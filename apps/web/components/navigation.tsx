@@ -3,6 +3,7 @@
 import { SignedIn, SignedOut, UserButton } from "@clerk/nextjs"
 import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
+import { ModeToggle } from "@workspace/ui/components/mode-toggle"
 import { Search } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -43,6 +44,7 @@ export function Navigation() {
           </div>
 
           <div className="flex items-center gap-4">
+            <ModeToggle />
             <SignedIn>
               <Link href="/profile">
                 <Button variant="ghost">Profile</Button>

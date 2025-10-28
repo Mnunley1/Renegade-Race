@@ -1,19 +1,19 @@
 import { ClerkProvider } from "@clerk/nextjs"
-import { Geist, Geist_Mono } from "next/font/google"
-
+import { ThemeProvider } from "@workspace/ui/components/theme-provider"
+import { Exo_2, Rubik } from "next/font/google"
 import "@workspace/ui/globals.css"
 import { Footer } from "@/components/footer"
 import { Navigation } from "@/components/navigation"
 import { Providers } from "@/components/providers"
 
-const fontSans = Geist({
+const fontHeader = Exo_2({
   subsets: ["latin"],
-  variable: "--font-sans",
+  variable: "--font-header",
 })
 
-const fontMono = Geist_Mono({
+const fontBody = Rubik({
   subsets: ["latin"],
-  variable: "--font-mono",
+  variable: "--font-body",
 })
 
 export default function RootLayout({
@@ -24,14 +24,22 @@ export default function RootLayout({
   return (
     <ClerkProvider>
       <html lang="en" suppressHydrationWarning>
-        <body className={`${fontSans.variable} ${fontMono.variable} font-sans antialiased`}>
-          <Providers>
-            <div className="flex min-h-screen flex-col">
-              <Navigation />
-              <main className="flex-1">{children}</main>
-              <Footer />
-            </div>
-          </Providers>
+        <body className={`${fontHeader.variable} ${fontBody.variable} font-sans antialiased`}>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="system"
+            disableTransitionOnChange
+            enableColorScheme
+            enableSystem
+          >
+            <Providers>
+              <div className="flex min-h-screen flex-col">
+                <Navigation />
+                <main className="flex-1">{children}</main>
+                <Footer />
+              </div>
+            </Providers>
+          </ThemeProvider>
         </body>
       </html>
     </ClerkProvider>
