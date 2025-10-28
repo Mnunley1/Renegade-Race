@@ -1,0 +1,27 @@
+{
+  "name": "@renegade/backend",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "types": "index.ts",
+  "private": true,
+  "scripts": {
+    "convex:dev": "convex dev",
+    "convex:deploy": "convex deploy",
+    "convex:mcp": "convex mcp start",
+    "build": "echo 'Backend build complete'",
+    "lint": "echo 'No linting configured for backend'",
+    "lint:fix": "echo 'No linting configured for backend'",
+    "type-check": "tsc --noEmit",
+    "clean": "rm -rf convex/_generated"
+  },
+  "dependencies": {
+    "convex": "^1.27.0",
+    "stripe": "^18.5.0",
+    "svix": "^1.77.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.2"
+  },
+  "keywords": ["packages", "shared", "renegade", "convex"],
+  "author": "Renegade Team"
+}
