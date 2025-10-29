@@ -1,6 +1,6 @@
 "use client"
 
-import { useSignIn } from "@clerk/nextjs"
+import { useSignIn, useUser } from "@clerk/nextjs"
 import { Button } from "@workspace/ui/components/button"
 import {
   Card,
@@ -15,8 +15,8 @@ import { Label } from "@workspace/ui/components/label"
 import { Separator } from "@workspace/ui/components/separator"
 import { ArrowRight, Lock, Mail } from "lucide-react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { useState } from "react"
+import { useSearchParams } from "next/navigation"
+import { useEffect, useState } from "react"
 
 type ClerkError = {
   errors?: Array<{ message: string }>
@@ -24,11 +24,20 @@ type ClerkError = {
 
 export default function SignInPage() {
   const { signIn, setActive, isLoaded } = useSignIn()
+  const { isSignedIn, isLoaded: userLoaded } = useUser()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
-  const router = useRouter()
+  const searchParams = useSearchParams()
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (userLoaded && isSignedIn) {
+      const redirectUrl = searchParams.get("redirect_url") || "/"
+      window.location.href = redirectUrl
+    }
+  }, [isSignedIn, userLoaded, searchParams])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -47,8 +56,9 @@ export default function SignInPage() {
 
       if (result.status === "complete") {
         await setActive({ session: result.createdSessionId })
-        router.push("/")
-        router.refresh()
+        // Use window.location for full page navigation to ensure auth state is updated
+        const redirectUrl = searchParams.get("redirect_url") || "/"
+        window.location.href = redirectUrl
       } else {
         setError("Unable to sign in. Please try again.")
         setIsLoading(false)
@@ -142,7 +152,12 @@ export default function SignInPage() {
             disabled={isLoading || !isLoaded}
             onClick={() => {
               if (signIn) {
-                signIn.authenticateWithRedirect({ strategy: "oauth_google", redirectUrl: "/" })
+                const redirectUrl = searchParams.get("redirect_url") || "/"
+                signIn.authenticateWithRedirect({
+                  strategy: "oauth_google",
+                  redirectUrl: "/",
+                  redirectUrlComplete: redirectUrl,
+                })
               }
             }}
             type="button"

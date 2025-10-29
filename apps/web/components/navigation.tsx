@@ -1,7 +1,5 @@
 "use client"
 
-import { SignedIn, SignedOut } from "@clerk/nextjs"
-import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
 import { Search } from "lucide-react"
 import Image from "next/image"
@@ -51,17 +49,7 @@ export function Navigation() {
           </div>
 
           <div className="flex items-center gap-4">
-            <SignedIn>
-              <UserMenu />
-            </SignedIn>
-            <SignedOut>
-              <Link href="/sign-in">
-                <Button variant="ghost">Sign In</Button>
-              </Link>
-              <Link href="/sign-up">
-                <Button>Sign Up</Button>
-              </Link>
-            </SignedOut>
+            <UserMenu />
           </div>
         </div>
 
