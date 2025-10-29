@@ -20,7 +20,7 @@ export function Navigation() {
             <Link className="flex items-center gap-2" href="/">
               <Image
                 alt="Renegade"
-                className="rounded-full dark:invert"
+                className="rounded-full"
                 height={40}
                 src="/logo.png"
                 width={40}

@@ -10,13 +10,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           className="flex items-center gap-2 px-8 py-6 transition-opacity hover:opacity-80"
           href="/"
         >
-          <Image
-            alt="Renegade"
-            className="rounded-full invert-0 dark:invert"
-            height={48}
-            src="/logo.png"
-            width={48}
-          />
+          <Image alt="Renegade" className="rounded-full" height={48} src="/logo.png" width={48} />
           <span className="font-bold text-2xl text-black dark:text-white">Renegade</span>
         </Link>
       </div>

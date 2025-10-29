@@ -10,7 +10,7 @@ export function Footer() {
             <div className="mb-4 flex items-center gap-2">
               <Image
                 alt="Renegade"
-                className="rounded-full dark:invert"
+                className="rounded-full"
                 height={36}
                 src="/logo.png"
                 width={36}
@@ -70,11 +70,6 @@ export function Footer() {
               <li>
                 <Link className="text-muted-foreground hover:text-primary" href="/contact">
                   Contact Us
-                </Link>
-              </li>
-              <li>
-                <Link className="text-muted-foreground hover:text-primary" href="/safety">
-                  Safety
                 </Link>
               </li>
             </ul>
