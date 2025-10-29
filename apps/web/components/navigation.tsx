@@ -1,6 +1,6 @@
 "use client"
 
-import { SignedIn, SignedOut, UserButton } from "@clerk/nextjs"
+import { SignedIn, SignedOut } from "@clerk/nextjs"
 import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
 import { ModeToggle } from "@workspace/ui/components/mode-toggle"
@@ -8,6 +8,7 @@ import { Search } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { UserMenu } from "@/components/user-menu"
 
 export function Navigation() {
   const pathname = usePathname()
@@ -54,10 +55,7 @@ export function Navigation() {
           <div className="flex items-center gap-4">
             <ModeToggle />
             <SignedIn>
-              <Link href="/profile">
-                <Button variant="ghost">Profile</Button>
-              </Link>
-              <UserButton afterSignOutUrl="/" />
+              <UserMenu />
             </SignedIn>
             <SignedOut>
               <Link href="/sign-in">
