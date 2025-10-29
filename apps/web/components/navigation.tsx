@@ -5,6 +5,7 @@ import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
 import { ModeToggle } from "@workspace/ui/components/mode-toggle"
 import { Search } from "lucide-react"
+import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
@@ -17,7 +18,14 @@ export function Navigation() {
         <div className="flex h-16 items-center justify-between">
           <div className="flex items-center gap-6">
             <Link className="flex items-center gap-2" href="/">
-              <span className="font-bold text-xl">🏁 Renegade Rentals</span>
+              <Image
+                alt="Renegade"
+                className="rounded-full dark:invert"
+                height={40}
+                src="/logo.png"
+                width={40}
+              />
+              <span className="font-bold text-black text-xl dark:text-white">Renegade</span>
             </Link>
             <div className="hidden items-center gap-4 md:flex">
               <Link

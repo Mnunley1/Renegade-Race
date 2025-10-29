@@ -2,8 +2,7 @@ import { ClerkProvider } from "@clerk/nextjs"
 import { ThemeProvider } from "@workspace/ui/components/theme-provider"
 import { Exo_2, Rubik } from "next/font/google"
 import "@workspace/ui/globals.css"
-import { Footer } from "@/components/footer"
-import { Navigation } from "@/components/navigation"
+import { LayoutWrapper } from "@/components/layout-wrapper"
 import { Providers } from "@/components/providers"
 
 const fontHeader = Exo_2({
@@ -33,11 +32,7 @@ export default function RootLayout({
             enableSystem
           >
             <Providers>
-              <div className="flex min-h-screen flex-col">
-                <Navigation />
-                <main className="flex-1">{children}</main>
-                <Footer />
-              </div>
+              <LayoutWrapper>{children}</LayoutWrapper>
             </Providers>
           </ThemeProvider>
         </body>

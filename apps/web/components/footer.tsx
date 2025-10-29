@@ -1,3 +1,4 @@
+import Image from "next/image"
 import Link from "next/link"
 
 export function Footer() {
@@ -6,7 +7,16 @@ export function Footer() {
       <div className="container mx-auto px-4 py-12">
         <div className="grid grid-cols-1 gap-8 md:grid-cols-4">
           <div>
-            <h3 className="mb-4 font-bold text-lg">🏁 Renegade Rentals</h3>
+            <div className="mb-4 flex items-center gap-2">
+              <Image
+                alt="Renegade"
+                className="rounded-full dark:invert"
+                height={36}
+                src="/logo.png"
+                width={36}
+              />
+              <h3 className="font-bold text-black text-lg dark:text-white">Renegade</h3>
+            </div>
             <p className="text-muted-foreground text-sm">
               The fastest way to rent track cars. Experience the thrill of racing on the track.
             </p>
@@ -73,7 +83,7 @@ export function Footer() {
 
         <div className="mt-8 border-t pt-8">
           <p className="text-center text-muted-foreground text-sm">
-            © {new Date().getFullYear()} Renegade Rentals. All rights reserved.
+            © {new Date().getFullYear()} Renegade. All rights reserved.
           </p>
         </div>
       </div>
