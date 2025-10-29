@@ -1,3 +1,5 @@
+"use client"
+
 import { Button } from "@workspace/ui/components/button"
 import {
   Card,
@@ -6,14 +8,22 @@ import {
   CardHeader,
   CardTitle,
 } from "@workspace/ui/components/card"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@workspace/ui/components/dropdown-menu"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import { Separator } from "@workspace/ui/components/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, Moon, Sun } from "lucide-react"
 import Link from "next/link"
+import { useTheme } from "next-themes"
 
 export default function SettingsPage() {
+  const { theme, setTheme } = useTheme()
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="mb-6 flex items-center gap-4">
@@ -232,8 +242,46 @@ export default function SettingsPage() {
               <CardTitle>User Preferences</CardTitle>
               <CardDescription>Customize your experience</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <p className="text-muted-foreground">Preference settings coming soon...</p>
+            <CardContent className="space-y-6">
+              <div className="space-y-3">
+                <Label>Theme</Label>
+                <p className="text-muted-foreground text-sm">Choose your preferred color scheme</p>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button className="w-full justify-start sm:w-auto" variant="outline">
+                      {theme === "light" && (
+                        <>
+                          <Sun className="mr-2 size-4" />
+                          Light
+                        </>
+                      )}
+                      {theme === "dark" && (
+                        <>
+                          <Moon className="mr-2 size-4" />
+                          Dark
+                        </>
+                      )}
+                      {theme === "system" && (
+                        <>
+                          <Sun className="mr-2 size-4" />
+                          System
+                        </>
+                      )}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start">
+                    <DropdownMenuItem onClick={() => setTheme("light")}>
+                      <Sun className="mr-2 size-4" />
+                      Light
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setTheme("dark")}>
+                      <Moon className="mr-2 size-4" />
+                      Dark
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setTheme("system")}>System</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

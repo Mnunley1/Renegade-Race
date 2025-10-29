@@ -3,7 +3,6 @@
 import { SignedIn, SignedOut } from "@clerk/nextjs"
 import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
-import { ModeToggle } from "@workspace/ui/components/mode-toggle"
 import { Search } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
@@ -38,22 +37,20 @@ export function Navigation() {
               >
                 Search Vehicles
               </Link>
-              <SignedIn>
-                <Link
-                  className={cn(
-                    "font-medium text-sm transition-colors hover:text-primary",
-                    pathname === "/messages" && "text-primary"
-                  )}
-                  href="/messages"
-                >
-                  Messages
-                </Link>
-              </SignedIn>
+              <Link
+                className={cn(
+                  "font-medium text-sm transition-colors hover:text-primary",
+                  (pathname === "/motorsports" || pathname?.startsWith("/motorsports")) &&
+                    "text-primary"
+                )}
+                href="/motorsports"
+              >
+                Motorsports
+              </Link>
             </div>
           </div>
 
           <div className="flex items-center gap-4">
-            <ModeToggle />
             <SignedIn>
               <UserMenu />
             </SignedIn>
