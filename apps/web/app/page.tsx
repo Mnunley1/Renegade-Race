@@ -149,7 +149,7 @@ export default function HomePage() {
             Hand-picked selection of top-rated track cars
           </p>
         </div>
-        <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid auto-rows-fr gap-8 md:grid-cols-2 lg:grid-cols-3">
           {featuredVehicles.map((vehicle) => (
             <VehicleCard key={vehicle.id} {...vehicle} />
           ))}

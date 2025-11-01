@@ -1,3 +1,5 @@
+"use client"
+
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
@@ -10,11 +12,35 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select"
 import { Separator } from "@workspace/ui/components/separator"
-import { Filter, Search } from "lucide-react"
-import { Suspense } from "react"
+import { Badge } from "@workspace/ui/components/badge"
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@workspace/ui/components/accordion"
+import { Filter, Search, Grid3x3, List, MapPin, Calendar, X, Star } from "lucide-react"
+import { Suspense, useState, useMemo } from "react"
 import { VehicleCard } from "@/components/vehicle-card"
+import { cn } from "@workspace/ui/lib/utils"
 
 export default function VehiclesPage() {
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
+  const [showFilters, setShowFilters] = useState(true)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [selectedLocation, setSelectedLocation] = useState("")
+  const [selectedTrack, setSelectedTrack] = useState("all")
+  const [selectedMake, setSelectedMake] = useState("all")
+  const [selectedPriceRange, setSelectedPriceRange] = useState("any")
+  const [sortBy, setSortBy] = useState("popularity")
+  const [selectedDates, setSelectedDates] = useState({
+    start: "",
+    end: "",
+  })
+  // TODO: Replace with Convex query
+  // const vehicles = useQuery(api.vehicles.getAllWithOptimizedImages, {})
+  // const tracks = useQuery(api.tracks.getAll, {})
+
   const vehicles = [
     {
       id: "1",
@@ -25,8 +51,11 @@ export default function VehiclesPage() {
       model: "911 GT3",
       pricePerDay: 899,
       location: "Daytona Beach, FL",
+      track: "Daytona International Speedway",
       rating: 4.9,
       reviews: 23,
+      horsepower: 502,
+      transmission: "Manual",
     },
     {
       id: "2",
@@ -37,8 +66,11 @@ export default function VehiclesPage() {
       model: "Huracán",
       pricePerDay: 1299,
       location: "Miami, FL",
+      track: "Homestead-Miami Speedway",
       rating: 5.0,
       reviews: 45,
+      horsepower: 610,
+      transmission: "Automatic",
     },
     {
       id: "3",
@@ -49,8 +81,11 @@ export default function VehiclesPage() {
       model: "F8 Tributo",
       pricePerDay: 1199,
       location: "Orlando, FL",
+      track: "Sebring International Raceway",
       rating: 4.8,
       reviews: 31,
+      horsepower: 710,
+      transmission: "Automatic",
     },
     {
       id: "4",
@@ -61,8 +96,11 @@ export default function VehiclesPage() {
       model: "720S",
       pricePerDay: 1599,
       location: "Tampa, FL",
+      track: "Daytona International Speedway",
       rating: 4.9,
       reviews: 18,
+      horsepower: 710,
+      transmission: "Automatic",
     },
     {
       id: "5",
@@ -73,8 +111,11 @@ export default function VehiclesPage() {
       model: "Corvette Z06",
       pricePerDay: 699,
       location: "Jacksonville, FL",
+      track: "Sebring International Raceway",
       rating: 4.7,
       reviews: 12,
+      horsepower: 650,
+      transmission: "Manual",
     },
     {
       id: "6",
@@ -85,116 +126,356 @@ export default function VehiclesPage() {
       model: "Vantage",
       pricePerDay: 1099,
       location: "Naples, FL",
+      track: "Homestead-Miami Speedway",
       rating: 4.8,
       reviews: 27,
+      horsepower: 503,
+      transmission: "Manual",
     },
   ]
 
-  return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="mb-8">
-        <h1 className="mb-2 font-bold text-3xl">Track Cars</h1>
-        <p className="text-muted-foreground">
-          {vehicles.length} vehicles available for track rental
-        </p>
-      </div>
+  const tracks = [
+    { id: "1", name: "Daytona International Speedway", location: "Daytona Beach, FL" },
+    { id: "2", name: "Sebring International Raceway", location: "Sebring, FL" },
+    { id: "3", name: "Homestead-Miami Speedway", location: "Homestead, FL" },
+  ]
 
-      <div className="mb-8">
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex flex-col gap-4 md:flex-row">
-              <div className="flex-1 space-y-4 md:flex md:gap-4">
-                <div className="flex-1">
-                  <Label htmlFor="location">Location</Label>
-                  <Input id="location" placeholder="Where are you racing?" />
+  const makes = Array.from(new Set(vehicles.map((v) => v.make))).sort()
+
+  // Filter vehicles
+  const filteredVehicles = useMemo(() => {
+    let filtered = vehicles.filter((vehicle) => {
+      if (searchQuery && !vehicle.name.toLowerCase().includes(searchQuery.toLowerCase())) {
+        return false
+      }
+      if (selectedTrack !== "all" && vehicle.track !== selectedTrack) {
+        return false
+      }
+      if (selectedMake !== "all" && vehicle.make !== selectedMake) {
+        return false
+      }
+      if (selectedLocation && !vehicle.location.toLowerCase().includes(selectedLocation.toLowerCase())) {
+        return false
+      }
+      if (selectedPriceRange !== "any") {
+        if (selectedPriceRange.endsWith("+")) {
+          // Handle "1500+" case
+          const minPrice = parseInt(selectedPriceRange.replace(/\D/g, ""), 10)
+          if (vehicle.pricePerDay < minPrice) {
+            return false
+          }
+        } else {
+          // Handle "0-500", "500-1000", etc.
+          const [min, max] = selectedPriceRange.split("-").map((p) =>
+            parseInt(p.replace(/\D/g, ""), 10)
+          )
+          if (vehicle.pricePerDay < min || vehicle.pricePerDay > max) {
+            return false
+          }
+        }
+      }
+      return true
+    })
+
+    // Sort vehicles
+    filtered = [...filtered].sort((a, b) => {
+      switch (sortBy) {
+        case "price-low":
+          return a.pricePerDay - b.pricePerDay
+        case "price-high":
+          return b.pricePerDay - a.pricePerDay
+        case "newest":
+          return b.year - a.year
+        case "rating":
+          return (b.rating || 0) - (a.rating || 0)
+        case "horsepower":
+          return (b.horsepower || 0) - (a.horsepower || 0)
+        case "popularity":
+        default:
+          return (b.reviews || 0) - (a.reviews || 0)
+      }
+    })
+
+    return filtered
+  }, [searchQuery, selectedTrack, selectedMake, selectedLocation, selectedPriceRange, sortBy])
+
+  const clearFilters = () => {
+    setSearchQuery("")
+    setSelectedLocation("")
+    setSelectedTrack("all")
+    setSelectedMake("all")
+    setSelectedPriceRange("any")
+    setSelectedDates({ start: "", end: "" })
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-background via-background to-muted/20">
+      {/* Hero Section */}
+      <div className="relative overflow-hidden border-b bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
+        <div className="container relative z-10 mx-auto px-4 py-12 md:py-16">
+          <div className="mb-8 text-center">
+            <h1 className="mb-3 bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-4xl font-bold tracking-tight text-transparent md:text-5xl">
+              Find Your Perfect Track Vehicle
+            </h1>
+            <p className="mx-auto max-w-2xl text-lg text-muted-foreground">
+              Discover high-performance race cars ready for your next track day
+            </p>
+          </div>
+
+          {/* Enhanced Search Bar */}
+          <Card className="border-2 shadow-xl">
+            <CardContent className="p-4 md:p-6">
+              <div className="space-y-4">
+                {/* Search Input */}
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    className="h-12 pl-10 text-base"
+                    placeholder="Search by make, model, or track..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
                 </div>
-                <div className="flex-1">
-                  <Label htmlFor="dates">Dates</Label>
-                  <Input id="dates" type="date" />
+
+                <div className="grid gap-4 md:grid-cols-4">
+                  <div>
+                    <Label htmlFor="track" className="mb-2 flex items-center gap-2">
+                      <MapPin className="size-4" />
+                      Track
+                    </Label>
+                    <Select value={selectedTrack} onValueChange={setSelectedTrack}>
+                      <SelectTrigger id="track">
+                        <SelectValue placeholder="All tracks" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All tracks</SelectItem>
+                        {tracks.map((track) => (
+                          <SelectItem key={track.id} value={track.name}>
+                            {track.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="location" className="mb-2 flex items-center gap-2">
+                      <MapPin className="size-4" />
+                      Location
+                    </Label>
+                    <Input
+                      id="location"
+                      placeholder="City, State"
+                      value={selectedLocation}
+                      onChange={(e) => setSelectedLocation(e.target.value)}
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="start-date" className="mb-2 flex items-center gap-2">
+                      <Calendar className="size-4" />
+                      Start Date
+                    </Label>
+                    <Input
+                      id="start-date"
+                      type="date"
+                      value={selectedDates.start}
+                      onChange={(e) =>
+                        setSelectedDates({ ...selectedDates, start: e.target.value })
+                      }
+                    />
+                  </div>
+
+                  <div className="flex items-end">
+                    <Button className="w-full" size="lg">
+                      <Search className="mr-2 size-4" />
+                      Search
+                    </Button>
+                  </div>
                 </div>
               </div>
-              <Button className="w-full md:w-auto" size="lg">
-                <Search className="mr-2 size-4" />
-                Search
+            </CardContent>
+          </Card>
+
+          {/* Results Summary */}
+          <div className="mt-6 flex items-center justify-between">
+            <p className="text-muted-foreground">
+              <span className="font-semibold text-foreground">{filteredVehicles.length}</span>{" "}
+              vehicles available
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                variant={viewMode === "grid" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setViewMode("grid")}
+              >
+                <Grid3x3 className="size-4" />
+              </Button>
+              <Button
+                variant={viewMode === "list" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setViewMode("list")}
+              >
+                <List className="size-4" />
               </Button>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-4">
-        <div className="lg:col-span-1">
-          <div className="sticky top-20 space-y-6">
-            <div>
-              <div className="mb-4 flex items-center gap-2">
-                <Filter className="size-4" />
-                <h2 className="font-semibold text-lg">Filters</h2>
+      <div className="container mx-auto px-4 py-8">
+        <div className="grid gap-8 lg:grid-cols-4">
+          {/* Enhanced Filter Sidebar */}
+          <div className={cn("lg:col-span-1", !showFilters && "hidden lg:block")}>
+            <div className="sticky top-20 space-y-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Filter className="size-5" />
+                  <h2 className="text-lg font-semibold">Filters</h2>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="lg:hidden"
+                  onClick={() => setShowFilters(false)}
+                >
+                  <X className="size-4" />
+                </Button>
               </div>
-              <Card>
-                <CardContent className="space-y-4 p-6">
-                  <div>
-                    <Label>Make</Label>
-                    <Select>
-                      <SelectTrigger>
-                        <SelectValue placeholder="All makes" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All makes</SelectItem>
-                        <SelectItem value="porsche">Porsche</SelectItem>
-                        <SelectItem value="lamborghini">Lamborghini</SelectItem>
-                        <SelectItem value="ferrari">Ferrari</SelectItem>
-                        <SelectItem value="mclaren">McLaren</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <Separator />
-                  <div>
-                    <Label>Price Range</Label>
-                    <Select>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Any price" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="any">Any price</SelectItem>
-                        <SelectItem value="0-500">$0 - $500/day</SelectItem>
-                        <SelectItem value="500-1000">$500 - $1,000/day</SelectItem>
-                        <SelectItem value="1000-1500">$1,000 - $1,500/day</SelectItem>
-                        <SelectItem value="1500+">$1,500+/day</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <Separator />
-                  <div>
-                    <Label>Sort By</Label>
-                    <Select defaultValue="popularity">
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="popularity">Popularity</SelectItem>
-                        <SelectItem value="price-low">Price: Low to High</SelectItem>
-                        <SelectItem value="price-high">Price: High to Low</SelectItem>
-                        <SelectItem value="newest">Newest</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+
+              <Card className="border-2">
+                <CardContent className="p-6">
+                  <Accordion type="multiple" className="w-full" defaultValue={["make", "price"]}>
+                    <AccordionItem value="make">
+                      <AccordionTrigger className="text-sm font-medium">
+                        Vehicle Make
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        <Select value={selectedMake} onValueChange={setSelectedMake}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="All makes" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All makes</SelectItem>
+                            {makes.map((make) => (
+                              <SelectItem key={make} value={make}>
+                                {make}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </AccordionContent>
+                    </AccordionItem>
+
+                    <Separator />
+
+                    <AccordionItem value="price">
+                      <AccordionTrigger className="text-sm font-medium">
+                        Price Range
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        <Select value={selectedPriceRange} onValueChange={setSelectedPriceRange}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Any price" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="any">Any price</SelectItem>
+                            <SelectItem value="0-500">$0 - $500/day</SelectItem>
+                            <SelectItem value="500-1000">$500 - $1,000/day</SelectItem>
+                            <SelectItem value="1000-1500">$1,000 - $1,500/day</SelectItem>
+                            <SelectItem value="1500+">$1,500+/day</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </AccordionContent>
+                    </AccordionItem>
+
+                    <Separator />
+
+                    <AccordionItem value="sort">
+                      <AccordionTrigger className="text-sm font-medium">Sort By</AccordionTrigger>
+                      <AccordionContent>
+                        <Select value={sortBy} onValueChange={setSortBy}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="popularity">Popularity</SelectItem>
+                            <SelectItem value="price-low">Price: Low to High</SelectItem>
+                            <SelectItem value="price-high">Price: High to Low</SelectItem>
+                            <SelectItem value="newest">Newest</SelectItem>
+                            <SelectItem value="rating">Highest Rated</SelectItem>
+                            <SelectItem value="horsepower">Horsepower</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </AccordionContent>
+                    </AccordionItem>
+                  </Accordion>
+
+                  {(searchQuery || selectedTrack !== "all" || selectedMake !== "all" || selectedPriceRange !== "any" || selectedLocation) && (
+                    <div className="mt-4 pt-4 border-t">
+                      <Button variant="outline" className="w-full" onClick={clearFilters}>
+                        <X className="mr-2 size-4" />
+                        Clear Filters
+                      </Button>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
           </div>
-        </div>
 
-        <div className="lg:col-span-3">
-          <div className="mb-4 flex items-center justify-between">
-            <p className="text-muted-foreground text-sm">Showing {vehicles.length} results</p>
-          </div>
-          <Suspense fallback={<div>Loading...</div>}>
-            <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-              {vehicles.map((vehicle) => (
-                <VehicleCard key={vehicle.id} {...vehicle} />
-              ))}
+          {/* Mobile Filter Toggle */}
+          {!showFilters && (
+            <div className="mb-4 lg:hidden">
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => setShowFilters(true)}
+              >
+                <Filter className="mr-2 size-4" />
+                Show Filters
+              </Button>
             </div>
-          </Suspense>
+          )}
+
+          {/* Vehicle Grid */}
+          <div className="lg:col-span-3">
+            {filteredVehicles.length === 0 ? (
+              <Card className="border-2 border-dashed">
+                <CardContent className="flex flex-col items-center justify-center py-16">
+                  <Search className="mb-4 size-12 text-muted-foreground" />
+                  <h3 className="mb-2 text-lg font-semibold">No vehicles found</h3>
+                  <p className="mb-4 text-center text-muted-foreground">
+                    Try adjusting your filters to see more results
+                  </p>
+                  <Button variant="outline" onClick={clearFilters}>
+                    Clear Filters
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : (
+              <Suspense fallback={<div>Loading...</div>}>
+                <div
+                  className={cn(
+                    "grid gap-6",
+                    viewMode === "grid"
+                      ? "md:grid-cols-2 xl:grid-cols-3 auto-rows-fr"
+                      : "grid-cols-1"
+                  )}
+                >
+                  {filteredVehicles.map((vehicle) => (
+                    <VehicleCard
+                      key={vehicle.id}
+                      {...vehicle}
+                      track={vehicle.track}
+                      horsepower={vehicle.horsepower}
+                      transmission={vehicle.transmission}
+                    />
+                  ))}
+                </div>
+              </Suspense>
+            )}
+          </div>
         </div>
       </div>
     </div>
