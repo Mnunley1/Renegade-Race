@@ -12,6 +12,7 @@ import {
 } from "@workspace/ui/components/dropdown-menu"
 import {
   Calendar,
+  Car,
   HeadphonesIcon,
   Heart,
   HelpCircle,
@@ -81,6 +82,16 @@ export function UserMenu() {
               <Link className="flex items-center text-sm" href="/messages">
                 <MessageSquare className="mr-3 size-4" />
                 Inbox
+              </Link>
+            </DropdownMenuItem>
+
+            <DropdownMenuSeparator />
+
+            {/* Host Section */}
+            <DropdownMenuItem asChild>
+              <Link className="flex items-center text-sm" href="/host/dashboard">
+                <Car className="mr-3 size-4" />
+                Host Dashboard
               </Link>
             </DropdownMenuItem>
 
