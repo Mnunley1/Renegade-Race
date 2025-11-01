@@ -14,6 +14,9 @@ interface TeamCardProps extends ComponentProps<"div"> {
   specialties: string[]
   availableSeats: number
   requirements?: string[]
+  contactInfo?: unknown
+  description?: unknown
+  socialLinks?: unknown
 }
 
 const MAX_VISIBLE_SPECIALTIES = 3
@@ -27,6 +30,9 @@ export function TeamCard({
   availableSeats,
   requirements,
   className,
+  contactInfo: _contactInfo,
+  description: _description,
+  socialLinks: _socialLinks,
   ...props
 }: TeamCardProps) {
   return (
