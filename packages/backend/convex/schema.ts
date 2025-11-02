@@ -6,6 +6,7 @@ export default defineSchema({
   users: defineTable({
     externalId: v.string(),
     name: v.string(),
+    role: v.optional(v.string()),
     email: v.optional(v.string()),
     phone: v.optional(v.string()),
     rating: v.optional(v.number()),
