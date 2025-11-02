@@ -1,12 +1,55 @@
+"use client"
+
+import { useQuery } from "convex/react"
+import { useUser } from "@clerk/nextjs"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent } from "@workspace/ui/components/card"
 import { Heart } from "lucide-react"
 import Link from "next/link"
 import { VehicleCard } from "@/components/vehicle-card"
+import { api } from "@/lib/convex"
+import { useMemo } from "react"
 
 export default function FavoritesPage() {
-  // TODO: Replace with Convex query to fetch user's favorites
-  const favorites = [
+  const { user } = useUser()
+  
+  // Fetch user's favorites from Convex
+  const favoritesData = useQuery(api.favorites.getUserFavorites, user?.id ? {} : "skip")
+
+  // Map favorites to the format expected by VehicleCard
+  const favorites = useMemo(() => {
+    if (!favoritesData || !favoritesData.length) return []
+    return favoritesData.map((fav) => {
+      const vehicle = fav.vehicle
+      if (!vehicle) return null
+      const primaryImage = vehicle.images?.find((img) => img.isPrimary) || vehicle.images?.[0]
+      return {
+        id: vehicle._id,
+        image: primaryImage?.cardUrl || primaryImage?.imageUrl || "",
+        name: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
+        year: vehicle.year,
+        make: vehicle.make,
+        model: vehicle.model,
+        pricePerDay: vehicle.dailyRate,
+        location: vehicle.track?.location || "",
+        rating: 0, // TODO: Calculate from reviews
+        reviews: 0, // TODO: Get from reviews
+      }
+    }).filter(Boolean) as Array<{
+      id: string
+      image: string
+      name: string
+      year: number
+      make: string
+      model: string
+      pricePerDay: number
+      location: string
+      rating: number
+      reviews: number
+    }>
+  }, [favoritesData])
+
+  const mockFavorites = [
     {
       id: "1",
       image: "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=800",

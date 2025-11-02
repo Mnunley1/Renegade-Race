@@ -1,6 +1,12 @@
+import { fileURLToPath } from "url"
+import { dirname, resolve } from "path"
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  transpilePackages: ["@workspace/ui"],
+  transpilePackages: ["@workspace/ui", "@renegade/backend"],
   images: {
     remotePatterns: [
       {
@@ -12,6 +18,14 @@ const nextConfig = {
         hostname: "api.dicebear.com",
       },
     ],
+  },
+  webpack: (config) => {
+    // Allow importing from backend package's generated files
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      "@renegade/backend": resolve(__dirname, "../../packages/backend"),
+    }
+    return config
   },
 }
 

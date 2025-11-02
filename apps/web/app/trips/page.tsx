@@ -1,13 +1,99 @@
+"use client"
+
+import { useQuery } from "convex/react"
+import { useUser } from "@clerk/nextjs"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent } from "@workspace/ui/components/card"
 import { Separator } from "@workspace/ui/components/separator"
 import { Calendar } from "lucide-react"
 import Link from "next/link"
 import { VehicleCard } from "@/components/vehicle-card"
+import { api } from "@/lib/convex"
+import { useMemo } from "react"
 
 export default function TripsPage() {
-  // TODO: Replace with Convex query to fetch user's trips
-  const upcomingTrips: Array<{
+  const { user } = useUser()
+  
+  // Fetch user's reservations from Convex (as renter)
+  const reservationsData = useQuery(
+    api.reservations.getByUser,
+    user?.id ? { userId: user.id, role: "renter" as const } : "skip"
+  )
+
+  // Map reservations to trips format
+  const upcomingTrips = useMemo(() => {
+    if (!reservationsData) return []
+    const today = new Date().toISOString().split('T')[0]
+    return reservationsData
+      .filter((res) => res.status === "confirmed" && res.endDate >= today)
+      .map((res) => {
+        const vehicle = res.vehicle
+        if (!vehicle) return null
+        const primaryImage = vehicle.images?.find((img) => img.isPrimary) || vehicle.images?.[0]
+        return {
+          id: res._id,
+          image: primaryImage?.cardUrl || primaryImage?.imageUrl || "",
+          name: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
+          year: vehicle.year,
+          make: vehicle.make,
+          model: vehicle.model,
+          pricePerDay: vehicle.dailyRate,
+          location: vehicle.track?.location || "",
+          rating: 0,
+          reviews: 0,
+        }
+      })
+      .filter(Boolean) as Array<{
+        id: string
+        image: string
+        name: string
+        year: number
+        make: string
+        model: string
+        pricePerDay: number
+        location: string
+        rating: number
+        reviews: number
+      }>
+  }, [reservationsData])
+
+  const pastTrips = useMemo(() => {
+    if (!reservationsData) return []
+    const today = new Date().toISOString().split('T')[0]
+    return reservationsData
+      .filter((res) => res.status === "completed" || (res.endDate < today && res.status === "confirmed"))
+      .map((res) => {
+        const vehicle = res.vehicle
+        if (!vehicle) return null
+        const primaryImage = vehicle.images?.find((img) => img.isPrimary) || vehicle.images?.[0]
+        return {
+          id: res._id,
+          image: primaryImage?.cardUrl || primaryImage?.imageUrl || "",
+          name: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
+          year: vehicle.year,
+          make: vehicle.make,
+          model: vehicle.model,
+          pricePerDay: vehicle.dailyRate,
+          location: vehicle.track?.location || "",
+          rating: 0,
+          reviews: 0,
+        }
+      })
+      .filter(Boolean) as Array<{
+        id: string
+        image: string
+        name: string
+        year: number
+        make: string
+        model: string
+        pricePerDay: number
+        location: string
+        rating: number
+        reviews: number
+      }>
+  }, [reservationsData])
+
+  const mockUpcomingTrips: Array<{
     id: string
     image: string
     name: string
@@ -17,7 +103,7 @@ export default function TripsPage() {
     pricePerDay: number
     location: string
   }> = []
-  const pastTrips = [
+  const mockPastTrips = [
     {
       id: "1",
       image: "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=800",
