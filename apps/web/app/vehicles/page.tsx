@@ -21,8 +21,10 @@ import {
 } from "@workspace/ui/components/accordion"
 import { Filter, Search, Grid3x3, List, MapPin, Calendar, X, Star } from "lucide-react"
 import { Suspense, useState, useMemo } from "react"
+import { useQuery } from "convex/react"
 import { VehicleCard } from "@/components/vehicle-card"
 import { cn } from "@workspace/ui/lib/utils"
+import { api } from "@/lib/convex"
 
 export default function VehiclesPage() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
@@ -37,11 +39,44 @@ export default function VehiclesPage() {
     start: "",
     end: "",
   })
-  // TODO: Replace with Convex query
-  // const vehicles = useQuery(api.vehicles.getAllWithOptimizedImages, {})
-  // const tracks = useQuery(api.tracks.getAll, {})
 
-  const vehicles = [
+  // Fetch vehicles and tracks from Convex
+  const vehiclesData = useQuery(api.vehicles.getAllWithOptimizedImages, {})
+  const tracksData = useQuery(api.tracks.getAll, {})
+
+  // Map vehicles to the format expected by VehicleCard
+  const vehicles = useMemo(() => {
+    if (!vehiclesData) return []
+    return vehiclesData.map((vehicle) => {
+      const primaryImage = vehicle.images?.find((img) => img.isPrimary) || vehicle.images?.[0]
+      return {
+        id: vehicle._id,
+        image: primaryImage?.cardUrl || primaryImage?.imageUrl || "",
+        name: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
+        year: vehicle.year,
+        make: vehicle.make,
+        model: vehicle.model,
+        pricePerDay: vehicle.dailyRate,
+        location: vehicle.track?.location || "",
+        track: vehicle.track?.name || "",
+        rating: 0, // TODO: Calculate from reviews
+        reviews: 0, // TODO: Get from reviews
+        horsepower: vehicle.horsepower,
+        transmission: vehicle.transmission || "",
+      }
+    })
+  }, [vehiclesData])
+
+  const tracks = useMemo(() => {
+    if (!tracksData) return []
+    return tracksData.map((track) => ({
+      id: track._id,
+      name: track.name,
+      location: track.location,
+    }))
+  }, [tracksData])
+
+  const mockVehicles = [
     {
       id: "1",
       image: "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=800",
@@ -134,13 +169,9 @@ export default function VehiclesPage() {
     },
   ]
 
-  const tracks = [
-    { id: "1", name: "Daytona International Speedway", location: "Daytona Beach, FL" },
-    { id: "2", name: "Sebring International Raceway", location: "Sebring, FL" },
-    { id: "3", name: "Homestead-Miami Speedway", location: "Homestead, FL" },
-  ]
-
-  const makes = Array.from(new Set(vehicles.map((v) => v.make))).sort()
+  const makes = useMemo(() => {
+    return Array.from(new Set(vehicles.map((v) => v.make))).sort()
+  }, [vehicles])
 
   // Filter vehicles
   const filteredVehicles = useMemo(() => {
@@ -249,7 +280,7 @@ export default function VehiclesPage() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All tracks</SelectItem>
-                        {tracks.map((track) => (
+                        {tracks?.map((track) => (
                           <SelectItem key={track.id} value={track.name}>
                             {track.name}
                           </SelectItem>
@@ -440,7 +471,14 @@ export default function VehiclesPage() {
 
           {/* Vehicle Grid */}
           <div className="lg:col-span-3">
-            {filteredVehicles.length === 0 ? (
+            {!vehiclesData || !tracksData ? (
+              <Card className="border-2 border-dashed">
+                <CardContent className="flex flex-col items-center justify-center py-16">
+                  <div className="mb-4 size-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+                  <h3 className="mb-2 text-lg font-semibold">Loading vehicles...</h3>
+                </CardContent>
+              </Card>
+            ) : filteredVehicles.length === 0 ? (
               <Card className="border-2 border-dashed">
                 <CardContent className="flex flex-col items-center justify-center py-16">
                   <Search className="mb-4 size-12 text-muted-foreground" />
