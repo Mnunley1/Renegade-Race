@@ -1,3 +1,7 @@
+"use client"
+
+import { useQuery } from "convex/react"
+import { useMemo } from "react"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
@@ -6,9 +10,33 @@ import { CheckCircle2 } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { VehicleCard } from "@/components/vehicle-card"
+import { api } from "@/lib/convex"
 
 export default function HomePage() {
-  const featuredVehicles = [
+  // Fetch vehicles from Convex
+  const vehiclesData = useQuery(api.vehicles.getAllWithOptimizedImages, { limit: 3 })
+
+  // Map vehicles to the format expected by VehicleCard
+  const featuredVehicles = useMemo(() => {
+    if (!vehiclesData) return []
+    return vehiclesData.slice(0, 3).map((vehicle) => {
+      const primaryImage = vehicle.images?.find((img) => img.isPrimary) || vehicle.images?.[0]
+      return {
+        id: vehicle._id,
+        image: primaryImage?.cardUrl || primaryImage?.imageUrl || "",
+        name: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
+        year: vehicle.year,
+        make: vehicle.make,
+        model: vehicle.model,
+        pricePerDay: vehicle.dailyRate,
+        location: vehicle.track?.location || "",
+        rating: 0, // TODO: Calculate from reviews
+        reviews: 0, // TODO: Get from reviews
+      }
+    })
+  }, [vehiclesData])
+
+  const mockFeaturedVehicles = [
     {
       id: "1",
       image: "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=800",
@@ -149,11 +177,22 @@ export default function HomePage() {
             Hand-picked selection of top-rated track cars
           </p>
         </div>
-        <div className="grid auto-rows-fr gap-8 md:grid-cols-2 lg:grid-cols-3">
-          {featuredVehicles.map((vehicle) => (
-            <VehicleCard key={vehicle.id} {...vehicle} />
-          ))}
-        </div>
+        {!vehiclesData ? (
+          <div className="py-16 text-center">
+            <div className="mb-4 inline-block size-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+            <p className="text-muted-foreground">Loading featured vehicles...</p>
+          </div>
+        ) : featuredVehicles.length === 0 ? (
+          <div className="py-16 text-center">
+            <p className="text-muted-foreground">No vehicles available yet</p>
+          </div>
+        ) : (
+          <div className="grid auto-rows-fr gap-8 md:grid-cols-2 lg:grid-cols-3">
+            {featuredVehicles.map((vehicle) => (
+              <VehicleCard key={vehicle.id} {...vehicle} />
+            ))}
+          </div>
+        )}
         <div className="mt-16 text-center">
           <Link href="/vehicles">
             <Button size="lg" variant="outline">
