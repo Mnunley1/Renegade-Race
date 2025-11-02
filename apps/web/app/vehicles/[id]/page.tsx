@@ -1,51 +1,46 @@
+"use client"
+
+import { useQuery } from "convex/react"
 import { Avatar, AvatarFallback, AvatarImage } from "@workspace/ui/components/avatar"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
-import { Input } from "@workspace/ui/components/input"
-import { Label } from "@workspace/ui/components/label"
-import { Separator } from "@workspace/ui/components/separator"
-import { Calendar, DollarSign, MapPin, Shield, Star, Users } from "lucide-react"
+import { MapPin, Shield, Star } from "lucide-react"
+import { VehicleGallery } from "@/components/vehicle-gallery"
+import { BookingForm } from "@/components/booking-form"
+import { api } from "@/lib/convex"
+import { useParams } from "next/navigation"
 import Image from "next/image"
 
-type VehicleDetailsPageProps = {
-  params: Promise<{ id: string }>
-}
+export default function VehicleDetailsPage() {
+  const params = useParams()
+  const id = params.id as string
 
-export default async function VehicleDetailsPage({ params }: VehicleDetailsPageProps) {
-  const { id } = await params
+  const vehicle = useQuery(api.vehicles.getById, { id: id as any })
 
-  // Mock data - replace with actual API call
-  const vehicle = {
-    id,
-    images: [
-      "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=1200",
-      "https://images.unsplash.com/photo-1605170088216-9058e29c8e9f?w=1200",
-      "https://images.unsplash.com/photo-1549952891-fcf406dd2aa9?w=1200",
-    ],
-    name: "Porsche 911 GT3",
-    year: 2023,
-    make: "Porsche",
-    model: "911 GT3",
-    pricePerDay: 899,
-    location: "Daytona Beach, FL",
-    rating: 4.9,
-    reviews: 23,
-    specs: {
-      horsepower: "502 hp",
-      torque: "346 lb-ft",
-      topSpeed: "197 mph",
-      zeroTo60: "3.2s",
-    },
-    description:
-      "Experience the thrill of driving a track-ready Porsche 911 GT3. This exceptional sports car delivers uncompromising performance on both the road and track. With its naturally aspirated 4.0-liter flat-six engine producing 502 horsepower, the GT3 offers an exhilarating driving experience.",
-    host: {
-      name: "Mike Johnson",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Mike",
-      verified: true,
-      memberSince: "2019",
-      tripsCompleted: 127,
-    },
+  // Show loading state
+  if (!vehicle) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex min-h-[60vh] items-center justify-center">
+          <div className="text-center">
+            <p className="text-muted-foreground">Loading vehicle details...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Extract image URLs
+  const images = vehicle.images?.map((img) => img.cardUrl || img.imageUrl || "") || []
+
+  // Host information from owner
+  const host = {
+    name: vehicle.owner?.name || "Unknown",
+    avatar: vehicle.owner?.profileImage || "",
+    verified: false, // Would need to check owner verification status
+    memberSince: vehicle.owner?.memberSince || "",
+    tripsCompleted: vehicle.owner?.totalRentals || 0,
   }
 
   return (
@@ -61,44 +56,23 @@ export default async function VehicleDetailsPage({ params }: VehicleDetailsPageP
             </h1>
             <div className="flex items-center gap-2 text-muted-foreground">
               <MapPin className="size-4" />
-              <span>{vehicle.location}</span>
+              <span>{vehicle.track?.location || vehicle.track?.name || "Location TBD"}</span>
             </div>
           </div>
+          {/* Rating and reviews would come from reviews query */}
           <div className="text-right">
             <div className="mb-1 flex items-center gap-2">
               <div className="flex items-center">
                 <Star className="size-5 fill-yellow-400 text-yellow-400" />
-                <span className="ml-1 font-bold">{vehicle.rating}</span>
+                <span className="ml-1 font-bold">0.0</span>
               </div>
             </div>
-            <p className="text-muted-foreground text-sm">{vehicle.reviews} reviews</p>
+            <p className="text-muted-foreground text-sm">0 reviews</p>
           </div>
         </div>
       </div>
 
-      <div className="mb-8 grid gap-4 md:grid-cols-4">
-        <div className="md:col-span-2">
-          <Image
-            alt={vehicle.name}
-            className="h-96 w-full rounded-lg object-cover"
-            height={600}
-            src={vehicle.images[0]}
-            width={800}
-          />
-        </div>
-        <div className="grid grid-cols-2 gap-4 md:col-span-2">
-          {vehicle.images.slice(1).map((image) => (
-            <Image
-              alt={`${vehicle.name}`}
-              className="h-48 w-full rounded-lg object-cover"
-              height={300}
-              key={image}
-              src={image}
-              width={400}
-            />
-          ))}
-        </div>
-      </div>
+      <VehicleGallery images={images} vehicleName={`${vehicle.year} ${vehicle.make} ${vehicle.model}`} />
 
       <div className="grid gap-8 lg:grid-cols-3">
         <div className="space-y-8 lg:col-span-2">
@@ -117,30 +91,38 @@ export default async function VehicleDetailsPage({ params }: VehicleDetailsPageP
             </CardHeader>
             <CardContent>
               <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <Badge className="mb-2 w-full justify-start" variant="outline">
-                    Horsepower
-                  </Badge>
-                  <p className="font-semibold text-lg">{vehicle.specs.horsepower}</p>
-                </div>
-                <div>
-                  <Badge className="mb-2 w-full justify-start" variant="outline">
-                    Torque
-                  </Badge>
-                  <p className="font-semibold text-lg">{vehicle.specs.torque}</p>
-                </div>
-                <div>
-                  <Badge className="mb-2 w-full justify-start" variant="outline">
-                    Top Speed
-                  </Badge>
-                  <p className="font-semibold text-lg">{vehicle.specs.topSpeed}</p>
-                </div>
-                <div>
-                  <Badge className="mb-2 w-full justify-start" variant="outline">
-                    0-60 mph
-                  </Badge>
-                  <p className="font-semibold text-lg">{vehicle.specs.zeroTo60}</p>
-                </div>
+                {vehicle.horsepower && (
+                  <div>
+                    <Badge className="mb-2 w-full justify-start" variant="outline">
+                      Horsepower
+                    </Badge>
+                    <p className="font-semibold text-lg">{vehicle.horsepower} hp</p>
+                  </div>
+                )}
+                {vehicle.transmission && (
+                  <div>
+                    <Badge className="mb-2 w-full justify-start" variant="outline">
+                      Transmission
+                    </Badge>
+                    <p className="font-semibold text-lg">{vehicle.transmission}</p>
+                  </div>
+                )}
+                {vehicle.drivetrain && (
+                  <div>
+                    <Badge className="mb-2 w-full justify-start" variant="outline">
+                      Drivetrain
+                    </Badge>
+                    <p className="font-semibold text-lg">{vehicle.drivetrain}</p>
+                  </div>
+                )}
+                {vehicle.engineType && (
+                  <div>
+                    <Badge className="mb-2 w-full justify-start" variant="outline">
+                      Engine
+                    </Badge>
+                    <p className="font-semibold text-lg">{vehicle.engineType}</p>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -190,49 +172,8 @@ export default async function VehicleDetailsPage({ params }: VehicleDetailsPageP
             <CardHeader>
               <CardTitle>Book this vehicle</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="flex items-baseline gap-2">
-                <span className="font-bold text-3xl">${vehicle.pricePerDay}</span>
-                <span className="text-muted-foreground text-sm">/day</span>
-              </div>
-
-              <Separator />
-
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="check-in">Check in</Label>
-                  <Input id="check-in" type="date" />
-                </div>
-                <div>
-                  <Label htmlFor="check-out">Check out</Label>
-                  <Input id="check-out" type="date" />
-                </div>
-              </div>
-
-              <Separator />
-
-              <Button className="w-full" size="lg">
-                Reserve Now
-              </Button>
-
-              <p className="text-center text-muted-foreground text-xs">You won't be charged yet</p>
-
-              <Separator />
-
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-sm">
-                  <Calendar className="size-4 text-muted-foreground" />
-                  <span className="text-muted-foreground">Free cancellation</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <DollarSign className="size-4 text-muted-foreground" />
-                  <span className="text-muted-foreground">Pay at pickup</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <Users className="size-4 text-muted-foreground" />
-                  <span className="text-muted-foreground">Instant booking</span>
-                </div>
-              </div>
+            <CardContent>
+              <BookingForm pricePerDay={vehicle.dailyRate} vehicleId={vehicle._id} />
             </CardContent>
           </Card>
         </div>
