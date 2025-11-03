@@ -1,5 +1,7 @@
 "use client"
 
+import { useQuery, useMutation, useMemo } from "convex/react"
+import { useState, useEffect } from "react"
 import { useUser } from "@clerk/nextjs"
 import { Avatar, AvatarFallback, AvatarImage } from "@workspace/ui/components/avatar"
 import { Badge } from "@workspace/ui/components/badge"
@@ -24,28 +26,76 @@ import {
 } from "@workspace/ui/components/select"
 import { Separator } from "@workspace/ui/components/separator"
 import { Textarea } from "@workspace/ui/components/textarea"
-import { Calendar, MapPin, Pencil, Shield, Star } from "lucide-react"
-import { useState } from "react"
+import { Calendar, MapPin, Pencil, Shield, Star, Loader2 } from "lucide-react"
+import { api } from "@/lib/convex"
 
 const DEFAULT_MEMBER_YEAR = 2024
 
 export default function ProfilePage() {
   const { user } = useUser()
   const [isEditing, setIsEditing] = useState(false)
-  const [bio, setBio] = useState(
-    "I'm passionate about motorsports and experienced driving on some of the world's most iconic tracks. When I'm not behind the wheel, I love sharing my knowledge with the racing community."
+  const [bio, setBio] = useState("")
+  const [location, setLocation] = useState("")
+  const [experience, setExperience] = useState("")
+
+  // Fetch user data, review stats, reservations, and favorites from Convex
+  const convexUser = useQuery(api.users.current, {})
+  const reviewStats = useQuery(
+    api.reviews.getUserStats,
+    user?.id ? { userId: user.id } : "skip"
   )
-  const [location, setLocation] = useState("Daytona Beach, FL")
-  const [experience, setExperience] = useState("Advanced")
+  const reservations = useQuery(
+    api.reservations.getByUser,
+    user?.id ? { userId: user.id, role: "renter" as const } : "skip"
+  )
+  const favorites = useQuery(
+    api.favorites.getUserFavorites,
+    user?.id ? {} : "skip"
+  )
+
+  // Calculate stats
+  const stats = useMemo(() => {
+    const tripsCount = reservations?.filter((res) => res.status === "completed").length || 0
+    const averageRating = reviewStats?.averageRating || 0
+    const favoritesCount = favorites?.length || 0
+
+    return {
+      tripsCount,
+      averageRating,
+      favoritesCount,
+    }
+  }, [reservations, reviewStats, favorites])
+
+  // Initialize form data from user profile
+  useEffect(() => {
+    if (convexUser) {
+      // Note: Bio, location, and experience may need to be added to the users schema
+      // For now, using defaults or storing in local state
+      setBio("")
+      setLocation("")
+      setExperience("Advanced")
+    }
+  }, [convexUser])
 
   const handleEdit = () => {
     setIsEditing(true)
   }
 
-  const handleSave = () => {
-    // TODO: Connect to Convex to save profile changes
-    // For now, just close the dialog
-    setIsEditing(false)
+  const updateProfile = useMutation(api.users.updateProfile)
+
+  const handleSave = async () => {
+    try {
+      // Update user profile (name, email, phone)
+      // Note: Bio, location, and experience may need separate storage or schema update
+      await updateProfile({
+        name: user?.fullName || "",
+        email: user?.emailAddresses?.[0]?.emailAddress || undefined,
+      })
+      setIsEditing(false)
+    } catch (error) {
+      console.error("Error updating profile:", error)
+      alert("Failed to update profile. Please try again.")
+    }
   }
 
   const handleCancel = () => {
@@ -54,6 +104,20 @@ export default function ProfilePage() {
 
   const userInitials = user?.firstName?.[0] || user?.emailAddresses?.[0]?.emailAddress?.[0] || "U"
   const memberSince = user?.createdAt ? new Date(user.createdAt).getFullYear() : DEFAULT_MEMBER_YEAR
+
+  // Show loading state
+  if (convexUser === undefined || reviewStats === undefined || reservations === undefined || favorites === undefined) {
+    return (
+      <div className="container mx-auto max-w-5xl px-4 py-8">
+        <div className="flex min-h-[60vh] items-center justify-center">
+          <div className="text-center">
+            <Loader2 className="mx-auto mb-4 size-8 animate-spin text-muted-foreground" />
+            <p className="text-muted-foreground">Loading profile...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="container mx-auto max-w-5xl px-4 py-8">
@@ -88,7 +152,7 @@ export default function ProfilePage() {
                     Super Host
                   </Badge>
                   <Badge className="gap-1.5" variant="outline">
-                    <Calendar className="size-3.5" />5 Trips Completed
+                    <Calendar className="size-3.5" />{stats.tripsCount} Trips Completed
                   </Badge>
                 </div>
 
@@ -111,7 +175,7 @@ export default function ProfilePage() {
               <Calendar className="size-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="font-bold text-2xl">12</div>
+              <div className="font-bold text-2xl">{stats.tripsCount}</div>
               <p className="text-muted-foreground text-xs">Total completed</p>
             </CardContent>
           </Card>
@@ -122,7 +186,9 @@ export default function ProfilePage() {
               <Star className="size-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="font-bold text-2xl">4.8</div>
+              <div className="font-bold text-2xl">
+                {stats.averageRating > 0 ? stats.averageRating.toFixed(1) : "N/A"}
+              </div>
               <p className="text-muted-foreground text-xs">Average from reviews</p>
             </CardContent>
           </Card>
@@ -133,7 +199,7 @@ export default function ProfilePage() {
               <Star className="size-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="font-bold text-2xl">5</div>
+              <div className="font-bold text-2xl">{stats.favoritesCount}</div>
               <p className="text-muted-foreground text-xs">Saved vehicles</p>
             </CardContent>
           </Card>

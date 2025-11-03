@@ -1,5 +1,7 @@
 "use client"
 
+import { useQuery, useMutation } from "convex/react"
+import { useEffect, useState } from "react"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
@@ -13,18 +15,10 @@ import {
 } from "@workspace/ui/components/select"
 import { Separator } from "@workspace/ui/components/separator"
 import { Textarea } from "@workspace/ui/components/textarea"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
-import { useState } from "react"
-
-// TODO: Fetch from Convex query api.tracks.getTracks
-const AVAILABLE_TRACKS = [
-  { _id: "track1", name: "Daytona International Speedway", location: "Daytona Beach, FL" },
-  { _id: "track2", name: "Sebring International Raceway", location: "Sebring, FL" },
-  { _id: "track3", name: "Circuit of the Americas", location: "Austin, TX" },
-  { _id: "track4", name: "Road Atlanta", location: "Braselton, GA" },
-]
+import { api } from "@/lib/convex"
 
 const TRANSMISSION_OPTIONS = ["Manual", "Automatic", "PDK", "DCT", "CVT"]
 const DRIVETRAIN_OPTIONS = ["RWD", "AWD", "FWD"]
@@ -54,40 +48,88 @@ export default function EditVehiclePage() {
   const vehicleId = params.id as string
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // TODO: Replace with Convex query
-  // const vehicle = useQuery(api.vehicles.getById, { id: vehicleId })
+  // Fetch vehicle and tracks from Convex
+  const vehicle = useQuery(
+    api.vehicles.getById,
+    vehicleId ? { id: vehicleId as any } : "skip"
+  )
+  const tracks = useQuery(api.tracks.getAll, {})
 
-  // Mock data - will be replaced with Convex query
+  // Initialize form data
   const [formData, setFormData] = useState({
-    trackId: "track1",
-    make: "Porsche",
-    model: "911 GT3",
-    year: 2023,
-    dailyRate: 899,
-    description:
-      "Track-ready Porsche 911 GT3 with full racing package. This exceptional sports car delivers uncompromising performance on both the road and track.",
-    horsepower: 502,
-    transmission: "PDK",
-    drivetrain: "RWD",
-    engineType: "Flat-6",
-    mileage: 8500,
-    amenities: [
-      "GPS Navigation",
-      "Racing Seats",
-      "Roll Cage",
-      "Fire Suppression System",
-      "Data Logger",
-      "Track Tires",
-    ],
-    addOns: [
-      {
-        name: "Professional Driving Instructor",
-        price: 250,
-        description: "Experienced track instructor for your session",
-        isRequired: false,
-      },
-    ],
+    trackId: "",
+    make: "",
+    model: "",
+    year: 0,
+    dailyRate: 0,
+    description: "",
+    horsepower: 0,
+    transmission: "",
+    drivetrain: "",
+    engineType: "",
+    mileage: 0,
+    amenities: [] as string[],
+    addOns: [] as Array<{
+      name: string
+      price: number
+      description?: string
+      isRequired?: boolean
+    }>,
   })
+
+  // Populate form data when vehicle loads
+  useEffect(() => {
+    if (vehicle) {
+      setFormData({
+        trackId: vehicle.trackId || "",
+        make: vehicle.make || "",
+        model: vehicle.model || "",
+        year: vehicle.year || 0,
+        dailyRate: vehicle.dailyRate || 0,
+        description: vehicle.description || "",
+        horsepower: vehicle.horsepower || 0,
+        transmission: vehicle.transmission || "",
+        drivetrain: vehicle.drivetrain || "",
+        engineType: vehicle.engineType || "",
+        mileage: vehicle.mileage || 0,
+        amenities: vehicle.amenities || [],
+        addOns: vehicle.addOns || [],
+      })
+    }
+  }, [vehicle])
+
+  // Show loading state
+  if (vehicle === undefined || tracks === undefined) {
+    return (
+      <div className="container mx-auto max-w-4xl px-4 py-8">
+        <div className="flex min-h-[60vh] items-center justify-center">
+          <div className="text-center">
+            <Loader2 className="mx-auto mb-4 size-8 animate-spin text-muted-foreground" />
+            <p className="text-muted-foreground">Loading vehicle data...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Show error if vehicle not found
+  if (!vehicle) {
+    return (
+      <div className="container mx-auto max-w-4xl px-4 py-8">
+        <Card>
+          <CardContent className="py-12 text-center">
+            <p className="mb-2 font-bold text-2xl">Vehicle Not Found</p>
+            <p className="mb-6 text-muted-foreground">
+              The vehicle you're looking for doesn't exist or has been removed.
+            </p>
+            <Link href="/host/vehicles/list">
+              <Button>Back to Vehicles</Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
@@ -120,22 +162,35 @@ export default function EditVehiclePage() {
     })
   }
 
+  const updateVehicle = useMutation(api.vehicles.update)
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
 
     try {
-      // TODO: Replace with Convex mutation
-      // await api.vehicles.update({ id: vehicleId, ...formData })
-
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      await updateVehicle({
+        id: vehicleId as any,
+        trackId: formData.trackId ? (formData.trackId as any) : undefined,
+        make: formData.make || undefined,
+        model: formData.model || undefined,
+        year: formData.year || undefined,
+        dailyRate: formData.dailyRate || undefined,
+        description: formData.description || undefined,
+        horsepower: formData.horsepower || undefined,
+        transmission: formData.transmission || undefined,
+        drivetrain: formData.drivetrain || undefined,
+        engineType: formData.engineType || undefined,
+        mileage: formData.mileage || undefined,
+        amenities: formData.amenities.length > 0 ? formData.amenities : undefined,
+        addOns: formData.addOns.length > 0 ? formData.addOns : undefined,
+      })
 
       // Redirect to vehicle detail page after successful update
       router.push(`/host/vehicles/${vehicleId}`)
     } catch (error) {
       console.error("Error updating vehicle:", error)
-      // TODO: Show error message to user
+      alert("Failed to update vehicle. Please try again.")
     } finally {
       setIsSubmitting(false)
     }
@@ -163,12 +218,15 @@ export default function EditVehiclePage() {
           <CardContent className="space-y-6">
             <div className="space-y-2">
               <Label htmlFor="trackId">Track Location *</Label>
-              <Select onValueChange={(value) => handleSelectChange("trackId", value)}>
+              <Select
+                value={formData.trackId}
+                onValueChange={(value) => handleSelectChange("trackId", value)}
+              >
                 <SelectTrigger id="trackId">
                   <SelectValue placeholder="Select a track" />
                 </SelectTrigger>
                 <SelectContent>
-                  {AVAILABLE_TRACKS.map((track) => (
+                  {tracks.map((track) => (
                     <SelectItem key={track._id} value={track._id}>
                       {track.name} - {track.location}
                     </SelectItem>

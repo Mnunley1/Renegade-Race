@@ -36,15 +36,15 @@ export function TeamCard({
   ...props
 }: TeamCardProps) {
   return (
-    <Link href={`/motorsports/teams/${id}`}>
+    <Link href={`/motorsports/teams/${id}`} className="h-full">
       <Card
         className={cn(
-          "group relative overflow-hidden border-2 transition-all hover:scale-[1.02] hover:shadow-xl",
+          "group relative flex h-full flex-col overflow-hidden border-2 transition-all hover:scale-[1.02] hover:shadow-xl",
           className
         )}
         {...props}
       >
-        <div className="relative h-48 w-full overflow-hidden bg-muted">
+        <div className="relative h-48 w-full flex-shrink-0 overflow-hidden bg-muted">
           {logoUrl ? (
             <Image
               alt={name}
@@ -60,8 +60,8 @@ export function TeamCard({
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
         </div>
-        <CardContent className="p-6">
-          <div className="space-y-4">
+        <CardContent className="flex flex-1 flex-col p-6">
+          <div className="flex flex-1 flex-col space-y-4">
             <div>
               <h3 className="font-bold text-xl transition-colors group-hover:text-primary">
                 {name}
@@ -79,7 +79,7 @@ export function TeamCard({
               </div>
             </div>
 
-            <div className="space-y-2">
+            <div className="mt-auto space-y-2">
               <div className="flex flex-wrap gap-2">
                 {specialties.slice(0, MAX_VISIBLE_SPECIALTIES).map((specialty) => (
                   <Badge key={`specialty-${specialty}`} variant="secondary">
@@ -88,7 +88,7 @@ export function TeamCard({
                 ))}
               </div>
               {requirements && requirements.length > 0 && (
-                <p className="text-muted-foreground text-xs">
+                <p className="line-clamp-2 text-muted-foreground text-xs">
                   Requirements: {requirements.join(", ")}
                 </p>
               )}

@@ -1,5 +1,7 @@
 "use client"
 
+import { useQuery, useMutation, useMemo } from "convex/react"
+import { useState } from "react"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Badge } from "@workspace/ui/components/badge"
@@ -14,126 +16,63 @@ import {
   User,
   Car,
   Filter,
+  Loader2,
 } from "lucide-react"
 import Link from "next/link"
 import { useUser } from "@clerk/nextjs"
-import { useState } from "react"
+import { api } from "@/lib/convex"
 
 export default function HostReservationsPage() {
   const { user } = useUser()
   const [selectedStatus, setSelectedStatus] = useState<string>("all")
 
-  // TODO: Replace with Convex queries
-  // const pendingReservations = useQuery(api.reservations.getPendingForOwner, { ownerId: user?.id || "" })
-  // const confirmedReservations = useQuery(api.reservations.getConfirmedForOwner, { ownerId: user?.id || "" })
-  // const allReservations = useQuery(api.reservations.getByUser, { userId: user?.id || "", role: "owner" })
+  // Fetch reservations from Convex
+  const pendingReservations = useQuery(
+    api.reservations.getPendingForOwner,
+    user?.id ? { ownerId: user.id } : "skip"
+  )
+  const confirmedReservations = useQuery(
+    api.reservations.getConfirmedForOwner,
+    user?.id ? { ownerId: user.id } : "skip"
+  )
+  const allReservationsData = useQuery(
+    api.reservations.getByUser,
+    user?.id ? { userId: user.id, role: "owner" as const } : "skip"
+  )
 
-  // Mock data - will be replaced with Convex queries
-  const pendingReservations = [
-    {
-      _id: "res1",
-      vehicleId: "vehicle1",
-      vehicle: {
-        make: "Porsche",
-        model: "911 GT3",
-        year: 2023,
-        images: [{ cardUrl: "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=400" }],
-      },
-      renter: {
-        name: "John Smith",
-        email: "john@example.com",
-        profileImage: "https://api.dicebear.com/7.x/avataaars/svg?seed=John",
-      },
-      startDate: "2024-03-22",
-      endDate: "2024-03-24",
-      totalDays: 3,
-      totalAmount: 2697,
-      dailyRate: 899,
-      status: "pending",
-      renterMessage: "Looking forward to the track day! Would love to book this for the weekend.",
-      createdAt: Date.now() - 2 * 60 * 60 * 1000,
-    },
-    {
-      _id: "res2",
-      vehicleId: "vehicle2",
-      vehicle: {
-        make: "Ferrari",
-        model: "F8 Tributo",
-        year: 2022,
-        images: [{ cardUrl: "https://images.unsplash.com/photo-1549952891-fcf406dd2aa9?w=400" }],
-      },
-      renter: {
-        name: "Sarah Johnson",
-        email: "sarah@example.com",
-        profileImage: "https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah",
-      },
-      startDate: "2024-04-01",
-      endDate: "2024-04-03",
-      totalDays: 3,
-      totalAmount: 3597,
-      dailyRate: 1199,
-      status: "pending",
-      renterMessage: "First time renting. Would appreciate any tips!",
-      createdAt: Date.now() - 5 * 60 * 60 * 1000,
-    },
-  ]
+  // Combine all reservations
+  const allReservations = useMemo(() => {
+    if (!allReservationsData) return []
+    return allReservationsData
+  }, [allReservationsData])
 
-  const confirmedReservations = [
-    {
-      _id: "res3",
-      vehicleId: "vehicle1",
-      vehicle: {
-        make: "Porsche",
-        model: "911 GT3",
-        year: 2023,
-        images: [{ cardUrl: "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=400" }],
-      },
-      renter: {
-        name: "Mike Davis",
-        email: "mike@example.com",
-        profileImage: "https://api.dicebear.com/7.x/avataaars/svg?seed=Mike",
-      },
-      startDate: "2024-03-15",
-      endDate: "2024-03-17",
-      totalDays: 3,
-      totalAmount: 2697,
-      dailyRate: 899,
-      status: "confirmed",
-      renterMessage: "Can't wait to drive this on the track!",
-      createdAt: Date.now() - 7 * 24 * 60 * 60 * 1000,
-    },
-  ]
+  // Mutations
+  const approveReservation = useMutation(api.reservations.approve)
+  const declineReservation = useMutation(api.reservations.decline)
 
-  const completedReservations = [
-    {
-      _id: "res4",
-      vehicleId: "vehicle1",
-      vehicle: {
-        make: "Porsche",
-        model: "911 GT3",
-        year: 2023,
-        images: [{ cardUrl: "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=400" }],
-      },
-      renter: {
-        name: "David Chen",
-        email: "david@example.com",
-        profileImage: "https://api.dicebear.com/7.x/avataaars/svg?seed=David",
-      },
-      startDate: "2024-02-10",
-      endDate: "2024-02-12",
-      totalDays: 3,
-      totalAmount: 2697,
-      dailyRate: 899,
-      status: "completed",
-      createdAt: Date.now() - 30 * 24 * 60 * 60 * 1000,
-    },
-  ]
+  // Show loading state
+  if (
+    pendingReservations === undefined ||
+    confirmedReservations === undefined ||
+    allReservationsData === undefined
+  ) {
+    return (
+      <div className="container mx-auto max-w-7xl px-4 py-8">
+        <div className="flex min-h-[60vh] items-center justify-center">
+          <div className="text-center">
+            <Loader2 className="mx-auto mb-4 size-8 animate-spin text-muted-foreground" />
+            <p className="text-muted-foreground">Loading reservations...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
-  const allReservations = [
-    ...pendingReservations,
-    ...confirmedReservations,
-    ...completedReservations,
-  ]
+  // Get counts for each status
+  const pendingCount = pendingReservations?.length || 0
+  const confirmedCount = confirmedReservations?.length || 0
+  const completedCount = allReservations.filter((res) => res.status === "completed").length
+  const cancelledCount = allReservations.filter((res) => res.status === "cancelled").length
 
   const filteredReservations =
     selectedStatus === "all"
@@ -196,15 +135,25 @@ export default function HostReservationsPage() {
   }
 
   const handleApprove = async (reservationId: string) => {
-    // TODO: Replace with Convex mutation
-    // await api.reservations.approve({ reservationId })
-    console.log("Approve reservation:", reservationId)
+    try {
+      await approveReservation({
+        reservationId: reservationId as any,
+      })
+    } catch (error) {
+      console.error("Error approving reservation:", error)
+      alert("Failed to approve reservation. Please try again.")
+    }
   }
 
   const handleDecline = async (reservationId: string) => {
-    // TODO: Replace with Convex mutation
-    // await api.reservations.decline({ reservationId })
-    console.log("Decline reservation:", reservationId)
+    try {
+      await declineReservation({
+        reservationId: reservationId as any,
+      })
+    } catch (error) {
+      console.error("Error declining reservation:", error)
+      alert("Failed to decline reservation. Please try again.")
+    }
   }
 
   return (
@@ -221,13 +170,13 @@ export default function HostReservationsPage() {
               All ({allReservations.length})
             </TabsTrigger>
             <TabsTrigger onClick={() => setSelectedStatus("pending")} value="pending">
-              Pending ({pendingReservations.length})
+              Pending ({pendingCount})
             </TabsTrigger>
             <TabsTrigger onClick={() => setSelectedStatus("confirmed")} value="confirmed">
-              Confirmed ({confirmedReservations.length})
+              Confirmed ({confirmedCount})
             </TabsTrigger>
             <TabsTrigger onClick={() => setSelectedStatus("completed")} value="completed">
-              Completed ({completedReservations.length})
+              Completed ({completedCount})
             </TabsTrigger>
           </TabsList>
         </div>
@@ -245,7 +194,8 @@ export default function HostReservationsPage() {
             <div className="space-y-4">
               {filteredReservations.map((reservation) => {
                 const vehicleImage =
-                  reservation.vehicle.images?.[0]?.cardUrl ||
+                  reservation.vehicle?.images?.[0]?.cardUrl ||
+                  reservation.vehicle?.images?.[0]?.imageUrl ||
                   "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=400"
 
                 return (
@@ -254,7 +204,7 @@ export default function HostReservationsPage() {
                       {/* Vehicle Image */}
                       <div className="relative h-48 w-full md:h-auto md:w-64 shrink-0 overflow-hidden">
                         <img
-                          alt={`${reservation.vehicle.year} ${reservation.vehicle.make} ${reservation.vehicle.model}`}
+                          alt={`${reservation.vehicle?.year} ${reservation.vehicle?.make} ${reservation.vehicle?.model}`}
                           className="size-full object-cover"
                           src={vehicleImage}
                         />
@@ -266,15 +216,15 @@ export default function HostReservationsPage() {
                           <div className="flex-1">
                             <div className="mb-2 flex items-center gap-3">
                               <h2 className="font-bold text-xl">
-                                {reservation.vehicle.year} {reservation.vehicle.make}{" "}
-                                {reservation.vehicle.model}
+                                {reservation.vehicle?.year} {reservation.vehicle?.make}{" "}
+                                {reservation.vehicle?.model}
                               </h2>
                               {getStatusBadge(reservation.status)}
                             </div>
                             <div className="mb-3 flex items-center gap-3">
                               <div className="flex items-center gap-2">
                                 <User className="size-4 text-muted-foreground" />
-                                <span className="font-medium">{reservation.renter.name}</span>
+                                <span className="font-medium">{reservation.renter?.name || "Unknown Renter"}</span>
                               </div>
                               <span className="text-muted-foreground">•</span>
                               <span className="text-muted-foreground text-sm">
@@ -380,7 +330,8 @@ export default function HostReservationsPage() {
             <div className="space-y-4">
               {pendingReservations.map((reservation) => {
                 const vehicleImage =
-                  reservation.vehicle.images?.[0]?.cardUrl ||
+                  reservation.vehicle?.images?.[0]?.cardUrl ||
+                  reservation.vehicle?.images?.[0]?.imageUrl ||
                   "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=400"
 
                 return (
@@ -388,7 +339,7 @@ export default function HostReservationsPage() {
                     <div className="flex flex-col md:flex-row">
                       <div className="relative h-48 w-full md:h-auto md:w-64 shrink-0 overflow-hidden">
                         <img
-                          alt={`${reservation.vehicle.year} ${reservation.vehicle.make} ${reservation.vehicle.model}`}
+                          alt={`${reservation.vehicle?.year} ${reservation.vehicle?.make} ${reservation.vehicle?.model}`}
                           className="size-full object-cover"
                           src={vehicleImage}
                         />
@@ -397,11 +348,11 @@ export default function HostReservationsPage() {
                         <div className="mb-4 flex items-start justify-between">
                           <div className="flex-1">
                             <h2 className="mb-2 font-bold text-xl">
-                              {reservation.vehicle.year} {reservation.vehicle.make}{" "}
-                              {reservation.vehicle.model}
+                              {reservation.vehicle?.year} {reservation.vehicle?.make}{" "}
+                              {reservation.vehicle?.model}
                             </h2>
                             <div className="mb-3 flex items-center gap-3">
-                              <span className="font-medium">{reservation.renter.name}</span>
+                              <span className="font-medium">{reservation.renter?.name || "Unknown Renter"}</span>
                               <span className="text-muted-foreground">•</span>
                               <span className="text-muted-foreground text-sm">
                                 {formatDate(reservation.startDate)} - {formatDate(reservation.endDate)}
@@ -419,7 +370,7 @@ export default function HostReservationsPage() {
                         )}
                         <div className="mt-auto flex items-center justify-between">
                           <p className="font-bold text-primary">
-                            ${reservation.totalAmount.toLocaleString()}
+                            ${Math.round((reservation.totalAmount || 0) / 100).toLocaleString()}
                           </p>
                           <div className="flex gap-2">
                             <Button onClick={() => handleApprove(reservation._id)} size="sm">
@@ -464,7 +415,7 @@ export default function HostReservationsPage() {
                     <div className="flex flex-col md:flex-row">
                       <div className="relative h-48 w-full md:h-auto md:w-64 shrink-0 overflow-hidden">
                         <img
-                          alt={`${reservation.vehicle.year} ${reservation.vehicle.make} ${reservation.vehicle.model}`}
+                          alt={`${reservation.vehicle?.year} ${reservation.vehicle?.make} ${reservation.vehicle?.model}`}
                           className="size-full object-cover"
                           src={vehicleImage}
                         />
@@ -488,7 +439,7 @@ export default function HostReservationsPage() {
                         </div>
                         <div className="mt-auto flex items-center justify-between">
                           <p className="font-bold text-primary">
-                            ${reservation.totalAmount.toLocaleString()}
+                            ${Math.round((reservation.totalAmount || 0) / 100).toLocaleString()}
                           </p>
                           <Link href={`/messages?conversation=${reservation._id}`}>
                             <Button size="sm" variant="outline">
@@ -527,7 +478,7 @@ export default function HostReservationsPage() {
                     <div className="flex flex-col md:flex-row">
                       <div className="relative h-48 w-full md:h-auto md:w-64 shrink-0 overflow-hidden">
                         <img
-                          alt={`${reservation.vehicle.year} ${reservation.vehicle.make} ${reservation.vehicle.model}`}
+                          alt={`${reservation.vehicle?.year} ${reservation.vehicle?.make} ${reservation.vehicle?.model}`}
                           className="size-full object-cover"
                           src={vehicleImage}
                         />
@@ -551,7 +502,7 @@ export default function HostReservationsPage() {
                         </div>
                         <div className="mt-auto flex items-center justify-between">
                           <p className="font-bold text-primary">
-                            ${reservation.totalAmount.toLocaleString()}
+                            ${Math.round((reservation.totalAmount || 0) / 100).toLocaleString()}
                           </p>
                           <Button size="sm" variant="outline">
                             View Details
