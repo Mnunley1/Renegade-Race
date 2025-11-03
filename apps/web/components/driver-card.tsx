@@ -3,6 +3,7 @@ import { Card, CardContent } from "@workspace/ui/components/card"
 import { cn } from "@workspace/ui/lib/utils"
 import { Award, MapPin, Star } from "lucide-react"
 import Image from "next/image"
+import Link from "next/link"
 import type { ComponentProps } from "react"
 
 interface DriverCardProps extends ComponentProps<"div"> {
@@ -42,14 +43,15 @@ export function DriverCard({
   const truncatedBio = bio.length > MAX_BIO_LENGTH ? `${bio.substring(0, MAX_BIO_LENGTH)}...` : bio
 
   return (
-    <Card
-      className={cn(
-        "group relative flex h-full flex-col overflow-hidden border-2 transition-all hover:scale-[1.02] hover:shadow-xl",
-        className
-      )}
-      {...props}
-    >
-      <CardContent className="flex flex-1 flex-col p-6">
+    <Link href={`/motorsports/drivers/${id}`} className="h-full">
+      <Card
+        className={cn(
+          "group relative flex h-full flex-col overflow-hidden border-2 transition-all hover:scale-[1.02] hover:shadow-xl cursor-pointer",
+          className
+        )}
+        {...props}
+      >
+        <CardContent className="flex flex-1 flex-col p-6">
         <div className="flex flex-1 flex-col space-y-4">
           <div className="flex items-start gap-4">
             <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-full border-2 border-primary/20">
@@ -101,5 +103,6 @@ export function DriverCard({
         </div>
       </CardContent>
     </Card>
+    </Link>
   )
 }

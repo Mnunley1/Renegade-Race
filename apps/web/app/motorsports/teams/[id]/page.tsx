@@ -45,9 +45,9 @@ export default async function TeamDetailPage({ params }: TeamDetailPageProps) {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <Link href="/motorsports">
+      <Link href="/motorsports/teams">
         <Button className="mb-6" variant="outline">
-          ← Back to Motorsports
+          ← Back to Teams
         </Button>
       </Link>
 
