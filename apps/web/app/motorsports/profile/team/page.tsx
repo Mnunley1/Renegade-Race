@@ -1,5 +1,8 @@
 "use client"
 
+import { useMutation } from "convex/react"
+import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@workspace/ui/components/button"
 import {
   Card,
@@ -14,7 +17,7 @@ import { Separator } from "@workspace/ui/components/separator"
 import { Textarea } from "@workspace/ui/components/textarea"
 import { ArrowLeft, Check, Plus, X } from "lucide-react"
 import Link from "next/link"
-import { useState } from "react"
+import { api } from "@/lib/convex"
 
 const COMMON_SPECIALTIES = [
   "GT3",
@@ -31,6 +34,7 @@ const COMMON_SPECIALTIES = [
 ]
 
 export default function CreateTeamProfilePage() {
+  const router = useRouter()
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -55,20 +59,39 @@ export default function CreateTeamProfilePage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [newRequirement, setNewRequirement] = useState("")
 
+  const createTeam = useMutation(api.teams.create)
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
 
     try {
-      // TODO: Connect to Convex mutation to create team profile
-      // await api.teams.create({ ...formData })
-
-      // Simulate API call
-      const API_DELAY_MS = 1000
-      await new Promise((resolve) => setTimeout(resolve, API_DELAY_MS))
+      await createTeam({
+        name: formData.name,
+        description: formData.description,
+        logoUrl: formData.logoUrl || undefined,
+        location: formData.location,
+        specialties: formData.specialties,
+        availableSeats: formData.availableSeats,
+        requirements: formData.requirements,
+        contactInfo: {
+          phone: formData.contactInfo.phone || undefined,
+          email: formData.contactInfo.email || undefined,
+          website: formData.contactInfo.website || undefined,
+        },
+        socialLinks: {
+          instagram: formData.socialLinks.instagram || undefined,
+          twitter: formData.socialLinks.twitter || undefined,
+          facebook: formData.socialLinks.facebook || undefined,
+          linkedin: formData.socialLinks.linkedin || undefined,
+        },
+      })
 
       // Redirect to motorsports page after successful creation
-      // router.push('/motorsports')
+      router.push("/motorsports")
+    } catch (error) {
+      console.error("Error creating team profile:", error)
+      alert("Failed to create team profile. Please try again.")
     } finally {
       setIsSubmitting(false)
     }

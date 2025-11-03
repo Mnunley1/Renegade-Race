@@ -7,9 +7,10 @@ import { Card, CardContent } from "@workspace/ui/components/card"
 import { Separator } from "@workspace/ui/components/separator"
 import { Calendar } from "lucide-react"
 import Link from "next/link"
-import { VehicleCard } from "@/components/vehicle-card"
+import { TripCard } from "@/components/trip-card"
 import { api } from "@/lib/convex"
 import { useMemo } from "react"
+import type { Id } from "@workspace/backend/convex/_generated/dataModel"
 
 export default function TripsPage() {
   const { user } = useUser()
@@ -31,29 +32,43 @@ export default function TripsPage() {
         if (!vehicle) return null
         const primaryImage = vehicle.images?.find((img) => img.isPrimary) || vehicle.images?.[0]
         return {
-          id: res._id,
-          image: primaryImage?.cardUrl || primaryImage?.imageUrl || "",
-          name: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
-          year: vehicle.year,
-          make: vehicle.make,
-          model: vehicle.model,
-          pricePerDay: vehicle.dailyRate,
-          location: vehicle.track?.location || "",
-          rating: 0,
-          reviews: 0,
+          reservationId: res._id,
+          vehicleId: vehicle._id,
+          vehicleName: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
+          vehicleImage: primaryImage?.cardUrl || primaryImage?.imageUrl || "",
+          vehicleYear: vehicle.year,
+          vehicleMake: vehicle.make,
+          vehicleModel: vehicle.model,
+          location: vehicle.track?.location || vehicle.track?.name || "Location TBD",
+          startDate: res.startDate,
+          endDate: res.endDate,
+          pickupTime: res.pickupTime,
+          dropoffTime: res.dropoffTime,
+          totalDays: res.totalDays,
+          dailyRate: res.dailyRate,
+          totalAmount: res.totalAmount,
+          status: res.status,
+          addOns: res.addOns,
         }
       })
       .filter(Boolean) as Array<{
-        id: string
-        image: string
-        name: string
-        year: number
-        make: string
-        model: string
-        pricePerDay: number
+        reservationId: Id<"reservations">
+        vehicleId: Id<"vehicles">
+        vehicleName: string
+        vehicleImage: string
+        vehicleYear: number
+        vehicleMake: string
+        vehicleModel: string
         location: string
-        rating: number
-        reviews: number
+        startDate: string
+        endDate: string
+        pickupTime?: string
+        dropoffTime?: string
+        totalDays: number
+        dailyRate: number
+        totalAmount: number
+        status: "pending" | "confirmed" | "cancelled" | "completed" | "declined"
+        addOns?: Array<{ name: string; price: number; description?: string }>
       }>
   }, [reservationsData])
 
@@ -67,68 +82,46 @@ export default function TripsPage() {
         if (!vehicle) return null
         const primaryImage = vehicle.images?.find((img) => img.isPrimary) || vehicle.images?.[0]
         return {
-          id: res._id,
-          image: primaryImage?.cardUrl || primaryImage?.imageUrl || "",
-          name: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
-          year: vehicle.year,
-          make: vehicle.make,
-          model: vehicle.model,
-          pricePerDay: vehicle.dailyRate,
-          location: vehicle.track?.location || "",
-          rating: 0,
-          reviews: 0,
+          reservationId: res._id,
+          vehicleId: vehicle._id,
+          vehicleName: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
+          vehicleImage: primaryImage?.cardUrl || primaryImage?.imageUrl || "",
+          vehicleYear: vehicle.year,
+          vehicleMake: vehicle.make,
+          vehicleModel: vehicle.model,
+          location: vehicle.track?.location || vehicle.track?.name || "Location TBD",
+          startDate: res.startDate,
+          endDate: res.endDate,
+          pickupTime: res.pickupTime,
+          dropoffTime: res.dropoffTime,
+          totalDays: res.totalDays,
+          dailyRate: res.dailyRate,
+          totalAmount: res.totalAmount,
+          status: res.status,
+          addOns: res.addOns,
         }
       })
       .filter(Boolean) as Array<{
-        id: string
-        image: string
-        name: string
-        year: number
-        make: string
-        model: string
-        pricePerDay: number
+        reservationId: Id<"reservations">
+        vehicleId: Id<"vehicles">
+        vehicleName: string
+        vehicleImage: string
+        vehicleYear: number
+        vehicleMake: string
+        vehicleModel: string
         location: string
-        rating: number
-        reviews: number
+        startDate: string
+        endDate: string
+        pickupTime?: string
+        dropoffTime?: string
+        totalDays: number
+        dailyRate: number
+        totalAmount: number
+        status: "pending" | "confirmed" | "cancelled" | "completed" | "declined"
+        addOns?: Array<{ name: string; price: number; description?: string }>
       }>
   }, [reservationsData])
 
-  const mockUpcomingTrips: Array<{
-    id: string
-    image: string
-    name: string
-    year: number
-    make: string
-    model: string
-    pricePerDay: number
-    location: string
-  }> = []
-  const mockPastTrips = [
-    {
-      id: "1",
-      image: "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=800",
-      name: "Porsche 911 GT3",
-      year: 2023,
-      make: "Porsche",
-      model: "911 GT3",
-      pricePerDay: 899,
-      location: "Daytona Beach, FL",
-      rating: 4.9,
-      reviews: 23,
-    },
-    {
-      id: "2",
-      image: "https://images.unsplash.com/photo-1549952891-fcf406dd2aa9?w=800",
-      name: "Ferrari F8 Tributo",
-      year: 2022,
-      make: "Ferrari",
-      model: "F8 Tributo",
-      pricePerDay: 1199,
-      location: "Orlando, FL",
-      rating: 4.8,
-      reviews: 31,
-    },
-  ]
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -157,9 +150,9 @@ export default function TripsPage() {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2">
               {upcomingTrips.map((trip) => (
-                <VehicleCard key={trip.id} {...trip} />
+                <TripCard key={trip.reservationId} {...trip} />
               ))}
             </div>
           )}
@@ -178,9 +171,9 @@ export default function TripsPage() {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2">
               {pastTrips.map((trip) => (
-                <VehicleCard key={trip.id} {...trip} />
+                <TripCard key={trip.reservationId} {...trip} />
               ))}
             </div>
           )}
