@@ -1,5 +1,6 @@
 "use client"
 
+import { useQuery } from "convex/react"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Badge } from "@workspace/ui/components/badge"
@@ -13,75 +14,43 @@ import {
   Clock,
   XCircle,
   Eye,
+  Loader2,
 } from "lucide-react"
 import Link from "next/link"
 import { useUser } from "@clerk/nextjs"
+import { api } from "@/lib/convex"
 
 export default function HostVehiclesListPage() {
   const { user } = useUser()
 
-  // TODO: Replace with Convex query
-  // const vehicles = useQuery(api.vehicles.getByOwner, { ownerId: user?.id || "" })
+  // Fetch vehicles from Convex
+  const vehicles = useQuery(
+    api.vehicles.getByOwner,
+    user?.id ? { ownerId: user.id } : "skip"
+  )
 
-  // Mock data - will be replaced with Convex query
-  const vehicles = [
-    {
-      _id: "1",
-      make: "Porsche",
-      model: "911 GT3",
-      year: 2023,
-      dailyRate: 899,
-      description: "Track-ready Porsche 911 GT3 with full racing package",
-      isActive: true,
-      isApproved: true,
-      track: { name: "Daytona International Speedway", location: "Daytona Beach, FL" },
-      images: [
-        {
-          cardUrl: "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=400",
-          isPrimary: true,
-        },
-      ],
-      createdAt: Date.now() - 30 * 24 * 60 * 60 * 1000,
-    },
-    {
-      _id: "2",
-      make: "Ferrari",
-      model: "F8 Tributo",
-      year: 2022,
-      dailyRate: 1199,
-      description: "Stunning Ferrari F8 Tributo ready for the track",
-      isActive: true,
-      isApproved: false,
-      track: { name: "Sebring International Raceway", location: "Sebring, FL" },
-      images: [
-        {
-          cardUrl: "https://images.unsplash.com/photo-1549952891-fcf406dd2aa9?w=400",
-          isPrimary: true,
-        },
-      ],
-      createdAt: Date.now() - 5 * 24 * 60 * 60 * 1000,
-    },
-    {
-      _id: "3",
-      make: "Lamborghini",
-      model: "Huracán",
-      year: 2024,
-      dailyRate: 1299,
-      description: "Brand new Lamborghini Huracán track edition",
-      isActive: false,
-      isApproved: true,
-      track: { name: "Circuit of the Americas", location: "Austin, TX" },
-      images: [
-        {
-          cardUrl: "https://images.unsplash.com/photo-1593941707882-a5bac6861d0d?w=400",
-          isPrimary: true,
-        },
-      ],
-      createdAt: Date.now() - 60 * 24 * 60 * 60 * 1000,
-    },
-  ]
+  // Show loading state
+  if (vehicles === undefined) {
+    return (
+      <div className="container mx-auto max-w-7xl px-4 py-8">
+        <div className="flex min-h-[60vh] items-center justify-center">
+          <div className="text-center">
+            <Loader2 className="mx-auto mb-4 size-8 animate-spin text-muted-foreground" />
+            <p className="text-muted-foreground">Loading vehicles...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
-  const getStatusBadge = (vehicle: (typeof vehicles)[0]) => {
+  const getStatusBadge = (
+    vehicle:
+      | (typeof vehicles)[0]
+      | {
+          isActive: boolean
+          isApproved: boolean
+        }
+  ) => {
     if (!vehicle.isActive) {
       return (
         <Badge className="gap-1.5 bg-gray-500/10 text-gray-700 dark:text-gray-400">
@@ -106,7 +75,8 @@ export default function HostVehiclesListPage() {
     )
   }
 
-  const formatDate = (timestamp: number) => {
+  const formatDate = (timestamp: number | undefined) => {
+    if (!timestamp) return "Unknown"
     const date = new Date(timestamp)
     return date.toLocaleDateString("en-US", {
       year: "numeric",
@@ -155,7 +125,9 @@ export default function HostVehiclesListPage() {
           {vehicles.map((vehicle) => {
             const primaryImage =
               vehicle.images?.find((img) => img.isPrimary)?.cardUrl ||
+              vehicle.images?.find((img) => img.isPrimary)?.imageUrl ||
               vehicle.images?.[0]?.cardUrl ||
+              vehicle.images?.[0]?.imageUrl ||
               "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=400"
 
             return (
@@ -190,7 +162,7 @@ export default function HostVehiclesListPage() {
                           </span>
                           <span className="flex items-center gap-1.5">
                             <Car className="size-4" />
-                            {vehicle.track.name}
+                            {vehicle.track?.name || "Track TBD"}
                           </span>
                           <span className="font-semibold text-primary">
                             ${vehicle.dailyRate}/day

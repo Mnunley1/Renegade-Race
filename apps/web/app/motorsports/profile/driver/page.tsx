@@ -1,5 +1,8 @@
 "use client"
 
+import { useMutation } from "convex/react"
+import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@workspace/ui/components/button"
 import {
   Card,
@@ -21,7 +24,7 @@ import { Separator } from "@workspace/ui/components/separator"
 import { Textarea } from "@workspace/ui/components/textarea"
 import { ArrowLeft, Check } from "lucide-react"
 import Link from "next/link"
-import { useState } from "react"
+import { api } from "@/lib/convex"
 
 const EXPERIENCE_LEVELS = [
   { value: "beginner", label: "Beginner" },
@@ -48,6 +51,7 @@ const COMMON_CATEGORIES = [
 const AVAILABILITY_OPTIONS = ["weekends", "weekdays", "evenings", "flexible"]
 
 export default function CreateDriverProfilePage() {
+  const router = useRouter()
   const [formData, setFormData] = useState({
     bio: "",
     achievements: "",
@@ -71,20 +75,39 @@ export default function CreateDriverProfilePage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [customLicense, setCustomLicense] = useState("")
 
+  const createDriverProfile = useMutation(api.driverProfiles.create)
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
 
     try {
-      // TODO: Connect to Convex mutation to create driver profile
-      // await api.driverProfiles.create({ ...formData })
+      // Map experience to match Convex schema
+      const experienceMap: Record<string, "beginner" | "intermediate" | "advanced" | "professional"> = {
+        Beginner: "beginner",
+        Intermediate: "intermediate",
+        Advanced: "advanced",
+        Professional: "professional",
+      }
 
-      // Simulate API call
-      const API_DELAY_MS = 1000
-      await new Promise((resolve) => setTimeout(resolve, API_DELAY_MS))
+      await createDriverProfile({
+        bio: formData.bio,
+        experience: experienceMap[formData.experience] || "beginner",
+        licenses: formData.licenses,
+        preferredCategories: formData.preferredCategories,
+        availability: formData.availability,
+        location: formData.location,
+        contactInfo: {
+          phone: formData.contactInfo.phone || undefined,
+          email: formData.contactInfo.email || undefined,
+        },
+      })
 
       // Redirect to motorsports page after successful creation
-      // router.push('/motorsports')
+      router.push("/motorsports")
+    } catch (error) {
+      console.error("Error creating driver profile:", error)
+      alert("Failed to create driver profile. Please try again.")
     } finally {
       setIsSubmitting(false)
     }

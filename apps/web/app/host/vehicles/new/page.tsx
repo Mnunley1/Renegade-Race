@@ -1,5 +1,7 @@
 "use client"
 
+import { useQuery, useMutation } from "convex/react"
+import { useState } from "react"
 import { Button } from "@workspace/ui/components/button"
 import {
   Card,
@@ -19,18 +21,10 @@ import {
 } from "@workspace/ui/components/select"
 import { Separator } from "@workspace/ui/components/separator"
 import { Textarea } from "@workspace/ui/components/textarea"
-import { ArrowLeft, Plus, X, Upload, CheckCircle2 } from "lucide-react"
+import { ArrowLeft, Plus, X, Upload, CheckCircle2, Loader2 } from "lucide-react"
 import Link from "next/link"
-import { useState } from "react"
 import { useRouter } from "next/navigation"
-
-// TODO: Fetch from Convex query api.tracks.getTracks
-const AVAILABLE_TRACKS = [
-  { _id: "track1", name: "Daytona International Speedway", location: "Daytona Beach, FL" },
-  { _id: "track2", name: "Sebring International Raceway", location: "Sebring, FL" },
-  { _id: "track3", name: "Circuit of the Americas", location: "Austin, TX" },
-  { _id: "track4", name: "Road Atlanta", location: "Braselton, GA" },
-]
+import { api } from "@/lib/convex"
 
 const TRANSMISSION_OPTIONS = ["Manual", "Automatic", "PDK", "DCT", "CVT"]
 const DRIVETRAIN_OPTIONS = ["RWD", "AWD", "FWD"]
@@ -58,6 +52,11 @@ export default function CreateVehiclePage() {
   const router = useRouter()
   const [currentStep, setCurrentStep] = useState(1)
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // Fetch tracks from Convex
+  const tracks = useQuery(api.tracks.getAll, {})
+  const generateUploadUrl = useMutation(api.vehicles.generateUploadUrl)
+  const createVehicle = useMutation(api.vehicles.create)
 
   const [formData, setFormData] = useState({
     trackId: "",
@@ -192,23 +191,74 @@ export default function CreateVehiclePage() {
     setIsSubmitting(true)
 
     try {
-      // TODO: Replace with Convex mutation
-      // 1. Generate upload URLs for images
-      // 2. Upload images to storage
-      // 3. Process images (create thumbnails, card, detail, hero sizes)
-      // 4. Create vehicle with api.vehicles.createVehicleWithImages
+      if (!formData.trackId || !formData.make || !formData.model || !formData.year || !formData.dailyRate || !formData.description) {
+        alert("Please fill in all required fields")
+        setIsSubmitting(false)
+        return
+      }
 
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 2000))
+      if (images.length === 0) {
+        alert("Please upload at least one image")
+        setIsSubmitting(false)
+        return
+      }
+
+      // For now, convert images to data URLs (base64) and use legacy create
+      // In production, you'd want to upload to Convex storage and process images
+      const imageUrls = await Promise.all(
+        images.map((img) => {
+          return new Promise<string>((resolve) => {
+            const reader = new FileReader()
+            reader.onloadend = () => {
+              resolve(reader.result as string)
+            }
+            reader.readAsDataURL(img.file)
+          })
+        })
+      )
+
+      // Create vehicle with images
+      const vehicleId = await createVehicle({
+        trackId: formData.trackId as any,
+        make: formData.make,
+        model: formData.model,
+        year: Number(formData.year),
+        dailyRate: Number(formData.dailyRate),
+        description: formData.description,
+        horsepower: formData.horsepower ? Number(formData.horsepower) : undefined,
+        transmission: formData.transmission || undefined,
+        drivetrain: formData.drivetrain || undefined,
+        engineType: formData.engineType || undefined,
+        mileage: formData.mileage ? Number(formData.mileage) : undefined,
+        amenities: formData.amenities,
+        images: imageUrls.map((url, index) => ({
+          imageUrl: url,
+          isPrimary: index === 0,
+        })),
+      })
 
       // Redirect to vehicle list after successful creation
       router.push("/host/vehicles/list")
     } catch (error) {
       console.error("Error creating vehicle:", error)
-      // TODO: Show error message to user
+      alert("Failed to create vehicle. Please try again.")
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  // Show loading state while tracks are loading
+  if (tracks === undefined) {
+    return (
+      <div className="container mx-auto max-w-4xl px-4 py-8">
+        <div className="flex min-h-[60vh] items-center justify-center">
+          <div className="text-center">
+            <Loader2 className="mx-auto mb-4 size-8 animate-spin text-muted-foreground" />
+            <p className="text-muted-foreground">Loading tracks...</p>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   const steps = [
@@ -284,12 +334,15 @@ export default function CreateVehiclePage() {
               <>
                 <div className="space-y-2">
                   <Label htmlFor="trackId">Track Location *</Label>
-                  <Select onValueChange={(value) => handleSelectChange("trackId", value)}>
+                  <Select
+                    value={formData.trackId}
+                    onValueChange={(value) => handleSelectChange("trackId", value)}
+                  >
                     <SelectTrigger id="trackId">
                       <SelectValue placeholder="Select a track" />
                     </SelectTrigger>
                     <SelectContent>
-                      {AVAILABLE_TRACKS.map((track) => (
+                      {tracks.map((track) => (
                         <SelectItem key={track._id} value={track._id}>
                           {track.name} - {track.location}
                         </SelectItem>

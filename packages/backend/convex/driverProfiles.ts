@@ -116,8 +116,9 @@ export const list = query({
     const profiles = await profilesQuery.collect();
 
     // Filter by preferred categories if specified
+    let filteredProfiles = profiles;
     if (args.preferredCategories && args.preferredCategories.length > 0) {
-      return profiles.filter(profile =>
+      filteredProfiles = profiles.filter(profile =>
         args.preferredCategories!.some(category =>
           profile.preferredCategories.includes(category)
         )
@@ -126,12 +127,34 @@ export const list = query({
 
     // Filter by availability if specified
     if (args.availability && args.availability.length > 0) {
-      return profiles.filter(profile =>
+      filteredProfiles = filteredProfiles.filter(profile =>
         args.availability!.some(avail => profile.availability.includes(avail))
       );
     }
 
-    return profiles;
+    // Fetch user data for each profile
+    const profilesWithUsers = await Promise.all(
+      filteredProfiles.map(async (profile) => {
+        const user = await ctx.db
+          .query('users')
+          .withIndex('by_external_id', q => q.eq('externalId', profile.userId))
+          .unique();
+        
+        return {
+          ...profile,
+          user: user ? {
+            name: user.name,
+            avatarUrl: user.profileImage,
+          } : {
+            // Fallback for profiles without user data
+            name: 'Unknown Driver',
+            avatarUrl: undefined,
+          },
+        };
+      })
+    );
+
+    return profilesWithUsers;
   },
 });
 

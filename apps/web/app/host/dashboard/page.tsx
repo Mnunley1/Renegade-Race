@@ -1,5 +1,7 @@
 "use client"
 
+import { useQuery } from "convex/react"
+import { useMemo } from "react"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Badge } from "@workspace/ui/components/badge"
@@ -13,26 +15,97 @@ import {
   AlertCircle,
   CheckCircle2,
   XCircle,
+  Loader2,
 } from "lucide-react"
 import Link from "next/link"
 import { useUser } from "@clerk/nextjs"
+import { api } from "@/lib/convex"
 
 export default function HostDashboardPage() {
   const { user } = useUser()
 
-  // TODO: Replace with Convex queries to fetch real data
-  // const vehicles = useQuery(api.vehicles.getByOwner, { ownerId: user?.id || "" })
-  // const pendingReservations = useQuery(api.reservations.getPendingForOwner, { ownerId: user?.id || "" })
-  // const confirmedReservations = useQuery(api.reservations.getConfirmedForOwner, { ownerId: user?.id || "" })
+  // Fetch data from Convex
+  const vehicles = useQuery(
+    api.vehicles.getByOwner,
+    user?.id ? { ownerId: user.id } : "skip"
+  )
+  const pendingReservations = useQuery(
+    api.reservations.getPendingForOwner,
+    user?.id ? { ownerId: user.id } : "skip"
+  )
+  const confirmedReservations = useQuery(
+    api.reservations.getConfirmedForOwner,
+    user?.id ? { ownerId: user.id } : "skip"
+  )
+  const reviewStats = useQuery(
+    api.reviews.getUserStats,
+    user?.id ? { userId: user.id } : "skip"
+  )
 
-  // Mock data - will be replaced with Convex queries
-  const stats = {
-    totalVehicles: 3,
-    pendingBookings: 2,
-    upcomingBookings: 4,
-    totalEarnings: 15420,
-    averageRating: 4.8,
-  }
+  // Calculate stats from real data
+  const stats = useMemo(() => {
+    const totalVehicles = vehicles?.length || 0
+    const pendingBookings = pendingReservations?.length || 0
+    const upcomingBookings = confirmedReservations?.length || 0
+
+    // Calculate total earnings from confirmed reservations
+    const totalEarnings =
+      confirmedReservations?.reduce((sum, res) => sum + (res.totalAmount || 0), 0) || 0
+
+    // Get average rating from review stats
+    const averageRating = reviewStats?.averageRating || 0
+
+    return {
+      totalVehicles,
+      pendingBookings,
+      upcomingBookings,
+      totalEarnings,
+      averageRating,
+    }
+  }, [vehicles, pendingReservations, confirmedReservations, reviewStats])
+
+  // Map recent vehicles from real data
+  const recentVehicles = useMemo(() => {
+    if (!vehicles || vehicles.length === 0) return []
+
+    return vehicles.slice(0, 3).map((vehicle) => {
+      const primaryImage =
+        vehicle.images?.find((img) => img.isPrimary) || vehicle.images?.[0]
+
+      // Calculate bookings and earnings from reservations
+      const vehicleReservations = [
+        ...(pendingReservations || []),
+        ...(confirmedReservations || []),
+      ].filter((res) => res.vehicleId === vehicle._id)
+
+      const bookings = vehicleReservations.length
+      const earnings = vehicleReservations.reduce(
+        (sum, res) => sum + (res.totalAmount || 0),
+        0
+      )
+
+      const status = vehicle.isApproved
+        ? "active"
+        : vehicle.isActive
+          ? "pending"
+          : "inactive"
+
+      return {
+        id: vehicle._id,
+        name: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
+        make: vehicle.make,
+        model: vehicle.model,
+        year: vehicle.year,
+        status,
+        bookings,
+        earnings: Math.round(earnings / 100), // Convert cents to dollars
+        image:
+          primaryImage?.cardUrl ||
+          primaryImage?.imageUrl ||
+          "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=400",
+      }
+    })
+  }, [vehicles, pendingReservations, confirmedReservations])
 
   const recentActivity = [
     {
@@ -138,6 +211,26 @@ export default function HostDashboardPage() {
     }
   }
 
+  // Show loading state while data is being fetched
+  const isLoading =
+    vehicles === undefined ||
+    pendingReservations === undefined ||
+    confirmedReservations === undefined ||
+    reviewStats === undefined
+
+  if (isLoading) {
+    return (
+      <div className="container mx-auto max-w-7xl px-4 py-8">
+        <div className="flex min-h-[60vh] items-center justify-center">
+          <div className="text-center">
+            <Loader2 className="mx-auto mb-4 size-8 animate-spin text-muted-foreground" />
+            <p className="text-muted-foreground">Loading dashboard data...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="container mx-auto max-w-7xl px-4 py-8">
       <div className="mb-8">
@@ -209,7 +302,7 @@ export default function HostDashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="font-bold text-2xl">
-              ${stats.totalEarnings.toLocaleString()}
+              ${Math.round(stats.totalEarnings / 100).toLocaleString()}
             </div>
             <p className="text-muted-foreground text-xs">All-time earnings</p>
           </CardContent>

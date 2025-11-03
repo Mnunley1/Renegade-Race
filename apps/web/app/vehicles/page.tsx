@@ -47,7 +47,7 @@ export default function VehiclesPage() {
   // Map vehicles to the format expected by VehicleCard
   const vehicles = useMemo(() => {
     if (!vehiclesData) return []
-    return vehiclesData.map((vehicle) => {
+    const mapped = vehiclesData.map((vehicle) => {
       const primaryImage = vehicle.images?.find((img) => img.isPrimary) || vehicle.images?.[0]
       return {
         id: vehicle._id,
@@ -65,6 +65,7 @@ export default function VehiclesPage() {
         transmission: vehicle.transmission || "",
       }
     })
+    return mapped
   }, [vehiclesData])
 
   const tracks = useMemo(() => {
@@ -228,7 +229,7 @@ export default function VehiclesPage() {
     })
 
     return filtered
-  }, [searchQuery, selectedTrack, selectedMake, selectedLocation, selectedPriceRange, sortBy])
+  }, [vehicles, searchQuery, selectedTrack, selectedMake, selectedLocation, selectedPriceRange, sortBy])
 
   const clearFilters = () => {
     setSearchQuery("")
@@ -471,11 +472,21 @@ export default function VehiclesPage() {
 
           {/* Vehicle Grid */}
           <div className="lg:col-span-3">
-            {!vehiclesData || !tracksData ? (
+            {vehiclesData === undefined || tracksData === undefined ? (
               <Card className="border-2 border-dashed">
                 <CardContent className="flex flex-col items-center justify-center py-16">
                   <div className="mb-4 size-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
                   <h3 className="mb-2 text-lg font-semibold">Loading vehicles...</h3>
+                </CardContent>
+              </Card>
+            ) : vehicles.length === 0 ? (
+              <Card className="border-2 border-dashed">
+                <CardContent className="flex flex-col items-center justify-center py-16">
+                  <Search className="mb-4 size-12 text-muted-foreground" />
+                  <h3 className="mb-2 text-lg font-semibold">No vehicles in database</h3>
+                  <p className="mb-4 text-center text-muted-foreground">
+                    No active and approved vehicles found. Vehicles need to be both active and approved to appear.
+                  </p>
                 </CardContent>
               </Card>
             ) : filteredVehicles.length === 0 ? (

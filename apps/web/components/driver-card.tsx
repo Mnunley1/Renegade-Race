@@ -44,15 +44,15 @@ export function DriverCard({
   return (
     <Card
       className={cn(
-        "group relative overflow-hidden border-2 transition-all hover:scale-[1.02] hover:shadow-xl",
+        "group relative flex h-full flex-col overflow-hidden border-2 transition-all hover:scale-[1.02] hover:shadow-xl",
         className
       )}
       {...props}
     >
-      <CardContent className="p-6">
-        <div className="space-y-4">
+      <CardContent className="flex flex-1 flex-col p-6">
+        <div className="flex flex-1 flex-col space-y-4">
           <div className="flex items-start gap-4">
-            <div className="relative h-16 w-16 overflow-hidden rounded-full border-2 border-primary/20">
+            <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-full border-2 border-primary/20">
               {avatarUrl ? (
                 <Image alt={name} className="object-cover" fill src={avatarUrl} />
               ) : (
@@ -81,7 +81,7 @@ export function DriverCard({
 
           <p className="text-muted-foreground text-sm">{truncatedBio}</p>
 
-          <div className="space-y-2">
+          <div className="mt-auto space-y-2">
             <div className="flex flex-wrap gap-2">
               {licenses.slice(0, MAX_VISIBLE_LICENSES).map((license) => (
                 <Badge key={license} variant="outline">

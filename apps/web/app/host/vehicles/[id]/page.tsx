@@ -1,5 +1,6 @@
 "use client"
 
+import { useQuery, useMemo } from "convex/react"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Badge } from "@workspace/ui/components/badge"
@@ -17,10 +18,12 @@ import {
   MapPin,
   Gauge,
   Users,
+  Loader2,
 } from "lucide-react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import { useUser } from "@clerk/nextjs"
+import { api } from "@/lib/convex"
 
 export default function HostVehicleDetailPage() {
   const params = useParams()
@@ -28,100 +31,99 @@ export default function HostVehicleDetailPage() {
   const { user } = useUser()
   const vehicleId = params.id as string
 
-  // TODO: Replace with Convex queries
-  // const vehicle = useQuery(api.vehicles.getById, { id: vehicleId })
-  // const availability = useQuery(api.availability.getCalendarData, { vehicleId, year: currentYear, month: currentMonth })
-  // const reservations = useQuery(api.reservations.getByUser, { userId: user?.id || "", role: "owner" })
+  // Fetch vehicle from Convex
+  const vehicle = useQuery(
+    api.vehicles.getById,
+    vehicleId ? { id: vehicleId as any } : "skip"
+  )
 
-  // Mock data - will be replaced with Convex queries
-  const vehicle = {
-    _id: vehicleId,
-    make: "Porsche",
-    model: "911 GT3",
-    year: 2023,
-    dailyRate: 899,
-    description:
-      "Track-ready Porsche 911 GT3 with full racing package. This exceptional sports car delivers uncompromising performance on both the road and track. With its naturally aspirated 4.0-liter flat-six engine producing 502 horsepower, the GT3 offers an exhilarating driving experience.",
-    horsepower: 502,
-    transmission: "PDK",
-    drivetrain: "RWD",
-    engineType: "Flat-6",
-    mileage: 8500,
-    amenities: [
-      "GPS Navigation",
-      "Racing Seats",
-      "Roll Cage",
-      "Fire Suppression System",
-      "Data Logger",
-      "Track Tires",
-      "Racing Wheels",
-      "Aerodynamic Package",
-    ],
-    addOns: [
-      {
-        name: "Professional Driving Instructor",
-        price: 250,
-        description: "Experienced track instructor for your session",
-        isRequired: false,
-      },
-      {
-        name: "Data Analysis Session",
-        price: 150,
-        description: "Post-session telemetry analysis",
-        isRequired: false,
-      },
-    ],
-    isActive: true,
-    isApproved: true,
-    track: {
-      name: "Daytona International Speedway",
-      location: "Daytona Beach, FL",
-    },
-    images: [
-      {
-        heroUrl: "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=1200",
-        detailUrl: "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=800",
-        isPrimary: true,
-      },
-      {
-        detailUrl: "https://images.unsplash.com/photo-1605170088216-9058e29c8e9f?w=800",
-        isPrimary: false,
-      },
-      {
-        detailUrl: "https://images.unsplash.com/photo-1549952891-fcf406dd2aa9?w=800",
-        isPrimary: false,
-      },
-    ],
-    stats: {
-      totalBookings: 12,
-      totalEarnings: 10788,
-      averageRating: 4.8,
-      completedTrips: 10,
-    },
+  // Fetch reservations for this vehicle (as owner)
+  const allReservations = useQuery(
+    api.reservations.getByUser,
+    user?.id ? { userId: user.id, role: "owner" as const } : "skip"
+  )
+
+  // Filter reservations for this vehicle
+  const vehicleReservations = useMemo(() => {
+    if (!allReservations || !vehicle) return []
+    return allReservations.filter((res) => res.vehicleId === vehicle._id)
+  }, [allReservations, vehicle])
+
+  // Calculate stats from reservations
+  const stats = useMemo(() => {
+    if (!vehicleReservations || !vehicle) {
+      return {
+        totalBookings: 0,
+        totalEarnings: 0,
+        averageRating: 0,
+        completedTrips: 0,
+      }
+    }
+
+    const totalBookings = vehicleReservations.length
+    const totalEarnings = vehicleReservations.reduce(
+      (sum, res) => sum + (res.totalAmount || 0),
+      0
+    )
+    const completedTrips = vehicleReservations.filter(
+      (res) => res.status === "completed"
+    ).length
+
+    // TODO: Calculate average rating from reviews if needed
+    const averageRating = 0
+
+    return {
+      totalBookings,
+      totalEarnings,
+      averageRating,
+      completedTrips,
+    }
+  }, [vehicleReservations, vehicle])
+
+  // Get upcoming reservations (confirmed and pending)
+  const upcomingReservations = useMemo(() => {
+    if (!vehicleReservations) return []
+    return vehicleReservations
+      .filter(
+        (res) =>
+          res.status === "confirmed" || res.status === "pending"
+      )
+      .sort((a, b) => a.startDate.localeCompare(b.startDate))
+  }, [vehicleReservations])
+
+  // Show loading state
+  if (vehicle === undefined || allReservations === undefined) {
+    return (
+      <div className="container mx-auto max-w-7xl px-4 py-8">
+        <div className="flex min-h-[60vh] items-center justify-center">
+          <div className="text-center">
+            <Loader2 className="mx-auto mb-4 size-8 animate-spin text-muted-foreground" />
+            <p className="text-muted-foreground">Loading vehicle details...</p>
+          </div>
+        </div>
+      </div>
+    )
   }
 
-  const upcomingReservations = [
-    {
-      _id: "res1",
-      renter: { name: "John Smith", email: "john@example.com" },
-      startDate: "2024-03-15",
-      endDate: "2024-03-17",
-      totalDays: 3,
-      totalAmount: 2697,
-      status: "confirmed",
-      renterMessage: "Looking forward to the track day!",
-    },
-    {
-      _id: "res2",
-      renter: { name: "Sarah Johnson", email: "sarah@example.com" },
-      startDate: "2024-03-22",
-      endDate: "2024-03-24",
-      totalDays: 3,
-      totalAmount: 2697,
-      status: "pending",
-      renterMessage: "Would love to book this for the weekend.",
-    },
-  ]
+  // Show error if vehicle not found
+  if (!vehicle) {
+    return (
+      <div className="container mx-auto max-w-7xl px-4 py-8">
+        <Card>
+          <CardContent className="py-12 text-center">
+            <XCircle className="mx-auto mb-4 size-12 text-destructive" />
+            <h2 className="mb-2 font-bold text-2xl">Vehicle Not Found</h2>
+            <p className="mb-6 text-muted-foreground">
+              The vehicle you're looking for doesn't exist or has been removed.
+            </p>
+            <Link href="/host/vehicles/list">
+              <Button>Back to Vehicles</Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -160,7 +162,14 @@ export default function HostVehicleDetailPage() {
     })
   }
 
-  const primaryImage = vehicle.images.find((img) => img.isPrimary)?.heroUrl || vehicle.images[0]?.heroUrl
+  const primaryImage =
+    vehicle.images?.find((img) => img.isPrimary)?.heroUrl ||
+    vehicle.images?.find((img) => img.isPrimary)?.detailUrl ||
+    vehicle.images?.[0]?.heroUrl ||
+    vehicle.images?.[0]?.detailUrl ||
+    vehicle.images?.[0]?.cardUrl ||
+    vehicle.images?.[0]?.imageUrl ||
+    "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=1200"
 
   return (
     <div className="container mx-auto max-w-7xl px-4 py-8">
@@ -196,7 +205,7 @@ export default function HostVehicleDetailPage() {
               </Badge>
             )}
           </div>
-          <p className="text-muted-foreground">{vehicle.track.name}</p>
+          <p className="text-muted-foreground">{vehicle.track?.name || "Track TBD"}</p>
         </div>
         <Link href={`/host/vehicles/${vehicleId}/edit`}>
           <Button>
@@ -360,8 +369,12 @@ export default function HostVehicleDetailPage() {
                         <div key={reservation._id} className="rounded-lg border p-4">
                           <div className="mb-3 flex items-start justify-between">
                             <div>
-                              <p className="font-semibold">{reservation.renter.name}</p>
-                              <p className="text-muted-foreground text-sm">{reservation.renter.email}</p>
+                              <p className="font-semibold">
+                                {reservation.renter?.name || "Unknown Renter"}
+                              </p>
+                              <p className="text-muted-foreground text-sm">
+                                {reservation.renter?.email || "No email"}
+                              </p>
                             </div>
                             {getStatusBadge(reservation.status)}
                           </div>
@@ -372,7 +385,8 @@ export default function HostVehicleDetailPage() {
                             </p>
                             <p className="flex items-center gap-2">
                               <DollarSign className="size-4 text-muted-foreground" />
-                              ${reservation.totalAmount.toLocaleString()} ({reservation.totalDays} days)
+                              ${Math.round((reservation.totalAmount || 0) / 100).toLocaleString()} (
+                              {reservation.totalDays} days)
                             </p>
                           </div>
                           {reservation.renterMessage && (
@@ -413,28 +427,32 @@ export default function HostVehicleDetailPage() {
                   <p className="text-muted-foreground text-sm">Total Bookings</p>
                   <Users className="size-4 text-muted-foreground" />
                 </div>
-                <p className="font-bold text-2xl">{vehicle.stats.totalBookings}</p>
+                <p className="font-bold text-2xl">{stats.totalBookings}</p>
               </div>
               <div>
                 <div className="mb-1 flex items-center justify-between">
                   <p className="text-muted-foreground text-sm">Total Earnings</p>
                   <DollarSign className="size-4 text-muted-foreground" />
                 </div>
-                <p className="font-bold text-2xl">${vehicle.stats.totalEarnings.toLocaleString()}</p>
+                <p className="font-bold text-2xl">
+                  ${Math.round(stats.totalEarnings / 100).toLocaleString()}
+                </p>
               </div>
               <div>
                 <div className="mb-1 flex items-center justify-between">
                   <p className="text-muted-foreground text-sm">Average Rating</p>
                   <CheckCircle2 className="size-4 text-muted-foreground" />
                 </div>
-                <p className="font-bold text-2xl">{vehicle.stats.averageRating}/5.0</p>
+                <p className="font-bold text-2xl">
+                  {stats.averageRating > 0 ? `${stats.averageRating}/5.0` : "N/A"}
+                </p>
               </div>
               <div>
                 <div className="mb-1 flex items-center justify-between">
                   <p className="text-muted-foreground text-sm">Completed Trips</p>
                   <CheckCircle2 className="size-4 text-muted-foreground" />
                 </div>
-                <p className="font-bold text-2xl">{vehicle.stats.completedTrips}</p>
+                <p className="font-bold text-2xl">{stats.completedTrips}</p>
               </div>
             </CardContent>
           </Card>
@@ -478,8 +496,8 @@ export default function HostVehicleDetailPage() {
               <div className="flex items-start gap-3">
                 <MapPin className="mt-0.5 size-5 text-muted-foreground" />
                 <div>
-                  <p className="font-semibold">{vehicle.track.name}</p>
-                  <p className="text-muted-foreground text-sm">{vehicle.track.location}</p>
+                  <p className="font-semibold">{vehicle.track?.name || "Track TBD"}</p>
+                  <p className="text-muted-foreground text-sm">{vehicle.track?.location || ""}</p>
                 </div>
               </div>
             </CardContent>
