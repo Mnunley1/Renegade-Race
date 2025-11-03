@@ -120,6 +120,16 @@ export default defineSchema({
     renterMessage: v.optional(v.string()),
     ownerMessage: v.optional(v.string()),
     cancellationReason: v.optional(v.string()),
+    // Add-ons selected for this reservation
+    addOns: v.optional(
+      v.array(
+        v.object({
+          name: v.string(),
+          price: v.number(),
+          description: v.optional(v.string()),
+        })
+      )
+    ),
     // Payment-related fields
     paymentId: v.optional(v.id('payments')),
     paymentStatus: v.optional(
