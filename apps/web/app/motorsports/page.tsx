@@ -1,75 +1,29 @@
 "use client"
 
 import { useQuery } from "convex/react"
-import { useMemo } from "react"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
-import { Plus } from "lucide-react"
+import { ArrowRight, Plus, Users } from "lucide-react"
 import Link from "next/link"
-import { DriverCard } from "@/components/driver-card"
-import { TeamCard } from "@/components/team-card"
 import { api } from "@/lib/convex"
 
 export default function MotorsportsPage() {
-  // Fetch teams and drivers from database
+  // Fetch summary counts for featured section
   const teamsData = useQuery(api.teams.list, {})
   const driversData = useQuery(api.driverProfiles.list, {})
 
-  // Map teams data to the format expected by TeamCard
-  const teams = useMemo(() => {
-    if (!teamsData) return []
-    return teamsData.map((team) => ({
-      id: team._id as string,
-      name: team.name,
-      logoUrl: team.logoUrl,
-      location: team.location,
-      specialties: team.specialties,
-      availableSeats: team.availableSeats,
-      requirements: team.requirements,
-      contactInfo: team.contactInfo,
-      description: team.description,
-      socialLinks: team.socialLinks,
-    }))
-  }, [teamsData])
-
-  // Map drivers data to the format expected by DriverCard
-  const drivers = useMemo(() => {
-    if (!driversData) return []
-    return driversData.map((driver) => ({
-      id: driver._id as string,
-      name: driver.user?.name || 'Unknown Driver',
-      avatarUrl: driver.user?.avatarUrl,
-      location: driver.location,
-      experience: driver.experience,
-      licenses: driver.licenses,
-      preferredCategories: driver.preferredCategories,
-      bio: driver.bio,
-    }))
-  }, [driversData])
+  const teamCount = teamsData?.length || 0
+  const driverCount = driversData?.length || 0
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="mb-2 font-bold text-3xl">Motorsports</h1>
-          <p className="text-muted-foreground">Connect with racing teams and drivers</p>
-        </div>
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <Link href="/motorsports/profile/driver">
-            <Button className="w-full sm:w-auto" variant="outline">
-              <Plus className="mr-2 size-4" />
-              Create Driver Profile
-            </Button>
-          </Link>
-          <Link href="/motorsports/profile/team">
-            <Button className="w-full sm:w-auto">
-              <Plus className="mr-2 size-4" />
-              Create Team Profile
-            </Button>
-          </Link>
-        </div>
+      <div className="mb-12">
+        <h1 className="mb-2 font-bold text-3xl">Motorsports</h1>
+        <p className="text-muted-foreground text-lg">
+          Connect drivers with racing teams. Find your perfect match and accelerate your racing
+          career.
+        </p>
       </div>
 
       {/* Hero/Info Section */}
@@ -176,38 +130,79 @@ export default function MotorsportsPage() {
         </div>
       </div>
 
-      <Tabs className="w-full" defaultValue="teams">
-        <TabsList className="mb-8">
-          <TabsTrigger value="teams">Teams Looking for Drivers ({teams.length})</TabsTrigger>
-          <TabsTrigger value="drivers">Drivers Looking for Teams ({drivers.length})</TabsTrigger>
-        </TabsList>
+      {/* Main CTAs */}
+      <div className="mb-12 grid gap-6 md:grid-cols-2">
+        <Card className="group relative overflow-hidden border-2 transition-all hover:scale-[1.02] hover:shadow-xl">
+          <CardContent className="p-8">
+            <div className="mb-4 flex size-16 items-center justify-center rounded-full bg-primary/10">
+              <Users className="size-8 text-primary" />
+            </div>
+            <h3 className="mb-2 font-bold text-2xl">Find a Team</h3>
+            <p className="mb-6 text-muted-foreground">
+              Browse racing teams looking for drivers. Filter by series, location, and requirements
+              to find the perfect match.
+            </p>
+            <div className="mb-4 flex items-center gap-2 text-muted-foreground text-sm">
+              <span>{teamCount} teams available</span>
+            </div>
+            <Button asChild className="w-full" size="lg">
+              <Link href="/motorsports/teams">
+                Browse Teams
+                <ArrowRight className="ml-2 size-4" />
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
 
-        <TabsContent className="mt-8" value="teams">
-          <div className="mb-4 flex items-center justify-between">
-            <p className="text-muted-foreground text-sm">Showing {teams.length} teams</p>
-          </div>
-          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-            {teams.map((team) => (
-              <div key={team.id} className="flex h-full">
-                <TeamCard {...team} />
-              </div>
-            ))}
-          </div>
-        </TabsContent>
+        <Card className="group relative overflow-hidden border-2 transition-all hover:scale-[1.02] hover:shadow-xl">
+          <CardContent className="p-8">
+            <div className="mb-4 flex size-16 items-center justify-center rounded-full bg-primary/10">
+              <span className="text-4xl">🏎️</span>
+            </div>
+            <h3 className="mb-2 font-bold text-2xl">Find a Driver</h3>
+            <p className="mb-6 text-muted-foreground">
+              Discover talented drivers looking for team opportunities. Search by experience,
+              licenses, and preferred racing categories.
+            </p>
+            <div className="mb-4 flex items-center gap-2 text-muted-foreground text-sm">
+              <span>{driverCount} drivers available</span>
+            </div>
+            <Button asChild className="w-full" size="lg" variant="outline">
+              <Link href="/motorsports/drivers">
+                Browse Drivers
+                <ArrowRight className="ml-2 size-4" />
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
 
-        <TabsContent className="mt-8" value="drivers">
-          <div className="mb-4 flex items-center justify-between">
-            <p className="text-muted-foreground text-sm">Showing {drivers.length} drivers</p>
+      {/* Create Profile CTAs */}
+      <Card className="bg-muted/50">
+        <CardHeader>
+          <CardTitle>Join the Network</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="mb-6 text-muted-foreground">
+            Are you a driver looking for opportunities, or a team seeking talent? Create your
+            profile to get started.
+          </p>
+          <div className="flex flex-col gap-4 sm:flex-row">
+            <Button asChild className="flex-1" variant="outline">
+              <Link href="/motorsports/profile/driver">
+                <Plus className="mr-2 size-4" />
+                Create Driver Profile
+              </Link>
+            </Button>
+            <Button asChild className="flex-1">
+              <Link href="/motorsports/profile/team">
+                <Plus className="mr-2 size-4" />
+                Create Team Profile
+              </Link>
+            </Button>
           </div>
-          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-            {drivers.map((driver) => (
-              <div key={driver.id} className="flex h-full">
-                <DriverCard {...driver} />
-              </div>
-            ))}
-          </div>
-        </TabsContent>
-      </Tabs>
+        </CardContent>
+      </Card>
     </div>
   )
 }

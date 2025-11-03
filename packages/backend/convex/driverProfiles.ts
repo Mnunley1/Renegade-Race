@@ -160,7 +160,29 @@ export const list = query({
 
 export const getById = query({
   args: { profileId: v.id('driverProfiles') },
-  handler: async (ctx, args) => await ctx.db.get(args.profileId),
+  handler: async (ctx, args) => {
+    const profile = await ctx.db.get(args.profileId);
+    if (!profile) {
+      return null;
+    }
+
+    // Fetch user data for the profile
+    const user = await ctx.db
+      .query('users')
+      .withIndex('by_external_id', q => q.eq('externalId', profile.userId))
+      .unique();
+    
+    return {
+      ...profile,
+      user: user ? {
+        name: user.name,
+        avatarUrl: user.profileImage,
+      } : {
+        name: 'Unknown Driver',
+        avatarUrl: undefined,
+      },
+    };
+  },
 });
 
 export const getByUser = query({

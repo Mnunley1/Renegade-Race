@@ -103,8 +103,8 @@ export default function CreateDriverProfilePage() {
         },
       })
 
-      // Redirect to motorsports page after successful creation
-      router.push("/motorsports")
+      // Redirect to drivers page after successful creation
+      router.push("/motorsports/drivers")
     } catch (error) {
       console.error("Error creating driver profile:", error)
       alert("Failed to create driver profile. Please try again.")
@@ -172,10 +172,10 @@ export default function CreateDriverProfilePage() {
 
   return (
     <div className="container mx-auto max-w-4xl px-4 py-8">
-      <Link href="/motorsports">
+      <Link href="/motorsports/drivers">
         <Button className="mb-6" variant="ghost">
           <ArrowLeft className="mr-2 size-4" />
-          Back to Motorsports
+          Back to Drivers
         </Button>
       </Link>
 
@@ -495,7 +495,7 @@ export default function CreateDriverProfilePage() {
 
           {/* Submit */}
           <div className="flex justify-end gap-4">
-            <Link href="/motorsports">
+            <Link href="/motorsports/drivers">
               <Button type="button" variant="outline">
                 Cancel
               </Button>

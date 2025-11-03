@@ -88,7 +88,7 @@ export default function CreateTeamProfilePage() {
       })
 
       // Redirect to motorsports page after successful creation
-      router.push("/motorsports")
+      router.push("/motorsports/teams")
     } catch (error) {
       console.error("Error creating team profile:", error)
       alert("Failed to create team profile. Please try again.")
@@ -151,10 +151,10 @@ export default function CreateTeamProfilePage() {
 
   return (
     <div className="container mx-auto max-w-4xl px-4 py-8">
-      <Link href="/motorsports">
+      <Link href="/motorsports/teams">
         <Button className="mb-6" variant="ghost">
           <ArrowLeft className="mr-2 size-4" />
-          Back to Motorsports
+          Back to Teams
         </Button>
       </Link>
 
@@ -448,7 +448,7 @@ export default function CreateTeamProfilePage() {
 
           {/* Submit */}
           <div className="flex justify-end gap-4">
-            <Link href="/motorsports">
+            <Link href="/motorsports/teams">
               <Button type="button" variant="outline">
                 Cancel
               </Button>
