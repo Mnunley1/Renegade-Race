@@ -171,6 +171,10 @@ export default defineSchema({
     unreadCountRenter: v.number(),
     unreadCountOwner: v.number(),
     isActive: v.boolean(),
+    deletedByRenter: v.optional(v.boolean()),
+    deletedByOwner: v.optional(v.boolean()),
+    reopenedAtRenter: v.optional(v.number()), // Timestamp when conversation was reopened for renter
+    reopenedAtOwner: v.optional(v.number()), // Timestamp when conversation was reopened for owner
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -191,6 +195,7 @@ export default defineSchema({
       v.literal('image'),
       v.literal('system')
     ),
+    replyTo: v.optional(v.id('messages')),
     isRead: v.boolean(),
     readAt: v.optional(v.number()),
     createdAt: v.number(),
