@@ -147,6 +147,12 @@ export default function CheckoutPage() {
     reservationId ? { id: reservationId as any } : "skip"
   )
 
+  // Fetch blocked dates from availability
+  const availability = useQuery(
+    api.availability.getByVehicle,
+    vehicleId ? { vehicleId: vehicleId as any } : "skip"
+  )
+
   const createReservation = useMutation(api.reservations.create)
   const createPaymentIntent = useAction(api.stripe.createPaymentIntent)
 
@@ -201,6 +207,41 @@ export default function CheckoutPage() {
   const minPickupDate = today
   const minDropoffDate = pickupDate || today
 
+  // Get blocked dates from availability (where isAvailable is false)
+  const blockedDates =
+    availability
+      ?.filter((item) => !item.isAvailable)
+      .map((item) => {
+        const date = new Date(item.date)
+        date.setHours(0, 0, 0, 0)
+        return date
+      }) || []
+
+  // Combine blocked dates (availability already accounts for reservations)
+  const unavailableDates = new Set(blockedDates.map((d) => d.toISOString().split("T")[0]))
+
+  // Function to check if a date is unavailable
+  const isDateUnavailable = (date: Date): boolean => {
+    const dateStr = date.toISOString().split("T")[0]
+    return unavailableDates.has(dateStr)
+  }
+
+  // Function to check if a date range contains any unavailable dates
+  const isDateRangeUnavailable = (startDate: Date, endDate: Date): boolean => {
+    const start = new Date(startDate)
+    const end = new Date(endDate)
+    start.setHours(0, 0, 0, 0)
+    end.setHours(0, 0, 0, 0)
+
+    // Check each date in the range
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      if (isDateUnavailable(d)) {
+        return true
+      }
+    }
+    return false
+  }
+
   // Toggle add-on selection
   const toggleAddOn = (addOn: AddOn) => {
     if (addOn.isRequired) return // Can't deselect required add-ons
@@ -245,6 +286,13 @@ export default function CheckoutPage() {
 
     if (!(pickupDate && dropoffDate && pickupTime && dropoffTime && vehicle)) {
       setError("Please fill in all required fields")
+      return
+    }
+
+    // Validate that the selected date range doesn't contain blocked dates
+    if (isDateRangeUnavailable(pickupDate, dropoffDate)) {
+      setError("The selected dates include unavailable dates. Please select different dates.")
+      setIsCreatingReservation(false)
       return
     }
 
@@ -479,7 +527,14 @@ export default function CheckoutPage() {
     vehicle.images?.[0]?.cardUrl ||
     vehicle.images?.[0]?.imageUrl ||
     ""
-  const isValid = pickupDate && dropoffDate && pickupTime && dropoffTime && days > 0
+  // Check if form is valid and dates don't contain blocked dates
+  const isValid =
+    pickupDate &&
+    dropoffDate &&
+    pickupTime &&
+    dropoffTime &&
+    days > 0 &&
+    !isDateRangeUnavailable(pickupDate, dropoffDate)
 
   return (
     <div className="container mx-auto max-w-6xl px-4 py-8">
@@ -552,22 +607,46 @@ export default function CheckoutPage() {
                         disabled={(date: Date) => {
                           const dateStart = new Date(date)
                           dateStart.setHours(0, 0, 0, 0)
-                          return dateStart < minPickupDate
+                          return dateStart < minPickupDate || isDateUnavailable(dateStart)
                         }}
                         initialFocus
                         mode="single"
+                        modifiers={{
+                          blocked: blockedDates,
+                        }}
+                        modifiersClassNames={{
+                          blocked: "bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400",
+                        }}
                         onSelect={(date) => {
-                          setPickupDate(date)
-                          // Reset dropoff date if it's before new pickup date
-                          if (dropoffDate && date && dropoffDate < date) {
-                            setDropoffDate(undefined)
+                          if (date) {
+                            if (isDateUnavailable(date)) {
+                              setError("This date is unavailable. Please select a different date.")
+                              return
+                            }
+                            setPickupDate(date)
+                            setError(null)
+                            // Reset dropoff date if it's before new pickup date or if it's unavailable
+                            if (dropoffDate && date && dropoffDate < date) {
+                              setDropoffDate(undefined)
+                            } else if (dropoffDate && isDateRangeUnavailable(date, dropoffDate)) {
+                              setError(
+                                "The selected date range includes unavailable dates. Please select different dates."
+                              )
+                              setDropoffDate(undefined)
+                            }
+                            setOpenPickupDate(false)
                           }
-                          setOpenPickupDate(false)
                         }}
                         selected={pickupDate}
                       />
                     </PopoverContent>
                   </Popover>
+                  {blockedDates.length > 0 && (
+                    <div className="mt-2 flex items-center gap-2 text-muted-foreground text-xs">
+                      <div className="size-3 rounded bg-red-100 dark:bg-red-900/20" />
+                      <span>Unavailable dates</span>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <Label className="mb-2 flex items-center gap-2" htmlFor="pickup-time">
@@ -622,18 +701,44 @@ export default function CheckoutPage() {
                           dateStart.setHours(0, 0, 0, 0)
                           const minDate = new Date(minDropoffDate)
                           minDate.setHours(0, 0, 0, 0)
-                          return dateStart < minDate
+                          return dateStart < minDate || isDateUnavailable(dateStart)
                         }}
                         initialFocus
                         mode="single"
+                        modifiers={{
+                          blocked: blockedDates,
+                        }}
+                        modifiersClassNames={{
+                          blocked: "bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400",
+                        }}
                         onSelect={(date) => {
-                          setDropoffDate(date)
-                          setOpenDropoffDate(false)
+                          if (date) {
+                            if (isDateUnavailable(date)) {
+                              setError("This date is unavailable. Please select a different date.")
+                              return
+                            }
+                            // Validate that the date range from pickup to dropoff doesn't contain blocked dates
+                            if (pickupDate && isDateRangeUnavailable(pickupDate, date)) {
+                              setError(
+                                "The selected date range includes unavailable dates. Please select different dates."
+                              )
+                              return
+                            }
+                            setDropoffDate(date)
+                            setError(null)
+                            setOpenDropoffDate(false)
+                          }
                         }}
                         selected={dropoffDate}
                       />
                     </PopoverContent>
                   </Popover>
+                  {blockedDates.length > 0 && (
+                    <div className="mt-2 flex items-center gap-2 text-muted-foreground text-xs">
+                      <div className="size-3 rounded bg-red-100 dark:bg-red-900/20" />
+                      <span>Unavailable dates</span>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <Label className="mb-2 flex items-center gap-2" htmlFor="dropoff-time">
