@@ -25,7 +25,16 @@ export const getByUser = query({
         );
     }
 
-    const conversations = await conversationsQuery.order('desc').collect();
+    const allConversations = await conversationsQuery.order('desc').collect();
+
+    // Filter out conversations deleted by the current user
+    const conversations = allConversations.filter(conversation => {
+      if (role === 'renter') {
+        return conversation.deletedByRenter !== true;
+      } else {
+        return conversation.deletedByOwner !== true;
+      }
+    });
 
     // Get vehicle and user details
     const conversationsWithDetails = await Promise.all(
@@ -63,10 +72,28 @@ export const getByUser = query({
 export const getById = query({
   args: {
     conversationId: v.id('conversations'),
+    userId: v.string(),
   },
   handler: async (ctx, args) => {
     const conversation = await ctx.db.get(args.conversationId);
     if (!conversation) {
+      throw new Error('Conversation not found');
+    }
+
+    // Ensure the user is part of the conversation
+    if (
+      conversation.renterId !== args.userId &&
+      conversation.ownerId !== args.userId
+    ) {
+      throw new Error('Not authorized to view this conversation');
+    }
+
+    // Check if the user has deleted this conversation
+    const isRenter = conversation.renterId === args.userId;
+    if (
+      (isRenter && conversation.deletedByRenter === true) ||
+      (!isRenter && conversation.deletedByOwner === true)
+    ) {
       throw new Error('Conversation not found');
     }
 
@@ -175,7 +202,7 @@ export const create = mutation({
 
     const now = Date.now();
 
-    // Create the conversation
+    // Create the conversation as inactive - it will be activated when the first message is sent
     const conversationId = await ctx.db.insert('conversations', {
       vehicleId: args.vehicleId,
       renterId: args.renterId,
@@ -183,7 +210,7 @@ export const create = mutation({
       lastMessageAt: now,
       unreadCountRenter: 0,
       unreadCountOwner: 0,
-      isActive: true,
+      isActive: false,
       createdAt: now,
       updatedAt: now,
     });
@@ -283,7 +310,9 @@ export const archive = mutation({
   },
 });
 
-// Delete conversation and all its messages (hard delete)
+// Delete conversation (soft delete - per user)
+// Each user can hide the conversation from their view
+// The conversation is only hard deleted when both users delete it
 export const deleteConversation = mutation({
   args: {
     conversationId: v.id('conversations'),
@@ -307,20 +336,47 @@ export const deleteConversation = mutation({
       throw new Error('Not authorized to delete this conversation');
     }
 
-    // Delete all messages in the conversation
-    const messages = await ctx.db
-      .query('messages')
-      .withIndex('by_conversation', q =>
-        q.eq('conversationId', args.conversationId)
-      )
-      .collect();
+    const userId = identity.subject;
+    const isRenter = conversation.renterId === userId;
+    const updateData: {
+      updatedAt: number;
+      deletedByRenter?: boolean;
+      deletedByOwner?: boolean;
+    } = {
+      updatedAt: Date.now(),
+    };
 
-    for (const message of messages) {
-      await ctx.db.delete(message._id);
+    // Mark as deleted by the current user
+    if (isRenter) {
+      updateData.deletedByRenter = true;
+    } else {
+      updateData.deletedByOwner = true;
     }
 
-    // Delete the conversation
-    await ctx.db.delete(args.conversationId);
+    await ctx.db.patch(args.conversationId, updateData);
+
+    // Check if both users have deleted the conversation
+    const updatedConversation = await ctx.db.get(args.conversationId);
+    if (
+      updatedConversation &&
+      updatedConversation.deletedByRenter === true &&
+      updatedConversation.deletedByOwner === true
+    ) {
+      // Both users have deleted - perform hard delete
+      const messages = await ctx.db
+        .query('messages')
+        .withIndex('by_conversation', q =>
+          q.eq('conversationId', args.conversationId)
+        )
+        .collect();
+
+      for (const message of messages) {
+        await ctx.db.delete(message._id);
+      }
+
+      // Delete the conversation
+      await ctx.db.delete(args.conversationId);
+    }
 
     return args.conversationId;
   },
@@ -338,11 +394,16 @@ export const getHostConversationsByVehicle = query({
     const { hostId, vehicleId } = args;
 
     // Get conversations for this vehicle where user is the owner
-    const conversations = await ctx.db
+    const allConversations = await ctx.db
       .query('conversations')
       .withIndex('by_vehicle', q => q.eq('vehicleId', vehicleId))
       .filter(q => q.eq(q.field('ownerId'), hostId))
       .collect();
+
+    // Filter out conversations deleted by the host (owner)
+    const conversations = allConversations.filter(
+      conversation => conversation.deletedByOwner !== true
+    );
 
     // Get detailed information for each conversation
     const conversationsWithDetails = await Promise.all(
@@ -403,10 +464,15 @@ export const getHostConversationAnalytics = query({
     }
 
     // Get all conversations for this host
-    const conversations = await ctx.db
+    const allConversations = await ctx.db
       .query('conversations')
       .withIndex('by_owner', q => q.eq('ownerId', hostId))
       .collect();
+
+    // Filter out conversations deleted by the host (owner)
+    const conversations = allConversations.filter(
+      conv => conv.deletedByOwner !== true
+    );
 
     // Filter conversations by time range
     const recentConversations = conversations.filter(
@@ -547,20 +613,46 @@ export const bulkHostConversationActions = mutation({
         }
 
         case 'delete': {
-          // Delete all messages in the conversation
-          const messages = await ctx.db
-            .query('messages')
-            .withIndex('by_conversation', q =>
-              q.eq('conversationId', conversationId)
-            )
-            .collect();
+          // Soft delete - mark as deleted by the host
+          const isRenter = conversation.renterId === hostId;
+          const updateData: {
+            updatedAt: number;
+            deletedByRenter?: boolean;
+            deletedByOwner?: boolean;
+          } = {
+            updatedAt: Date.now(),
+          };
 
-          for (const message of messages) {
-            await ctx.db.delete(message._id);
+          if (isRenter) {
+            updateData.deletedByRenter = true;
+          } else {
+            updateData.deletedByOwner = true;
           }
 
-          // Delete the conversation
-          await ctx.db.delete(conversationId);
+          await ctx.db.patch(conversationId, updateData);
+
+          // Check if both users have deleted - if so, hard delete
+          const updatedConversation = await ctx.db.get(conversationId);
+          if (
+            updatedConversation &&
+            updatedConversation.deletedByRenter === true &&
+            updatedConversation.deletedByOwner === true
+          ) {
+            // Both users have deleted - perform hard delete
+            const messages = await ctx.db
+              .query('messages')
+              .withIndex('by_conversation', q =>
+                q.eq('conversationId', conversationId)
+              )
+              .collect();
+
+            for (const message of messages) {
+              await ctx.db.delete(message._id);
+            }
+
+            // Delete the conversation
+            await ctx.db.delete(conversationId);
+          }
           break;
         }
       }

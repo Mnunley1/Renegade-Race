@@ -1,22 +1,47 @@
 "use client"
 
-import { useQuery } from "convex/react"
 import { useUser } from "@clerk/nextjs"
-import { Avatar, AvatarFallback, AvatarImage } from "@workspace/ui/components/avatar"
-import { Card, CardContent, CardHeader } from "@workspace/ui/components/card"
-import { Input } from "@workspace/ui/components/input"
+import type { Id } from "@workspace/backend/convex/_generated/dataModel"
 import { Badge } from "@workspace/ui/components/badge"
-import { MessageSquare, Search, Car } from "lucide-react"
+import { Button } from "@workspace/ui/components/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
+import { Input } from "@workspace/ui/components/input"
+import { useMutation, useQuery } from "convex/react"
+import { MessageSquare, Search } from "lucide-react"
+import { useEffect, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { api } from "@/lib/convex"
-import { useMemo, useState } from "react"
 import { cn } from "@workspace/ui/lib/utils"
 
 export default function MessagesPage() {
-  const { user } = useUser()
+  const { user, isSignedIn } = useUser()
   const [searchQuery, setSearchQuery] = useState("")
+  const searchParams = useSearchParams()
+  const router = useRouter()
 
-  // Fetch user's conversations from Convex (as both renter and owner)
+  // Bulk operations states
+  const [selectedConversations, setSelectedConversations] = useState<string[]>([])
+  const [isBulkMode, setIsBulkMode] = useState(false)
+  const [isPerformingBulkAction, setIsPerformingBulkAction] = useState(false)
+
+  // Handle query parameters - redirect to chat page if needed
+  useEffect(() => {
+    const conversationId = searchParams.get("conversationId")
+    const vehicleId = searchParams.get("vehicleId")
+    const renterId = searchParams.get("renterId")
+    const ownerId = searchParams.get("ownerId")
+
+    if (conversationId) {
+      // If there's a conversationId, navigate to the chat page
+      router.replace(`/messages/${conversationId}`)
+    } else if (vehicleId && renterId && ownerId) {
+      // If there are pending conversation parameters, navigate to chat page
+      router.replace(`/messages?vehicleId=${vehicleId}&renterId=${renterId}&ownerId=${ownerId}`)
+    }
+  }, [searchParams, router])
+
+  // Fetch user's conversations
   const renterConversations = useQuery(
     api.conversations.getByUser,
     user?.id ? { userId: user.id, role: "renter" as const } : "skip"
@@ -27,173 +52,344 @@ export default function MessagesPage() {
     user?.id ? { userId: user.id, role: "owner" as const } : "skip"
   )
 
-  // Combine conversations from both roles and sort by last message
-  const allConversationsData = useMemo(() => {
-    const renter = renterConversations || []
-    const owner = ownerConversations || []
-    // Merge and deduplicate by conversation ID
-    const all = [...renter, ...owner]
-    const unique = all.filter(
-      (conv, index, self) => index === self.findIndex((c) => c._id === conv._id)
+  // Combine conversations
+  const conversations = [
+    ...(renterConversations || []),
+    ...(ownerConversations || []),
+  ].sort((a, b) => b.lastMessageAt - a.lastMessageAt)
+
+  // Filter conversations based on search query
+  const filteredConversations = conversations.filter((conversation) => {
+    if (!searchQuery.trim()) return true
+
+    const otherUser =
+      user?.id === conversation.renterId ? conversation.owner : conversation.renter
+
+    const searchLower = searchQuery.toLowerCase()
+    return (
+      otherUser?.name?.toLowerCase().includes(searchLower) ||
+      conversation.vehicle?.make?.toLowerCase().includes(searchLower) ||
+      conversation.vehicle?.model?.toLowerCase().includes(searchLower) ||
+      conversation.lastMessageText?.toLowerCase().includes(searchLower)
     )
-    // Sort by last message time (most recent first)
-    return unique.sort((a, b) => b.lastMessageAt - a.lastMessageAt)
-  }, [renterConversations, ownerConversations])
+  })
 
-  // Map conversations to the format expected by the UI
-  const conversations = useMemo(() => {
-    if (!allConversationsData || !allConversationsData.length) return []
-    return allConversationsData.map((conv) => {
-      const otherPerson = conv.renter?.externalId === user?.id ? conv.owner : conv.renter
-      const unreadCount = user?.id === conv.renter?.externalId ? conv.unreadCountRenter : conv.unreadCountOwner
-      return {
-        id: conv._id,
-        name: otherPerson?.name || "Unknown",
-        avatar: otherPerson?.profileImage || "",
-        preview: conv.lastMessageText || "No messages yet",
-        unread: unreadCount > 0,
-        unreadCount,
-        vehicle: conv.vehicle ? `${conv.vehicle.year} ${conv.vehicle.make} ${conv.vehicle.model}` : "",
-        lastMessageAt: conv.lastMessageAt,
-      }
-    })
-  }, [allConversationsData, user?.id])
+  // Mutations
+  const bulkConversationActions = useMutation(api.conversations.bulkHostConversationActions)
 
-  // Filter conversations by search query
-  const filteredConversations = useMemo(() => {
-    if (!searchQuery.trim()) return conversations
-    const query = searchQuery.toLowerCase()
-    return conversations.filter(
-      (conv) =>
-        conv.name.toLowerCase().includes(query) ||
-        conv.vehicle.toLowerCase().includes(query) ||
-        conv.preview.toLowerCase().includes(query)
+  if (!isSignedIn || !user) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Card className="w-full max-w-md">
+          <CardContent className="p-6">
+            <div className="text-center">
+              <MessageSquare className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <h2 className="text-xl font-semibold text-foreground mb-2">Please sign in</h2>
+              <p className="text-muted-foreground">You need to be signed in to view conversations.</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     )
-  }, [conversations, searchQuery])
+  }
 
-  // Format timestamp for display
-  const formatTimestamp = (timestamp: number): string => {
+  // Bulk operations handlers
+  const handleBulkSelect = (conversationId: string) => {
+    setSelectedConversations((prev) =>
+      prev.includes(conversationId)
+        ? prev.filter((id) => id !== conversationId)
+        : [...prev, conversationId]
+    )
+  }
+
+  const handleSelectAll = () => {
+    if (selectedConversations.length === conversations.length) {
+      setSelectedConversations([])
+    } else {
+      setSelectedConversations(conversations.map((c) => c._id))
+    }
+  }
+
+  const handleBulkArchive = async () => {
+    if (selectedConversations.length === 0) return
+
+    setIsPerformingBulkAction(true)
+    try {
+      await bulkConversationActions({
+        hostId: user?.id || "",
+        conversationIds: selectedConversations.map((id) => id as Id<"conversations">),
+        action: "archive",
+      })
+      setSelectedConversations([])
+      setIsBulkMode(false)
+    } catch (error) {
+      console.error("Failed to archive conversations:", error)
+    } finally {
+      setIsPerformingBulkAction(false)
+    }
+  }
+
+  const handleBulkDelete = async () => {
+    if (selectedConversations.length === 0) return
+
+    setIsPerformingBulkAction(true)
+    try {
+      await bulkConversationActions({
+        hostId: user?.id || "",
+        conversationIds: selectedConversations.map((id) => id as Id<"conversations">),
+        action: "delete",
+      })
+      setSelectedConversations([])
+      setIsBulkMode(false)
+    } catch (error) {
+      console.error("Failed to delete conversations:", error)
+    } finally {
+      setIsPerformingBulkAction(false)
+    }
+  }
+
+  const handleBulkMarkRead = async () => {
+    if (selectedConversations.length === 0) return
+
+    setIsPerformingBulkAction(true)
+    try {
+      await bulkConversationActions({
+        hostId: user?.id || "",
+        conversationIds: selectedConversations.map((id) => id as Id<"conversations">),
+        action: "mark_read",
+      })
+      setSelectedConversations([])
+      setIsBulkMode(false)
+    } catch (error) {
+      console.error("Failed to mark conversations as read:", error)
+    } finally {
+      setIsPerformingBulkAction(false)
+    }
+  }
+
+  const formatTime = (timestamp: number) => {
     const date = new Date(timestamp)
     const now = new Date()
-    const diffMs = now.getTime() - date.getTime()
-    const diffMins = Math.floor(diffMs / 60000)
-    const diffHours = Math.floor(diffMs / 3600000)
-    const diffDays = Math.floor(diffMs / 86400000)
+    const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60)
 
-    if (diffMins < 1) return "Just now"
-    if (diffMins < 60) return `${diffMins}m ago`
-    if (diffHours < 24) return `${diffHours}h ago`
-    if (diffDays < 7) return `${diffDays}d ago`
-    return date.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    if (diffInHours < 1) {
+      const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60))
+      return `${diffInMinutes}m ago`
+    } else if (diffInHours < 24) {
+      return `${Math.floor(diffInHours)}h ago`
+    } else {
+      return date.toLocaleDateString()
+    }
   }
 
   const isLoading = renterConversations === undefined || ownerConversations === undefined
 
   return (
-    <div className="container mx-auto max-w-6xl px-4 py-8">
-      <div className="mb-8">
-        <h1 className="mb-2 font-bold text-3xl">Messages</h1>
-        <p className="text-muted-foreground">
-          Connect with hosts and renters to manage your conversations
-        </p>
-      </div>
+    <div className="bg-background">
+      <div className="max-w-6xl mx-auto p-6">
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-foreground">Messages</h1>
+          <p className="text-muted-foreground mt-2">
+            Manage your conversations and stay connected with other users.
+          </p>
+        </div>
 
-      <Card className="border-2 shadow-lg">
-        <CardHeader className="border-b pb-4">
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              className="h-12 pl-11 text-base"
-              placeholder="Search conversations by name, vehicle, or message..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          {isLoading ? (
-            <div className="flex min-h-[400px] items-center justify-center py-12">
-              <div className="size-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-            </div>
-          ) : filteredConversations.length === 0 ? (
-            <div className="flex min-h-[400px] flex-col items-center justify-center py-16 text-center">
-              <div className="mb-6 flex size-20 items-center justify-center rounded-full bg-muted">
-                <MessageSquare className="size-10 text-muted-foreground" />
-              </div>
-              <h3 className="mb-2 font-semibold text-xl">
-                {searchQuery ? "No conversations found" : "No conversations yet"}
-              </h3>
-              <p className="mx-auto max-w-md text-muted-foreground">
-                {searchQuery
-                  ? "Try adjusting your search terms to find conversations."
-                  : "Start a conversation with a vehicle owner or renter to begin messaging."}
-              </p>
-            </div>
-          ) : (
-            <div className="divide-y">
-              {filteredConversations.map((conversation) => (
-                <Link
-                  className={cn(
-                    "block border-l-4 p-6 transition-colors hover:bg-accent/50",
-                    conversation.unread
-                      ? "border-primary bg-primary/5"
-                      : "border-transparent"
+        <Card className="h-[calc(100vh-16rem)] max-h-[700px]">
+          <CardHeader>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <CardTitle>Conversations</CardTitle>
+                <div className="flex gap-2">
+                  {isBulkMode ? (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setIsBulkMode(false)
+                          setSelectedConversations([])
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                      <Button size="sm" onClick={handleSelectAll}>
+                        {selectedConversations.length === conversations.length
+                          ? "Deselect All"
+                          : "Select All"}
+                      </Button>
+                    </>
+                  ) : (
+                    <Button size="sm" variant="outline" onClick={() => setIsBulkMode(true)}>
+                      Select
+                    </Button>
                   )}
-                  href={`/messages/${conversation.id}`}
-                  key={conversation.id}
-                >
-                  <div className="flex gap-4">
-                    <div className="relative shrink-0">
-                      <Avatar className="size-14">
-                        <AvatarImage src={conversation.avatar} />
-                        <AvatarFallback className="text-base font-semibold">
-                          {conversation.name[0]}
-                        </AvatarFallback>
-                      </Avatar>
-                      {conversation.unread && (
-                        <span className="absolute -right-1 -top-1 flex size-5 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-bold">
-                          {conversation.unreadCount > 9 ? "9+" : conversation.unreadCount}
-                        </span>
-                      )}
+                </div>
+              </div>
+
+              {/* Bulk actions bar */}
+              {isBulkMode && selectedConversations.length > 0 && (
+                <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
+                  <span className="text-sm text-muted-foreground">
+                    {selectedConversations.length} selected
+                  </span>
+                  <div className="flex gap-1">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleBulkMarkRead}
+                      disabled={isPerformingBulkAction}
+                    >
+                      Mark Read
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleBulkArchive}
+                      disabled={isPerformingBulkAction}
+                    >
+                      Archive
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={handleBulkDelete}
+                      disabled={isPerformingBulkAction}
+                    >
+                      Delete
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                <Input
+                  placeholder="Search conversations..."
+                  value={searchQuery}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    setSearchQuery(e.target.value)
+                  }
+                  className="pl-10"
+                />
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0 overflow-y-auto">
+            {isLoading ? (
+              // Loading state
+              <div className="space-y-3 p-4">
+                {Array.from({ length: 5 }).map((_, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center space-x-3 p-3 rounded-lg bg-muted animate-pulse"
+                  >
+                    <div className="w-12 h-12 rounded-full bg-muted-foreground/20"></div>
+                    <div className="flex-1 space-y-2">
+                      <div className="h-4 bg-muted-foreground/20 rounded w-3/4"></div>
+                      <div className="h-3 bg-muted-foreground/20 rounded w-1/2"></div>
                     </div>
-                    <div className="min-w-0 flex-1 space-y-2">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <h3 className="truncate font-semibold text-lg">{conversation.name}</h3>
-                            {conversation.unread && (
-                              <Badge className="h-5 px-1.5 text-xs" variant="default">
-                                New
+                  </div>
+                ))}
+              </div>
+            ) : filteredConversations.length === 0 ? (
+              // Empty state
+              <div className="flex items-center justify-center h-64">
+                <div className="text-center">
+                  <MessageSquare className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+                  <h3 className="text-xl font-semibold text-foreground mb-2">
+                    {searchQuery ? "No conversations found" : "No conversations yet"}
+                  </h3>
+                  <p className="text-muted-foreground text-sm">
+                    {searchQuery
+                      ? "Try a different search term."
+                      : "Start a conversation by booking a vehicle or listing one."}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              // Conversations list
+              <div className="space-y-1">
+                {filteredConversations.map((conversation) => {
+                  // Determine the other user (if current user is renter, show owner; if owner, show renter)
+                  const otherUser =
+                    user?.id === conversation.renterId ? conversation.owner : conversation.renter
+
+                  const unreadCount =
+                    user?.id === conversation.renterId
+                      ? conversation.unreadCountRenter
+                      : conversation.unreadCountOwner
+
+                  const conversationContent = (
+                    <div className="flex items-start space-x-3">
+                      <div className="w-12 h-12 rounded-full bg-[#EF1C25] flex items-center justify-center text-white font-medium flex-shrink-0">
+                        {otherUser?.name?.[0]?.toUpperCase() || "U"}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between mb-1">
+                          <h4 className="font-semibold text-foreground truncate text-sm">
+                            {otherUser?.name || "Unknown User"}
+                          </h4>
+                          <div className="flex items-center space-x-2 flex-shrink-0 ml-2">
+                            <span className="text-xs text-muted-foreground">
+                              {formatTime(conversation.lastMessageAt)}
+                            </span>
+                            {unreadCount > 0 && (
+                              <Badge className="bg-[#EF1C25] text-white text-xs px-1.5 py-0.5 min-w-[18px] h-[18px] flex items-center justify-center">
+                                {unreadCount}
                               </Badge>
                             )}
                           </div>
                         </div>
-                        <span className="shrink-0 text-muted-foreground text-sm">
-                          {formatTimestamp(conversation.lastMessageAt)}
-                        </span>
+                        <p className="text-xs text-muted-foreground truncate mb-1">
+                          {conversation.vehicle
+                            ? `${conversation.vehicle.year} ${conversation.vehicle.make} ${conversation.vehicle.model}`
+                            : "Vehicle conversation"}
+                        </p>
+                        <p
+                          className={cn(
+                            "text-xs truncate",
+                            unreadCount > 0
+                              ? "text-foreground font-medium"
+                              : "text-muted-foreground"
+                          )}
+                        >
+                          {conversation.lastMessageText || "No messages yet"}
+                        </p>
                       </div>
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Car className="size-4 shrink-0" />
-                        <p className="truncate font-medium text-sm">{conversation.vehicle}</p>
-                      </div>
-                      <p
-                        className={cn(
-                          "truncate text-sm",
-                          conversation.unread
-                            ? "font-medium text-foreground"
-                            : "text-muted-foreground"
-                        )}
-                      >
-                        {conversation.preview}
-                      </p>
                     </div>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                  )
+
+                  return (
+                    <div
+                      key={conversation._id}
+                      className={cn(
+                        "w-full text-left hover:bg-muted/50 transition-colors",
+                        isBulkMode ? "flex items-center space-x-3 p-4" : "p-4"
+                      )}
+                    >
+                      {isBulkMode && (
+                        <input
+                          type="checkbox"
+                          checked={selectedConversations.includes(conversation._id)}
+                          onChange={() => handleBulkSelect(conversation._id)}
+                          className="w-4 h-4 text-[#EF1C25] border-border rounded focus:ring-[#EF1C25] flex-shrink-0"
+                        />
+                      )}
+                      {isBulkMode ? (
+                        <div className="flex-1">{conversationContent}</div>
+                      ) : (
+                        <Link href={`/messages/${conversation._id}`} className="w-full text-left">
+                          {conversationContent}
+                        </Link>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }

@@ -1,34 +1,32 @@
 "use client"
 
-import { useQuery } from "convex/react"
-import { useMemo } from "react"
+import { useUser } from "@clerk/nextjs"
+import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
-import { Badge } from "@workspace/ui/components/badge"
+import { useQuery } from "convex/react"
 import {
+  AlertCircle,
   Calendar,
   Car,
+  CheckCircle2,
   Clock,
   DollarSign,
+  Loader2,
   Plus,
   TrendingUp,
-  AlertCircle,
-  CheckCircle2,
   XCircle,
-  Loader2,
 } from "lucide-react"
 import Link from "next/link"
-import { useUser } from "@clerk/nextjs"
+import { useMemo } from "react"
 import { api } from "@/lib/convex"
 
 export default function HostDashboardPage() {
   const { user } = useUser()
+  console.log("user", user)
 
   // Fetch data from Convex
-  const vehicles = useQuery(
-    api.vehicles.getByOwner,
-    user?.id ? { ownerId: user.id } : "skip"
-  )
+  const vehicles = useQuery(api.vehicles.getByOwner, user?.id ? { ownerId: user.id } : "skip")
   const pendingReservations = useQuery(
     api.reservations.getPendingForOwner,
     user?.id ? { ownerId: user.id } : "skip"
@@ -37,10 +35,7 @@ export default function HostDashboardPage() {
     api.reservations.getConfirmedForOwner,
     user?.id ? { ownerId: user.id } : "skip"
   )
-  const reviewStats = useQuery(
-    api.reviews.getUserStats,
-    user?.id ? { userId: user.id } : "skip"
-  )
+  const reviewStats = useQuery(api.reviews.getUserStats, user?.id ? { userId: user.id } : "skip")
 
   // Calculate stats from real data
   const stats = useMemo(() => {
@@ -69,8 +64,7 @@ export default function HostDashboardPage() {
     if (!vehicles || vehicles.length === 0) return []
 
     return vehicles.slice(0, 3).map((vehicle) => {
-      const primaryImage =
-        vehicle.images?.find((img) => img.isPrimary) || vehicle.images?.[0]
+      const primaryImage = vehicle.images?.find((img) => img.isPrimary) || vehicle.images?.[0]
 
       // Calculate bookings and earnings from reservations
       const vehicleReservations = [
@@ -79,16 +73,9 @@ export default function HostDashboardPage() {
       ].filter((res) => res.vehicleId === vehicle._id)
 
       const bookings = vehicleReservations.length
-      const earnings = vehicleReservations.reduce(
-        (sum, res) => sum + (res.totalAmount || 0),
-        0
-      )
+      const earnings = vehicleReservations.reduce((sum, res) => sum + (res.totalAmount || 0), 0)
 
-      const status = vehicle.isApproved
-        ? "active"
-        : vehicle.isActive
-          ? "pending"
-          : "inactive"
+      const status = vehicle.isApproved ? "active" : vehicle.isActive ? "pending" : "inactive"
 
       return {
         id: vehicle._id,
@@ -131,42 +118,6 @@ export default function HostDashboardPage() {
       description: "Your Lamborghini Huracán has been approved and is now live",
       time: "1 day ago",
       status: "approved",
-    },
-  ]
-
-  const recentVehicles = [
-    {
-      id: "1",
-      name: "Porsche 911 GT3",
-      make: "Porsche",
-      model: "911 GT3",
-      year: 2023,
-      status: "active",
-      bookings: 12,
-      earnings: 10788,
-      image: "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=400",
-    },
-    {
-      id: "2",
-      name: "Ferrari F8 Tributo",
-      make: "Ferrari",
-      model: "F8 Tributo",
-      year: 2022,
-      status: "pending",
-      bookings: 0,
-      earnings: 0,
-      image: "https://images.unsplash.com/photo-1549952891-fcf406dd2aa9?w=400",
-    },
-    {
-      id: "3",
-      name: "Lamborghini Huracán",
-      make: "Lamborghini",
-      model: "Huracán",
-      year: 2024,
-      status: "active",
-      bookings: 5,
-      earnings: 6495,
-      image: "https://images.unsplash.com/photo-1593941707882-a5bac6861d0d?w=400",
     },
   ]
 
@@ -329,7 +280,7 @@ export default function HostDashboardPage() {
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Your Vehicles</CardTitle>
               <Link href="/host/vehicles/list">
-                <Button variant="outline" size="sm">
+                <Button size="sm" variant="outline">
                   View All
                 </Button>
               </Link>
@@ -353,8 +304,8 @@ export default function HostDashboardPage() {
                 <div className="space-y-4">
                   {recentVehicles.map((vehicle) => (
                     <div
-                      key={vehicle.id}
                       className="flex items-center gap-4 rounded-lg border p-4 transition-colors hover:bg-muted/50"
+                      key={vehicle.id}
                     >
                       <div className="relative size-20 shrink-0 overflow-hidden rounded-lg">
                         <img
@@ -374,9 +325,7 @@ export default function HostDashboardPage() {
                           {getStatusBadge(vehicle.status)}
                         </div>
                         <div className="flex items-center gap-4 text-sm">
-                          <span className="text-muted-foreground">
-                            {vehicle.bookings} bookings
-                          </span>
+                          <span className="text-muted-foreground">{vehicle.bookings} bookings</span>
                           <span className="text-muted-foreground">•</span>
                           <span className="font-semibold">
                             ${vehicle.earnings.toLocaleString()} earned
@@ -384,7 +333,7 @@ export default function HostDashboardPage() {
                         </div>
                       </div>
                       <Link href={`/host/vehicles/${vehicle.id}`}>
-                        <Button variant="outline" size="sm">
+                        <Button size="sm" variant="outline">
                           Manage
                         </Button>
                       </Link>
@@ -404,14 +353,14 @@ export default function HostDashboardPage() {
               <CardTitle>Quick Actions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              <Link href="/host/reservations" className="block">
-                <Button variant="outline" className="w-full justify-start" size="sm">
+              <Link className="block" href="/host/reservations">
+                <Button className="w-full justify-start" size="sm" variant="outline">
                   <Calendar className="mr-2 size-4" />
                   View All Reservations
                 </Button>
               </Link>
-              <Link href="/host/vehicles/list" className="block">
-                <Button variant="outline" className="w-full justify-start" size="sm">
+              <Link className="block" href="/host/vehicles/list">
+                <Button className="w-full justify-start" size="sm" variant="outline">
                   <Car className="mr-2 size-4" />
                   Manage Vehicles
                 </Button>
@@ -433,10 +382,8 @@ export default function HostDashboardPage() {
               ) : (
                 <div className="space-y-4">
                   {recentActivity.map((activity) => (
-                    <div key={activity.id} className="flex gap-3">
-                      <div className="mt-0.5 shrink-0">
-                        {getActivityIcon(activity.type)}
-                      </div>
+                    <div className="flex gap-3" key={activity.id}>
+                      <div className="mt-0.5 shrink-0">{getActivityIcon(activity.type)}</div>
                       <div className="flex-1 space-y-1">
                         <p className="font-medium text-sm">{activity.title}</p>
                         <p className="text-muted-foreground text-xs">{activity.description}</p>
