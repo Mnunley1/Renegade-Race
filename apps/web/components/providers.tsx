@@ -4,6 +4,7 @@ import { useAuth } from "@clerk/nextjs"
 import { ConvexReactClient } from "convex/react"
 import { ConvexProviderWithClerk } from "convex/react-clerk"
 import { ThemeProvider as NextThemesProvider } from "next-themes"
+import { Toaster } from "@workspace/ui/components/sonner"
 import type * as React from "react"
 
 if (!process.env.NEXT_PUBLIC_CONVEX_URL) {
@@ -23,6 +24,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         enableSystem
       >
         {children}
+        <Toaster />
       </NextThemesProvider>
     </ConvexProviderWithClerk>
   )

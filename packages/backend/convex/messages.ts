@@ -6,10 +6,11 @@ import { mutation, query } from './_generated/server';
 export const getByConversation = query({
   args: {
     conversationId: v.id('conversations'),
+    userId: v.string(), // Add userId to identify which user is viewing
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const { conversationId, limit = 50 } = args;
+    const { conversationId, userId, limit = 50 } = args;
 
     // Verify conversation exists
     const conversation = await ctx.db.get(conversationId);
@@ -17,8 +18,22 @@ export const getByConversation = query({
       throw new Error('Conversation not found');
     }
 
+    // Ensure the user is part of the conversation
+    if (
+      conversation.renterId !== userId &&
+      conversation.ownerId !== userId
+    ) {
+      throw new Error('Not authorized to view this conversation');
+    }
+
+    // Determine if this user has a reopening timestamp (they deleted and it was reopened)
+    const isRenter = conversation.renterId === userId;
+    const reopenedAt = isRenter 
+      ? conversation.reopenedAtRenter 
+      : conversation.reopenedAtOwner;
+
     // Get messages ordered by creation time (newest first)
-    const messages = await ctx.db
+    let messages = await ctx.db
       .query('messages')
       .withIndex('by_conversation_created', q =>
         q.eq('conversationId', conversationId)
@@ -26,7 +41,13 @@ export const getByConversation = query({
       .order('desc')
       .take(limit);
 
-    // Get sender details for each message
+    // If user has a reopening timestamp, only show messages sent after that timestamp
+    // This hides old messages that were part of the deleted conversation
+    if (reopenedAt) {
+      messages = messages.filter(message => message.createdAt >= reopenedAt);
+    }
+
+    // Get sender details and replied-to message for each message
     const messagesWithSenders = await Promise.all(
       messages.map(async message => {
         const sender = await ctx.db
@@ -36,9 +57,32 @@ export const getByConversation = query({
           )
           .first();
 
+        // Get replied-to message if it exists and is visible (after reopening timestamp)
+        let repliedToMessage = null;
+        if (message.replyTo) {
+          const replyToMsg = await ctx.db.get(message.replyTo);
+          if (replyToMsg) {
+            // Only include replied-to message if it's visible (after reopening timestamp)
+            if (!reopenedAt || replyToMsg.createdAt >= reopenedAt) {
+              const replyToSender = await ctx.db
+                .query('users')
+                .withIndex('by_external_id', q =>
+                  q.eq('externalId', replyToMsg.senderId)
+                )
+                .first();
+
+              repliedToMessage = {
+                ...replyToMsg,
+                sender: replyToSender,
+              };
+            }
+          }
+        }
+
         return {
           ...message,
           sender,
+          repliedToMessage,
         };
       })
     );
@@ -59,6 +103,7 @@ export const send = mutation({
     messageType: v.optional(
       v.union(v.literal('text'), v.literal('image'), v.literal('system'))
     ),
+    replyTo: v.optional(v.id('messages')),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -109,7 +154,7 @@ export const send = mutation({
         conversationId = existingConversation._id;
         conversation = existingConversation;
       } else {
-        // Create the conversation
+        // Create the conversation as inactive - it will be activated after the first message is sent
         conversationId = await ctx.db.insert('conversations', {
           vehicleId: args.vehicleId,
           renterId: args.renterId,
@@ -117,7 +162,7 @@ export const send = mutation({
           lastMessageAt: now,
           unreadCountRenter: 0,
           unreadCountOwner: 0,
-          isActive: true,
+          isActive: false,
           createdAt: now,
           updatedAt: now,
         });
@@ -127,33 +172,89 @@ export const send = mutation({
       }
     }
 
+    // Verify replyTo message exists and is in the same conversation if provided
+    if (args.replyTo) {
+      const replyToMessage = await ctx.db.get(args.replyTo);
+      if (!replyToMessage) {
+        throw new Error('Reply to message not found');
+      }
+      if (replyToMessage.conversationId !== conversationId) {
+        throw new Error('Reply to message must be in the same conversation');
+      }
+    }
+
     // Create the message
     const messageId = await ctx.db.insert('messages', {
       conversationId,
       senderId,
       content: args.content,
       messageType: args.messageType || 'text',
+      replyTo: args.replyTo,
       isRead: false,
       createdAt: now,
     });
 
-    // Update conversation metadata and unread count
+    // Update conversation metadata and unread count, and activate the conversation
+    // Activate conversation if it's currently inactive (first message or reactivating)
+    // This ensures the recipient only sees the conversation after the first message is sent
+    const activateConversation = !conversation?.isActive
+
     if (conversation && conversation.renterId === senderId) {
-      await ctx.db.patch(conversationId, {
+      // Sender is renter, so owner receives the message
+      const updateData: {
+        lastMessageAt: number;
+        lastMessageText: string;
+        lastMessageSenderId: string;
+        unreadCountOwner: number;
+        isActive: boolean;
+        updatedAt: number;
+        deletedByOwner?: boolean;
+        reopenedAtOwner?: number;
+      } = {
         lastMessageAt: now,
         lastMessageText: args.content,
         lastMessageSenderId: senderId,
         unreadCountOwner: (conversation.unreadCountOwner || 0) + 1,
+        isActive: activateConversation ? true : conversation.isActive,
         updatedAt: now,
-      });
+      };
+
+      // If owner deleted the conversation, clear their deletion flag and record reopening timestamp
+      // This allows the conversation to reappear, but only new messages will be visible
+      if (conversation.deletedByOwner === true) {
+        updateData.deletedByOwner = false;
+        updateData.reopenedAtOwner = now; // Record when conversation was reopened for owner
+      }
+
+      await ctx.db.patch(conversationId, updateData);
     } else {
-      await ctx.db.patch(conversationId, {
+      // Sender is owner, so renter receives the message
+      const updateData: {
+        lastMessageAt: number;
+        lastMessageText: string;
+        lastMessageSenderId: string;
+        unreadCountRenter: number;
+        isActive: boolean;
+        updatedAt: number;
+        deletedByRenter?: boolean;
+        reopenedAtRenter?: number;
+      } = {
         lastMessageAt: now,
         lastMessageText: args.content,
         lastMessageSenderId: senderId,
         unreadCountRenter: (conversation?.unreadCountRenter || 0) + 1,
+        isActive: activateConversation ? true : (conversation?.isActive ?? true),
         updatedAt: now,
-      });
+      };
+
+      // If renter deleted the conversation, clear their deletion flag and record reopening timestamp
+      // This allows the conversation to reappear, but only new messages will be visible
+      if (conversation.deletedByRenter === true) {
+        updateData.deletedByRenter = false;
+        updateData.reopenedAtRenter = now; // Record when conversation was reopened for renter
+      }
+
+      await ctx.db.patch(conversationId, updateData);
     }
 
     return { messageId, conversationId };
@@ -372,7 +473,12 @@ export const getHostConversations = query({
       .query('conversations')
       .withIndex('by_owner', q => q.eq('ownerId', hostId));
 
-    const conversations = await conversationsQuery.collect();
+    const allConversations = await conversationsQuery.collect();
+
+    // Filter out conversations deleted by the host (owner)
+    const conversations = allConversations.filter(
+      conv => conv.deletedByOwner !== true
+    );
 
     // Filter by active status if needed
     const filteredConversations = includeArchived
@@ -426,10 +532,15 @@ export const getHostMessageStats = query({
     const { hostId } = args;
 
     // Get all conversations for this host
-    const conversations = await ctx.db
+    const allConversations = await ctx.db
       .query('conversations')
       .withIndex('by_owner', q => q.eq('ownerId', hostId))
       .collect();
+
+    // Filter out conversations deleted by the host (owner)
+    const conversations = allConversations.filter(
+      conv => conv.deletedByOwner !== true
+    );
 
     let totalMessages = 0;
     let unreadMessages = 0;
@@ -499,10 +610,13 @@ export const bulkMarkHostConversationsAsRead = mutation({
       conversations = conversations.filter(Boolean);
     } else {
       // Get all conversations for this host
-      conversations = await ctx.db
+      const allConversations = await ctx.db
         .query('conversations')
         .withIndex('by_owner', q => q.eq('ownerId', hostId))
         .collect();
+      conversations = allConversations.filter(
+        conv => conv.deletedByOwner !== true
+      );
     }
 
     const updatedConversations: Id<'conversations'>[] = [];
