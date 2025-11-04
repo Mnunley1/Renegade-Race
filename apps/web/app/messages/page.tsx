@@ -1,5 +1,6 @@
 "use client"
 
+import { Suspense } from "react"
 import { useUser } from "@clerk/nextjs"
 import type { Id } from "@workspace/backend/convex/_generated/dataModel"
 import { Badge } from "@workspace/ui/components/badge"
@@ -14,7 +15,7 @@ import Link from "next/link"
 import { api } from "@/lib/convex"
 import { cn } from "@workspace/ui/lib/utils"
 
-export default function MessagesPage() {
+function MessagesPageContent() {
   const { user, isSignedIn } = useUser()
   const [searchQuery, setSearchQuery] = useState("")
   const searchParams = useSearchParams()
@@ -391,5 +392,31 @@ export default function MessagesPage() {
         </Card>
       </div>
     </div>
+  )
+}
+
+export default function MessagesPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="bg-background">
+          <div className="max-w-6xl mx-auto p-6">
+            <div className="mb-6">
+              <h1 className="text-3xl font-bold text-foreground">Messages</h1>
+              <p className="text-muted-foreground mt-2">
+                Manage your conversations and stay connected with other users.
+              </p>
+            </div>
+            <Card className="h-[calc(100vh-16rem)] max-h-[700px]">
+              <CardContent className="p-6">
+                <div className="text-center text-muted-foreground">Loading...</div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      }
+    >
+      <MessagesPageContent />
+    </Suspense>
   )
 }
