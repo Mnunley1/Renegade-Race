@@ -1,5 +1,6 @@
 "use client"
 
+import { Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 import { useQuery } from "convex/react"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
@@ -10,7 +11,7 @@ import { api } from "@/lib/convex"
 import Image from "next/image"
 import Link from "next/link"
 
-export default function CheckoutSuccessPage() {
+function CheckoutSuccessContent() {
   const searchParams = useSearchParams()
   const reservationId = searchParams.get("reservationId")
 
@@ -152,6 +153,24 @@ export default function CheckoutSuccessPage() {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+export default function CheckoutSuccessPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="container mx-auto max-w-4xl px-4 py-8">
+          <Card>
+            <CardContent className="py-12 text-center">
+              <p className="text-muted-foreground">Loading...</p>
+            </CardContent>
+          </Card>
+        </div>
+      }
+    >
+      <CheckoutSuccessContent />
+    </Suspense>
   )
 }
 
