@@ -19,12 +19,13 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@workspace/ui/components/accordion"
-import { Filter, Search, Grid3x3, List, MapPin, Calendar, X, Star } from "lucide-react"
-import { Suspense, useState, useMemo } from "react"
+import { Filter, Search, Grid3x3, List, MapPin, Calendar, X, Star, ChevronRight } from "lucide-react"
+import { Suspense, useState, useMemo, useEffect } from "react"
 import { useQuery } from "convex/react"
 import { VehicleCard } from "@/components/vehicle-card"
 import { cn } from "@workspace/ui/lib/utils"
 import { api } from "@/lib/convex"
+import { useDebounce } from "@/hooks/useDebounce"
 
 export default function VehiclesPage() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
@@ -34,11 +35,22 @@ export default function VehiclesPage() {
   const [selectedTrack, setSelectedTrack] = useState("all")
   const [selectedMake, setSelectedMake] = useState("all")
   const [selectedPriceRange, setSelectedPriceRange] = useState("any")
+  const [minHorsepower, setMinHorsepower] = useState("")
+  const [maxHorsepower, setMaxHorsepower] = useState("")
+  const [selectedTransmission, setSelectedTransmission] = useState("all")
+  const [minYear, setMinYear] = useState("")
+  const [maxYear, setMaxYear] = useState("")
+  const [minRating, setMinRating] = useState("")
   const [sortBy, setSortBy] = useState("popularity")
   const [selectedDates, setSelectedDates] = useState({
     start: "",
     end: "",
   })
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 12
+
+  // Debounce search query
+  const debouncedSearchQuery = useDebounce(searchQuery, 300)
 
   // Fetch vehicles and tracks from Convex
   const vehiclesData = useQuery(api.vehicles.getAllWithOptimizedImages, {})
@@ -77,127 +89,53 @@ export default function VehiclesPage() {
     }))
   }, [tracksData])
 
-  const mockVehicles = [
-    {
-      id: "1",
-      image: "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=800",
-      name: "Porsche 911 GT3",
-      year: 2023,
-      make: "Porsche",
-      model: "911 GT3",
-      pricePerDay: 899,
-      location: "Daytona Beach, FL",
-      track: "Daytona International Speedway",
-      rating: 4.9,
-      reviews: 23,
-      horsepower: 502,
-      transmission: "Manual",
-    },
-    {
-      id: "2",
-      image: "https://images.unsplash.com/photo-1593941707882-a5bac6861d0d?w=800",
-      name: "Lamborghini Huracán",
-      year: 2024,
-      make: "Lamborghini",
-      model: "Huracán",
-      pricePerDay: 1299,
-      location: "Miami, FL",
-      track: "Homestead-Miami Speedway",
-      rating: 5.0,
-      reviews: 45,
-      horsepower: 610,
-      transmission: "Automatic",
-    },
-    {
-      id: "3",
-      image: "https://images.unsplash.com/photo-1549952891-fcf406dd2aa9?w=800",
-      name: "Ferrari F8 Tributo",
-      year: 2022,
-      make: "Ferrari",
-      model: "F8 Tributo",
-      pricePerDay: 1199,
-      location: "Orlando, FL",
-      track: "Sebring International Raceway",
-      rating: 4.8,
-      reviews: 31,
-      horsepower: 710,
-      transmission: "Automatic",
-    },
-    {
-      id: "4",
-      image: "https://images.unsplash.com/photo-1605170088216-9058e29c8e9f?w=800",
-      name: "McLaren 720S",
-      year: 2023,
-      make: "McLaren",
-      model: "720S",
-      pricePerDay: 1599,
-      location: "Tampa, FL",
-      track: "Daytona International Speedway",
-      rating: 4.9,
-      reviews: 18,
-      horsepower: 710,
-      transmission: "Automatic",
-    },
-    {
-      id: "5",
-      image: "https://images.unsplash.com/photo-1619682817481-ae0c7d3a0f8c?w=800",
-      name: "Chevrolet Corvette Z06",
-      year: 2024,
-      make: "Chevrolet",
-      model: "Corvette Z06",
-      pricePerDay: 699,
-      location: "Jacksonville, FL",
-      track: "Sebring International Raceway",
-      rating: 4.7,
-      reviews: 12,
-      horsepower: 650,
-      transmission: "Manual",
-    },
-    {
-      id: "6",
-      image: "https://images.unsplash.com/photo-1605170088197-48c5e1c45f3f?w=800",
-      name: "Aston Martin Vantage",
-      year: 2023,
-      make: "Aston Martin",
-      model: "Vantage",
-      pricePerDay: 1099,
-      location: "Naples, FL",
-      track: "Homestead-Miami Speedway",
-      rating: 4.8,
-      reviews: 27,
-      horsepower: 503,
-      transmission: "Manual",
-    },
-  ]
-
   const makes = useMemo(() => {
     return Array.from(new Set(vehicles.map((v) => v.make))).sort()
   }, [vehicles])
 
-  // Filter vehicles
+  // Filter vehicles with enhanced search and filters
   const filteredVehicles = useMemo(() => {
     let filtered = vehicles.filter((vehicle) => {
-      if (searchQuery && !vehicle.name.toLowerCase().includes(searchQuery.toLowerCase())) {
-        return false
+      // Enhanced multi-field search
+      if (debouncedSearchQuery) {
+        const query = debouncedSearchQuery.toLowerCase()
+        const searchableText = [
+          vehicle.make,
+          vehicle.model,
+          vehicle.name,
+          vehicle.track,
+          vehicle.location,
+        ]
+          .join(" ")
+          .toLowerCase()
+        if (!searchableText.includes(query)) {
+          return false
+        }
       }
+
+      // Track filter
       if (selectedTrack !== "all" && vehicle.track !== selectedTrack) {
         return false
       }
+
+      // Make filter
       if (selectedMake !== "all" && vehicle.make !== selectedMake) {
         return false
       }
+
+      // Location filter
       if (selectedLocation && !vehicle.location.toLowerCase().includes(selectedLocation.toLowerCase())) {
         return false
       }
+
+      // Price range filter
       if (selectedPriceRange !== "any") {
         if (selectedPriceRange.endsWith("+")) {
-          // Handle "1500+" case
           const minPrice = parseInt(selectedPriceRange.replace(/\D/g, ""), 10)
           if (vehicle.pricePerDay < minPrice) {
             return false
           }
         } else {
-          // Handle "0-500", "500-1000", etc.
           const [min, max] = selectedPriceRange.split("-").map((p) =>
             parseInt(p.replace(/\D/g, ""), 10)
           )
@@ -206,6 +144,33 @@ export default function VehiclesPage() {
           }
         }
       }
+
+      // Horsepower filter
+      if (minHorsepower && vehicle.horsepower && vehicle.horsepower < parseInt(minHorsepower, 10)) {
+        return false
+      }
+      if (maxHorsepower && vehicle.horsepower && vehicle.horsepower > parseInt(maxHorsepower, 10)) {
+        return false
+      }
+
+      // Transmission filter
+      if (selectedTransmission !== "all" && vehicle.transmission?.toLowerCase() !== selectedTransmission.toLowerCase()) {
+        return false
+      }
+
+      // Year filter
+      if (minYear && vehicle.year < parseInt(minYear, 10)) {
+        return false
+      }
+      if (maxYear && vehicle.year > parseInt(maxYear, 10)) {
+        return false
+      }
+
+      // Rating filter
+      if (minRating && vehicle.rating < parseFloat(minRating)) {
+        return false
+      }
+
       return true
     })
 
@@ -229,7 +194,64 @@ export default function VehiclesPage() {
     })
 
     return filtered
-  }, [vehicles, searchQuery, selectedTrack, selectedMake, selectedLocation, selectedPriceRange, sortBy])
+  }, [
+    vehicles,
+    debouncedSearchQuery,
+    selectedTrack,
+    selectedMake,
+    selectedLocation,
+    selectedPriceRange,
+    minHorsepower,
+    maxHorsepower,
+    selectedTransmission,
+    minYear,
+    maxYear,
+    minRating,
+    sortBy,
+  ])
+
+  // Paginate filtered vehicles
+  const paginatedVehicles = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage
+    return filteredVehicles.slice(startIndex, startIndex + itemsPerPage)
+  }, [filteredVehicles, currentPage])
+
+  const totalPages = Math.ceil(filteredVehicles.length / itemsPerPage)
+  const hasMore = currentPage < totalPages
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [debouncedSearchQuery, selectedTrack, selectedMake, selectedLocation, selectedPriceRange, minHorsepower, maxHorsepower, selectedTransmission, minYear, maxYear, minRating, sortBy])
+
+  // Get active filter count
+  const activeFiltersCount = useMemo(() => {
+    let count = 0
+    if (debouncedSearchQuery) count++
+    if (selectedTrack !== "all") count++
+    if (selectedMake !== "all") count++
+    if (selectedLocation) count++
+    if (selectedPriceRange !== "any") count++
+    if (minHorsepower || maxHorsepower) count++
+    if (selectedTransmission !== "all") count++
+    if (minYear || maxYear) count++
+    if (minRating) count++
+    if (selectedDates.start || selectedDates.end) count++
+    return count
+  }, [
+    debouncedSearchQuery,
+    selectedTrack,
+    selectedMake,
+    selectedLocation,
+    selectedPriceRange,
+    minHorsepower,
+    maxHorsepower,
+    selectedTransmission,
+    minYear,
+    maxYear,
+    minRating,
+    selectedDates,
+  ])
 
   const clearFilters = () => {
     setSearchQuery("")
@@ -237,7 +259,20 @@ export default function VehiclesPage() {
     setSelectedTrack("all")
     setSelectedMake("all")
     setSelectedPriceRange("any")
+    setMinHorsepower("")
+    setMaxHorsepower("")
+    setSelectedTransmission("all")
+    setMinYear("")
+    setMaxYear("")
+    setMinRating("")
     setSelectedDates({ start: "", end: "" })
+    setCurrentPage(1)
+  }
+
+  const loadMore = () => {
+    if (hasMore) {
+      setCurrentPage((prev) => prev + 1)
+    }
   }
 
   return (
@@ -263,13 +298,13 @@ export default function VehiclesPage() {
                   <Search className="absolute left-3 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     className="h-12 pl-10 text-base"
-                    placeholder="Search by make, model, or track..."
+                    placeholder="Search by make, model, track, or location..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                   />
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-4">
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
                   <div>
                     <Label htmlFor="track" className="mb-2 flex items-center gap-2">
                       <MapPin className="size-4" />
@@ -311,9 +346,26 @@ export default function VehiclesPage() {
                     <Input
                       id="start-date"
                       type="date"
+                      min={new Date().toISOString().split("T")[0]}
                       value={selectedDates.start}
                       onChange={(e) =>
                         setSelectedDates({ ...selectedDates, start: e.target.value })
+                      }
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="end-date" className="mb-2 flex items-center gap-2">
+                      <Calendar className="size-4" />
+                      End Date
+                    </Label>
+                    <Input
+                      id="end-date"
+                      type="date"
+                      min={selectedDates.start || new Date().toISOString().split("T")[0]}
+                      value={selectedDates.end}
+                      onChange={(e) =>
+                        setSelectedDates({ ...selectedDates, end: e.target.value })
                       }
                     />
                   </div>
@@ -325,6 +377,117 @@ export default function VehiclesPage() {
                     </Button>
                   </div>
                 </div>
+
+                {/* Active Filters Badges */}
+                {activeFiltersCount > 0 && (
+                  <div className="flex flex-wrap items-center gap-2 pt-2 border-t">
+                    <span className="text-sm text-muted-foreground">Active filters:</span>
+                    {debouncedSearchQuery && (
+                      <Badge variant="secondary" className="gap-1">
+                        Search: {debouncedSearchQuery}
+                        <X
+                          className="size-3 cursor-pointer"
+                          onClick={() => setSearchQuery("")}
+                        />
+                      </Badge>
+                    )}
+                    {selectedTrack !== "all" && (
+                      <Badge variant="secondary" className="gap-1">
+                        Track: {selectedTrack}
+                        <X
+                          className="size-3 cursor-pointer"
+                          onClick={() => setSelectedTrack("all")}
+                        />
+                      </Badge>
+                    )}
+                    {selectedMake !== "all" && (
+                      <Badge variant="secondary" className="gap-1">
+                        Make: {selectedMake}
+                        <X
+                          className="size-3 cursor-pointer"
+                          onClick={() => setSelectedMake("all")}
+                        />
+                      </Badge>
+                    )}
+                    {selectedLocation && (
+                      <Badge variant="secondary" className="gap-1">
+                        Location: {selectedLocation}
+                        <X
+                          className="size-3 cursor-pointer"
+                          onClick={() => setSelectedLocation("")}
+                        />
+                      </Badge>
+                    )}
+                    {selectedPriceRange !== "any" && (
+                      <Badge variant="secondary" className="gap-1">
+                        Price: {selectedPriceRange}
+                        <X
+                          className="size-3 cursor-pointer"
+                          onClick={() => setSelectedPriceRange("any")}
+                        />
+                      </Badge>
+                    )}
+                    {(minHorsepower || maxHorsepower) && (
+                      <Badge variant="secondary" className="gap-1">
+                        HP: {minHorsepower || "0"}-{maxHorsepower || "∞"}
+                        <X
+                          className="size-3 cursor-pointer"
+                          onClick={() => {
+                            setMinHorsepower("")
+                            setMaxHorsepower("")
+                          }}
+                        />
+                      </Badge>
+                    )}
+                    {selectedTransmission !== "all" && (
+                      <Badge variant="secondary" className="gap-1">
+                        Transmission: {selectedTransmission}
+                        <X
+                          className="size-3 cursor-pointer"
+                          onClick={() => setSelectedTransmission("all")}
+                        />
+                      </Badge>
+                    )}
+                    {(minYear || maxYear) && (
+                      <Badge variant="secondary" className="gap-1">
+                        Year: {minYear || "Any"}-{maxYear || "Any"}
+                        <X
+                          className="size-3 cursor-pointer"
+                          onClick={() => {
+                            setMinYear("")
+                            setMaxYear("")
+                          }}
+                        />
+                      </Badge>
+                    )}
+                    {minRating && (
+                      <Badge variant="secondary" className="gap-1">
+                        Rating: {minRating}+
+                        <X
+                          className="size-3 cursor-pointer"
+                          onClick={() => setMinRating("")}
+                        />
+                      </Badge>
+                    )}
+                    {(selectedDates.start || selectedDates.end) && (
+                      <Badge variant="secondary" className="gap-1">
+                        Dates: {selectedDates.start || "..."} - {selectedDates.end || "..."}
+                        <X
+                          className="size-3 cursor-pointer"
+                          onClick={() => setSelectedDates({ start: "", end: "" })}
+                        />
+                      </Badge>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={clearFilters}
+                      className="h-6 text-xs"
+                    >
+                      Clear all
+                    </Button>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -334,6 +497,11 @@ export default function VehiclesPage() {
             <p className="text-muted-foreground">
               <span className="font-semibold text-foreground">{filteredVehicles.length}</span>{" "}
               vehicles available
+              {filteredVehicles.length > paginatedVehicles.length && (
+                <span className="ml-2 text-sm">
+                  (showing {paginatedVehicles.length} of {filteredVehicles.length})
+                </span>
+              )}
             </p>
             <div className="flex items-center gap-2">
               <Button
@@ -364,6 +532,11 @@ export default function VehiclesPage() {
                 <div className="flex items-center gap-2">
                   <Filter className="size-5" />
                   <h2 className="text-lg font-semibold">Filters</h2>
+                  {activeFiltersCount > 0 && (
+                    <Badge variant="secondary" className="ml-2">
+                      {activeFiltersCount}
+                    </Badge>
+                  )}
                 </div>
                 <Button
                   variant="ghost"
@@ -423,6 +596,115 @@ export default function VehiclesPage() {
 
                     <Separator />
 
+                    <AccordionItem value="horsepower">
+                      <AccordionTrigger className="text-sm font-medium">
+                        Horsepower
+                      </AccordionTrigger>
+                      <AccordionContent className="space-y-3">
+                        <div>
+                          <Label htmlFor="min-hp">Min HP</Label>
+                          <Input
+                            id="min-hp"
+                            type="number"
+                            placeholder="e.g., 400"
+                            value={minHorsepower}
+                            onChange={(e) => setMinHorsepower(e.target.value)}
+                            min={0}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="max-hp">Max HP</Label>
+                          <Input
+                            id="max-hp"
+                            type="number"
+                            placeholder="e.g., 800"
+                            value={maxHorsepower}
+                            onChange={(e) => setMaxHorsepower(e.target.value)}
+                            min={0}
+                          />
+                        </div>
+                      </AccordionContent>
+                    </AccordionItem>
+
+                    <Separator />
+
+                    <AccordionItem value="transmission">
+                      <AccordionTrigger className="text-sm font-medium">
+                        Transmission
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        <Select value={selectedTransmission} onValueChange={setSelectedTransmission}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="All transmissions" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All transmissions</SelectItem>
+                            <SelectItem value="Manual">Manual</SelectItem>
+                            <SelectItem value="Automatic">Automatic</SelectItem>
+                            <SelectItem value="Sequential">Sequential</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </AccordionContent>
+                    </AccordionItem>
+
+                    <Separator />
+
+                    <AccordionItem value="year">
+                      <AccordionTrigger className="text-sm font-medium">
+                        Year Range
+                      </AccordionTrigger>
+                      <AccordionContent className="space-y-3">
+                        <div>
+                          <Label htmlFor="min-year">Min Year</Label>
+                          <Input
+                            id="min-year"
+                            type="number"
+                            placeholder="e.g., 2020"
+                            value={minYear}
+                            onChange={(e) => setMinYear(e.target.value)}
+                            min={1900}
+                            max={new Date().getFullYear() + 1}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="max-year">Max Year</Label>
+                          <Input
+                            id="max-year"
+                            type="number"
+                            placeholder="e.g., 2024"
+                            value={maxYear}
+                            onChange={(e) => setMaxYear(e.target.value)}
+                            min={1900}
+                            max={new Date().getFullYear() + 1}
+                          />
+                        </div>
+                      </AccordionContent>
+                    </AccordionItem>
+
+                    <Separator />
+
+                    <AccordionItem value="rating">
+                      <AccordionTrigger className="text-sm font-medium">
+                        Minimum Rating
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        <Select value={minRating} onValueChange={setMinRating}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Any rating" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="">Any rating</SelectItem>
+                            <SelectItem value="4">4+ stars</SelectItem>
+                            <SelectItem value="4.5">4.5+ stars</SelectItem>
+                            <SelectItem value="4.7">4.7+ stars</SelectItem>
+                            <SelectItem value="4.9">4.9+ stars</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </AccordionContent>
+                    </AccordionItem>
+
+                    <Separator />
+
                     <AccordionItem value="sort">
                       <AccordionTrigger className="text-sm font-medium">Sort By</AccordionTrigger>
                       <AccordionContent>
@@ -443,7 +725,7 @@ export default function VehiclesPage() {
                     </AccordionItem>
                   </Accordion>
 
-                  {(searchQuery || selectedTrack !== "all" || selectedMake !== "all" || selectedPriceRange !== "any" || selectedLocation) && (
+                  {activeFiltersCount > 0 && (
                     <div className="mt-4 pt-4 border-t">
                       <Button variant="outline" className="w-full" onClick={clearFilters}>
                         <X className="mr-2 size-4" />
@@ -465,7 +747,7 @@ export default function VehiclesPage() {
                 onClick={() => setShowFilters(true)}
               >
                 <Filter className="mr-2 size-4" />
-                Show Filters
+                Show Filters {activeFiltersCount > 0 && `(${activeFiltersCount})`}
               </Button>
             </div>
           )}
@@ -503,26 +785,42 @@ export default function VehiclesPage() {
                 </CardContent>
               </Card>
             ) : (
-              <Suspense fallback={<div>Loading...</div>}>
-                <div
-                  className={cn(
-                    "grid gap-6",
-                    viewMode === "grid"
-                      ? "md:grid-cols-2 xl:grid-cols-3 auto-rows-fr"
-                      : "grid-cols-1"
-                  )}
-                >
-                  {filteredVehicles.map((vehicle) => (
-                    <VehicleCard
-                      key={vehicle.id}
-                      {...vehicle}
-                      track={vehicle.track}
-                      horsepower={vehicle.horsepower}
-                      transmission={vehicle.transmission}
-                    />
-                  ))}
-                </div>
-              </Suspense>
+              <>
+                <Suspense fallback={<div>Loading...</div>}>
+                  <div
+                    className={cn(
+                      "grid gap-6",
+                      viewMode === "grid"
+                        ? "md:grid-cols-2 xl:grid-cols-3 auto-rows-fr"
+                        : "grid-cols-1"
+                    )}
+                  >
+                    {paginatedVehicles.map((vehicle) => (
+                      <VehicleCard
+                        key={vehicle.id}
+                        {...vehicle}
+                        track={vehicle.track}
+                        horsepower={vehicle.horsepower}
+                        transmission={vehicle.transmission}
+                      />
+                    ))}
+                  </div>
+                </Suspense>
+
+                {/* Pagination / Load More */}
+                {hasMore && (
+                  <div className="mt-8 flex justify-center">
+                    <Button
+                      variant="outline"
+                      size="lg"
+                      onClick={loadMore}
+                    >
+                      Load More Vehicles
+                      <ChevronRight className="ml-2 size-4" />
+                    </Button>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
