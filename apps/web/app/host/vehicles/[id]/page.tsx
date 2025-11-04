@@ -1,12 +1,12 @@
 "use client"
 
-import { useQuery, useMemo } from "convex/react"
+import { useMemo } from "react"
+import { useQuery } from "convex/react"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Badge } from "@workspace/ui/components/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
 import {
-  Calendar,
+  Calendar as CalendarIcon,
   Car,
   Edit,
   Settings,
@@ -19,15 +19,15 @@ import {
   Gauge,
   Users,
   Loader2,
+  Eye,
 } from "lucide-react"
 import Link from "next/link"
-import { useParams, useRouter } from "next/navigation"
+import { useParams } from "next/navigation"
 import { useUser } from "@clerk/nextjs"
 import { api } from "@/lib/convex"
 
 export default function HostVehicleDetailPage() {
   const params = useParams()
-  const router = useRouter()
   const { user } = useUser()
   const vehicleId = params.id as string
 
@@ -80,16 +80,6 @@ export default function HostVehicleDetailPage() {
     }
   }, [vehicleReservations, vehicle])
 
-  // Get upcoming reservations (confirmed and pending)
-  const upcomingReservations = useMemo(() => {
-    if (!vehicleReservations) return []
-    return vehicleReservations
-      .filter(
-        (res) =>
-          res.status === "confirmed" || res.status === "pending"
-      )
-      .sort((a, b) => a.startDate.localeCompare(b.startDate))
-  }, [vehicleReservations])
 
   // Show loading state
   if (vehicle === undefined || allReservations === undefined) {
@@ -123,43 +113,6 @@ export default function HostVehicleDetailPage() {
         </Card>
       </div>
     )
-  }
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "confirmed":
-        return (
-          <Badge className="gap-1.5 bg-green-500/10 text-green-700 dark:text-green-400">
-            <CheckCircle2 className="size-3" />
-            Confirmed
-          </Badge>
-        )
-      case "pending":
-        return (
-          <Badge className="gap-1.5 bg-yellow-500/10 text-yellow-700 dark:text-yellow-400">
-            <Clock className="size-3" />
-            Pending
-          </Badge>
-        )
-      case "cancelled":
-        return (
-          <Badge className="gap-1.5 bg-red-500/10 text-red-700 dark:text-red-400">
-            <XCircle className="size-3" />
-            Cancelled
-          </Badge>
-        )
-      default:
-        return null
-    }
-  }
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    return date.toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    })
   }
 
   const primaryImage =
@@ -229,189 +182,86 @@ export default function HostVehicleDetailPage() {
             </div>
           </Card>
 
-          {/* Tabs */}
-          <Tabs className="w-full" defaultValue="overview">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="overview">Overview</TabsTrigger>
-              <TabsTrigger value="availability">Availability</TabsTrigger>
-              <TabsTrigger value="reservations">Reservations</TabsTrigger>
-            </TabsList>
+          {/* Vehicle Details */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Vehicle Details</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div>
+                <h3 className="mb-2 font-semibold text-lg">Description</h3>
+                <p className="text-muted-foreground leading-relaxed">{vehicle.description}</p>
+              </div>
 
-            <TabsContent className="mt-6" value="overview">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Vehicle Details</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-6">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="flex items-start gap-3">
+                  <Gauge className="mt-0.5 size-5 text-muted-foreground" />
                   <div>
-                    <h3 className="mb-2 font-semibold text-lg">Description</h3>
-                    <p className="text-muted-foreground leading-relaxed">{vehicle.description}</p>
+                    <p className="text-muted-foreground text-sm">Horsepower</p>
+                    <p className="font-semibold">{vehicle.horsepower} hp</p>
                   </div>
-
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="flex items-start gap-3">
-                      <Gauge className="mt-0.5 size-5 text-muted-foreground" />
-                      <div>
-                        <p className="text-muted-foreground text-sm">Horsepower</p>
-                        <p className="font-semibold">{vehicle.horsepower} hp</p>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <Car className="mt-0.5 size-5 text-muted-foreground" />
-                      <div>
-                        <p className="text-muted-foreground text-sm">Transmission</p>
-                        <p className="font-semibold">{vehicle.transmission}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <Settings className="mt-0.5 size-5 text-muted-foreground" />
-                      <div>
-                        <p className="text-muted-foreground text-sm">Drivetrain</p>
-                        <p className="font-semibold">{vehicle.drivetrain}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <Car className="mt-0.5 size-5 text-muted-foreground" />
-                      <div>
-                        <p className="text-muted-foreground text-sm">Engine Type</p>
-                        <p className="font-semibold">{vehicle.engineType}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {vehicle.mileage && (
-                    <div>
-                      <p className="text-muted-foreground text-sm">Mileage</p>
-                      <p className="font-semibold">{vehicle.mileage.toLocaleString()} miles</p>
-                    </div>
-                  )}
-
+                </div>
+                <div className="flex items-start gap-3">
+                  <Car className="mt-0.5 size-5 text-muted-foreground" />
                   <div>
-                    <h3 className="mb-3 font-semibold text-lg">Amenities</h3>
-                    <div className="flex flex-wrap gap-2">
-                      {vehicle.amenities.map((amenity) => (
-                        <Badge key={amenity} variant="secondary">
-                          {amenity}
-                        </Badge>
-                      ))}
-                    </div>
+                    <p className="text-muted-foreground text-sm">Transmission</p>
+                    <p className="font-semibold">{vehicle.transmission}</p>
                   </div>
-
-                  {vehicle.addOns.length > 0 && (
-                    <div>
-                      <h3 className="mb-3 font-semibold text-lg">Add-ons</h3>
-                      <div className="space-y-2">
-                        {vehicle.addOns.map((addOn, index) => (
-                          <div key={index} className="flex items-center justify-between rounded-lg border p-3">
-                            <div>
-                              <p className="font-medium">{addOn.name}</p>
-                              {addOn.description && (
-                                <p className="text-muted-foreground text-sm">{addOn.description}</p>
-                              )}
-                            </div>
-                            <p className="font-semibold text-primary">${addOn.price}/day</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent className="mt-6" value="availability">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Availability Calendar</CardTitle>
-                  <p className="text-muted-foreground text-sm">
-                    TODO: Integrate calendar component with Convex availability queries
-                  </p>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex min-h-96 items-center justify-center rounded-lg border border-dashed">
-                    <div className="text-center">
-                      <Calendar className="mx-auto mb-4 size-12 text-muted-foreground" />
-                      <p className="font-semibold text-lg">Availability Calendar</p>
-                      <p className="text-muted-foreground text-sm">
-                        Calendar component will be integrated here
-                      </p>
-                      <Button className="mt-4" variant="outline">
-                        Block Dates
-                      </Button>
-                    </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <Settings className="mt-0.5 size-5 text-muted-foreground" />
+                  <div>
+                    <p className="text-muted-foreground text-sm">Drivetrain</p>
+                    <p className="font-semibold">{vehicle.drivetrain}</p>
                   </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
+                </div>
+                <div className="flex items-start gap-3">
+                  <Car className="mt-0.5 size-5 text-muted-foreground" />
+                  <div>
+                    <p className="text-muted-foreground text-sm">Engine Type</p>
+                    <p className="font-semibold">{vehicle.engineType}</p>
+                  </div>
+                </div>
+              </div>
 
-            <TabsContent className="mt-6" value="reservations">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Reservations</CardTitle>
-                  <Link href={`/host/reservations?vehicle=${vehicleId}`}>
-                    <Button className="mt-2" size="sm" variant="outline">
-                      View All Reservations
-                    </Button>
-                  </Link>
-                </CardHeader>
-                <CardContent>
-                  {upcomingReservations.length === 0 ? (
-                    <div className="py-12 text-center">
-                      <Calendar className="mx-auto mb-4 size-12 text-muted-foreground" />
-                      <p className="mb-2 font-semibold text-lg">No upcoming reservations</p>
-                      <p className="text-muted-foreground text-sm">
-                        Bookings for this vehicle will appear here
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {upcomingReservations.map((reservation) => (
-                        <div key={reservation._id} className="rounded-lg border p-4">
-                          <div className="mb-3 flex items-start justify-between">
-                            <div>
-                              <p className="font-semibold">
-                                {reservation.renter?.name || "Unknown Renter"}
-                              </p>
-                              <p className="text-muted-foreground text-sm">
-                                {reservation.renter?.email || "No email"}
-                              </p>
-                            </div>
-                            {getStatusBadge(reservation.status)}
-                          </div>
-                          <div className="mb-3 space-y-1 text-sm">
-                            <p className="flex items-center gap-2">
-                              <Calendar className="size-4 text-muted-foreground" />
-                              {formatDate(reservation.startDate)} - {formatDate(reservation.endDate)}
-                            </p>
-                            <p className="flex items-center gap-2">
-                              <DollarSign className="size-4 text-muted-foreground" />
-                              ${Math.round((reservation.totalAmount || 0) / 100).toLocaleString()} (
-                              {reservation.totalDays} days)
-                            </p>
-                          </div>
-                          {reservation.renterMessage && (
-                            <div className="mb-3 rounded-lg bg-muted/50 p-3">
-                              <p className="text-muted-foreground text-sm">"{reservation.renterMessage}"</p>
-                            </div>
-                          )}
-                          {reservation.status === "pending" && (
-                            <div className="flex gap-2">
-                              <Button size="sm" variant="default">
-                                Approve
-                              </Button>
-                              <Button size="sm" variant="outline">
-                                Decline
-                              </Button>
-                            </div>
+              {vehicle.mileage && (
+                <div>
+                  <p className="text-muted-foreground text-sm">Mileage</p>
+                  <p className="font-semibold">{vehicle.mileage.toLocaleString()} miles</p>
+                </div>
+              )}
+
+              <div>
+                <h3 className="mb-3 font-semibold text-lg">Amenities</h3>
+                <div className="flex flex-wrap gap-2">
+                  {vehicle.amenities.map((amenity) => (
+                    <Badge key={amenity} variant="secondary">
+                      {amenity}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+
+              {vehicle.addOns.length > 0 && (
+                <div>
+                  <h3 className="mb-3 font-semibold text-lg">Add-ons</h3>
+                  <div className="space-y-2">
+                    {vehicle.addOns.map((addOn, index) => (
+                      <div key={index} className="flex items-center justify-between rounded-lg border p-3">
+                        <div>
+                          <p className="font-medium">{addOn.name}</p>
+                          {addOn.description && (
+                            <p className="text-muted-foreground text-sm">{addOn.description}</p>
                           )}
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
+                        <p className="font-semibold text-primary">${addOn.price}/day</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
         {/* Sidebar */}
@@ -457,22 +307,18 @@ export default function HostVehicleDetailPage() {
             </CardContent>
           </Card>
 
-          {/* Quick Actions */}
+          {/* Vehicle Actions */}
           <Card>
             <CardHeader>
-              <CardTitle>Quick Actions</CardTitle>
+              <CardTitle>Vehicle Actions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              <Link href={`/host/vehicles/${vehicleId}/edit`} className="block">
+              <Link href={`/host/vehicles/${vehicleId}/availability`} className="block">
                 <Button className="w-full justify-start" variant="outline" size="sm">
-                  <Edit className="mr-2 size-4" />
-                  Edit Vehicle
+                  <CalendarIcon className="mr-2 size-4" />
+                  Manage Availability
                 </Button>
               </Link>
-              <Button className="w-full justify-start" variant="outline" size="sm">
-                <Calendar className="mr-2 size-4" />
-                Manage Availability
-              </Button>
               <Link href="/host/reservations" className="block">
                 <Button className="w-full justify-start" variant="outline" size="sm">
                   <Users className="mr-2 size-4" />
@@ -481,6 +327,7 @@ export default function HostVehicleDetailPage() {
               </Link>
               <Link href={`/vehicles/${vehicleId}`} className="block">
                 <Button className="w-full justify-start" variant="outline" size="sm">
+                  <Eye className="mr-2 size-4" />
                   View Public Listing
                 </Button>
               </Link>

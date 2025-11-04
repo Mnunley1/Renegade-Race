@@ -55,6 +55,9 @@ export default function EditVehiclePage() {
   )
   const tracks = useQuery(api.tracks.getAll, {})
 
+  // Mutations
+  const updateVehicle = useMutation(api.vehicles.update)
+
   // Initialize form data
   const [formData, setFormData] = useState({
     trackId: "",
@@ -161,8 +164,6 @@ export default function EditVehiclePage() {
         : [...formData.amenities, amenity],
     })
   }
-
-  const updateVehicle = useMutation(api.vehicles.update)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
