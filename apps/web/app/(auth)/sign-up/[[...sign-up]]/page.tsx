@@ -70,7 +70,7 @@ export default function SignUpPage() {
         </p>
       </div>
 
-      <Card className="border-2 shadow-xl">
+      <Card className="border-2 shadow-xl bg-card">
         <CardHeader>
           <CardTitle>Sign up for free</CardTitle>
           <CardDescription>Create your account to start renting track cars</CardDescription>

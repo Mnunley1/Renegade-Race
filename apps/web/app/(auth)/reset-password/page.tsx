@@ -21,7 +21,7 @@ export default function ResetPasswordPage() {
         </p>
       </div>
 
-      <Card className="border-2 shadow-xl">
+      <Card className="border-2 shadow-xl bg-card">
         <CardHeader>
           <div className="mb-4">
             <Link
@@ -75,7 +75,7 @@ export default function ResetPasswordPage() {
       </Card>
 
       {/* Additional help section */}
-      <Card className="border bg-muted/30">
+      <Card className="border bg-muted/30 dark:bg-muted/50">
         <CardContent className="pt-6">
           <div className="space-y-3">
             <div className="flex items-start gap-3">
