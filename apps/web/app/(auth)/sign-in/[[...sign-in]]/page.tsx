@@ -79,7 +79,7 @@ export default function SignInPage() {
         </p>
       </div>
 
-      <Card className="border-2 shadow-xl">
+      <Card className="border-2 shadow-xl bg-card">
         <CardHeader>
           <CardTitle>Sign in to your account</CardTitle>
           <CardDescription>Enter your credentials below to access your account</CardDescription>
