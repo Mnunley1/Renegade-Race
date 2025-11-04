@@ -111,7 +111,7 @@ export function VehicleCard({
     <Link href={`/vehicles/${id}`} className="block h-full">
       <Card
         className={cn(
-          "group relative flex h-full flex-col overflow-hidden border-2 transition-all duration-300 hover:shadow-xl cursor-pointer",
+          "group relative flex h-full flex-col overflow-hidden border border-border transition-all duration-200 hover:shadow-md cursor-pointer",
           className
         )}
         {...props}
@@ -119,7 +119,7 @@ export function VehicleCard({
         <div className="relative h-64 w-full shrink-0 overflow-hidden bg-muted">
           <Image
             alt={name}
-            className="object-cover"
+            className="object-cover transition-transform duration-500 group-hover:scale-105"
             fill
             sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
             src={image}
@@ -129,23 +129,23 @@ export function VehicleCard({
           <Button
             variant="ghost"
             size="icon"
-            className="absolute right-3 top-3 z-10 !bg-white/90 backdrop-blur-sm !hover:bg-white/90 !hover:text-inherit group/btn"
+            className="absolute right-3 top-3 z-10 bg-white/80 backdrop-blur-sm hover:bg-white/90 group/btn"
             onClick={handleFavoriteClick}
           >
             <Heart
               className={cn(
                 "size-5 transition-colors",
                 isFavorite === true
-                  ? "fill-red-500 text-red-500"
-                  : "text-muted-foreground group-hover/btn:text-red-500"
+                  ? "fill-primary text-primary"
+                  : "text-muted-foreground group-hover/btn:text-primary"
               )}
             />
           </Button>
         </div>
 
-        <CardContent className="flex flex-1 flex-col p-6">
+        <CardContent className="flex flex-1 flex-col p-5">
           <div className="flex flex-1 flex-col">
-            <h3 className="mb-3 font-bold text-xl leading-tight min-h-[3rem]">
+            <h3 className="mb-2 font-semibold text-lg leading-tight">
               {year} {make} {model}
             </h3>
             <div className="mb-auto flex items-center gap-1.5 text-sm text-muted-foreground">
@@ -154,9 +154,9 @@ export function VehicleCard({
             </div>
           </div>
 
-          <div className="mt-4 pt-4 border-t">
+          <div className="mt-4 pt-4 border-t border-border">
             <div className="flex items-baseline gap-1">
-              <span className="bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-3xl font-bold text-transparent">
+              <span className="font-semibold text-2xl text-foreground">
                 ${pricePerDay}
               </span>
               <span className="text-sm text-muted-foreground">/day</span>

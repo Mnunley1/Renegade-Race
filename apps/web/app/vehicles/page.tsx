@@ -276,12 +276,12 @@ export default function VehiclesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background via-background to-muted/20">
+    <div className="min-h-screen bg-background">
       {/* Hero Section */}
-      <div className="relative overflow-hidden border-b bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
-        <div className="container relative z-10 mx-auto px-4 py-12 md:py-16">
+      <div className="relative overflow-hidden border-b border-border">
+        <div className="container relative z-10 mx-auto px-4 sm:px-6 py-12 md:py-16">
           <div className="mb-8 text-center">
-            <h1 className="mb-3 bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-4xl font-bold tracking-tight text-transparent md:text-5xl">
+            <h1 className="mb-3 text-4xl font-semibold tracking-tight md:text-5xl">
               Find Your Perfect Track Vehicle
             </h1>
             <p className="mx-auto max-w-2xl text-lg text-muted-foreground">
@@ -290,7 +290,7 @@ export default function VehiclesPage() {
           </div>
 
           {/* Enhanced Search Bar */}
-          <Card className="border-2 shadow-xl">
+          <Card className="shadow-sm">
             <CardContent className="p-4 md:p-6">
               <div className="space-y-4">
                 {/* Search Input */}
@@ -523,7 +523,7 @@ export default function VehiclesPage() {
         </div>
       </div>
 
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 sm:px-6 py-8">
         <div className="grid gap-8 lg:grid-cols-4">
           {/* Enhanced Filter Sidebar */}
           <div className={cn("lg:col-span-1", !showFilters && "hidden lg:block")}>
@@ -548,7 +548,7 @@ export default function VehiclesPage() {
                 </Button>
               </div>
 
-              <Card className="border-2">
+              <Card>
                 <CardContent className="p-6">
                   <Accordion type="multiple" className="w-full" defaultValue={["make", "price"]}>
                     <AccordionItem value="make">
@@ -755,14 +755,14 @@ export default function VehiclesPage() {
           {/* Vehicle Grid */}
           <div className="lg:col-span-3">
             {vehiclesData === undefined || tracksData === undefined ? (
-              <Card className="border-2 border-dashed">
+              <Card className="border-dashed">
                 <CardContent className="flex flex-col items-center justify-center py-16">
                   <div className="mb-4 size-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
                   <h3 className="mb-2 text-lg font-semibold">Loading vehicles...</h3>
                 </CardContent>
               </Card>
             ) : vehicles.length === 0 ? (
-              <Card className="border-2 border-dashed">
+              <Card className="border-dashed">
                 <CardContent className="flex flex-col items-center justify-center py-16">
                   <Search className="mb-4 size-12 text-muted-foreground" />
                   <h3 className="mb-2 text-lg font-semibold">No vehicles in database</h3>
@@ -772,7 +772,7 @@ export default function VehiclesPage() {
                 </CardContent>
               </Card>
             ) : filteredVehicles.length === 0 ? (
-              <Card className="border-2 border-dashed">
+              <Card className="border-dashed">
                 <CardContent className="flex flex-col items-center justify-center py-16">
                   <Search className="mb-4 size-12 text-muted-foreground" />
                   <h3 className="mb-2 text-lg font-semibold">No vehicles found</h3>
