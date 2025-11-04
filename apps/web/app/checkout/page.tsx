@@ -1,5 +1,6 @@
 "use client"
 
+import { Suspense } from "react"
 import { useUser } from "@clerk/nextjs"
 import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js"
 import { loadStripe, type StripeElementsOptions } from "@stripe/stripe-js"
@@ -133,7 +134,7 @@ function PaymentForm({
   )
 }
 
-export default function CheckoutPage() {
+function CheckoutPageContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const { isSignedIn, user } = useUser()
@@ -893,5 +894,26 @@ export default function CheckoutPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function CheckoutPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="container mx-auto max-w-4xl px-4 py-8">
+          <div className="flex min-h-[60vh] items-center justify-center">
+            <div className="text-center">
+              <div className="mb-4 flex justify-center">
+                <div className="size-12 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+              </div>
+              <p className="font-medium text-lg text-muted-foreground">Loading...</p>
+            </div>
+          </div>
+        </div>
+      }
+    >
+      <CheckoutPageContent />
+    </Suspense>
   )
 }
