@@ -1,7 +1,7 @@
 "use client"
 
-import { useQuery, useMutation, useMemo } from "convex/react"
-import { useState } from "react"
+import { useQuery, useMutation } from "convex/react"
+import { useState, useMemo } from "react"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Badge } from "@workspace/ui/components/badge"
@@ -71,7 +71,8 @@ export default function HostReservationsPage() {
   // Get counts for each status
   const pendingCount = pendingReservations?.length || 0
   const confirmedCount = confirmedReservations?.length || 0
-  const completedCount = allReservations.filter((res) => res.status === "completed").length
+  const completedReservations = allReservations.filter((res) => res.status === "completed")
+  const completedCount = completedReservations.length
   const cancelledCount = allReservations.filter((res) => res.status === "cancelled").length
 
   const filteredReservations =
@@ -470,7 +471,8 @@ export default function HostReservationsPage() {
             <div className="space-y-4">
               {completedReservations.map((reservation) => {
                 const vehicleImage =
-                  reservation.vehicle.images?.[0]?.cardUrl ||
+                  reservation.vehicle?.images?.[0]?.cardUrl ||
+                  reservation.vehicle?.images?.[0]?.imageUrl ||
                   "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=400"
 
                 return (
@@ -487,11 +489,11 @@ export default function HostReservationsPage() {
                         <div className="mb-4 flex items-start justify-between">
                           <div className="flex-1">
                             <h2 className="mb-2 font-bold text-xl">
-                              {reservation.vehicle.year} {reservation.vehicle.make}{" "}
-                              {reservation.vehicle.model}
+                              {reservation.vehicle?.year} {reservation.vehicle?.make}{" "}
+                              {reservation.vehicle?.model}
                             </h2>
                             <div className="mb-3 flex items-center gap-3">
-                              <span className="font-medium">{reservation.renter.name}</span>
+                              <span className="font-medium">{reservation.renter?.name || "Unknown Renter"}</span>
                               <span className="text-muted-foreground">•</span>
                               <span className="text-muted-foreground text-sm">
                                 {formatDate(reservation.startDate)} - {formatDate(reservation.endDate)}
