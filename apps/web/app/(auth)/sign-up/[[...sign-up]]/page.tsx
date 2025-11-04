@@ -169,7 +169,11 @@ export default function SignUpPage() {
             disabled={isLoading || !isLoaded}
             onClick={() => {
               if (signUp) {
-                signUp.authenticateWithRedirect({ strategy: "oauth_google", redirectUrl: "/" })
+                signUp.authenticateWithRedirect({
+                  strategy: "oauth_google",
+                  redirectUrl: "/",
+                  redirectUrlComplete: "/",
+                })
               }
             }}
             type="button"
