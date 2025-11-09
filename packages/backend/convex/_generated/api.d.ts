@@ -10,6 +10,7 @@
 
 import type * as availability from "../availability.js";
 import type * as conversations from "../conversations.js";
+import type * as disputes from "../disputes.js";
 import type * as driverProfiles from "../driverProfiles.js";
 import type * as favorites from "../favorites.js";
 import type * as http from "../http.js";
@@ -42,6 +43,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   availability: typeof availability;
   conversations: typeof conversations;
+  disputes: typeof disputes;
   driverProfiles: typeof driverProfiles;
   favorites: typeof favorites;
   http: typeof http;
