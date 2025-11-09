@@ -546,3 +546,47 @@ export const getUpcoming = query({
     return reservationsWithDetails;
   },
 });
+
+// Get completed reservation for a specific vehicle by a user (for review purposes)
+export const getCompletedReservationForVehicle = query({
+  args: {
+    userId: v.string(),
+    vehicleId: v.id('vehicles'),
+  },
+  handler: async (ctx, args) => {
+    const reservation = await ctx.db
+      .query('reservations')
+      .withIndex('by_renter_status', q =>
+        q.eq('renterId', args.userId).eq('status', 'completed')
+      )
+      .filter(q => q.eq(q.field('vehicleId'), args.vehicleId))
+      .order('desc')
+      .first();
+
+    if (!reservation) return null;
+
+    // Get related data
+    const [vehicle, renter, owner] = await Promise.all([
+      ctx.db.get(reservation.vehicleId),
+      ctx.db
+        .query('users')
+        .withIndex('by_external_id', q =>
+          q.eq('externalId', reservation.renterId)
+        )
+        .first(),
+      ctx.db
+        .query('users')
+        .withIndex('by_external_id', q =>
+          q.eq('externalId', reservation.ownerId)
+        )
+        .first(),
+    ]);
+
+    return {
+      ...reservation,
+      vehicle,
+      renter,
+      owner,
+    };
+  },
+});

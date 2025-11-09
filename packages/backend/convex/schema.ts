@@ -525,6 +525,58 @@ export default defineSchema({
     .index('by_status', ['status'])
     .index('by_stripe_payment_intent', ['stripePaymentIntentId']),
 
+  // Disputes table
+  disputes: defineTable({
+    completionId: v.id('rentalCompletions'),
+    reservationId: v.id('reservations'),
+    vehicleId: v.id('vehicles'),
+    renterId: v.string(),
+    ownerId: v.string(),
+    createdBy: v.string(), // renterId or ownerId
+    reason: v.string(),
+    description: v.string(),
+    photos: v.optional(v.array(v.string())),
+    requestedResolution: v.optional(v.string()),
+    status: v.union(
+      v.literal('open'),
+      v.literal('resolved'),
+      v.literal('closed')
+    ),
+    // Messages/updates in the dispute
+    messages: v.optional(
+      v.array(
+        v.object({
+          id: v.string(),
+          senderId: v.string(),
+          message: v.string(),
+          photos: v.optional(v.array(v.string())),
+          createdAt: v.number(),
+        })
+      )
+    ),
+    // Resolution details
+    resolution: v.optional(v.string()),
+    resolutionType: v.optional(
+      v.union(
+        v.literal('resolved_in_favor_renter'),
+        v.literal('resolved_in_favor_owner'),
+        v.literal('resolved_compromise'),
+        v.literal('dismissed')
+      )
+    ),
+    resolvedAt: v.optional(v.number()),
+    resolvedBy: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index('by_completion', ['completionId'])
+    .index('by_reservation', ['reservationId'])
+    .index('by_vehicle', ['vehicleId'])
+    .index('by_renter', ['renterId'])
+    .index('by_owner', ['ownerId'])
+    .index('by_status', ['status'])
+    .index('by_created_by', ['createdBy']),
+
   // Platform settings for fees and configuration
   platformSettings: defineTable({
     platformFeePercentage: v.number(), // e.g., 5 for 5%

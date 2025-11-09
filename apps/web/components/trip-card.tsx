@@ -204,7 +204,7 @@ export function TripCard({
           </div>
 
           {/* Actions */}
-          <div>
+          <div className="space-y-2">
             <Button
               asChild
               className="w-full"
@@ -216,6 +216,44 @@ export function TripCard({
                 <ChevronRight className="ml-2 size-4" />
               </Link>
             </Button>
+            {status === "confirmed" && (
+              <Button
+                asChild
+                variant="outline"
+                className="w-full"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <Link href={`/trips/return/${reservationId}`}>
+                  Return Vehicle
+                </Link>
+              </Button>
+            )}
+            {status === "completed" && (
+              <div className="flex gap-2">
+                <Button
+                  asChild
+                  variant="outline"
+                  size="sm"
+                  className="flex-1"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Link href={`/trips/review/${reservationId}`}>
+                    Write Review
+                  </Link>
+                </Button>
+                <Button
+                  asChild
+                  variant="outline"
+                  size="sm"
+                  className="flex-1"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Link href={`/trips/dispute/${reservationId}`}>
+                    File Dispute
+                  </Link>
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </CardContent>
