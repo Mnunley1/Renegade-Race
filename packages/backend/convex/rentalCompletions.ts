@@ -410,6 +410,47 @@ export const getById = query({
   },
 });
 
+// Get rental completion by reservation ID
+export const getByReservation = query({
+  args: { reservationId: v.id('reservations') },
+  handler: async (ctx, args) => {
+    const completion = await ctx.db
+      .query('rentalCompletions')
+      .withIndex('by_reservation', q =>
+        q.eq('reservationId', args.reservationId)
+      )
+      .first();
+
+    if (!completion) return null;
+
+    // Get related data
+    const [reservation, vehicle, renter, owner] = await Promise.all([
+      ctx.db.get(completion.reservationId),
+      ctx.db.get(completion.vehicleId),
+      ctx.db
+        .query('users')
+        .withIndex('by_external_id', q =>
+          q.eq('externalId', completion.renterId)
+        )
+        .first(),
+      ctx.db
+        .query('users')
+        .withIndex('by_external_id', q =>
+          q.eq('externalId', completion.ownerId)
+        )
+        .first(),
+    ]);
+
+    return {
+      ...completion,
+      reservation,
+      vehicle,
+      renter,
+      owner,
+    };
+  },
+});
+
 // Get rental completions for a user
 export const getByUser = query({
   args: {

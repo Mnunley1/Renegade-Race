@@ -40,6 +40,32 @@ export default function HostReservationsPage() {
     user?.id ? { userId: user.id, role: "owner" as const } : "skip"
   )
 
+  // Fetch pending completions (returns awaiting review)
+  const pendingCompletions = useQuery(
+    api.rentalCompletions.getPendingCompletions,
+    user?.id ? { userId: user.id } : "skip"
+  )
+
+  // Create a map of reservation IDs to completion status
+  const completionStatusMap = useMemo(() => {
+    if (!pendingCompletions) return new Map()
+    const map = new Map()
+    pendingCompletions.forEach((completion) => {
+      if (completion.status === "pending_owner") {
+        map.set(completion.reservationId, completion)
+      }
+    })
+    return map
+  }, [pendingCompletions])
+
+  // Count pending returns
+  const pendingReturnsCount = useMemo(() => {
+    if (!pendingCompletions) return 0
+    return pendingCompletions.filter(
+      (c) => c.status === "pending_owner" && c.ownerId === user?.id
+    ).length
+  }, [pendingCompletions, user?.id])
+
   // Combine all reservations
   const allReservations = useMemo(() => {
     if (!allReservationsData) return []
@@ -54,7 +80,8 @@ export default function HostReservationsPage() {
   if (
     pendingReservations === undefined ||
     confirmedReservations === undefined ||
-    allReservationsData === undefined
+    allReservationsData === undefined ||
+    pendingCompletions === undefined
   ) {
     return (
       <div className="container mx-auto max-w-7xl px-4 py-8">
@@ -164,6 +191,33 @@ export default function HostReservationsPage() {
         <p className="text-muted-foreground">Manage booking requests and confirmed reservations</p>
       </div>
 
+      {pendingReturnsCount > 0 && (
+        <Card className="mb-6 border-orange-500/50 bg-orange-500/10">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Clock className="size-5 text-orange-600 dark:text-orange-400" />
+                <div>
+                  <p className="font-semibold text-orange-700 dark:text-orange-400">
+                    {pendingReturnsCount} Return{pendingReturnsCount !== 1 ? "s" : ""} Pending Review
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Review the return forms submitted by renters
+                  </p>
+                </div>
+              </div>
+              <Button
+                onClick={() => setSelectedStatus("pending_returns")}
+                variant="outline"
+                size="sm"
+              >
+                View Pending Returns
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Tabs className="w-full" defaultValue="all">
         <div className="mb-6 flex items-center justify-between">
           <TabsList>
@@ -179,6 +233,14 @@ export default function HostReservationsPage() {
             <TabsTrigger onClick={() => setSelectedStatus("completed")} value="completed">
               Completed ({completedCount})
             </TabsTrigger>
+            {pendingReturnsCount > 0 && (
+              <TabsTrigger
+                onClick={() => setSelectedStatus("pending_returns")}
+                value="pending_returns"
+              >
+                Pending Returns ({pendingReturnsCount})
+              </TabsTrigger>
+            )}
           </TabsList>
         </div>
 
@@ -221,6 +283,12 @@ export default function HostReservationsPage() {
                                 {reservation.vehicle?.model}
                               </h2>
                               {getStatusBadge(reservation.status)}
+                              {completionStatusMap.has(reservation._id) && (
+                                <Badge className="gap-1.5 bg-orange-500/10 text-orange-700 dark:text-orange-400">
+                                  <Clock className="size-3" />
+                                  Return Pending Review
+                                </Badge>
+                              )}
                             </div>
                             <div className="mb-3 flex items-center gap-3">
                               <div className="flex items-center gap-2">
@@ -293,6 +361,13 @@ export default function HostReservationsPage() {
                                   Decline
                                 </Button>
                               </>
+                            )}
+                            {reservation.status === "confirmed" && completionStatusMap.has(reservation._id) && (
+                              <Link href={`/host/returns/${reservation._id}`}>
+                                <Button size="sm" variant="default">
+                                  Review Return
+                                </Button>
+                              </Link>
                             )}
                             {reservation.status === "confirmed" && (
                               <Link href={`/messages?conversation=${reservation._id}`}>
@@ -442,12 +517,21 @@ export default function HostReservationsPage() {
                           <p className="font-bold text-primary">
                             ${Math.round((reservation.totalAmount || 0) / 100).toLocaleString()}
                           </p>
-                          <Link href={`/messages?conversation=${reservation._id}`}>
-                            <Button size="sm" variant="outline">
-                              <MessageSquare className="mr-2 size-4" />
-                              Message Renter
-                            </Button>
-                          </Link>
+                          <div className="flex gap-2">
+                            {reservation.status === "confirmed" && completionStatusMap.has(reservation._id) && (
+                              <Link href={`/host/returns/${reservation._id}`}>
+                                <Button size="sm" variant="default">
+                                  Review Return
+                                </Button>
+                              </Link>
+                            )}
+                            <Link href={`/messages?conversation=${reservation._id}`}>
+                              <Button size="sm" variant="outline">
+                                <MessageSquare className="mr-2 size-4" />
+                                Message Renter
+                              </Button>
+                            </Link>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -506,15 +590,109 @@ export default function HostReservationsPage() {
                           <p className="font-bold text-primary">
                             ${Math.round((reservation.totalAmount || 0) / 100).toLocaleString()}
                           </p>
-                          <Button size="sm" variant="outline">
-                            View Details
-                          </Button>
+                          <div className="flex gap-2">
+                            {reservation.status === "completed" && (
+                              <Link href={`/host/returns/${reservation._id}`}>
+                                <Button size="sm" variant="outline">
+                                  Review Return
+                                </Button>
+                              </Link>
+                            )}
+                            <Button size="sm" variant="outline">
+                              View Details
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     </div>
                   </Card>
                 )
               })}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="pending_returns">
+          {pendingReturnsCount === 0 ? (
+            <Card>
+              <CardContent className="p-12 text-center">
+                <CheckCircle2 className="mx-auto mb-4 size-12 text-muted-foreground" />
+                <p className="mb-2 font-semibold text-lg">No Pending Returns</p>
+                <p className="text-muted-foreground">All returns have been reviewed</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-4">
+              {pendingCompletions
+                ?.filter((c) => c.status === "pending_owner" && c.ownerId === user?.id)
+                .map((completion) => {
+                  const reservation = completion.reservation
+                  if (!reservation) return null
+
+                  const vehicleImage =
+                    completion.vehicle?.images?.[0]?.cardUrl ||
+                    completion.vehicle?.images?.[0]?.imageUrl ||
+                    "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=400"
+
+                  return (
+                    <Card key={completion._id} className="border-orange-500/50">
+                      <div className="flex flex-col md:flex-row">
+                        <div className="relative h-48 w-full md:h-auto md:w-64 shrink-0 overflow-hidden">
+                          <img
+                            alt={`${completion.vehicle?.year} ${completion.vehicle?.make} ${completion.vehicle?.model}`}
+                            className="size-full object-cover"
+                            src={vehicleImage}
+                          />
+                        </div>
+                        <div className="flex flex-1 flex-col p-6">
+                          <div className="mb-4 flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="mb-2 flex items-center gap-3">
+                                <h2 className="font-bold text-xl">
+                                  {completion.vehicle?.year} {completion.vehicle?.make}{" "}
+                                  {completion.vehicle?.model}
+                                </h2>
+                                <Badge className="gap-1.5 bg-orange-500/10 text-orange-700 dark:text-orange-400">
+                                  <Clock className="size-3" />
+                                  Return Pending Review
+                                </Badge>
+                              </div>
+                              <div className="mb-3 flex items-center gap-3">
+                                <span className="font-medium">
+                                  {completion.renter?.name || "Unknown Renter"}
+                                </span>
+                                <span className="text-muted-foreground">•</span>
+                                <span className="text-muted-foreground text-sm">
+                                  {formatDate(reservation.startDate)} - {formatDate(reservation.endDate)}
+                                </span>
+                              </div>
+                              {completion.renterReturnForm && (
+                                <div className="mb-3 rounded-lg border border-orange-500/30 bg-orange-500/10 p-3">
+                                  <p className="mb-1 text-sm font-semibold text-orange-700 dark:text-orange-400">
+                                    Return Form Submitted
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    Submitted {formatTimeAgo(completion.renterReturnForm.submittedAt)}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <div className="mt-auto flex items-center justify-between">
+                            <p className="text-muted-foreground text-xs">
+                              Action Required: Review the return form
+                            </p>
+                            <Link href={`/host/returns/${reservation._id}`}>
+                              <Button size="sm" variant="default">
+                                Review Return
+                              </Button>
+                            </Link>
+                          </div>
+                        </div>
+                      </div>
+                    </Card>
+                  )
+                })}
             </div>
           )}
         </TabsContent>
