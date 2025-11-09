@@ -11,6 +11,7 @@ import { useMutation, useQuery } from "convex/react"
 import {
   Car,
   Check,
+  Edit,
   Gauge,
   Heart,
   LogIn,
@@ -23,7 +24,8 @@ import {
   Zap,
 } from "lucide-react"
 import { useParams, useRouter } from "next/navigation"
-import { useState } from "react"
+import { useState, useMemo } from "react"
+import Link from "next/link"
 import { VehicleGallery } from "@/components/vehicle-gallery"
 import { api } from "@/lib/convex"
 
@@ -38,6 +40,20 @@ export default function VehicleDetailsPage() {
   const vehicle = useQuery(api.vehicles.getById, { id: id as any })
   const reviews = useQuery(api.reviews.getByVehicle, id ? { vehicleId: id as any } : "skip")
   const reviewStats = useQuery(api.reviews.getVehicleStats, id ? { vehicleId: id as any } : "skip")
+  
+  // Check if user has a completed reservation for this vehicle (to show "Write Review" button)
+  const completedReservation = useQuery(
+    api.reservations.getCompletedReservationForVehicle,
+    isSignedIn && user?.id && id
+      ? { userId: user.id, vehicleId: id as any }
+      : "skip"
+  )
+
+  // Check if user has already written a review for this vehicle
+  const hasUserReviewed = useMemo(() => {
+    if (!isSignedIn || !user?.id || !reviews) return false
+    return reviews.some((review) => review.reviewerId === user.id)
+  }, [isSignedIn, user?.id, reviews])
 
   // Check if vehicle is favorited
   const isFavorite = useQuery(
@@ -191,7 +207,7 @@ export default function VehicleDetailsPage() {
                 </div>
                 {reviewStats && reviewStats.averageRating > 0 && (
                   <div className="flex items-center gap-1">
-                    <Star className="size-4 fill-yellow-400 text-yellow-400" />
+                    <Star className="size-4 fill-primary text-primary" />
                     <span className="font-semibold">{reviewStats.averageRating.toFixed(1)}</span>
                     <span className="text-muted-foreground text-sm">
                       ({reviewStats.totalReviews || 0})
@@ -388,63 +404,103 @@ export default function VehicleDetailsPage() {
                     </span>
                   )}
                 </CardTitle>
-                {reviewStats && reviewStats.averageRating > 0 && (
-                  <div className="flex items-center gap-2 rounded-lg bg-primary/10 px-4 py-2">
-                    <Star className="size-5 fill-yellow-400 text-yellow-400" />
-                    <span className="font-bold text-lg">
-                      {reviewStats.averageRating.toFixed(1)}
-                    </span>
-                  </div>
-                )}
+                <div className="flex items-center gap-3">
+                  {reviewStats && reviewStats.averageRating > 0 && (
+                    <div className="flex items-center gap-2 rounded-lg bg-primary/10 px-4 py-2">
+                      <Star className="size-5 fill-primary text-primary" />
+                      <span className="font-bold text-lg">
+                        {reviewStats.averageRating.toFixed(1)}
+                      </span>
+                    </div>
+                  )}
+                  {completedReservation && (
+                    <Button
+                      asChild
+                      size="sm"
+                      variant="outline"
+                    >
+                      <Link href={`/trips/review/${completedReservation._id}`}>
+                        <Star className="mr-2 size-4" />
+                        {hasUserReviewed ? "Edit Review" : "Write Review"}
+                      </Link>
+                    </Button>
+                  )}
+                </div>
               </div>
             </CardHeader>
             <CardContent>
               {reviews && reviews.length > 0 ? (
                 <div className="space-y-6">
-                  {reviews.map((review) => (
-                    <div
-                      className="rounded-lg border bg-muted/30 p-4 transition-colors hover:bg-muted/50"
-                      key={review._id}
-                    >
-                      <div className="mb-3 flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="mb-1 flex items-center gap-2">
-                            <p className="font-semibold">{review.reviewer?.name || "Anonymous"}</p>
-                            <div className="flex items-center gap-1">
-                              {Array.from({ length: 5 }).map((_, i) => (
-                                <Star
-                                  className={cn(
-                                    "size-4",
-                                    i < review.rating
-                                      ? "fill-yellow-400 text-yellow-400"
-                                      : "text-muted-foreground"
-                                  )}
-                                  key={i}
-                                />
-                              ))}
+                  {reviews.map((review) => {
+                    const isUserReview = review.reviewerId === user?.id
+                    return (
+                      <div
+                        className="rounded-lg border bg-muted/30 p-4 transition-colors hover:bg-muted/50"
+                        key={review._id}
+                      >
+                        <div className="mb-3 flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="mb-1 flex items-center gap-2">
+                              <p className="font-semibold">{review.reviewer?.name || "Anonymous"}</p>
+                              <div className="flex items-center gap-1">
+                                {Array.from({ length: 5 }).map((_, i) => (
+                                  <Star
+                                    className={cn(
+                                      "size-4",
+                                      i < review.rating
+                                        ? "fill-primary text-primary"
+                                        : "text-muted-foreground"
+                                    )}
+                                    key={i}
+                                  />
+                                ))}
+                              </div>
                             </div>
+                            <p className="text-muted-foreground text-sm">
+                              {new Date(review.createdAt).toLocaleDateString("en-US", {
+                                year: "numeric",
+                                month: "long",
+                                day: "numeric",
+                              })}
+                              {review.updatedAt && review.updatedAt !== review.createdAt && (
+                                <span className="ml-2 text-xs">(edited)</span>
+                              )}
+                            </p>
                           </div>
-                          <p className="text-muted-foreground text-sm">
-                            {new Date(review.createdAt).toLocaleDateString("en-US", {
-                              year: "numeric",
-                              month: "long",
-                              day: "numeric",
-                            })}
-                          </p>
+                          {isUserReview && review.reservation && (
+                            <Link href={`/trips/review/${review.reservation._id}`}>
+                              <Button size="sm" variant="ghost" className="gap-2">
+                                <Edit className="size-4" />
+                                Edit
+                              </Button>
+                            </Link>
+                          )}
                         </div>
+                        {review.title && <p className="mb-2 font-semibold text-lg">{review.title}</p>}
+                        {review.review && (
+                          <p className="text-muted-foreground leading-relaxed">{review.review}</p>
+                        )}
                       </div>
-                      {review.title && <p className="mb-2 font-semibold text-lg">{review.title}</p>}
-                      {review.review && (
-                        <p className="text-muted-foreground leading-relaxed">{review.review}</p>
-                      )}
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               ) : (
                 <div className="py-12 text-center">
                   <Star className="mx-auto mb-4 size-12 text-muted-foreground/30" />
                   <p className="mb-2 font-semibold text-lg">No reviews yet</p>
-                  <p className="text-muted-foreground">Be the first to review this vehicle!</p>
+                  <p className="mb-4 text-muted-foreground">
+                    {completedReservation
+                      ? "Share your experience with this vehicle!"
+                      : "Be the first to review this vehicle!"}
+                  </p>
+                  {completedReservation && (
+                    <Button asChild variant="outline">
+                      <Link href={`/trips/review/${completedReservation._id}`}>
+                        <Star className="mr-2 size-4" />
+                        {hasUserReviewed ? "Edit Review" : "Write Review"}
+                      </Link>
+                    </Button>
+                  )}
                 </div>
               )}
             </CardContent>
