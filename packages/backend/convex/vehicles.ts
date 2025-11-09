@@ -249,9 +249,38 @@ export const getByOwner = query({
           ctx.db.get(vehicle.trackId),
         ]);
 
+        // Add optimized URLs for each image
+        const optimizedImages = await Promise.all(
+          images.map(async image => {
+            const [thumbnailUrl, cardUrl, detailUrl, heroUrl] =
+              await Promise.all([
+                image.thumbnailStorageId
+                  ? ctx.storage.getUrl(image.thumbnailStorageId)
+                  : image.imageUrl,
+                image.cardStorageId
+                  ? ctx.storage.getUrl(image.cardStorageId)
+                  : image.imageUrl,
+                image.detailStorageId
+                  ? ctx.storage.getUrl(image.detailStorageId)
+                  : image.imageUrl,
+                image.heroStorageId
+                  ? ctx.storage.getUrl(image.heroStorageId)
+                  : image.imageUrl,
+              ]);
+
+            return {
+              ...image,
+              thumbnailUrl,
+              cardUrl,
+              detailUrl,
+              heroUrl,
+            };
+          })
+        );
+
         return {
           ...vehicle,
-          images,
+          images: optimizedImages,
           track,
         };
       })

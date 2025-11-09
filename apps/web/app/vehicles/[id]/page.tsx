@@ -500,7 +500,16 @@ export default function VehicleDetailsPage() {
                         <div className="mb-3 flex items-start justify-between">
                           <div className="flex-1">
                             <div className="mb-1 flex items-center gap-2">
-                              <p className="font-semibold">{review.reviewer?.name || "Anonymous"}</p>
+                              {review.reviewerId ? (
+                                <Link
+                                  href={`/r/${review.reviewerId}`}
+                                  className="font-semibold transition-colors hover:text-primary"
+                                >
+                                  {review.reviewer?.name || "Anonymous"}
+                                </Link>
+                              ) : (
+                                <p className="font-semibold">{review.reviewer?.name || "Anonymous"}</p>
+                              )}
                               <div className="flex items-center gap-1">
                                 {Array.from({ length: 5 }).map((_, i) => (
                                   <Star
@@ -610,29 +619,33 @@ export default function VehicleDetailsPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  <div className="flex items-center gap-4">
-                    <Avatar className="size-16">
-                      <AvatarImage src={host.avatar} />
-                      <AvatarFallback>{host.name[0]?.toUpperCase() || "U"}</AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-semibold">{host.name}</h3>
-                        {host.verified && (
-                          <Badge className="bg-green-500" variant="default">
-                            <Shield className="mr-1 size-3" />
-                            Verified
-                          </Badge>
-                        )}
+                  <Link href={`/r/${vehicle.ownerId}`} className="block">
+                    <div className="flex items-center gap-4 transition-opacity hover:opacity-80">
+                      <Avatar className="size-16">
+                        <AvatarImage src={host.avatar} />
+                        <AvatarFallback>{host.name[0]?.toUpperCase() || "U"}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-semibold transition-colors hover:text-primary">
+                            {host.name}
+                          </h3>
+                          {host.verified && (
+                            <Badge className="bg-green-500" variant="default">
+                              <Shield className="mr-1 size-3" />
+                              Verified
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-muted-foreground text-sm">
+                          {host.memberSince && `Member since ${host.memberSince}`}
+                          {host.memberSince && host.tripsCompleted > 0 && " • "}
+                          {host.tripsCompleted > 0 && `${host.tripsCompleted} trips`}
+                          {!host.memberSince && host.tripsCompleted === 0 && "New member"}
+                        </p>
                       </div>
-                      <p className="text-muted-foreground text-sm">
-                        {host.memberSince && `Member since ${host.memberSince}`}
-                        {host.memberSince && host.tripsCompleted > 0 && " • "}
-                        {host.tripsCompleted > 0 && `${host.tripsCompleted} trips`}
-                        {!host.memberSince && host.tripsCompleted === 0 && "New member"}
-                      </p>
                     </div>
-                  </div>
+                  </Link>
                   {vehicle.ownerId !== user?.id && (
                     <Button
                       className="w-full"
