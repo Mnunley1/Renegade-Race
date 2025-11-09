@@ -18,13 +18,14 @@ import {
   MapPin,
   MessageSquare,
   Route,
+  Share2,
   Shield,
   Star,
   UserPlus,
   Zap,
 } from "lucide-react"
 import { useParams, useRouter } from "next/navigation"
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect, useRef } from "react"
 import Link from "next/link"
 import { VehicleGallery } from "@/components/vehicle-gallery"
 import { api } from "@/lib/convex"
@@ -36,6 +37,7 @@ export default function VehicleDetailsPage() {
   const id = params.id as string
   const [showLoginDialog, setShowLoginDialog] = useState(false)
   const [isCreatingConversation, setIsCreatingConversation] = useState(false)
+  const hasTrackedView = useRef(false)
 
   const vehicle = useQuery(api.vehicles.getById, { id: id as any })
   const reviews = useQuery(api.reviews.getByVehicle, id ? { vehicleId: id as any } : "skip")
@@ -66,6 +68,10 @@ export default function VehicleDetailsPage() {
 
   // Create conversation mutation
   const createConversation = useMutation(api.conversations.create)
+
+  // Track view and share mutations
+  const trackView = useMutation(api.vehicleAnalytics.trackView)
+  const trackShare = useMutation(api.vehicleAnalytics.trackShare)
 
   const handleFavoriteClick = async () => {
     // If not signed in, show login dialog
@@ -139,6 +145,59 @@ export default function VehicleDetailsPage() {
       }
     } finally {
       setIsCreatingConversation(false)
+    }
+  }
+
+  // Track view when page loads (only once per page load)
+  useEffect(() => {
+    // Only track if we haven't tracked yet, vehicle is loaded and active, and we have an ID
+    if (!hasTrackedView.current && vehicle && vehicle.isActive && id) {
+      hasTrackedView.current = true
+      trackView({ vehicleId: id as any }).catch(console.error)
+    }
+  }, [vehicle, id, trackView])
+
+  // Reset tracking ref when vehicle ID changes (user navigates to different vehicle)
+  useEffect(() => {
+    hasTrackedView.current = false
+  }, [id])
+
+  // Handle share functionality
+  const handleShare = async (platform: string) => {
+    if (!vehicle || !id) return
+
+    const url = typeof window !== "undefined" ? window.location.href : ""
+    const title = `${vehicle.year} ${vehicle.make} ${vehicle.model}`
+    const text = `Check out this ${title} on Renegade Rentals!`
+
+    try {
+      if (platform === "copy_link") {
+        await navigator.clipboard.writeText(url)
+        // You could add a toast notification here
+      } else if (platform === "facebook") {
+        window.open(
+          `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`,
+          "_blank"
+        )
+      } else if (platform === "twitter") {
+        window.open(
+          `https://twitter.com/intent/tweet?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`,
+          "_blank"
+        )
+      } else if (platform === "linkedin") {
+        window.open(
+          `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`,
+          "_blank"
+        )
+      }
+
+      // Track the share
+      await trackShare({
+        vehicleId: id as any,
+        platform,
+      })
+    } catch (error) {
+      console.error("Error sharing:", error)
     }
   }
 
@@ -585,6 +644,52 @@ export default function VehicleDetailsPage() {
                       {isCreatingConversation ? "Loading..." : "Message Host"}
                     </Button>
                   )}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Share2 className="size-5 text-primary" />
+                  Share Listing
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    className="w-full"
+                    onClick={() => handleShare("copy_link")}
+                    size="sm"
+                    variant="outline"
+                  >
+                    <Share2 className="mr-2 size-4" />
+                    Copy Link
+                  </Button>
+                  <Button
+                    className="w-full"
+                    onClick={() => handleShare("facebook")}
+                    size="sm"
+                    variant="outline"
+                  >
+                    Facebook
+                  </Button>
+                  <Button
+                    className="w-full"
+                    onClick={() => handleShare("twitter")}
+                    size="sm"
+                    variant="outline"
+                  >
+                    Twitter
+                  </Button>
+                  <Button
+                    className="w-full"
+                    onClick={() => handleShare("linkedin")}
+                    size="sm"
+                    variant="outline"
+                  >
+                    LinkedIn
+                  </Button>
                 </div>
               </CardContent>
             </Card>

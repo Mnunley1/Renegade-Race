@@ -20,6 +20,8 @@ import {
   Users,
   Loader2,
   Eye,
+  Share2,
+  Heart,
 } from "lucide-react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
@@ -41,6 +43,12 @@ export default function HostVehicleDetailPage() {
   const allReservations = useQuery(
     api.reservations.getByUser,
     user?.id ? { userId: user.id, role: "owner" as const } : "skip"
+  )
+
+  // Fetch analytics for this vehicle
+  const analytics = useQuery(
+    api.vehicleAnalytics.getVehicleAnalytics,
+    vehicleId && user?.id ? { vehicleId: vehicleId as any } : "skip"
   )
 
   // Filter reservations for this vehicle
@@ -303,6 +311,36 @@ export default function HostVehicleDetailPage() {
                   <CheckCircle2 className="size-4 text-muted-foreground" />
                 </div>
                 <p className="font-bold text-2xl">{stats.completedTrips}</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Analytics */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Analytics</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <div className="mb-1 flex items-center justify-between">
+                  <p className="text-muted-foreground text-sm">Total Views</p>
+                  <Eye className="size-4 text-muted-foreground" />
+                </div>
+                <p className="font-bold text-2xl">{analytics?.totalViews.toLocaleString() || 0}</p>
+              </div>
+              <div>
+                <div className="mb-1 flex items-center justify-between">
+                  <p className="text-muted-foreground text-sm">Shares</p>
+                  <Share2 className="size-4 text-muted-foreground" />
+                </div>
+                <p className="font-bold text-2xl">{analytics?.totalShares.toLocaleString() || 0}</p>
+              </div>
+              <div>
+                <div className="mb-1 flex items-center justify-between">
+                  <p className="text-muted-foreground text-sm">Favorites</p>
+                  <Heart className="size-4 text-muted-foreground" />
+                </div>
+                <p className="font-bold text-2xl">{analytics?.favoriteCount.toLocaleString() || 0}</p>
               </div>
             </CardContent>
           </Card>
