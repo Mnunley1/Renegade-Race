@@ -51,6 +51,8 @@ export default defineSchema({
     ),
     isActive: v.boolean(),
     isApproved: v.optional(v.boolean()),
+    viewCount: v.optional(v.number()), // Total views
+    shareCount: v.optional(v.number()), // Total shares
     createdAt: v.number(),
     updatedAt: v.number(),
   })

@@ -24,6 +24,7 @@ import type * as teamApplications from "../teamApplications.js";
 import type * as teams from "../teams.js";
 import type * as tracks from "../tracks.js";
 import type * as users from "../users.js";
+import type * as vehicleAnalytics from "../vehicleAnalytics.js";
 import type * as vehicles from "../vehicles.js";
 
 import type {
@@ -57,6 +58,7 @@ declare const fullApi: ApiFromModules<{
   teams: typeof teams;
   tracks: typeof tracks;
   users: typeof users;
+  vehicleAnalytics: typeof vehicleAnalytics;
   vehicles: typeof vehicles;
 }>;
 declare const fullApiWithMounts: typeof fullApi;
