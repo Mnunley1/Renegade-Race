@@ -12,8 +12,11 @@ import {
   CheckCircle2,
   Clock,
   DollarSign,
+  Eye,
+  Heart,
   Loader2,
   Plus,
+  Share2,
   TrendingUp,
   XCircle,
 } from "lucide-react"
@@ -36,6 +39,10 @@ export default function HostDashboardPage() {
     user?.id ? { ownerId: user.id } : "skip"
   )
   const reviewStats = useQuery(api.reviews.getUserStats, user?.id ? { userId: user.id } : "skip")
+  const vehicleAnalytics = useQuery(
+    api.vehicleAnalytics.getAllVehicleAnalytics,
+    user?.id ? { ownerId: user.id } : "skip"
+  )
 
   // Calculate stats from real data
   const stats = useMemo(() => {
@@ -50,14 +57,22 @@ export default function HostDashboardPage() {
     // Get average rating from review stats
     const averageRating = reviewStats?.averageRating || 0
 
+    // Calculate analytics totals
+    const totalViews = vehicleAnalytics?.reduce((sum, v) => sum + v.totalViews, 0) || 0
+    const totalShares = vehicleAnalytics?.reduce((sum, v) => sum + v.totalShares, 0) || 0
+    const totalFavorites = vehicleAnalytics?.reduce((sum, v) => sum + v.favoriteCount, 0) || 0
+
     return {
       totalVehicles,
       pendingBookings,
       upcomingBookings,
       totalEarnings,
       averageRating,
+      totalViews,
+      totalShares,
+      totalFavorites,
     }
-  }, [vehicles, pendingReservations, confirmedReservations, reviewStats])
+  }, [vehicles, pendingReservations, confirmedReservations, reviewStats, vehicleAnalytics])
 
   // Map recent vehicles from real data
   const recentVehicles = useMemo(() => {
@@ -167,7 +182,8 @@ export default function HostDashboardPage() {
     vehicles === undefined ||
     pendingReservations === undefined ||
     confirmedReservations === undefined ||
-    reviewStats === undefined
+    reviewStats === undefined ||
+    vehicleAnalytics === undefined
 
   if (isLoading) {
     return (
@@ -202,7 +218,7 @@ export default function HostDashboardPage() {
       </div>
 
       {/* Stats Grid */}
-      <div className="mb-8 grid gap-6 md:grid-cols-2 lg:grid-cols-5">
+      <div className="mb-8 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="font-medium text-muted-foreground text-sm">
@@ -269,6 +285,48 @@ export default function HostDashboardPage() {
           <CardContent>
             <div className="font-bold text-2xl">{stats.averageRating}</div>
             <p className="text-muted-foreground text-xs">From renters</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Analytics Grid */}
+      <div className="mb-8 grid gap-6 md:grid-cols-3">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="font-medium text-muted-foreground text-sm">
+              Total Views
+            </CardTitle>
+            <Eye className="size-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="font-bold text-2xl">{stats.totalViews.toLocaleString()}</div>
+            <p className="text-muted-foreground text-xs">Listing views</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="font-medium text-muted-foreground text-sm">
+              Total Shares
+            </CardTitle>
+            <Share2 className="size-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="font-bold text-2xl">{stats.totalShares.toLocaleString()}</div>
+            <p className="text-muted-foreground text-xs">Times shared</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="font-medium text-muted-foreground text-sm">
+              Total Favorites
+            </CardTitle>
+            <Heart className="size-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="font-bold text-2xl">{stats.totalFavorites.toLocaleString()}</div>
+            <p className="text-muted-foreground text-xs">Saved by users</p>
           </CardContent>
         </Card>
       </div>
