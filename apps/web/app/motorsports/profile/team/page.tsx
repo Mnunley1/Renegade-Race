@@ -1,8 +1,9 @@
 "use client"
 
 import { useMutation } from "convex/react"
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useEffect } from "react"
+import { useRouter, usePathname } from "next/navigation"
+import { useUser } from "@clerk/nextjs"
 import { Button } from "@workspace/ui/components/button"
 import {
   Card,
@@ -15,7 +16,7 @@ import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import { Separator } from "@workspace/ui/components/separator"
 import { Textarea } from "@workspace/ui/components/textarea"
-import { ArrowLeft, Check, Plus, X } from "lucide-react"
+import { ArrowLeft, Check, Plus, X, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { api } from "@/lib/convex"
 
@@ -35,6 +36,8 @@ const COMMON_SPECIALTIES = [
 
 export default function CreateTeamProfilePage() {
   const router = useRouter()
+  const pathname = usePathname()
+  const { isSignedIn, isLoaded: userLoaded } = useUser()
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -60,6 +63,13 @@ export default function CreateTeamProfilePage() {
   const [newRequirement, setNewRequirement] = useState("")
 
   const createTeam = useMutation(api.teams.create)
+
+  // Redirect to sign-in if not authenticated
+  useEffect(() => {
+    if (userLoaded && !isSignedIn) {
+      router.push(`/sign-in?redirect_url=${encodeURIComponent(pathname || "/motorsports/profile/team")}`)
+    }
+  }, [isSignedIn, userLoaded, router, pathname])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -147,6 +157,25 @@ export default function CreateTeamProfilePage() {
       ...formData,
       requirements: formData.requirements.filter((r) => r !== requirement),
     })
+  }
+
+  // Show loading state while checking authentication
+  if (!userLoaded) {
+    return (
+      <div className="container mx-auto max-w-4xl px-4 py-8">
+        <div className="flex min-h-[60vh] items-center justify-center">
+          <div className="text-center">
+            <Loader2 className="mx-auto mb-4 size-8 animate-spin text-muted-foreground" />
+            <p className="text-muted-foreground">Loading...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Don't render form if not authenticated (will redirect)
+  if (!isSignedIn) {
+    return null
   }
 
   return (

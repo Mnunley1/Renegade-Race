@@ -150,7 +150,10 @@ export function UserMenu() {
         ) : (
           <>
             <DropdownMenuItem asChild>
-              <Link className="flex items-center text-sm" href="/sign-in">
+              <Link
+                className="flex items-center text-sm"
+                href={`/sign-in?redirect_url=${encodeURIComponent(pathname || "/")}`}
+              >
                 Sign In
               </Link>
             </DropdownMenuItem>

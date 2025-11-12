@@ -6,7 +6,7 @@ import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent } from "@workspace/ui/components/card"
 import { Heart, Loader2 } from "lucide-react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import { VehicleCard } from "@/components/vehicle-card"
 import { api } from "@/lib/convex"
 import { useMemo } from "react"
@@ -14,6 +14,7 @@ import { useMemo } from "react"
 export default function FavoritesPage() {
   const { user, isSignedIn, isLoaded: userLoaded } = useUser()
   const router = useRouter()
+  const pathname = usePathname()
   
   // Fetch user's favorites from Convex
   const favoritesData = useQuery(
@@ -89,7 +90,12 @@ export default function FavoritesPage() {
             <p className="mb-6 max-w-md text-muted-foreground">
               Create an account or sign in to save your favorite vehicles and access them anytime.
             </p>
-            <Button onClick={() => router.push("/sign-in")} size="lg">
+            <Button
+              onClick={() =>
+                router.push(`/sign-in?redirect_url=${encodeURIComponent(pathname || "/")}`)
+              }
+              size="lg"
+            >
               Sign In
             </Button>
           </CardContent>
