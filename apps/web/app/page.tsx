@@ -47,7 +47,6 @@ export default function HomePage() {
   const benefits = [
     "Instant booking confirmation",
     "Verified host vehicles",
-    "Track insurance included",
     "24/7 customer support",
   ]
 
@@ -178,8 +177,7 @@ export default function HomePage() {
               perfect track car for your next event.
             </p>
             <p>
-              Our platform ensures every vehicle meets strict quality and safety standards, while our
-              comprehensive insurance coverage gives you peace of mind on the track. Join our
+              Our platform ensures every vehicle meets strict quality and safety standards. Join our
               community of drivers and hosts who share a passion for motorsports and performance.
             </p>
           </div>
