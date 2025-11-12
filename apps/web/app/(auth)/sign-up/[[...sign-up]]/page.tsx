@@ -13,7 +13,7 @@ import {
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import { Separator } from "@workspace/ui/components/separator"
-import { ArrowRight, Lock, Mail, User } from "lucide-react"
+import { ArrowRight, Eye, EyeOff, Lock, Mail, User } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
@@ -28,6 +28,7 @@ export default function SignUpPage() {
   const [lastName, setLastName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
   const router = useRouter()
@@ -136,15 +137,29 @@ export default function SignUpPage() {
               <div className="relative">
                 <Lock className="-translate-y-1/2 absolute top-1/2 left-3 size-4 text-muted-foreground" />
                 <Input
-                  className="pl-10"
+                  className="pl-10 pr-10"
                   disabled={isLoading}
                   id="password"
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Create a strong password"
                   required
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   value={password}
                 />
+                <button
+                  className="-translate-y-1/2 absolute top-1/2 right-3 text-muted-foreground transition-colors hover:text-foreground"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    setShowPassword(!showPassword)
+                  }}
+                  type="button"
+                >
+                  {showPassword ? (
+                    <EyeOff className="size-4" />
+                  ) : (
+                    <Eye className="size-4" />
+                  )}
+                </button>
               </div>
               <p className="text-muted-foreground text-sm">
                 Must be at least 8 characters with a mix of letters and numbers
@@ -160,8 +175,8 @@ export default function SignUpPage() {
 
         <CardFooter className="flex flex-col space-y-4">
           <div className="relative w-full text-center text-sm">
-            <span className="relative bg-card px-2 text-muted-foreground">Or sign up with</span>
             <Separator className="absolute top-1/2 right-0 left-0" />
+            <span className="relative z-10 bg-card px-2 text-muted-foreground">Or sign up with</span>
           </div>
 
           <Button
