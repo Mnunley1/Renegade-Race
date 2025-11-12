@@ -47,7 +47,7 @@ export default function HelpPage() {
         {
           question: "Are there any booking fees?",
           answer:
-            "The price you see includes the daily rental rate. Additional fees may apply for insurance, delivery, or special equipment.",
+            "The price you see includes the daily rental rate. Additional fees may apply for delivery or special equipment.",
         },
         {
           question: "Can I cancel my booking?",
@@ -74,11 +74,6 @@ export default function HelpPage() {
           answer:
             "Contact us immediately. We'll work with the host to provide a replacement vehicle or full refund depending on the circumstances.",
         },
-        {
-          question: "Is insurance included?",
-          answer:
-            "Track insurance is included with all rentals. We recommend reviewing the policy details and considering additional coverage for high-value vehicles.",
-        },
       ],
     },
     {
@@ -92,7 +87,7 @@ export default function HelpPage() {
         {
           question: "What are the requirements for hosting?",
           answer:
-            "You need a track-ready vehicle that passes our safety inspection, valid insurance, and to complete our host verification process.",
+            "You need a track-ready vehicle that passes our safety inspection and to complete our host verification process.",
         },
         {
           question: "How do I get paid?",
