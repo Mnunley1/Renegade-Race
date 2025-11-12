@@ -125,12 +125,6 @@ export const seed = mutation({
         amenities: ['Carbon Ceramic Brakes', 'Sport Chrono', 'Track Mode', 'Data Logger'],
         addOns: [
           {
-            name: 'Track Insurance',
-            price: 150,
-            description: 'Comprehensive track day insurance coverage',
-            isRequired: true,
-          },
-          {
             name: 'Helmet Rental',
             price: 50,
             description: 'Professional racing helmet',

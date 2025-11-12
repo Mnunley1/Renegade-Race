@@ -34,6 +34,9 @@ export default function VehiclesPage() {
   const [selectedLocation, setSelectedLocation] = useState("")
   const [selectedTrack, setSelectedTrack] = useState("all")
   const [selectedMake, setSelectedMake] = useState("all")
+  const [selectedModel, setSelectedModel] = useState("all")
+  const [selectedRaceCarClass, setSelectedRaceCarClass] = useState("all")
+  const [selectedDriveType, setSelectedDriveType] = useState("all")
   const [selectedPriceRange, setSelectedPriceRange] = useState("any")
   const [minHorsepower, setMinHorsepower] = useState("")
   const [maxHorsepower, setMaxHorsepower] = useState("")
@@ -75,6 +78,8 @@ export default function VehiclesPage() {
         reviews: 0, // TODO: Get from reviews
         horsepower: vehicle.horsepower,
         transmission: vehicle.transmission || "",
+        drivetrain: vehicle.drivetrain || "",
+        raceCarClass: (vehicle as any).raceCarClass || "", // TODO: Add to schema
       }
     })
     return mapped
@@ -92,6 +97,35 @@ export default function VehiclesPage() {
   const makes = useMemo(() => {
     return Array.from(new Set(vehicles.map((v) => v.make))).sort()
   }, [vehicles])
+
+  const models = useMemo(() => {
+    // Filter models based on selected make if one is selected
+    const filteredVehicles = selectedMake !== "all"
+      ? vehicles.filter((v) => v.make === selectedMake)
+      : vehicles
+    return Array.from(new Set(filteredVehicles.map((v) => v.model))).sort()
+  }, [vehicles, selectedMake])
+
+  const driveTypes = useMemo(() => {
+    return Array.from(
+      new Set(vehicles.map((v) => v.drivetrain).filter(Boolean))
+    ).sort()
+  }, [vehicles])
+
+  const raceCarClasses = useMemo(() => {
+    // Common race car classes - this will be populated from schema once added
+    return [
+      "GT3",
+      "GT4",
+      "Formula",
+      "Prototype",
+      "Touring",
+      "Rally",
+      "Drift",
+      "Time Attack",
+      "Endurance",
+    ]
+  }, [])
 
   // Filter vehicles with enhanced search and filters
   const filteredVehicles = useMemo(() => {
@@ -120,6 +154,21 @@ export default function VehiclesPage() {
 
       // Make filter
       if (selectedMake !== "all" && vehicle.make !== selectedMake) {
+        return false
+      }
+
+      // Model filter
+      if (selectedModel !== "all" && vehicle.model !== selectedModel) {
+        return false
+      }
+
+      // Race Car Class filter (will work once schema is updated)
+      if (selectedRaceCarClass !== "all" && vehicle.raceCarClass && vehicle.raceCarClass !== selectedRaceCarClass) {
+        return false
+      }
+
+      // Drive Type filter
+      if (selectedDriveType !== "all" && vehicle.drivetrain && vehicle.drivetrain.toUpperCase() !== selectedDriveType.toUpperCase()) {
         return false
       }
 
@@ -199,6 +248,9 @@ export default function VehiclesPage() {
     debouncedSearchQuery,
     selectedTrack,
     selectedMake,
+    selectedModel,
+    selectedRaceCarClass,
+    selectedDriveType,
     selectedLocation,
     selectedPriceRange,
     minHorsepower,
@@ -219,10 +271,15 @@ export default function VehiclesPage() {
   const totalPages = Math.ceil(filteredVehicles.length / itemsPerPage)
   const hasMore = currentPage < totalPages
 
+  // Reset model filter when make changes
+  useEffect(() => {
+    setSelectedModel("all")
+  }, [selectedMake])
+
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1)
-  }, [debouncedSearchQuery, selectedTrack, selectedMake, selectedLocation, selectedPriceRange, minHorsepower, maxHorsepower, selectedTransmission, minYear, maxYear, minRating, sortBy])
+  }, [debouncedSearchQuery, selectedTrack, selectedMake, selectedModel, selectedRaceCarClass, selectedDriveType, selectedLocation, selectedPriceRange, minHorsepower, maxHorsepower, selectedTransmission, minYear, maxYear, minRating, sortBy])
 
   // Get active filter count
   const activeFiltersCount = useMemo(() => {
@@ -230,6 +287,9 @@ export default function VehiclesPage() {
     if (debouncedSearchQuery) count++
     if (selectedTrack !== "all") count++
     if (selectedMake !== "all") count++
+    if (selectedModel !== "all") count++
+    if (selectedRaceCarClass !== "all") count++
+    if (selectedDriveType !== "all") count++
     if (selectedLocation) count++
     if (selectedPriceRange !== "any") count++
     if (minHorsepower || maxHorsepower) count++
@@ -242,6 +302,9 @@ export default function VehiclesPage() {
     debouncedSearchQuery,
     selectedTrack,
     selectedMake,
+    selectedModel,
+    selectedRaceCarClass,
+    selectedDriveType,
     selectedLocation,
     selectedPriceRange,
     minHorsepower,
@@ -258,6 +321,9 @@ export default function VehiclesPage() {
     setSelectedLocation("")
     setSelectedTrack("all")
     setSelectedMake("all")
+    setSelectedModel("all")
+    setSelectedRaceCarClass("all")
+    setSelectedDriveType("all")
     setSelectedPriceRange("any")
     setMinHorsepower("")
     setMaxHorsepower("")
@@ -409,6 +475,33 @@ export default function VehiclesPage() {
                         />
                       </Badge>
                     )}
+                    {selectedModel !== "all" && (
+                      <Badge variant="secondary" className="gap-1">
+                        Model: {selectedModel}
+                        <X
+                          className="size-3 cursor-pointer"
+                          onClick={() => setSelectedModel("all")}
+                        />
+                      </Badge>
+                    )}
+                    {selectedRaceCarClass !== "all" && (
+                      <Badge variant="secondary" className="gap-1">
+                        Class: {selectedRaceCarClass}
+                        <X
+                          className="size-3 cursor-pointer"
+                          onClick={() => setSelectedRaceCarClass("all")}
+                        />
+                      </Badge>
+                    )}
+                    {selectedDriveType !== "all" && (
+                      <Badge variant="secondary" className="gap-1">
+                        Drive: {selectedDriveType}
+                        <X
+                          className="size-3 cursor-pointer"
+                          onClick={() => setSelectedDriveType("all")}
+                        />
+                      </Badge>
+                    )}
                     {selectedLocation && (
                       <Badge variant="secondary" className="gap-1">
                         Location: {selectedLocation}
@@ -550,7 +643,30 @@ export default function VehiclesPage() {
 
               <Card>
                 <CardContent className="p-6">
-                  <Accordion type="multiple" className="w-full" defaultValue={["make", "price"]}>
+                  <Accordion type="multiple" className="w-full" defaultValue={["track", "make", "price"]}>
+                    <AccordionItem value="track">
+                      <AccordionTrigger className="text-sm font-medium">
+                        Track
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        <Select value={selectedTrack} onValueChange={setSelectedTrack}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="All tracks" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All tracks</SelectItem>
+                            {tracks?.map((track) => (
+                              <SelectItem key={track.id} value={track.name}>
+                                {track.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </AccordionContent>
+                    </AccordionItem>
+
+                    <Separator />
+
                     <AccordionItem value="make">
                       <AccordionTrigger className="text-sm font-medium">
                         Vehicle Make
@@ -567,6 +683,80 @@ export default function VehiclesPage() {
                                 {make}
                               </SelectItem>
                             ))}
+                          </SelectContent>
+                        </Select>
+                      </AccordionContent>
+                    </AccordionItem>
+
+                    <Separator />
+
+                    <AccordionItem value="model">
+                      <AccordionTrigger className="text-sm font-medium">
+                        Model
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        <Select
+                          value={selectedModel}
+                          onValueChange={setSelectedModel}
+                          disabled={selectedMake === "all"}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder={selectedMake === "all" ? "Select make first" : "All models"} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All models</SelectItem>
+                            {models.map((model) => (
+                              <SelectItem key={model} value={model}>
+                                {model}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </AccordionContent>
+                    </AccordionItem>
+
+                    <Separator />
+
+                    <AccordionItem value="raceCarClass">
+                      <AccordionTrigger className="text-sm font-medium">
+                        Race Car Class
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        <Select value={selectedRaceCarClass} onValueChange={setSelectedRaceCarClass}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="All classes" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All classes</SelectItem>
+                            {raceCarClasses.map((raceClass) => (
+                              <SelectItem key={raceClass} value={raceClass}>
+                                {raceClass}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          Note: This filter will work once race car class is added to the vehicle schema.
+                        </p>
+                      </AccordionContent>
+                    </AccordionItem>
+
+                    <Separator />
+
+                    <AccordionItem value="driveType">
+                      <AccordionTrigger className="text-sm font-medium">
+                        Drive Type
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        <Select value={selectedDriveType} onValueChange={setSelectedDriveType}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="All drive types" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All drive types</SelectItem>
+                            <SelectItem value="FWD">FWD</SelectItem>
+                            <SelectItem value="RWD">RWD</SelectItem>
+                            <SelectItem value="AWD">AWD</SelectItem>
                           </SelectContent>
                         </Select>
                       </AccordionContent>
