@@ -1,8 +1,9 @@
 "use client"
 
 import { useMutation } from "convex/react"
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useEffect } from "react"
+import { useRouter, usePathname } from "next/navigation"
+import { useUser } from "@clerk/nextjs"
 import { Button } from "@workspace/ui/components/button"
 import {
   Card,
@@ -22,7 +23,7 @@ import {
 } from "@workspace/ui/components/select"
 import { Separator } from "@workspace/ui/components/separator"
 import { Textarea } from "@workspace/ui/components/textarea"
-import { ArrowLeft, Check } from "lucide-react"
+import { ArrowLeft, Check, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { api } from "@/lib/convex"
 
@@ -52,6 +53,8 @@ const AVAILABILITY_OPTIONS = ["weekends", "weekdays", "evenings", "flexible"]
 
 export default function CreateDriverProfilePage() {
   const router = useRouter()
+  const pathname = usePathname()
+  const { isSignedIn, isLoaded: userLoaded } = useUser()
   const [formData, setFormData] = useState({
     bio: "",
     achievements: "",
@@ -76,6 +79,13 @@ export default function CreateDriverProfilePage() {
   const [customLicense, setCustomLicense] = useState("")
 
   const createDriverProfile = useMutation(api.driverProfiles.create)
+
+  // Redirect to sign-in if not authenticated
+  useEffect(() => {
+    if (userLoaded && !isSignedIn) {
+      router.push(`/sign-in?redirect_url=${encodeURIComponent(pathname || "/motorsports/profile/driver")}`)
+    }
+  }, [isSignedIn, userLoaded, router, pathname])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -168,6 +178,25 @@ export default function CreateDriverProfilePage() {
       })
       setCustomLicense("")
     }
+  }
+
+  // Show loading state while checking authentication
+  if (!userLoaded) {
+    return (
+      <div className="container mx-auto max-w-4xl px-4 py-8">
+        <div className="flex min-h-[60vh] items-center justify-center">
+          <div className="text-center">
+            <Loader2 className="mx-auto mb-4 size-8 animate-spin text-muted-foreground" />
+            <p className="text-muted-foreground">Loading...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Don't render form if not authenticated (will redirect)
+  if (!isSignedIn) {
+    return null
   }
 
   return (
