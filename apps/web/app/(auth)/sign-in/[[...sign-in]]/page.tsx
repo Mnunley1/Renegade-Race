@@ -13,13 +13,30 @@ import {
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import { Separator } from "@workspace/ui/components/separator"
-import { ArrowRight, Lock, Mail } from "lucide-react"
+import { ArrowRight, Eye, EyeOff, Lock, Mail } from "lucide-react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 
 type ClerkError = {
   errors?: Array<{ message: string }>
+}
+
+// Helper function to safely get redirect URL
+function getRedirectUrl(searchParams: URLSearchParams): string {
+  const redirectUrl = searchParams.get("redirect_url")
+  if (!redirectUrl) return "/"
+  
+  // Decode the URL
+  const decoded = decodeURIComponent(redirectUrl)
+  
+  // Ensure it's a relative path (starts with /) and doesn't contain protocol
+  if (decoded.startsWith("/") && !decoded.includes("://")) {
+    return decoded
+  }
+  
+  // Fallback to home if invalid
+  return "/"
 }
 
 export default function SignInPage() {
@@ -27,17 +44,20 @@ export default function SignInPage() {
   const { isSignedIn, isLoaded: userLoaded } = useUser()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
   const searchParams = useSearchParams()
+  
+  // Memoize redirect URL to avoid recalculating
+  const redirectUrl = useMemo(() => getRedirectUrl(searchParams), [searchParams])
 
   // Redirect if already authenticated
   useEffect(() => {
     if (userLoaded && isSignedIn) {
-      const redirectUrl = searchParams.get("redirect_url") || "/"
       window.location.href = redirectUrl
     }
-  }, [isSignedIn, userLoaded, searchParams])
+  }, [isSignedIn, userLoaded, redirectUrl])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -57,7 +77,6 @@ export default function SignInPage() {
       if (result.status === "complete") {
         await setActive({ session: result.createdSessionId })
         // Use window.location for full page navigation to ensure auth state is updated
-        const redirectUrl = searchParams.get("redirect_url") || "/"
         window.location.href = redirectUrl
       } else {
         setError("Unable to sign in. Please try again.")
@@ -122,15 +141,29 @@ export default function SignInPage() {
               <div className="relative">
                 <Lock className="-translate-y-1/2 absolute top-1/2 left-3 size-4 text-muted-foreground" />
                 <Input
-                  className="pl-10"
+                  className="pl-10 pr-10"
                   disabled={isLoading}
                   id="password"
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
                   required
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   value={password}
                 />
+                <button
+                  className="-translate-y-1/2 absolute top-1/2 right-3 text-muted-foreground transition-colors hover:text-foreground"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    setShowPassword(!showPassword)
+                  }}
+                  type="button"
+                >
+                  {showPassword ? (
+                    <EyeOff className="size-4" />
+                  ) : (
+                    <Eye className="size-4" />
+                  )}
+                </button>
               </div>
             </div>
 
@@ -143,8 +176,8 @@ export default function SignInPage() {
 
         <CardFooter className="flex flex-col space-y-4">
           <div className="relative w-full text-center text-sm">
-            <span className="relative bg-card px-2 text-muted-foreground">Or continue with</span>
             <Separator className="absolute top-1/2 right-0 left-0" />
+            <span className="relative z-10 bg-card px-2 text-muted-foreground">Or continue with</span>
           </div>
 
           <Button
@@ -152,7 +185,6 @@ export default function SignInPage() {
             disabled={isLoading || !isLoaded}
             onClick={() => {
               if (signIn) {
-                const redirectUrl = searchParams.get("redirect_url") || "/"
                 signIn.authenticateWithRedirect({
                   strategy: "oauth_google",
                   redirectUrl: "/",

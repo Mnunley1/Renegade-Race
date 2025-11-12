@@ -54,57 +54,75 @@ export default function HomePage() {
   return (
     <div className="space-y-32 pb-32">
       {/* Hero Section */}
-      <section className="relative overflow-hidden">
-        <div className="container relative mx-auto px-4 sm:px-6 pt-12 pb-20 md:pt-20 md:pb-32">
-          <div className="grid gap-16 lg:grid-cols-2 lg:items-center">
-            <div className="space-y-8">
-              <div className="space-y-6">
-                <h1 className="font-semibold text-4xl leading-tight tracking-tight md:text-5xl lg:text-6xl xl:text-7xl">
-                  Experience the ultimate thrill of racing
-                </h1>
-                <p className="max-w-xl text-muted-foreground text-lg md:text-xl leading-relaxed">
-                  Rent high-performance track cars from verified hosts. Book your dream car today
-                  and feel the adrenaline rush on the world's best tracks.
-                </p>
-              </div>
+      <section className="relative h-screen min-h-[600px] max-h-[900px] overflow-hidden">
+        {/* Fallback Background Image */}
+        <div className="absolute inset-0">
+          <Image
+            alt="Racing on track"
+            className="object-cover"
+            fill
+            priority
+            src="/images/clement-delacre-JuEQI7nssh0-unsplash.jpg"
+          />
+        </div>
 
-              <div className="flex flex-wrap gap-6">
-                {benefits.map((benefit) => (
-                  <div
-                    className="flex items-center gap-2 text-sm text-muted-foreground"
-                    key={benefit}
-                  >
-                    <CheckCircle2 className="size-4 text-primary" />
-                    <span>{benefit}</span>
-                  </div>
-                ))}
-              </div>
+        {/* Video Background */}
+        <video
+          autoPlay
+          className="absolute inset-0 h-full w-full object-cover"
+          loop
+          muted
+          playsInline
+          poster="/images/clement-delacre-JuEQI7nssh0-unsplash.jpg"
+        >
+          <source src="/videos/renegade-hero-vid.mp4" type="video/mp4" />
+        </video>
 
-              <div className="flex flex-col gap-3 sm:flex-row">
-                <Link href="/vehicles">
-                  <Button className="w-full sm:w-auto" size="lg">
-                    <Car className="mr-2 size-5" />
-                    Browse Vehicles
-                  </Button>
-                </Link>
-                <Link href="/motorsports">
-                  <Button className="w-full sm:w-auto" size="lg" variant="outline">
-                    <Award className="mr-2 size-5" />
-                    Motorsports
-                  </Button>
-                </Link>
-              </div>
+        {/* Dark Overlay for better text readability */}
+        <div className="absolute inset-0 bg-black/50" />
+
+        {/* Content Overlay */}
+        <div className="container relative z-10 mx-auto flex h-full items-center px-4 sm:px-6">
+          <div className="max-w-3xl space-y-8 text-white">
+            <div className="space-y-6">
+              <h1 className="font-semibold text-4xl leading-tight tracking-tight md:text-5xl lg:text-6xl xl:text-7xl">
+                Experience the ultimate thrill of racing
+              </h1>
+              <p className="max-w-xl text-lg leading-relaxed text-white/90 md:text-xl">
+                Rent high-performance track cars from verified hosts. Book your dream car today
+                and feel the adrenaline rush on the world's best tracks.
+              </p>
             </div>
 
-            <div className="relative aspect-square overflow-hidden rounded-2xl lg:aspect-video">
-              <Image
-                alt="Racing on track"
-                className="object-cover transition-transform duration-500 hover:scale-105"
-                fill
-                sizes="(max-width: 768px) 100vw, 50vw"
-                src="/images/clement-delacre-JuEQI7nssh0-unsplash.jpg"
-                priority
-              />
+            <div className="flex flex-wrap gap-6">
+              {benefits.map((benefit) => (
+                <div
+                  className="flex items-center gap-2 text-sm text-white/90"
+                  key={benefit}
+                >
+                  <CheckCircle2 className="size-4 text-primary" />
+                  <span>{benefit}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Link href="/vehicles">
+                <Button className="w-full sm:w-auto" size="lg">
+                  <Car className="mr-2 size-5" />
+                  Browse Vehicles
+                </Button>
+              </Link>
+              <Link href="/motorsports">
+                <Button
+                  className="w-full border-white/20 bg-white text-black hover:bg-white/90 sm:w-auto"
+                  size="lg"
+                  variant="outline"
+                >
+                  <Award className="mr-2 size-5" />
+                  Motorsports
+                </Button>
+              </Link>
             </div>
           </div>
         </div>

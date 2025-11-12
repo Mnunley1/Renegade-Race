@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import { useUser } from "@clerk/nextjs"
 import { useMutation, useAction } from "convex/react"
 import { Button } from "@workspace/ui/components/button"
@@ -43,6 +43,7 @@ interface BookingFormProps {
 
 export function BookingForm({ pricePerDay, vehicleId, addOns = [] }: BookingFormProps) {
   const router = useRouter()
+  const pathname = usePathname()
   const { user, isSignedIn } = useUser()
   const createReservation = useMutation(api.reservations.create)
   const createPaymentIntent = useAction(api.stripe.createPaymentIntent)
@@ -130,7 +131,7 @@ export function BookingForm({ pricePerDay, vehicleId, addOns = [] }: BookingForm
     if (!isSignedIn) {
       setError("Please sign in to make a reservation")
       setIsSubmitting(false)
-      router.push("/sign-in")
+      router.push(`/sign-in?redirect_url=${encodeURIComponent(pathname || "/")}`)
       return
     }
 

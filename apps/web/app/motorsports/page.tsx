@@ -1,9 +1,9 @@
 "use client"
 
-import { useQuery } from "convex/react"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
+import { useQuery } from "convex/react"
 import { ArrowRight, Plus, Users } from "lucide-react"
 import Link from "next/link"
 import { api } from "@/lib/convex"
@@ -20,7 +20,7 @@ export default function MotorsportsPage() {
     <div className="container mx-auto px-4 py-8">
       <div className="mb-12">
         <h1 className="mb-2 font-bold text-3xl">Motorsports</h1>
-        <p className="text-muted-foreground text-lg">
+        <p className="text-lg text-muted-foreground">
           Connect drivers with racing teams. Find your perfect match and accelerate your racing
           career.
         </p>

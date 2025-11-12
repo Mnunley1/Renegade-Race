@@ -6,6 +6,7 @@ const isProtectedRoute = createRouteMatcher([
   "/profile(.*)",
   "/messages(.*)",
   "/vehicles/(.*)/book(.*)",
+  "/motorsports/profile(.*)",
 ])
 
 export default clerkMiddleware(async (auth, req) => {
@@ -15,8 +16,11 @@ export default clerkMiddleware(async (auth, req) => {
 
     if (!userId) {
       // Redirect to sign-in if not authenticated
+      // Extract only the pathname and search params (not the full URL)
+      const url = new URL(req.url)
+      const redirectPath = url.pathname + url.search
       const signInUrl = new URL("/sign-in", req.url)
-      signInUrl.searchParams.set("redirect_url", req.url)
+      signInUrl.searchParams.set("redirect_url", redirectPath)
       return NextResponse.redirect(signInUrl)
     }
   }
