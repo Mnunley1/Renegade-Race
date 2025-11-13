@@ -8,10 +8,12 @@
  * @module
  */
 
+import type * as admin from "../admin.js";
 import type * as availability from "../availability.js";
 import type * as conversations from "../conversations.js";
 import type * as disputes from "../disputes.js";
 import type * as driverProfiles from "../driverProfiles.js";
+import type * as emails from "../emails.js";
 import type * as favorites from "../favorites.js";
 import type * as http from "../http.js";
 import type * as messages from "../messages.js";
@@ -42,10 +44,12 @@ import type {
  * ```
  */
 declare const fullApi: ApiFromModules<{
+  admin: typeof admin;
   availability: typeof availability;
   conversations: typeof conversations;
   disputes: typeof disputes;
   driverProfiles: typeof driverProfiles;
+  emails: typeof emails;
   favorites: typeof favorites;
   http: typeof http;
   messages: typeof messages;

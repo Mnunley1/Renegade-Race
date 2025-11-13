@@ -16,6 +16,7 @@ export default defineSchema({
     userType: v.optional(
       v.union(v.literal('driver'), v.literal('team'), v.literal('both'))
     ),
+    isBanned: v.optional(v.boolean()),
   }).index('by_external_id', ['externalId']),
 
   tracks: defineTable({

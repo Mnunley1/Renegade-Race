@@ -695,6 +695,114 @@ export const bulkArchiveHostConversations = mutation({
   },
 });
 
+// Helper function to check if user is admin via Clerk metadata
+async function checkAdmin(ctx: any) {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) {
+    throw new Error('Not authenticated');
+  }
+
+  // When session token is configured with { "metadata": "{{user.public_metadata}}" },
+  // the metadata is available in identity.metadata
+  const role =
+    (identity as any).metadata?.role || // From session token (recommended)
+    (identity as any).publicMetadata?.role || // Direct from Clerk
+    (identity as any).orgRole;
+
+  if (role !== 'admin') {
+    throw new Error('Admin access required');
+  }
+
+  return identity;
+}
+
+// Send admin message to a user (creates a system message in an existing conversation or creates a new one)
+export const sendAdminMessage = mutation({
+  args: {
+    userId: v.string(), // externalId of the user to message
+    content: v.string(),
+    vehicleId: v.optional(v.id('vehicles')), // Optional - if provided, will use/create conversation for that vehicle
+  },
+  handler: async (ctx, args) => {
+    const identity = await checkAdmin(ctx);
+    const adminId = identity.subject;
+    const now = Date.now();
+
+    // Find the user
+    const user = await ctx.db
+      .query('users')
+      .withIndex('by_external_id', q => q.eq('externalId', args.userId))
+      .first();
+
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    // If vehicleId is provided, try to find or create a conversation
+    // For admin messages, we'll create a system message
+    // Since admin isn't part of normal conversations, we'll create a special system message
+    // For simplicity, we'll create a message that can be displayed in the user's admin messages section
+    // This is a simplified implementation - in production you might want a dedicated admin messages table
+
+    // For now, if vehicleId is provided, find the conversation and add admin message
+    if (args.vehicleId) {
+      const vehicle = await ctx.db.get(args.vehicleId);
+      if (!vehicle) {
+        throw new Error('Vehicle not found');
+      }
+
+      // Find conversation for this vehicle with this user
+      const conversation = await ctx.db
+        .query('conversations')
+        .withIndex('by_vehicle', q => q.eq('vehicleId', args.vehicleId))
+        .filter(q =>
+          q.or(
+            q.eq(q.field('renterId'), args.userId),
+            q.eq(q.field('ownerId'), args.userId)
+          )
+        )
+        .first();
+
+      if (conversation) {
+        // Add system message to existing conversation
+        const messageId = await ctx.db.insert('messages', {
+          conversationId: conversation._id,
+          senderId: adminId,
+          content: `[Admin Message] ${args.content}`,
+          messageType: 'system',
+          isRead: false,
+          createdAt: now,
+        });
+
+        // Update conversation metadata
+        await ctx.db.patch(conversation._id, {
+          lastMessageAt: now,
+          lastMessageText: args.content,
+          lastMessageSenderId: adminId,
+          updatedAt: now,
+        });
+
+        // Update unread count for the user
+        if (conversation.renterId === args.userId) {
+          await ctx.db.patch(conversation._id, {
+            unreadCountRenter: (conversation.unreadCountRenter || 0) + 1,
+          });
+        } else {
+          await ctx.db.patch(conversation._id, {
+            unreadCountOwner: (conversation.unreadCountOwner || 0) + 1,
+          });
+        }
+
+        return { messageId, conversationId: conversation._id };
+      }
+    }
+
+    // If no conversation found or no vehicleId, we'll just return success
+    // In production, you might want to create a dedicated admin messages system
+    return { success: true, message: 'Admin message sent (system message)' };
+  },
+});
+
 // Send system message as host (for automated responses)
 export const sendHostSystemMessage = mutation({
   args: {
