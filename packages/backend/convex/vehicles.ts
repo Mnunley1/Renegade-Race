@@ -725,18 +725,32 @@ export const migrateVehicleImages = mutation({
   },
 });
 
+// Helper function to check if user is admin via Clerk metadata
+async function checkAdmin(ctx: any) {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) {
+    throw new Error('Not authenticated');
+  }
+
+  // When session token is configured with { "metadata": "{{user.public_metadata}}" },
+  // the metadata is available in identity.metadata
+  const role =
+    (identity as any).metadata?.role || // From session token (recommended)
+    (identity as any).publicMetadata?.role || // Direct from Clerk
+    (identity as any).orgRole;
+
+  if (role !== 'admin') {
+    throw new Error('Admin access required');
+  }
+
+  return identity;
+}
+
 // Admin function to approve a vehicle
 export const approveVehicle = mutation({
   args: { vehicleId: v.id('vehicles') },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error('Not authenticated');
-    }
-
-    // TODO: Add admin role check here
-    // For now, any authenticated user can approve vehicles
-    // In production, you should check if the user has admin privileges
+    await checkAdmin(ctx);
 
     const vehicle = await ctx.db.get(args.vehicleId);
     if (!vehicle) {
@@ -756,14 +770,7 @@ export const approveVehicle = mutation({
 export const rejectVehicle = mutation({
   args: { vehicleId: v.id('vehicles') },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error('Not authenticated');
-    }
-
-    // TODO: Add admin role check here
-    // For now, any authenticated user can reject vehicles
-    // In production, you should check if the user has admin privileges
+    await checkAdmin(ctx);
 
     const vehicle = await ctx.db.get(args.vehicleId);
     if (!vehicle) {
@@ -785,14 +792,7 @@ export const getPendingVehicles = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error('Not authenticated');
-    }
-
-    // TODO: Add admin role check here
-    // For now, any authenticated user can view pending vehicles
-    // In production, you should check if the user has admin privileges
+    await checkAdmin(ctx);
 
     const { limit = 50 } = args;
 
