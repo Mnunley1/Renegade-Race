@@ -215,7 +215,15 @@ export default defineSchema({
     description: v.string(),
     logoUrl: v.optional(v.string()),
     location: v.string(),
-    specialties: v.array(v.string()), // e.g., ['GT3', 'Formula', 'Endurance']
+    racingType: v.optional(
+      v.union(
+        v.literal('real-world'),
+        v.literal('sim-racing'),
+        v.literal('both')
+      )
+    ),
+    simRacingPlatforms: v.optional(v.array(v.string())),
+    specialties: v.array(v.string()), // e.g., ['GT3', 'Formula', 'Endurance', 'iRacing']
     availableSeats: v.number(),
     requirements: v.array(v.string()), // e.g., ['License Required', 'Experience Level']
     contactInfo: v.object({
@@ -237,7 +245,8 @@ export default defineSchema({
   })
     .index('by_owner', ['ownerId'])
     .index('by_active', ['isActive'])
-    .index('by_location', ['location']),
+    .index('by_location', ['location'])
+    .index('by_racing_type', ['racingType']),
 
   driverProfiles: defineTable({
     userId: v.string(),
@@ -249,8 +258,17 @@ export default defineSchema({
       v.literal('advanced'),
       v.literal('professional')
     ),
+    racingType: v.optional(
+      v.union(
+        v.literal('real-world'),
+        v.literal('sim-racing'),
+        v.literal('both')
+      )
+    ),
+    simRacingPlatforms: v.optional(v.array(v.string())), // e.g., ['iRacing', 'ACC', 'Gran Turismo']
+    simRacingRating: v.optional(v.string()), // e.g., 'A License', 'iRating: 3500', 'S Rating'
     licenses: v.array(v.string()), // e.g., ['FIA', 'NASA', 'SCCA']
-    preferredCategories: v.array(v.string()), // e.g., ['GT3', 'Formula', 'Endurance']
+    preferredCategories: v.array(v.string()), // e.g., ['GT3', 'Formula', 'Endurance', 'iRacing']
     availability: v.array(v.string()), // e.g., ['weekends', 'weekdays', 'evenings']
     location: v.string(),
     contactInfo: v.object({
@@ -272,7 +290,8 @@ export default defineSchema({
     .index('by_user', ['userId'])
     .index('by_active', ['isActive'])
     .index('by_location', ['location'])
-    .index('by_experience', ['experience']),
+    .index('by_experience', ['experience'])
+    .index('by_racing_type', ['racingType']),
 
   teamApplications: defineTable({
     teamId: v.id('teams'),
