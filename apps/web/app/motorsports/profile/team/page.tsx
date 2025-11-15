@@ -14,6 +14,13 @@ import {
 } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@workspace/ui/components/select"
 import { Separator } from "@workspace/ui/components/separator"
 import { Textarea } from "@workspace/ui/components/textarea"
 import { ArrowLeft, Check, Plus, X, Loader2 } from "lucide-react"
@@ -32,6 +39,32 @@ const COMMON_SPECIALTIES = [
   "Vintage Racing",
   "Cup Series",
   "Track Days",
+  // Sim Racing Categories
+  "iRacing",
+  "Assetto Corsa Competizione",
+  "Gran Turismo",
+  "F1 Esports",
+  "Sim Racing - GT",
+  "Sim Racing - Formula",
+  "Sim Racing - Endurance",
+  "Sim Racing - Oval",
+]
+
+const SIM_RACING_PLATFORMS = [
+  "iRacing",
+  "Assetto Corsa Competizione",
+  "Gran Turismo 7",
+  "F1 24",
+  "rFactor 2",
+  "RaceRoom",
+  "Automobilista 2",
+  "Other",
+]
+
+const RACING_TYPES = [
+  { value: "real-world", label: "Real-World Racing" },
+  { value: "sim-racing", label: "Sim Racing" },
+  { value: "both", label: "Both" },
 ]
 
 export default function CreateTeamProfilePage() {
@@ -43,6 +76,8 @@ export default function CreateTeamProfilePage() {
     description: "",
     logoUrl: "",
     location: "",
+    racingType: "",
+    simRacingPlatforms: [] as string[],
     specialties: [] as string[],
     availableSeats: 1,
     requirements: [] as string[],
@@ -81,6 +116,8 @@ export default function CreateTeamProfilePage() {
         description: formData.description,
         logoUrl: formData.logoUrl || undefined,
         location: formData.location,
+        racingType: formData.racingType ? (formData.racingType as "real-world" | "sim-racing" | "both") : undefined,
+        simRacingPlatforms: formData.simRacingPlatforms.length > 0 ? formData.simRacingPlatforms : undefined,
         specialties: formData.specialties,
         availableSeats: formData.availableSeats,
         requirements: formData.requirements,
@@ -157,6 +194,20 @@ export default function CreateTeamProfilePage() {
       ...formData,
       requirements: formData.requirements.filter((r) => r !== requirement),
     })
+  }
+
+  const handleSimPlatformToggle = (platform: string) => {
+    if (formData.simRacingPlatforms.includes(platform)) {
+      setFormData({
+        ...formData,
+        simRacingPlatforms: formData.simRacingPlatforms.filter((p) => p !== platform),
+      })
+    } else {
+      setFormData({
+        ...formData,
+        simRacingPlatforms: [...formData.simRacingPlatforms, platform],
+      })
+    }
   }
 
   // Show loading state while checking authentication
@@ -268,6 +319,86 @@ export default function CreateTeamProfilePage() {
                   Number of driver positions you're looking to fill
                 </p>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Racing Type */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Racing Type</CardTitle>
+              <CardDescription>
+                Select whether your team participates in real-world racing, sim racing, or both
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="racingType">Racing Type *</Label>
+                <Select
+                  onValueChange={(value) => setFormData({ ...formData, racingType: value })}
+                  required
+                  value={formData.racingType}
+                >
+                  <SelectTrigger id="racingType">
+                    <SelectValue placeholder="Select racing type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {RACING_TYPES.map((type) => (
+                      <SelectItem key={type.value} value={type.value}>
+                        {type.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {(formData.racingType === "sim-racing" || formData.racingType === "both") && (
+                <>
+                  <Separator />
+                  <div className="space-y-3">
+                    <Label>Sim Racing Platforms</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {SIM_RACING_PLATFORMS.map((platform) => (
+                        <button
+                          className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition-colors hover:bg-accent"
+                          key={platform}
+                          onClick={(e) => {
+                            e.preventDefault()
+                            handleSimPlatformToggle(platform)
+                          }}
+                          type="button"
+                        >
+                          {formData.simRacingPlatforms.includes(platform) && (
+                            <Check className="size-3 text-primary" />
+                          )}
+                          {platform}
+                        </button>
+                      ))}
+                    </div>
+                    {formData.simRacingPlatforms.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {formData.simRacingPlatforms.map((platform) => (
+                          <span
+                            className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-1 text-primary text-xs"
+                            key={platform}
+                          >
+                            {platform}
+                            <button
+                              className="hover:text-primary/80"
+                              onClick={(e) => {
+                                e.preventDefault()
+                                handleSimPlatformToggle(platform)
+                              }}
+                              type="button"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
 

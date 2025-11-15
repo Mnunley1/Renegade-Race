@@ -189,17 +189,59 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
                 <h3 className="mb-3 font-semibold text-lg">Availability</h3>
                 <div className="flex flex-wrap gap-2">
                   {driverProfile.availability.length > 0 ? (
-                    driverProfile.availability.map((availability) => (
-                      <Badge key={availability} variant="outline" className="px-3 py-1 text-sm">
-                        <Calendar className="mr-1 size-3" />
-                        {availability.charAt(0).toUpperCase() + availability.slice(1)}
-                      </Badge>
-                    ))
+                    driverProfile.availability.map((availability) => {
+                      const availabilityLabels: Record<string, string> = {
+                        "single-race": "Single Race",
+                        "multi-race": "Multi-Race",
+                        "season-commitment": "Season Commitment",
+                        // Legacy support for old values
+                        "weekends": "Weekends",
+                        "weekdays": "Weekdays",
+                        "evenings": "Evenings",
+                        "flexible": "Flexible",
+                      }
+                      const label = availabilityLabels[availability] || availability.charAt(0).toUpperCase() + availability.slice(1).replace(/-/g, " ")
+                      return (
+                        <Badge key={availability} variant="outline" className="px-3 py-1 text-sm">
+                          <Calendar className="mr-1 size-3" />
+                          {label}
+                        </Badge>
+                      )
+                    })
                   ) : (
                     <p className="text-muted-foreground text-sm">No availability listed</p>
                   )}
                 </div>
               </div>
+
+              {(driverProfile.racingType === "sim-racing" || driverProfile.racingType === "both") && (
+                <>
+                  <Separator />
+                  <div>
+                    <h3 className="mb-3 font-semibold text-lg">Sim Racing</h3>
+                    <div className="space-y-3">
+                      {driverProfile.simRacingPlatforms && driverProfile.simRacingPlatforms.length > 0 && (
+                        <div>
+                          <p className="mb-2 text-muted-foreground text-sm font-medium">Platforms</p>
+                          <div className="flex flex-wrap gap-2">
+                            {driverProfile.simRacingPlatforms.map((platform) => (
+                              <Badge key={platform} variant="secondary" className="px-3 py-1 text-sm">
+                                🎮 {platform}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {driverProfile.simRacingRating && (
+                        <div>
+                          <p className="mb-2 text-muted-foreground text-sm font-medium">Rating</p>
+                          <p className="text-muted-foreground">{driverProfile.simRacingRating}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
         </div>

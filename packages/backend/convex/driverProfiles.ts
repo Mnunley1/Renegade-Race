@@ -11,6 +11,15 @@ export const create = mutation({
       v.literal('advanced'),
       v.literal('professional')
     ),
+    racingType: v.optional(
+      v.union(
+        v.literal('real-world'),
+        v.literal('sim-racing'),
+        v.literal('both')
+      )
+    ),
+    simRacingPlatforms: v.optional(v.array(v.string())),
+    simRacingRating: v.optional(v.string()),
     licenses: v.array(v.string()),
     preferredCategories: v.array(v.string()),
     availability: v.array(v.string()),
@@ -52,6 +61,15 @@ export const update = mutation({
         v.literal('professional')
       )
     ),
+    racingType: v.optional(
+      v.union(
+        v.literal('real-world'),
+        v.literal('sim-racing'),
+        v.literal('both')
+      )
+    ),
+    simRacingPlatforms: v.optional(v.array(v.string())),
+    simRacingRating: v.optional(v.string()),
     licenses: v.optional(v.array(v.string())),
     preferredCategories: v.optional(v.array(v.string())),
     availability: v.optional(v.array(v.string())),
@@ -93,6 +111,13 @@ export const list = query({
         v.literal('professional')
       )
     ),
+    racingType: v.optional(
+      v.union(
+        v.literal('real-world'),
+        v.literal('sim-racing'),
+        v.literal('both')
+      )
+    ),
     preferredCategories: v.optional(v.array(v.string())),
     availability: v.optional(v.array(v.string())),
   },
@@ -110,6 +135,15 @@ export const list = query({
     if (args.experience) {
       profilesQuery = profilesQuery.filter(q =>
         q.eq(q.field('experience'), args.experience)
+      );
+    }
+
+    if (args.racingType) {
+      profilesQuery = profilesQuery.filter(q =>
+        q.or(
+          q.eq(q.field('racingType'), args.racingType),
+          q.eq(q.field('racingType'), 'both')
+        )
       );
     }
 
