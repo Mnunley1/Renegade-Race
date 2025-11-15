@@ -1,17 +1,28 @@
 "use client"
 
 import { useQuery } from "convex/react"
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@workspace/ui/components/select"
 import { ArrowLeft, Plus } from "lucide-react"
 import Link from "next/link"
 import { TeamCard } from "@/components/team-card"
 import { api } from "@/lib/convex"
 
 export default function TeamsPage() {
+  const [racingTypeFilter, setRacingTypeFilter] = useState<string>("all")
+
   // Fetch teams from database
-  const teamsData = useQuery(api.teams.list, {})
+  const teamsData = useQuery(api.teams.list, {
+    racingType: racingTypeFilter !== "all" ? (racingTypeFilter as "real-world" | "sim-racing" | "both") : undefined,
+  })
 
   // Map teams data to the format expected by TeamCard
   const teams = useMemo(() => {
@@ -21,6 +32,8 @@ export default function TeamsPage() {
       name: team.name,
       logoUrl: team.logoUrl,
       location: team.location,
+      racingType: team.racingType,
+      simRacingPlatforms: team.simRacingPlatforms,
       specialties: team.specialties,
       availableSeats: team.availableSeats,
       requirements: team.requirements,
@@ -55,12 +68,23 @@ export default function TeamsPage() {
         </Link>
       </div>
 
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-muted-foreground text-sm">
           {teamsData === undefined
             ? "Loading teams..."
             : `Showing ${teams.length} ${teams.length === 1 ? "team" : "teams"}`}
         </p>
+        <Select value={racingTypeFilter} onValueChange={setRacingTypeFilter}>
+          <SelectTrigger className="w-[200px]">
+            <SelectValue placeholder="Filter by type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Types</SelectItem>
+            <SelectItem value="real-world">Real-World</SelectItem>
+            <SelectItem value="sim-racing">Sim Racing</SelectItem>
+            <SelectItem value="both">Both</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {teamsData === undefined ? (

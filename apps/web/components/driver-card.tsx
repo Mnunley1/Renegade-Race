@@ -12,6 +12,9 @@ interface DriverCardProps extends ComponentProps<"div"> {
   avatarUrl?: string
   location: string
   experience: "beginner" | "intermediate" | "advanced" | "professional"
+  racingType?: "real-world" | "sim-racing" | "both"
+  simRacingPlatforms?: string[]
+  simRacingRating?: string
   licenses: string[]
   preferredCategories: string[]
   bio: string
@@ -33,6 +36,9 @@ export function DriverCard({
   avatarUrl,
   location,
   experience,
+  racingType,
+  simRacingPlatforms,
+  simRacingRating,
   licenses,
   preferredCategories,
   bio,
@@ -74,11 +80,18 @@ export function DriverCard({
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Badge className={experienceColors[experience]}>
               <Award className="mr-1 size-3" />
               {experience.charAt(0).toUpperCase() + experience.slice(1)}
             </Badge>
+            {racingType && (
+              <Badge variant="outline">
+                {racingType === "sim-racing" ? "🎮 Sim Racing" : 
+                 racingType === "both" ? "🏎️🎮 Both" : 
+                 "🏎️ Real-World"}
+              </Badge>
+            )}
           </div>
 
           <p className="text-muted-foreground text-sm">{truncatedBio}</p>

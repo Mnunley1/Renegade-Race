@@ -22,7 +22,7 @@ export default function MotorsportsPage() {
         <h1 className="mb-2 font-bold text-3xl">Motorsports</h1>
         <p className="text-lg text-muted-foreground">
           Connect drivers with racing teams. Find your perfect match and accelerate your racing
-          career.
+          career in real-world racing or sim racing.
         </p>
       </div>
 
@@ -39,7 +39,7 @@ export default function MotorsportsPage() {
                 <p className="text-lg text-muted-foreground leading-relaxed">
                   Renegade Motorsports is the premier platform connecting talented drivers with
                   professional racing teams. Whether you're a seasoned professional or an
-                  up-and-coming driver, find your perfect match and accelerate your racing career.
+                  up-and-coming driver in real-world racing or sim racing, find your perfect match and accelerate your racing career.
                 </p>
               </div>
               <div className="hidden md:block">

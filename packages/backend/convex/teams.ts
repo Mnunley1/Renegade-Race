@@ -8,6 +8,14 @@ export const create = mutation({
     description: v.string(),
     logoUrl: v.optional(v.string()),
     location: v.string(),
+    racingType: v.optional(
+      v.union(
+        v.literal('real-world'),
+        v.literal('sim-racing'),
+        v.literal('both')
+      )
+    ),
+    simRacingPlatforms: v.optional(v.array(v.string())),
     specialties: v.array(v.string()),
     availableSeats: v.number(),
     requirements: v.array(v.string()),
@@ -52,6 +60,14 @@ export const update = mutation({
     description: v.optional(v.string()),
     logoUrl: v.optional(v.string()),
     location: v.optional(v.string()),
+    racingType: v.optional(
+      v.union(
+        v.literal('real-world'),
+        v.literal('sim-racing'),
+        v.literal('both')
+      )
+    ),
+    simRacingPlatforms: v.optional(v.array(v.string())),
     specialties: v.optional(v.array(v.string())),
     availableSeats: v.optional(v.number()),
     requirements: v.optional(v.array(v.string())),
@@ -93,6 +109,13 @@ export const update = mutation({
 export const list = query({
   args: {
     location: v.optional(v.string()),
+    racingType: v.optional(
+      v.union(
+        v.literal('real-world'),
+        v.literal('sim-racing'),
+        v.literal('both')
+      )
+    ),
     specialties: v.optional(v.array(v.string())),
     availableSeats: v.optional(v.number()),
   },
@@ -104,6 +127,15 @@ export const list = query({
     if (args.location) {
       teamsQuery = teamsQuery.filter(q =>
         q.eq(q.field('location'), args.location)
+      );
+    }
+
+    if (args.racingType) {
+      teamsQuery = teamsQuery.filter(q =>
+        q.or(
+          q.eq(q.field('racingType'), args.racingType),
+          q.eq(q.field('racingType'), 'both')
+        )
       );
     }
 
