@@ -47,9 +47,39 @@ const COMMON_CATEGORIES = [
   "Club Racing",
   "Vintage Racing",
   "Track Days",
+  // Sim Racing Categories
+  "iRacing",
+  "Assetto Corsa Competizione",
+  "Gran Turismo",
+  "F1 Esports",
+  "Sim Racing - GT",
+  "Sim Racing - Formula",
+  "Sim Racing - Endurance",
+  "Sim Racing - Oval",
 ]
 
-const AVAILABILITY_OPTIONS = ["weekends", "weekdays", "evenings", "flexible"]
+const SIM_RACING_PLATFORMS = [
+  "iRacing",
+  "Assetto Corsa Competizione",
+  "Gran Turismo 7",
+  "F1 24",
+  "rFactor 2",
+  "RaceRoom",
+  "Automobilista 2",
+  "Other",
+]
+
+const RACING_TYPES = [
+  { value: "real-world", label: "Real-World Racing" },
+  { value: "sim-racing", label: "Sim Racing" },
+  { value: "both", label: "Both" },
+]
+
+const AVAILABILITY_OPTIONS = [
+  { value: "single-race", label: "Single Race" },
+  { value: "multi-race", label: "Multi-Race" },
+  { value: "season-commitment", label: "Season Commitment" },
+]
 
 export default function CreateDriverProfilePage() {
   const router = useRouter()
@@ -59,6 +89,9 @@ export default function CreateDriverProfilePage() {
     bio: "",
     achievements: "",
     experience: "",
+    racingType: "",
+    simRacingPlatforms: [] as string[],
+    simRacingRating: "",
     location: "",
     licenses: [] as string[],
     preferredCategories: [] as string[],
@@ -103,6 +136,9 @@ export default function CreateDriverProfilePage() {
       await createDriverProfile({
         bio: formData.bio,
         experience: experienceMap[formData.experience] || "beginner",
+        racingType: formData.racingType ? (formData.racingType as "real-world" | "sim-racing" | "both") : undefined,
+        simRacingPlatforms: formData.simRacingPlatforms.length > 0 ? formData.simRacingPlatforms : undefined,
+        simRacingRating: formData.simRacingRating || undefined,
         licenses: formData.licenses,
         preferredCategories: formData.preferredCategories,
         availability: formData.availability,
@@ -167,6 +203,13 @@ export default function CreateDriverProfilePage() {
     setFormData({
       ...formData,
       availability: toggleArrayValue(formData.availability, availability),
+    })
+  }
+
+  const handleSimPlatformToggle = (platform: string) => {
+    setFormData({
+      ...formData,
+      simRacingPlatforms: toggleArrayValue(formData.simRacingPlatforms, platform),
     })
   }
 
@@ -285,6 +328,100 @@ export default function CreateDriverProfilePage() {
                   />
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Racing Type */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Racing Type</CardTitle>
+              <CardDescription>
+                Select whether you participate in real-world racing, sim racing, or both
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="racingType">Racing Type *</Label>
+                <Select
+                  onValueChange={(value) => setFormData({ ...formData, racingType: value })}
+                  required
+                  value={formData.racingType}
+                >
+                  <SelectTrigger id="racingType">
+                    <SelectValue placeholder="Select racing type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {RACING_TYPES.map((type) => (
+                      <SelectItem key={type.value} value={type.value}>
+                        {type.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {(formData.racingType === "sim-racing" || formData.racingType === "both") && (
+                <>
+                  <Separator />
+                  <div className="space-y-3">
+                    <Label>Sim Racing Platforms</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {SIM_RACING_PLATFORMS.map((platform) => (
+                        <button
+                          className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition-colors hover:bg-accent"
+                          key={platform}
+                          onClick={(e) => {
+                            e.preventDefault()
+                            handleSimPlatformToggle(platform)
+                          }}
+                          type="button"
+                        >
+                          {formData.simRacingPlatforms.includes(platform) && (
+                            <Check className="size-3 text-primary" />
+                          )}
+                          {platform}
+                        </button>
+                      ))}
+                    </div>
+                    {formData.simRacingPlatforms.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {formData.simRacingPlatforms.map((platform) => (
+                          <span
+                            className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-1 text-primary text-xs"
+                            key={platform}
+                          >
+                            {platform}
+                            <button
+                              className="hover:text-primary/80"
+                              onClick={(e) => {
+                                e.preventDefault()
+                                handleSimPlatformToggle(platform)
+                              }}
+                              type="button"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="simRacingRating">Sim Racing Rating (Optional)</Label>
+                    <Input
+                      id="simRacingRating"
+                      name="simRacingRating"
+                      onChange={handleChange}
+                      placeholder="e.g., A License, iRating: 3500, S Rating"
+                      value={formData.simRacingRating}
+                    />
+                    <p className="text-muted-foreground text-xs">
+                      Your rating or license level on your primary sim racing platform
+                    </p>
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
 
@@ -411,17 +548,17 @@ export default function CreateDriverProfilePage() {
                   {AVAILABILITY_OPTIONS.map((option) => (
                     <button
                       className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition-colors hover:bg-accent"
-                      key={option}
+                      key={option.value}
                       onClick={(e) => {
                         e.preventDefault()
-                        handleAvailabilityToggle(option)
+                        handleAvailabilityToggle(option.value)
                       }}
                       type="button"
                     >
-                      {formData.availability.includes(option) && (
+                      {formData.availability.includes(option.value) && (
                         <Check className="size-3 text-primary" />
                       )}
-                      {option.charAt(0).toUpperCase() + option.slice(1)}
+                      {option.label}
                     </button>
                   ))}
                 </div>

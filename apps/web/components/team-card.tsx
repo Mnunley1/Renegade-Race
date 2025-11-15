@@ -11,6 +11,8 @@ interface TeamCardProps extends ComponentProps<"div"> {
   name: string
   logoUrl?: string
   location: string
+  racingType?: "real-world" | "sim-racing" | "both"
+  simRacingPlatforms?: string[]
   specialties: string[]
   availableSeats: number
   requirements?: string[]
@@ -26,6 +28,8 @@ export function TeamCard({
   name,
   logoUrl,
   location,
+  racingType,
+  simRacingPlatforms,
   specialties,
   availableSeats,
   requirements,
@@ -66,9 +70,18 @@ export function TeamCard({
               <h3 className="font-bold text-xl transition-colors group-hover:text-primary">
                 {name}
               </h3>
-              <div className="mt-2 flex items-center gap-2 text-muted-foreground text-sm">
-                <MapPin className="size-4" />
-                <span>{location}</span>
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-muted-foreground text-sm">
+                <div className="flex items-center gap-2">
+                  <MapPin className="size-4" />
+                  <span>{location}</span>
+                </div>
+                {racingType && (
+                  <Badge variant="outline" className="text-xs">
+                    {racingType === "sim-racing" ? "🎮 Sim Racing" : 
+                     racingType === "both" ? "🏎️🎮 Both" : 
+                     "🏎️ Real-World"}
+                  </Badge>
+                )}
               </div>
             </div>
 

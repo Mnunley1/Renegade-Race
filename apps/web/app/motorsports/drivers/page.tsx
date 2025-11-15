@@ -1,17 +1,28 @@
 "use client"
 
 import { useQuery } from "convex/react"
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent } from "@workspace/ui/components/card"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@workspace/ui/components/select"
 import { ArrowLeft, Plus } from "lucide-react"
 import Link from "next/link"
 import { DriverCard } from "@/components/driver-card"
 import { api } from "@/lib/convex"
 
 export default function DriversPage() {
+  const [racingTypeFilter, setRacingTypeFilter] = useState<string>("all")
+
   // Fetch drivers from database
-  const driversData = useQuery(api.driverProfiles.list, {})
+  const driversData = useQuery(api.driverProfiles.list, {
+    racingType: racingTypeFilter !== "all" ? (racingTypeFilter as "real-world" | "sim-racing" | "both") : undefined,
+  })
 
   // Map drivers data to the format expected by DriverCard
   const drivers = useMemo(() => {
@@ -22,6 +33,9 @@ export default function DriversPage() {
       avatarUrl: driver.user?.avatarUrl,
       location: driver.location,
       experience: driver.experience,
+      racingType: driver.racingType,
+      simRacingPlatforms: driver.simRacingPlatforms,
+      simRacingRating: driver.simRacingRating,
       licenses: driver.licenses,
       preferredCategories: driver.preferredCategories,
       bio: driver.bio,
@@ -53,12 +67,23 @@ export default function DriversPage() {
         </Link>
       </div>
 
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-muted-foreground text-sm">
           {driversData === undefined
             ? "Loading drivers..."
             : `Showing ${drivers.length} ${drivers.length === 1 ? "driver" : "drivers"}`}
         </p>
+        <Select value={racingTypeFilter} onValueChange={setRacingTypeFilter}>
+          <SelectTrigger className="w-[200px]">
+            <SelectValue placeholder="Filter by type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Types</SelectItem>
+            <SelectItem value="real-world">Real-World</SelectItem>
+            <SelectItem value="sim-racing">Sim Racing</SelectItem>
+            <SelectItem value="both">Both</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {driversData === undefined ? (
