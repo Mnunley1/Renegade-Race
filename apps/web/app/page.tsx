@@ -74,6 +74,7 @@ export default function HomePage() {
             onAbort={() => setHeroVideoFailed(true)}
             onError={() => setHeroVideoFailed(true)}
             playsInline
+            poster="/images/hero-vid-thumbnail.png"
           >
             <source src="/videos/renegade-hero-video.mp4" type="video/mp4" />
           </video>
