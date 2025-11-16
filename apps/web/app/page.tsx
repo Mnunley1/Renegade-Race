@@ -11,7 +11,9 @@ import { VehicleCard } from "@/components/vehicle-card"
 import { api } from "@/lib/convex"
 
 export default function HomePage() {
-  // Track video load error
+  // Track video load error for hero section
+  const [heroVideoFailed, setHeroVideoFailed] = useState(false)
+  // Track video load error for about section
   const [videoError, setVideoError] = useState(false)
 
   // Fetch vehicles from Convex
@@ -49,28 +51,33 @@ export default function HomePage() {
     <div className="space-y-32 pb-32">
       {/* Hero Section */}
       <section className="relative h-screen max-h-[900px] min-h-[600px] overflow-hidden">
-        {/* Fallback Background Image */}
-        <div className="absolute inset-0">
-          <Image
-            alt="Racing on track"
-            className="object-cover"
-            fill
-            priority
-            src="/images/clement-delacre-JuEQI7nssh0-unsplash.jpg"
-          />
-        </div>
+        {/* Fallback Background Image - only shown when video fails */}
+        {heroVideoFailed && (
+          <div className="absolute inset-0">
+            <Image
+              alt="Racing on track"
+              className="object-cover"
+              fill
+              priority
+              src="/images/clement-delacre-JuEQI7nssh0-unsplash.jpg"
+            />
+          </div>
+        )}
 
-        {/* Video Background */}
-        <video
-          autoPlay
-          className="absolute inset-0 h-full w-full object-cover"
-          loop
-          muted
-          playsInline
-          poster="/images/clement-delacre-JuEQI7nssh0-unsplash.jpg"
-        >
-          <source src="/videos/renegade-hero-video.mp4" type="video/mp4" />
-        </video>
+        {/* Video Background - only shown when video hasn't failed */}
+        {!heroVideoFailed && (
+          <video
+            autoPlay
+            className="absolute inset-0 h-full w-full object-cover"
+            loop
+            muted
+            onAbort={() => setHeroVideoFailed(true)}
+            onError={() => setHeroVideoFailed(true)}
+            playsInline
+          >
+            <source src="/videos/renegade-hero-video.mp4" type="video/mp4" />
+          </video>
+        )}
 
         {/* Dark Overlay for better text readability */}
         <div className="absolute inset-0 bg-black/50" />
@@ -304,7 +311,7 @@ export default function HomePage() {
                 playsInline
                 preload="metadata"
               >
-                <source src="/videos/renegade_promo_video.mp4" type="video/mp4" />
+                <source src="/videos/Renegade_promo_video.mp4" type="video/mp4" />
                 Your browser does not support the video tag.
               </video>
             )}
