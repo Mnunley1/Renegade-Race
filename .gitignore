@@ -34,5 +34,3 @@ npm-debug.log*
 # Misc
 .DS_Store
 *.pem
-
-apps/web/public/videos/renegade-hero-vid.mp4
