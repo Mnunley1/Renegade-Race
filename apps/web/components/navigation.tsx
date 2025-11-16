@@ -22,7 +22,7 @@ export function Navigation() {
                 src="/logo.png"
                 width={32}
               />
-              <span className="font-semibold text-foreground text-lg tracking-tight">Renegade</span>
+              <span className="font-semibold text-foreground text-lg tracking-tight" style={{ fontFamily: 'var(--font-header), sans-serif' }}>Renegade</span>
             </Link>
             <div className="hidden items-center gap-8 md:flex">
               <Link
