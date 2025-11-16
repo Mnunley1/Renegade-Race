@@ -1,0 +1,125 @@
+# Renegade Rentals - Monorepo Development Rules
+
+## Tech Stack
+- **Framework**: Next.js 15 with App Router
+- **Language**: TypeScript 5.7+
+- **React**: 19.x
+- **Styling**: Tailwind CSS v4
+- **Linting**: Biome (not ESLint)
+- **Build**: Turbo (pnpm workspace)
+- **Package Manager**: pnpm 10.4.1
+
+## Code Style & Formatting
+- Use Biome for all linting and formatting (already configured in biome.jsonc)
+- Follow the existing code style: 2-space indentation, double quotes, no semicolons (AS needed mode)
+- Maximum line width: 100 characters
+- Trailing commas: ES5 style
+- Line endings: LF
+
+## TypeScript Best Practices
+- Always use explicit types for function parameters and return types
+- Prefer type imports (`import type`) for types-only imports
+- Use interface for object shapes, type for unions/intersections
+- Leverage `React.ComponentProps` and utility types for component props
+- Avoid `any` - use `unknown` if type is truly unknown
+- Use const assertions where appropriate
+
+## React Best Practices
+- Use React 19 features appropriately
+- Prefer server components by default (only use "use client" when needed)
+- Use named exports for components, default exports for pages
+- Props should be destructured with explicit typing
+- Use async/await properly in server components
+- Implement proper error boundaries and loading states
+
+## Component Patterns
+- Follow the shadcn/ui component pattern for reusable UI components
+- Components go in `packages/ui/src/components/`
+- Use CVA (class-variance-authority) for variant-based styling
+- Always use the `cn()` utility from `@workspace/ui/lib/utils` for className merging
+- Implement proper accessibility (aria-labels, keyboard navigation, etc.)
+- Use Radix UI primitives where appropriate
+
+## Monorepo Structure
+- **Apps**: User-facing applications in `apps/` directory
+- **Packages**: Shared code in `packages/` directory
+- **Workspace imports**: Always import from `@workspace/ui/*` for UI components
+- Keep workspace dependencies in sync
+- Respect build dependencies (packages build before apps)
+
+## Performance Guidelines
+- Use Next.js 15 features like partial prerendering and streamed responses
+- Implement proper memoization (useMemo, useCallback) for expensive computations
+- Optimize images and assets appropriately
+- Use React Server Components to reduce client bundle size
+- Implement proper code splitting
+- Avoid unnecessary re-renders
+
+## File Organization
+- **Apps**: Use Next.js App Router structure with `app/` directory
+- **Components**: One component per file in `src/components/`
+- **Hooks**: Custom hooks in `src/hooks/`
+- **Utilities**: Shared utilities in `src/lib/`
+- Use colocation for tightly coupled files when appropriate
+
+## Import Patterns
+```typescript
+// Correct import from workspace UI package
+import { Button } from "@workspace/ui/components/button"
+import { cn } from "@workspace/ui/lib/utils"
+
+// Type imports
+import type { VariantProps } from "class-variance-authority"
+
+// React types
+import type * as React from "react"
+```
+
+## Code Quality
+- Write self-documenting code with clear variable names
+- Keep functions small and focused (single responsibility)
+- Add JSDoc comments for public APIs and complex logic
+- Handle edge cases and error states
+- Write defensive code that handles null/undefined safely
+
+## Security
+- Never hardcode secrets or API keys
+- Use environment variables for configuration
+- Sanitize user inputs
+- Implement proper authentication/authorization
+
+## Testing Strategy
+- Write tests for business logic and critical paths
+- Test error states and edge cases
+- Keep tests maintainable and readable
+
+## Git Workflow
+- Branch from `dev-build` for new features
+- Write clear, descriptive commit messages
+- Keep commits atomic and focused
+
+## When Generating Code
+- Always export components properly (named exports for components, default for pages)
+- Include proper TypeScript types
+- Follow the existing patterns in the codebase
+- Use Tailwind classes from the existing design system
+- Implement responsive design where applicable
+- Ensure proper semantic HTML
+- Add proper loading and error states
+- Consider accessibility requirements
+
+## Common Patterns
+- Server actions for form submissions
+- Server components for data fetching
+- Client components only when interactivity is needed
+- Proper suspense boundaries for async data
+- Use searchParams appropriately in Next.js 15
+
+## Performance Optimization Checklist
+- [ ] Components are properly memoized when needed
+- [ ] No unnecessary re-renders
+- [ ] Proper use of React 19 streaming and RSC
+- [ ] Images are optimized
+- [ ] Bundle size is considered
+- [ ] Database queries are optimized
+- [ ] Proper caching strategies are implemented

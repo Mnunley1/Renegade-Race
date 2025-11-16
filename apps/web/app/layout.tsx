@@ -1,16 +1,25 @@
-import { Geist, Geist_Mono } from "next/font/google"
-
+import { ClerkProvider } from "@clerk/nextjs"
+import { ThemeProvider } from "@workspace/ui/components/theme-provider"
+import { Lato, Oxanium } from "next/font/google"
 import "@workspace/ui/globals.css"
+import { LayoutWrapper } from "@/components/layout-wrapper"
 import { Providers } from "@/components/providers"
 
-const fontSans = Geist({
+const fontHeader = Oxanium({
   subsets: ["latin"],
-  variable: "--font-sans",
+  variable: "--font-header",
+  weight: "400",
+  display: "swap",
+  preload: true,
+  style: "normal",
 })
 
-const fontMono = Geist_Mono({
+const fontBody = Lato({
   subsets: ["latin"],
-  variable: "--font-mono",
+  variable: "--font-body",
+  weight: ["300", "400", "700"] as const,
+  preload: true,
+  style: "normal",
 })
 
 export default function RootLayout({
@@ -19,10 +28,22 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={`${fontSans.variable} ${fontMono.variable} font-sans antialiased`}>
-        <Providers>{children}</Providers>
-      </body>
-    </html>
+    <ClerkProvider>
+      <html lang="en" suppressHydrationWarning>
+        <body className={`${fontHeader.variable} ${fontBody.variable} font-sans antialiased`}>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="light"
+            disableTransitionOnChange
+            enableColorScheme
+            enableSystem
+          >
+            <Providers>
+              <LayoutWrapper>{children}</LayoutWrapper>
+            </Providers>
+          </ThemeProvider>
+        </body>
+      </html>
+    </ClerkProvider>
   )
 }
