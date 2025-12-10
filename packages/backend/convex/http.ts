@@ -2,9 +2,10 @@ import type { WebhookEvent } from '@clerk/backend';
 import { httpRouter } from 'convex/server';
 import Stripe from 'stripe';
 import { Webhook } from 'svix';
-import { api, internal } from './_generated/api';
+import { api, internal, components } from './_generated/api';
 import { httpAction } from './_generated/server';
 import { resendComponent } from './emails';
+import { registerRoutes } from '@convex-dev/stripe';
 
 // Helper function to get Stripe instance
 function getStripe(): Stripe {
@@ -19,40 +20,79 @@ function getStripe(): Stripe {
 
 const http = httpRouter();
 
-http.route({
-  path: '/stripe/webhook',
-  method: 'POST',
-  handler: httpAction(async (ctx, request) => {
-    const body = await request.text();
-    const signature = request.headers.get('stripe-signature');
-
-    if (!signature) {
-      return new Response('No signature', { status: 400 });
-    }
-
-    try {
-      const stripe = getStripe();
-      const event = await stripe.webhooks.constructEventAsync(
-        body,
-        signature,
-        process.env.STRIPE_WEBHOOK_SECRET!
-      );
-
-      console.log('Received webhook event:', event.type);
-
-      // Handle the event
-      await ctx.runMutation(api.stripe.handleWebhook, {
-        eventType: event.type,
-        paymentIntentId: (event.data.object as Stripe.PaymentIntent).id,
-        data: event.data.object,
+// Register Stripe component webhook routes with custom event handlers
+registerRoutes(http, components.stripe, {
+  webhookPath: '/stripe/webhook',
+  events: {
+    // Custom handler for payment_intent.succeeded
+    'payment_intent.succeeded': async (ctx, event: Stripe.PaymentIntentSucceededEvent) => {
+      const paymentIntent = event.data.object;
+      
+      // Find payment by Stripe payment intent ID
+      const payment = await ctx.runQuery(api.stripe.findPaymentByStripeIntent, {
+        stripePaymentIntentId: paymentIntent.id,
       });
 
-      return new Response('OK', { status: 200 });
-    } catch (error) {
-      console.error('Webhook error:', error);
-      return new Response('Webhook error', { status: 400 });
-    }
-  }),
+      if (payment) {
+        // Update your custom payment record
+        await ctx.runMutation(api.stripe.handlePaymentSuccess, {
+          paymentId: payment._id,
+          stripeChargeId: paymentIntent.latest_charge as string,
+        });
+      }
+    },
+
+    // Custom handler for payment_intent.payment_failed
+    'payment_intent.payment_failed': async (ctx, event: Stripe.PaymentIntentPaymentFailedEvent) => {
+      const paymentIntent = event.data.object;
+      
+      const payment = await ctx.runQuery(api.stripe.findPaymentByStripeIntent, {
+        stripePaymentIntentId: paymentIntent.id,
+      });
+
+      if (payment) {
+        await ctx.runMutation(api.stripe.handlePaymentFailure, {
+          paymentId: payment._id,
+          failureReason: paymentIntent.last_payment_error?.message,
+        });
+      }
+    },
+
+    // Handle charge.dispute.created
+    'charge.dispute.created': async (ctx, event: Stripe.ChargeDisputeCreatedEvent) => {
+      const charge = event.data.object;
+      const paymentIntentId = charge.payment_intent as string;
+      
+      if (paymentIntentId) {
+        const payment = await ctx.runQuery(api.stripe.findPaymentByStripeIntent, {
+          stripePaymentIntentId: paymentIntentId,
+        });
+
+        if (payment) {
+          console.log('Dispute created for payment:', payment._id);
+          // You can add dispute handling logic here
+        }
+      }
+    },
+
+    // Handle checkout.session.completed
+    'checkout.session.completed': async (ctx, event: Stripe.CheckoutSessionCompletedEvent) => {
+      const session = event.data.object;
+      const paymentIntentId = session.payment_intent as string;
+      
+      if (paymentIntentId) {
+        const payment = await ctx.runQuery(api.stripe.findPaymentByStripeIntent, {
+          stripePaymentIntentId: paymentIntentId,
+        });
+
+        if (payment) {
+          // Payment success is already handled by payment_intent.succeeded
+          // But we can add additional logic here if needed
+          console.log('Checkout session completed for payment:', payment._id);
+        }
+      }
+    },
+  },
 });
 
 // Add this route to your http router (after the Stripe route)

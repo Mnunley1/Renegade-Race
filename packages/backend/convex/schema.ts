@@ -17,6 +17,16 @@ export default defineSchema({
       v.union(v.literal('driver'), v.literal('team'), v.literal('both'))
     ),
     isBanned: v.optional(v.boolean()),
+    // Stripe Connect fields
+    stripeAccountId: v.optional(v.string()),
+    stripeAccountStatus: v.optional(
+      v.union(
+        v.literal('pending'),
+        v.literal('active'),
+        v.literal('restricted'),
+        v.literal('disabled')
+      )
+    ),
   }).index('by_external_id', ['externalId']),
 
   tracks: defineTable({
@@ -525,8 +535,11 @@ export default defineSchema({
       v.literal('partially_refunded')
     ),
     stripePaymentIntentId: v.optional(v.string()),
+    stripeCheckoutSessionId: v.optional(v.string()),
+    stripeCustomerId: v.optional(v.string()),
     stripeChargeId: v.optional(v.string()),
     stripeTransferId: v.optional(v.string()), // For Connect transfers
+    stripeAccountId: v.optional(v.string()), // Owner's Connect account ID
     refundAmount: v.optional(v.number()),
     refundReason: v.optional(v.string()),
     failureReason: v.optional(v.string()),
@@ -545,7 +558,9 @@ export default defineSchema({
     .index('by_renter', ['renterId'])
     .index('by_owner', ['ownerId'])
     .index('by_status', ['status'])
-    .index('by_stripe_payment_intent', ['stripePaymentIntentId']),
+    .index('by_stripe_payment_intent', ['stripePaymentIntentId'])
+    .index('by_stripe_checkout_session', ['stripeCheckoutSessionId'])
+    .index('by_stripe_customer', ['stripeCustomerId']),
 
   // Disputes table
   disputes: defineTable({
