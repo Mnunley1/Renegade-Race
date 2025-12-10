@@ -1,6 +1,10 @@
 import { v } from 'convex/values';
 import type { Id } from './_generated/dataModel';
 import { mutation, query } from './_generated/server';
+import {
+  getReviewResponseEmailTemplate,
+  sendTransactionalEmail,
+} from './emails';
 
 // Get review by completion ID for current user
 export const getByCompletion = query({
@@ -379,9 +383,43 @@ export const submitResponse = mutation({
         respondedAt: Date.now(),
       },
       updatedAt: Date.now(),
-    });
+    })
 
-    return args.reviewId;
+    // Send email to reviewer about review response
+    try {
+      const [vehicle, reviewer, reviewed] = await Promise.all([
+        ctx.db.get(review.vehicleId),
+        ctx.db
+          .query('users')
+          .withIndex('by_external_id', q =>
+            q.eq('externalId', review.reviewerId)
+          )
+          .first(),
+        ctx.db
+          .query('users')
+          .withIndex('by_external_id', q =>
+            q.eq('externalId', review.reviewedId)
+          )
+          .first(),
+      ])
+
+      if (vehicle && reviewer?.email && reviewed) {
+        const vehicleName = `${vehicle.year} ${vehicle.make} ${vehicle.model}`
+        const webUrl = process.env.WEB_URL || 'https://renegaderentals.com'
+        const template = getReviewResponseEmailTemplate({
+          reviewerName: reviewer.name || 'Guest',
+          reviewedName: reviewed.name || 'Guest',
+          vehicleName,
+          reviewUrl: `${webUrl}/profile`,
+        })
+        await sendTransactionalEmail(ctx, reviewer.email, template)
+      }
+    } catch (error) {
+      console.error('Failed to send review response email:', error)
+      // Don't fail the mutation if email fails
+    }
+
+    return args.reviewId
   },
 });
 
