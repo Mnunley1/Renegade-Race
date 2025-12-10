@@ -1,5 +1,9 @@
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
+import {
+  getNewReviewEmailTemplate,
+  sendTransactionalEmail,
+} from './emails';
 
 // Create a new rental completion record
 export const create = mutation({
@@ -364,14 +368,45 @@ export const submitReview = mutation({
       isModerated: false,
       createdAt: Date.now(),
       updatedAt: Date.now(),
-    });
+    })
+
+    // Send email to reviewed user about new review
+    try {
+      const [vehicle, reviewer, reviewed] = await Promise.all([
+        ctx.db.get(completion.vehicleId),
+        ctx.db
+          .query('users')
+          .withIndex('by_external_id', q => q.eq('externalId', identity.subject))
+          .first(),
+        ctx.db
+          .query('users')
+          .withIndex('by_external_id', q => q.eq('externalId', reviewedId))
+          .first(),
+      ])
+
+      if (vehicle && reviewer && reviewed?.email) {
+        const vehicleName = `${vehicle.year} ${vehicle.make} ${vehicle.model}`
+        const webUrl = process.env.WEB_URL || 'https://renegaderentals.com'
+        const template = getNewReviewEmailTemplate({
+          reviewedName: reviewed.name || 'Guest',
+          reviewerName: reviewer.name || 'Guest',
+          vehicleName,
+          rating: args.rating,
+          reviewUrl: `${webUrl}/profile`,
+        })
+        await sendTransactionalEmail(ctx, reviewed.email, template)
+      }
+    } catch (error) {
+      console.error('Failed to send new review email:', error)
+      // Don't fail the mutation if email fails
+    }
 
     // TODO: Update the reviewed user's rating via scheduler
     // await ctx.scheduler.runAfter(0, api.reviews.updateUserRating, {
     //   userId: reviewedId,
     // });
 
-    return reviewId;
+    return reviewId
   },
 });
 

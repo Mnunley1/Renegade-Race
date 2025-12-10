@@ -6,6 +6,10 @@ import {
   type QueryCtx,
   query,
 } from './_generated/server';
+import {
+  getWelcomeEmailTemplate,
+  sendTransactionalEmail,
+} from './emails';
 
 export const current = query({
   args: {},
@@ -22,18 +26,33 @@ export const upsertFromClerk = internalMutation({
   async handler(ctx, { data }) {
     const userData = data as UserJSON; // Type assertion for Clerk data
     const user = await userByExternalId(ctx, data.id);
-    if (user === null) {
+    const isNewUser = user === null;
+    const userName =
+      `${userData.first_name} ${userData.last_name}`.trim() ||
+      'Unknown User';
+    const userEmail = userData.email_addresses?.[0]?.email_address;
+
+    if (isNewUser) {
       await ctx.db.insert('users', {
         externalId: data.id,
-        name:
-          `${userData.first_name} ${userData.last_name}`.trim() ||
-          'Unknown User',
+        name: userName,
+        email: userEmail,
       });
+
+      // Send welcome email to new user
+      if (userEmail) {
+        try {
+          const template = getWelcomeEmailTemplate(userName);
+          await sendTransactionalEmail(ctx, userEmail, template);
+        } catch (error) {
+          console.error('Failed to send welcome email:', error);
+          // Don't fail the mutation if email fails
+        }
+      }
     } else {
       await ctx.db.patch(user._id, {
-        name:
-          `${userData.first_name} ${userData.last_name}`.trim() ||
-          'Unknown User',
+        name: userName,
+        email: userEmail || user.email, // Update email if provided
       });
     }
   },

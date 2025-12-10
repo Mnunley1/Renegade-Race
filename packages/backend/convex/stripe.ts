@@ -3,6 +3,11 @@ import Stripe from 'stripe';
 import { api } from './_generated/api';
 import type { Id } from './_generated/dataModel';
 import { action, mutation, query } from './_generated/server';
+import {
+  getPaymentSucceededEmailTemplate,
+  getPaymentFailedEmailTemplate,
+  sendTransactionalEmail,
+} from './emails';
 
 // Helper function to get Stripe instance
 function getStripe(): Stripe {
@@ -483,22 +488,88 @@ export const handleWebhook = mutation({
           status: 'succeeded',
           stripeChargeId: args.data.latest_charge,
           updatedAt: Date.now(),
-        });
+        })
 
         await ctx.db.patch(payment.reservationId, {
           status: 'confirmed',
           paymentStatus: 'paid',
           updatedAt: Date.now(),
-        });
-        break;
+        })
+
+        // Send payment success email
+        try {
+          const [reservation, vehicle, renter] = await Promise.all([
+            ctx.db.get(payment.reservationId),
+            payment.metadata?.vehicleId
+              ? ctx.db.get(payment.metadata.vehicleId as Id<'vehicles'>)
+              : null,
+            ctx.db
+              .query('users')
+              .withIndex('by_external_id', q =>
+                q.eq('externalId', payment.renterId)
+              )
+              .first(),
+          ])
+
+          if (reservation && vehicle && renter?.email) {
+            const vehicleName = `${vehicle.year} ${vehicle.make} ${vehicle.model}`
+            const webUrl = process.env.WEB_URL || 'https://renegaderentals.com'
+
+            const template = getPaymentSucceededEmailTemplate({
+              renterName: renter.name || 'Guest',
+              vehicleName,
+              totalAmount: payment.amount,
+              paymentDate: new Date().toISOString(),
+              reservationUrl: `${webUrl}/trips`,
+            })
+            await sendTransactionalEmail(ctx, renter.email, template)
+          }
+        } catch (error) {
+          console.error('Failed to send payment success email:', error)
+          // Don't fail the webhook if email fails
+        }
+        break
 
       case 'payment_intent.payment_failed':
         await ctx.db.patch(payment._id, {
           status: 'failed',
           failureReason: args.data.last_payment_error?.message,
           updatedAt: Date.now(),
-        });
-        break;
+        })
+
+        // Send payment failure email
+        try {
+          const [reservation, vehicle, renter] = await Promise.all([
+            ctx.db.get(payment.reservationId),
+            payment.metadata?.vehicleId
+              ? ctx.db.get(payment.metadata.vehicleId as Id<'vehicles'>)
+              : null,
+            ctx.db
+              .query('users')
+              .withIndex('by_external_id', q =>
+                q.eq('externalId', payment.renterId)
+              )
+              .first(),
+          ])
+
+          if (reservation && vehicle && renter?.email) {
+            const vehicleName = `${vehicle.year} ${vehicle.make} ${vehicle.model}`
+            const webUrl = process.env.WEB_URL || 'https://renegaderentals.com'
+
+            const template = getPaymentFailedEmailTemplate({
+              renterName: renter.name || 'Guest',
+              vehicleName,
+              totalAmount: payment.amount,
+              failureReason: args.data.last_payment_error?.message,
+              reservationUrl: `${webUrl}/checkout?reservationId=${reservation._id}`,
+            })
+            await sendTransactionalEmail(ctx, renter.email, template)
+          }
+        } catch (error) {
+          console.error('Failed to send payment failure email:', error)
+          // Don't fail the webhook if email fails
+        }
+        break
 
       case 'charge.dispute.created':
         // Handle disputes - could update payment status or create dispute record
