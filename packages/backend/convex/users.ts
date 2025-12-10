@@ -158,6 +158,30 @@ export const updateProfile = mutation({
   },
 });
 
+export const setStripeAccountId = mutation({
+  args: {
+    userId: v.string(),
+    stripeAccountId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db
+      .query('users')
+      .withIndex('by_external_id', q => q.eq('externalId', args.userId))
+      .first();
+
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    await ctx.db.patch(user._id, {
+      stripeAccountId: args.stripeAccountId,
+      stripeAccountStatus: 'pending',
+    });
+
+    return user._id;
+  },
+});
+
 export async function getCurrentUserOrThrow(ctx: QueryCtx) {
   const userRecord = await getCurrentUser(ctx);
   if (!userRecord) throw new Error("Can't get current user");
