@@ -4,6 +4,7 @@ import Stripe from 'stripe';
 import { Webhook } from 'svix';
 import { api, internal } from './_generated/api';
 import { httpAction } from './_generated/server';
+import { resendComponent } from './emails';
 
 // Helper function to get Stripe instance
 function getStripe(): Stripe {
@@ -99,5 +100,14 @@ async function validateRequest(req: Request): Promise<WebhookEvent | null> {
     return null;
   }
 }
+
+// Resend webhook for email status tracking
+http.route({
+  path: '/resend-webhook',
+  method: 'POST',
+  handler: httpAction(async (ctx, req) => {
+    return await resendComponent.handleResendEventWebhook(ctx, req);
+  }),
+});
 
 export default http;
