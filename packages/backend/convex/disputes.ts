@@ -1,5 +1,11 @@
 import { v } from 'convex/values'
 import { mutation, query } from './_generated/server'
+import {
+  getDisputeCreatedEmailTemplate,
+  getDisputeResolvedEmailTemplate,
+  sendTransactionalEmail,
+  getSupportEmail,
+} from './emails'
 
 // Create a dispute for a rental completion
 export const create = mutation({
@@ -62,6 +68,68 @@ export const create = mutation({
       createdAt: Date.now(),
       updatedAt: Date.now(),
     })
+
+    // Send emails to both parties and admin about dispute creation
+    try {
+      const [vehicle, renter, owner] = await Promise.all([
+        ctx.db.get(completion.vehicleId),
+        ctx.db
+          .query('users')
+          .withIndex('by_external_id', q =>
+            q.eq('externalId', completion.renterId)
+          )
+          .first(),
+        ctx.db
+          .query('users')
+          .withIndex('by_external_id', q =>
+            q.eq('externalId', completion.ownerId)
+          )
+          .first(),
+      ])
+
+      if (vehicle) {
+        const vehicleName = `${vehicle.year} ${vehicle.make} ${vehicle.model}`
+        const webUrl = process.env.WEB_URL || 'https://renegaderentals.com'
+        const disputeUrl = `${webUrl}/disputes/${disputeId}`
+
+        // Email to renter
+        if (renter?.email) {
+          const template = getDisputeCreatedEmailTemplate({
+            userName: renter.name || 'Guest',
+            vehicleName,
+            role: 'renter',
+            disputeUrl,
+          })
+          await sendTransactionalEmail(ctx, renter.email, template)
+        }
+
+        // Email to owner
+        if (owner?.email) {
+          const template = getDisputeCreatedEmailTemplate({
+            userName: owner.name || 'Owner',
+            vehicleName,
+            role: 'owner',
+            disputeUrl,
+          })
+          await sendTransactionalEmail(ctx, owner.email, template)
+        }
+
+        // Email to admin
+        const supportEmail = getSupportEmail()
+        if (supportEmail) {
+          const template = getDisputeCreatedEmailTemplate({
+            userName: 'Admin',
+            vehicleName,
+            role: 'admin',
+            disputeUrl: `${webUrl}/admin/disputes/${disputeId}`,
+          })
+          await sendTransactionalEmail(ctx, supportEmail, template)
+        }
+      }
+    } catch (error) {
+      console.error('Failed to send dispute created emails:', error)
+      // Don't fail the mutation if email fails
+    }
 
     return disputeId
   },
@@ -325,6 +393,56 @@ export const resolve = mutation({
         status: 'completed',
         updatedAt: Date.now(),
       })
+    }
+
+    // Send emails to both parties about dispute resolution
+    try {
+      const [vehicle, renter, owner] = await Promise.all([
+        ctx.db.get(dispute.vehicleId),
+        ctx.db
+          .query('users')
+          .withIndex('by_external_id', q =>
+            q.eq('externalId', dispute.renterId)
+          )
+          .first(),
+        ctx.db
+          .query('users')
+          .withIndex('by_external_id', q =>
+            q.eq('externalId', dispute.ownerId)
+          )
+          .first(),
+      ])
+
+      if (vehicle) {
+        const vehicleName = `${vehicle.year} ${vehicle.make} ${vehicle.model}`
+        const webUrl = process.env.WEB_URL || 'https://renegaderentals.com'
+        const disputeUrl = `${webUrl}/disputes/${args.disputeId}`
+
+        // Email to renter
+        if (renter?.email) {
+          const template = getDisputeResolvedEmailTemplate({
+            userName: renter.name || 'Guest',
+            vehicleName,
+            resolution: args.resolution,
+            disputeUrl,
+          })
+          await sendTransactionalEmail(ctx, renter.email, template)
+        }
+
+        // Email to owner
+        if (owner?.email) {
+          const template = getDisputeResolvedEmailTemplate({
+            userName: owner.name || 'Owner',
+            vehicleName,
+            resolution: args.resolution,
+            disputeUrl,
+          })
+          await sendTransactionalEmail(ctx, owner.email, template)
+        }
+      }
+    } catch (error) {
+      console.error('Failed to send dispute resolved emails:', error)
+      // Don't fail the mutation if email fails
     }
 
     return args.disputeId
