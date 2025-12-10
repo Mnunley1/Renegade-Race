@@ -1,6 +1,8 @@
 import { v } from 'convex/values'
 import { mutation, query } from './_generated/server'
 import { Resend } from 'resend'
+import { components } from './_generated/api'
+import { Resend as ResendComponent } from '@convex-dev/resend'
 
 // Helper function to check if user is admin
 async function checkAdmin(ctx: any) {
@@ -23,7 +25,7 @@ async function checkAdmin(ctx: any) {
   return identity
 }
 
-// Initialize Resend client
+// Initialize Resend client (legacy - for sendMassEmail)
 function getResendClient() {
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey) {
@@ -31,6 +33,12 @@ function getResendClient() {
   }
   return new Resend(apiKey)
 }
+
+// Initialize Convex Resend component
+// testMode defaults to true for safety - set RESEND_TEST_MODE=false in production
+export const resendComponent = new ResendComponent(components.resend, {
+  testMode: process.env.RESEND_TEST_MODE !== 'false',
+})
 
 // Send mass email to users
 export const sendMassEmail = mutation({
@@ -134,6 +142,61 @@ export const getEmailHistory = query({
     // This is a placeholder - in production you'd want to store email history in a table
     // For now, we'll return an empty array
     return []
+  },
+})
+
+// Send contact form email to support inbox
+// Public mutation - no authentication required
+export const sendContactFormEmail = mutation({
+  args: {
+    name: v.string(),
+    email: v.string(),
+    subject: v.string(),
+    message: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const supportEmail = process.env.SUPPORT_EMAIL || 'support@renegaderentals.com'
+    const fromEmail = process.env.RESEND_FROM_EMAIL || 'Renegade Rentals <noreply@renegaderentals.com>'
+
+    // Create HTML email content
+    const htmlContent = `
+      <h2>New Contact Form Submission</h2>
+      <p><strong>From:</strong> ${args.name} (${args.email})</p>
+      <p><strong>Subject:</strong> ${args.subject}</p>
+      <hr>
+      <p>${args.message.replace(/\n/g, '<br>')}</p>
+    `
+
+    // Create plain text version
+    const textContent = `
+New Contact Form Submission
+
+From: ${args.name} (${args.email})
+Subject: ${args.subject}
+
+${args.message}
+    `.trim()
+
+    try {
+      // Use the Convex Resend component for reliable email delivery
+      const emailId = await resendComponent.sendEmail(ctx, {
+        from: fromEmail,
+        to: [supportEmail],
+        replyTo: args.email, // Allow replying directly to the customer
+        subject: `Contact Form: ${args.subject}`,
+        html: htmlContent,
+        text: textContent,
+      })
+
+      return {
+        success: true,
+        emailId,
+      }
+    } catch (error) {
+      throw new Error(
+        error instanceof Error ? error.message : 'Failed to send email'
+      )
+    }
   },
 })
 

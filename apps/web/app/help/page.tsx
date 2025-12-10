@@ -65,6 +65,11 @@ export default function HelpPage() {
             "All renters must have proper safety equipment including a DOT-approved helmet, appropriate clothing, and depending on the vehicle, additional safety gear may be required.",
         },
         {
+          question: "What's the difference between DOT and Snell helmets?",
+          answer:
+            "DOT (Department of Transportation) is the minimum legal standard for motorcycle helmets in the US, ensuring basic impact protection. Snell is a voluntary certification with more rigorous testing standards, including multiple impact tests and higher performance thresholds. While DOT approval meets legal requirements, Snell-certified helmets offer enhanced protection and are often preferred for track use. Both are acceptable for rentals, but Snell helmets provide an extra layer of safety for high-performance driving.",
+        },
+        {
           question: "Are vehicles track-ready?",
           answer:
             "All vehicles listed on Renegade have been verified as track-ready by their hosts. We require basic safety inspections before listing.",
@@ -73,6 +78,11 @@ export default function HelpPage() {
           question: "What if the vehicle has mechanical issues?",
           answer:
             "Contact us immediately. We'll work with the host to provide a replacement vehicle or full refund depending on the circumstances.",
+        },
+        {
+          question: "Is track insurance required?",
+          answer:
+            "Track insurance is not required, but it is highly recommended to protect both you and the vehicle. Standard auto insurance typically does not cover track use, so track insurance provides important financial protection in case of accidents or damage during your rental. We recommend obtaining track insurance from a reputable provider before your rental period.",
         },
       ],
     },
