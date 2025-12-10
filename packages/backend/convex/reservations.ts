@@ -1,6 +1,14 @@
 import { v } from 'convex/values';
 import type { Id } from './_generated/dataModel';
 import { mutation, query } from './_generated/server';
+import {
+  getReservationPendingOwnerEmailTemplate,
+  getReservationConfirmedRenterEmailTemplate,
+  getReservationDeclinedRenterEmailTemplate,
+  getReservationCancelledEmailTemplate,
+  getReservationCompletedEmailTemplate,
+  sendTransactionalEmail,
+} from './emails';
 
 // Get reservations for a user (as renter or owner)
 export const getByUser = query({
@@ -263,6 +271,42 @@ export const create = mutation({
       updatedAt: now,
     });
 
+    // Send email to owner about new reservation request
+    try {
+      const [owner, renter] = await Promise.all([
+        ctx.db
+          .query('users')
+          .withIndex('by_external_id', q => q.eq('externalId', vehicle.ownerId))
+          .first(),
+        ctx.db
+          .query('users')
+          .withIndex('by_external_id', q => q.eq('externalId', renterId))
+          .first(),
+      ])
+
+      const ownerEmail = owner?.email || (identity as any).email
+      const renterName = renter?.name || identity.name || 'Guest'
+      const vehicleName = `${vehicle.year} ${vehicle.make} ${vehicle.model}`
+
+      if (ownerEmail) {
+        const webUrl = process.env.WEB_URL || 'https://renegaderentals.com'
+        const template = getReservationPendingOwnerEmailTemplate({
+          ownerName: owner?.name || 'Owner',
+          renterName,
+          vehicleName,
+          startDate: args.startDate,
+          endDate: args.endDate,
+          totalAmount,
+          renterMessage: args.renterMessage,
+          reservationUrl: `${webUrl}/host/reservations`,
+        })
+        await sendTransactionalEmail(ctx, ownerEmail, template)
+      }
+    } catch (error) {
+      console.error('Failed to send reservation created email:', error)
+      // Don't fail the mutation if email fails
+    }
+
     return reservationId;
   },
 });
@@ -298,6 +342,41 @@ export const approve = mutation({
       updatedAt: Date.now(),
     });
 
+    // Send email to renter about confirmed reservation
+    try {
+      const [vehicle, renter] = await Promise.all([
+        ctx.db.get(reservation.vehicleId),
+        ctx.db
+          .query('users')
+          .withIndex('by_external_id', q =>
+            q.eq('externalId', reservation.renterId)
+          )
+          .first(),
+      ])
+
+      if (vehicle && renter) {
+        const renterEmail = renter.email
+        const vehicleName = `${vehicle.year} ${vehicle.make} ${vehicle.model}`
+
+        if (renterEmail) {
+          const webUrl = process.env.WEB_URL || 'https://renegaderentals.com'
+          const template = getReservationConfirmedRenterEmailTemplate({
+            renterName: renter.name || 'Guest',
+            vehicleName,
+            startDate: reservation.startDate,
+            endDate: reservation.endDate,
+            totalAmount: reservation.totalAmount,
+            ownerMessage: args.ownerMessage,
+            reservationUrl: `${webUrl}/trips`,
+          })
+          await sendTransactionalEmail(ctx, renterEmail, template)
+        }
+      }
+    } catch (error) {
+      console.error('Failed to send reservation confirmed email:', error)
+      // Don't fail the mutation if email fails
+    }
+
     return args.reservationId;
   },
 });
@@ -332,6 +411,36 @@ export const decline = mutation({
       ownerMessage: args.ownerMessage,
       updatedAt: Date.now(),
     });
+
+    // Send email to renter about declined reservation
+    try {
+      const [vehicle, renter] = await Promise.all([
+        ctx.db.get(reservation.vehicleId),
+        ctx.db
+          .query('users')
+          .withIndex('by_external_id', q =>
+            q.eq('externalId', reservation.renterId)
+          )
+          .first(),
+      ])
+
+      if (vehicle && renter) {
+        const renterEmail = renter.email
+        const vehicleName = `${vehicle.year} ${vehicle.make} ${vehicle.model}`
+
+        if (renterEmail) {
+          const template = getReservationDeclinedRenterEmailTemplate({
+            renterName: renter.name || 'Guest',
+            vehicleName,
+            ownerMessage: args.ownerMessage,
+          })
+          await sendTransactionalEmail(ctx, renterEmail, template)
+        }
+      }
+    } catch (error) {
+      console.error('Failed to send reservation declined email:', error)
+      // Don't fail the mutation if email fails
+    }
 
     return args.reservationId;
   },
@@ -374,6 +483,55 @@ export const cancel = mutation({
       updatedAt: Date.now(),
     });
 
+    // Send emails to both parties about cancelled reservation
+    try {
+      const [vehicle, renter, owner] = await Promise.all([
+        ctx.db.get(reservation.vehicleId),
+        ctx.db
+          .query('users')
+          .withIndex('by_external_id', q =>
+            q.eq('externalId', reservation.renterId)
+          )
+          .first(),
+        ctx.db
+          .query('users')
+          .withIndex('by_external_id', q =>
+            q.eq('externalId', reservation.ownerId)
+          )
+          .first(),
+      ])
+
+      if (vehicle) {
+        const vehicleName = `${vehicle.year} ${vehicle.make} ${vehicle.model}`
+        const isRenter = reservation.renterId === identity.subject
+
+        // Email to renter
+        if (renter?.email) {
+          const template = getReservationCancelledEmailTemplate({
+            userName: renter.name || 'Guest',
+            vehicleName,
+            role: 'renter',
+            cancellationReason: args.cancellationReason,
+          })
+          await sendTransactionalEmail(ctx, renter.email, template)
+        }
+
+        // Email to owner
+        if (owner?.email) {
+          const template = getReservationCancelledEmailTemplate({
+            userName: owner.name || 'Owner',
+            vehicleName,
+            role: 'owner',
+            cancellationReason: args.cancellationReason,
+          })
+          await sendTransactionalEmail(ctx, owner.email, template)
+        }
+      }
+    } catch (error) {
+      console.error('Failed to send reservation cancelled emails:', error)
+      // Don't fail the mutation if email fails
+    }
+
     return args.reservationId;
   },
 });
@@ -406,6 +564,55 @@ export const complete = mutation({
       status: 'completed',
       updatedAt: Date.now(),
     });
+
+    // Send emails to both parties about completed reservation (prompt for review)
+    try {
+      const [vehicle, renter, owner] = await Promise.all([
+        ctx.db.get(reservation.vehicleId),
+        ctx.db
+          .query('users')
+          .withIndex('by_external_id', q =>
+            q.eq('externalId', reservation.renterId)
+          )
+          .first(),
+        ctx.db
+          .query('users')
+          .withIndex('by_external_id', q =>
+            q.eq('externalId', reservation.ownerId)
+          )
+          .first(),
+      ])
+
+      if (vehicle) {
+        const vehicleName = `${vehicle.year} ${vehicle.make} ${vehicle.model}`
+        const webUrl = process.env.WEB_URL || 'https://renegaderentals.com'
+
+        // Email to renter (prompt to review owner/vehicle)
+        if (renter?.email) {
+          const template = getReservationCompletedEmailTemplate({
+            userName: renter.name || 'Guest',
+            vehicleName,
+            role: 'renter',
+            reviewUrl: `${webUrl}/review/${reservation._id}`,
+          })
+          await sendTransactionalEmail(ctx, renter.email, template)
+        }
+
+        // Email to owner (prompt to review renter)
+        if (owner?.email) {
+          const template = getReservationCompletedEmailTemplate({
+            userName: owner.name || 'Owner',
+            vehicleName,
+            role: 'owner',
+            reviewUrl: `${webUrl}/review/${reservation._id}`,
+          })
+          await sendTransactionalEmail(ctx, owner.email, template)
+        }
+      }
+    } catch (error) {
+      console.error('Failed to send reservation completed emails:', error)
+      // Don't fail the mutation if email fails
+    }
 
     return args.reservationId;
   },
