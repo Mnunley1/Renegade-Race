@@ -13,6 +13,7 @@ import {
   LayoutDashboard,
   LogOut,
   User,
+  Settings,
 } from "lucide-react"
 import { Button } from "@workspace/ui/components/button"
 import {
@@ -32,6 +33,7 @@ const navigation = [
   { name: "Vehicle Approvals", href: "/vehicles/pending", icon: Car },
   { name: "Track Management", href: "/tracks", icon: MapPin },
   { name: "Disputes", href: "/disputes", icon: Shield },
+  { name: "Platform Settings", href: "/settings", icon: Settings },
 ]
 
 export function AdminSidebar() {

@@ -17,6 +17,7 @@
   "dependencies": {
     "@clerk/clerk-sdk-node": "^5.1.6",
     "@convex-dev/resend": "^0.2.1",
+    "@convex-dev/stripe": "^0.1.0",
     "convex": "^1.27.0",
     "resend": "^4.0.0",
     "stripe": "^18.5.0",
