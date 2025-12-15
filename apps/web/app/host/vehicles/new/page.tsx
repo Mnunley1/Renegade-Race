@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation } from "convex/react"
 import { useState } from "react"
+import { useUploadFile } from "@convex-dev/r2/react"
 import { Button } from "@workspace/ui/components/button"
 import {
   Card,
@@ -55,8 +56,9 @@ export default function CreateVehiclePage() {
 
   // Fetch tracks from Convex
   const tracks = useQuery(api.tracks.getAll, {})
-  const generateUploadUrl = useMutation(api.vehicles.generateUploadUrl)
-  const createVehicle = useMutation(api.vehicles.create)
+  const createVehicleWithImages = useMutation(api.vehicles.createVehicleWithImages)
+  // Use R2 upload hook - this handles the entire upload process
+  const uploadFile = useUploadFile(api.r2)
 
   const [formData, setFormData] = useState({
     trackId: "",
@@ -203,22 +205,17 @@ export default function CreateVehiclePage() {
         return
       }
 
-      // For now, convert images to data URLs (base64) and use legacy create
-      // In production, you'd want to upload to Convex storage and process images
-      const imageUrls = await Promise.all(
-        images.map((img) => {
-          return new Promise<string>((resolve) => {
-            const reader = new FileReader()
-            reader.onloadend = () => {
-              resolve(reader.result as string)
-            }
-            reader.readAsDataURL(img.file)
-          })
+      // Upload images to R2 and get keys
+      const imageKeys = await Promise.all(
+        images.map(async (img) => {
+          // useUploadFile handles: generating signed URL, uploading to R2, syncing metadata
+          const key = await uploadFile(img.file)
+          return key
         })
       )
 
-      // Create vehicle with images
-      const vehicleId = await createVehicle({
+      // Create vehicle with R2 image keys
+      const vehicleId = await createVehicleWithImages({
         trackId: formData.trackId as any,
         make: formData.make,
         model: formData.model,
@@ -231,9 +228,11 @@ export default function CreateVehiclePage() {
         engineType: formData.engineType || undefined,
         mileage: formData.mileage ? Number(formData.mileage) : undefined,
         amenities: formData.amenities,
-        images: imageUrls.map((url, index) => ({
-          imageUrl: url,
+        addOns: formData.addOns,
+        images: imageKeys.map((r2Key, index) => ({
+          r2Key,
           isPrimary: index === 0,
+          order: index,
         })),
       })
 
