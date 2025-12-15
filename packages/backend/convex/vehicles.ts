@@ -1,5 +1,6 @@
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
+import { imagePresets, r2 } from './r2';
 
 // Get all active and approved vehicles with optimized images
 export const getAllWithOptimizedImages = query({
@@ -51,9 +52,23 @@ export const getAllWithOptimizedImages = query({
           ctx.db.get(vehicle.trackId),
         ]);
 
-        // Add optimized URLs for each image
+        // Add optimized URLs for each image using ImageKit
         const optimizedImages = await Promise.all(
           images.map(async image => {
+            // Prefer R2 key, fallback to legacy storage IDs or imageUrl
+            if (image.r2Key) {
+              // Use ImageKit with R2 key for optimized delivery
+              return {
+                ...image,
+                thumbnailUrl: imagePresets.thumbnail(image.r2Key),
+                cardUrl: imagePresets.card(image.r2Key),
+                detailUrl: imagePresets.detail(image.r2Key),
+                heroUrl: imagePresets.hero(image.r2Key),
+                originalUrl: imagePresets.original(image.r2Key),
+              };
+            }
+
+            // Fallback to legacy storage IDs or imageUrl
             const [thumbnailUrl, cardUrl, detailUrl, heroUrl] =
               await Promise.all([
                 image.thumbnailStorageId
@@ -200,7 +215,19 @@ export const getVehicleImageById = query({
     const image = await ctx.db.get(args.id);
     if (!image) return null;
 
-    // Get optimized URLs
+    // Prefer R2 key with ImageKit, fallback to legacy storage
+    if (image.r2Key) {
+      return {
+        ...image,
+        thumbnailUrl: imagePresets.thumbnail(image.r2Key),
+        cardUrl: imagePresets.card(image.r2Key),
+        detailUrl: imagePresets.detail(image.r2Key),
+        heroUrl: imagePresets.hero(image.r2Key),
+        originalUrl: imagePresets.original(image.r2Key),
+      };
+    }
+
+    // Fallback to legacy storage IDs
     const [thumbnailUrl, cardUrl, detailUrl, heroUrl] = await Promise.all([
       image.thumbnailStorageId
         ? ctx.storage.getUrl(image.thumbnailStorageId)
@@ -249,9 +276,23 @@ export const getByOwner = query({
           ctx.db.get(vehicle.trackId),
         ]);
 
-        // Add optimized URLs for each image
+        // Add optimized URLs for each image using ImageKit
         const optimizedImages = await Promise.all(
           images.map(async image => {
+            // Prefer R2 key, fallback to legacy storage IDs or imageUrl
+            if (image.r2Key) {
+              // Use ImageKit with R2 key for optimized delivery
+              return {
+                ...image,
+                thumbnailUrl: imagePresets.thumbnail(image.r2Key),
+                cardUrl: imagePresets.card(image.r2Key),
+                detailUrl: imagePresets.detail(image.r2Key),
+                heroUrl: imagePresets.hero(image.r2Key),
+                originalUrl: imagePresets.original(image.r2Key),
+              };
+            }
+
+            // Fallback to legacy storage IDs or imageUrl
             const [thumbnailUrl, cardUrl, detailUrl, heroUrl] =
               await Promise.all([
                 image.thumbnailStorageId
@@ -290,7 +331,7 @@ export const getByOwner = query({
   },
 });
 
-// Generate upload URL for file storage
+// Generate upload URL for file storage (legacy - use R2 mutations instead)
 export const generateUploadUrl = mutation({
   args: {},
   handler: async ctx => {
@@ -330,7 +371,8 @@ export const createVehicleWithImages = mutation({
     ),
     images: v.array(
       v.object({
-        storageId: v.optional(v.id('_storage')),
+        r2Key: v.optional(v.string()), // R2 object key (preferred)
+        storageId: v.optional(v.id('_storage')), // Legacy Convex storage ID
         thumbnailStorageId: v.optional(v.id('_storage')),
         cardStorageId: v.optional(v.id('_storage')),
         detailStorageId: v.optional(v.id('_storage')),
@@ -404,6 +446,7 @@ export const createVehicleWithImages = mutation({
 
         return ctx.db.insert('vehicleImages', {
           vehicleId,
+          r2Key: image.r2Key, // Store R2 key if provided
           storageId: image.storageId,
           thumbnailStorageId: image.thumbnailStorageId,
           cardStorageId: image.cardStorageId,
@@ -655,6 +698,16 @@ export const removeImage = mutation({
     const vehicle = await ctx.db.get(image.vehicleId);
     if (!vehicle || vehicle.ownerId !== identity.subject) {
       throw new Error('Not authorized to modify this vehicle');
+    }
+
+    // Delete from R2 if r2Key exists
+    if (image.r2Key) {
+      try {
+        await r2.deleteObject(ctx, image.r2Key);
+      } catch (error) {
+        console.error(`Failed to delete R2 object ${image.r2Key}:`, error);
+        // Continue with database deletion even if R2 deletion fails
+      }
     }
 
     await ctx.db.delete(args.imageId);
