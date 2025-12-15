@@ -12,7 +12,8 @@ export default defineSchema({
     rating: v.optional(v.number()),
     totalRentals: v.optional(v.number()),
     memberSince: v.optional(v.string()),
-    profileImage: v.optional(v.string()),
+    profileImage: v.optional(v.string()), // Legacy URL field
+    profileImageR2Key: v.optional(v.string()), // R2 object key for profile image
     userType: v.optional(
       v.union(v.literal('driver'), v.literal('team'), v.literal('both'))
     ),
@@ -81,6 +82,7 @@ export default defineSchema({
     cardStorageId: v.optional(v.id('_storage')),
     detailStorageId: v.optional(v.id('_storage')),
     heroStorageId: v.optional(v.id('_storage')),
+    r2Key: v.optional(v.string()), // R2 object key for the original image
     imageUrl: v.string(), // Legacy field for backward compatibility
     isPrimary: v.boolean(),
     order: v.number(),

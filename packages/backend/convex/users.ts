@@ -10,6 +10,7 @@ import {
   getWelcomeEmailTemplate,
   sendTransactionalEmail,
 } from './emails';
+import { r2, imagePresets } from './r2';
 
 export const current = query({
   args: {},
@@ -75,7 +76,8 @@ export const deleteFromClerk = internalMutation({
 
 export const updateProfileImage = mutation({
   args: {
-    storageId: v.id('_storage'),
+    r2Key: v.optional(v.string()), // R2 object key (preferred)
+    storageId: v.optional(v.id('_storage')), // Legacy Convex storage ID
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -102,15 +104,26 @@ export const updateProfileImage = mutation({
       throw new Error('Failed to create or retrieve user');
     }
 
-    // Get the URL from the storage ID
-    const profileImageUrl = await ctx.storage.getUrl(args.storageId);
-    if (!profileImageUrl) {
-      throw new Error('Failed to get image URL from storage');
+    // Prefer R2 key, fallback to legacy storage ID
+    if (args.r2Key) {
+      // Generate ImageKit URL for profile image
+      const profileImageUrl = imagePresets.original(args.r2Key);
+      await ctx.db.patch(user._id, {
+        profileImage: profileImageUrl,
+        profileImageR2Key: args.r2Key,
+      });
+    } else if (args.storageId) {
+      // Legacy: Get the URL from the storage ID
+      const profileImageUrl = await ctx.storage.getUrl(args.storageId);
+      if (!profileImageUrl) {
+        throw new Error('Failed to get image URL from storage');
+      }
+      await ctx.db.patch(user._id, {
+        profileImage: profileImageUrl,
+      });
+    } else {
+      throw new Error('Either r2Key or storageId must be provided');
     }
-
-    await ctx.db.patch(user._id, {
-      profileImage: profileImageUrl,
-    });
 
     return user._id;
   },
