@@ -102,8 +102,7 @@ export default function HostDashboardPage() {
         bookings,
         earnings: Math.round(earnings / 100), // Convert cents to dollars
         image:
-          primaryImage?.cardUrl ||
-          primaryImage?.imageUrl ||
+          primaryImage?.cardUrl ??
           "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=400",
       }
     })
@@ -293,9 +292,7 @@ export default function HostDashboardPage() {
       <div className="mb-8 grid gap-6 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="font-medium text-muted-foreground text-sm">
-              Total Views
-            </CardTitle>
+            <CardTitle className="font-medium text-muted-foreground text-sm">Total Views</CardTitle>
             <Eye className="size-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>

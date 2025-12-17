@@ -1,6 +1,5 @@
 "use client"
 
-import { Suspense } from "react"
 import { useUser } from "@clerk/nextjs"
 import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js"
 import { loadStripe, type StripeElementsOptions } from "@stripe/stripe-js"
@@ -30,7 +29,7 @@ import {
 import Image from "next/image"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { useEffect, useState } from "react"
+import { Suspense, useEffect, useState } from "react"
 import { api } from "@/lib/convex"
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "")
@@ -350,11 +349,7 @@ function CheckoutPageContent() {
   if (reservation && clientSecret) {
     const vehicle = reservation.vehicle
     const primaryImage =
-      vehicle?.images?.find((img) => img.isPrimary)?.cardUrl ||
-      vehicle?.images?.find((img) => img.isPrimary)?.imageUrl ||
-      vehicle?.images?.[0]?.cardUrl ||
-      vehicle?.images?.[0]?.imageUrl ||
-      ""
+      vehicle?.images?.find((img) => img.isPrimary)?.cardUrl || vehicle?.images?.[0]?.cardUrl || ""
 
     const options: StripeElementsOptions = {
       clientSecret,
@@ -523,11 +518,7 @@ function CheckoutPageContent() {
   if (!vehicle) return null
 
   const primaryImage =
-    vehicle.images?.find((img) => img.isPrimary)?.cardUrl ||
-    vehicle.images?.find((img) => img.isPrimary)?.imageUrl ||
-    vehicle.images?.[0]?.cardUrl ||
-    vehicle.images?.[0]?.imageUrl ||
-    ""
+    vehicle.images?.find((img) => img.isPrimary)?.cardUrl || vehicle.images?.[0]?.cardUrl || ""
   // Check if form is valid and dates don't contain blocked dates
   const isValid =
     pickupDate &&

@@ -1,20 +1,20 @@
 "use client"
 
-import { useQuery } from "convex/react"
 import { useUser } from "@clerk/nextjs"
+import type { Id } from "@workspace/backend/convex/_generated/dataModel"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent } from "@workspace/ui/components/card"
 import { Separator } from "@workspace/ui/components/separator"
+import { useQuery } from "convex/react"
 import { Calendar } from "lucide-react"
 import Link from "next/link"
+import { useMemo } from "react"
 import { TripCard } from "@/components/trip-card"
 import { api } from "@/lib/convex"
-import { useMemo } from "react"
-import type { Id } from "@workspace/backend/convex/_generated/dataModel"
 
 export default function TripsPage() {
   const { user } = useUser()
-  
+
   // Fetch user's reservations from Convex (as renter)
   const reservationsData = useQuery(
     api.reservations.getByUser,
@@ -24,7 +24,7 @@ export default function TripsPage() {
   // Map reservations to trips format
   const upcomingTrips = useMemo(() => {
     if (!reservationsData) return []
-    const today = new Date().toISOString().split('T')[0]
+    const today = new Date().toISOString().split("T")[0]
     return reservationsData
       .filter((res) => res.status === "confirmed" && res.endDate >= today)
       .map((res) => {
@@ -35,7 +35,7 @@ export default function TripsPage() {
           reservationId: res._id,
           vehicleId: vehicle._id,
           vehicleName: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
-          vehicleImage: primaryImage?.cardUrl || primaryImage?.imageUrl || "",
+          vehicleImage: primaryImage?.cardUrl ?? "",
           vehicleYear: vehicle.year,
           vehicleMake: vehicle.make,
           vehicleModel: vehicle.model,
@@ -52,31 +52,33 @@ export default function TripsPage() {
         }
       })
       .filter(Boolean) as Array<{
-        reservationId: Id<"reservations">
-        vehicleId: Id<"vehicles">
-        vehicleName: string
-        vehicleImage: string
-        vehicleYear: number
-        vehicleMake: string
-        vehicleModel: string
-        location: string
-        startDate: string
-        endDate: string
-        pickupTime?: string
-        dropoffTime?: string
-        totalDays: number
-        dailyRate: number
-        totalAmount: number
-        status: "pending" | "confirmed" | "cancelled" | "completed" | "declined"
-        addOns?: Array<{ name: string; price: number; description?: string }>
-      }>
+      reservationId: Id<"reservations">
+      vehicleId: Id<"vehicles">
+      vehicleName: string
+      vehicleImage: string
+      vehicleYear: number
+      vehicleMake: string
+      vehicleModel: string
+      location: string
+      startDate: string
+      endDate: string
+      pickupTime?: string
+      dropoffTime?: string
+      totalDays: number
+      dailyRate: number
+      totalAmount: number
+      status: "pending" | "confirmed" | "cancelled" | "completed" | "declined"
+      addOns?: Array<{ name: string; price: number; description?: string }>
+    }>
   }, [reservationsData])
 
   const pastTrips = useMemo(() => {
     if (!reservationsData) return []
-    const today = new Date().toISOString().split('T')[0]
+    const today = new Date().toISOString().split("T")[0]
     return reservationsData
-      .filter((res) => res.status === "completed" || (res.endDate < today && res.status === "confirmed"))
+      .filter(
+        (res) => res.status === "completed" || (res.endDate < today && res.status === "confirmed")
+      )
       .map((res) => {
         const vehicle = res.vehicle
         if (!vehicle) return null
@@ -85,7 +87,7 @@ export default function TripsPage() {
           reservationId: res._id,
           vehicleId: vehicle._id,
           vehicleName: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
-          vehicleImage: primaryImage?.cardUrl || primaryImage?.imageUrl || "",
+          vehicleImage: primaryImage?.cardUrl ?? "",
           vehicleYear: vehicle.year,
           vehicleMake: vehicle.make,
           vehicleModel: vehicle.model,
@@ -102,26 +104,25 @@ export default function TripsPage() {
         }
       })
       .filter(Boolean) as Array<{
-        reservationId: Id<"reservations">
-        vehicleId: Id<"vehicles">
-        vehicleName: string
-        vehicleImage: string
-        vehicleYear: number
-        vehicleMake: string
-        vehicleModel: string
-        location: string
-        startDate: string
-        endDate: string
-        pickupTime?: string
-        dropoffTime?: string
-        totalDays: number
-        dailyRate: number
-        totalAmount: number
-        status: "pending" | "confirmed" | "cancelled" | "completed" | "declined"
-        addOns?: Array<{ name: string; price: number; description?: string }>
-      }>
+      reservationId: Id<"reservations">
+      vehicleId: Id<"vehicles">
+      vehicleName: string
+      vehicleImage: string
+      vehicleYear: number
+      vehicleMake: string
+      vehicleModel: string
+      location: string
+      startDate: string
+      endDate: string
+      pickupTime?: string
+      dropoffTime?: string
+      totalDays: number
+      dailyRate: number
+      totalAmount: number
+      status: "pending" | "confirmed" | "cancelled" | "completed" | "declined"
+      addOns?: Array<{ name: string; price: number; description?: string }>
+    }>
   }, [reservationsData])
-
 
   return (
     <div className="container mx-auto px-4 py-8">
