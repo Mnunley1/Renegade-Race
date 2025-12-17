@@ -1,7 +1,5 @@
 "use client"
 
-import { useQuery, useMutation } from "convex/react"
-import { useState } from "react"
 import { useUploadFile } from "@convex-dev/r2/react"
 import { Button } from "@workspace/ui/components/button"
 import {
@@ -22,9 +20,11 @@ import {
 } from "@workspace/ui/components/select"
 import { Separator } from "@workspace/ui/components/separator"
 import { Textarea } from "@workspace/ui/components/textarea"
-import { ArrowLeft, Plus, X, Upload, CheckCircle2, Loader2 } from "lucide-react"
+import { useMutation, useQuery } from "convex/react"
+import { ArrowLeft, CheckCircle2, Loader2, Plus, Upload, X } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { useState } from "react"
 import { api } from "@/lib/convex"
 
 const TRANSMISSION_OPTIONS = ["Manual", "Automatic", "PDK", "DCT", "CVT"]
@@ -90,11 +90,12 @@ export default function CreateVehiclePage() {
     const { name, value } = e.target
     setFormData({
       ...formData,
-      [name]: name === "year" || name === "dailyRate" || name === "horsepower" || name === "mileage"
-        ? value === ""
-          ? ""
-          : Number(value)
-        : value,
+      [name]:
+        name === "year" || name === "dailyRate" || name === "horsepower" || name === "mileage"
+          ? value === ""
+            ? ""
+            : Number(value)
+          : value,
     })
   }
 
@@ -193,7 +194,16 @@ export default function CreateVehiclePage() {
     setIsSubmitting(true)
 
     try {
-      if (!formData.trackId || !formData.make || !formData.model || !formData.year || !formData.dailyRate || !formData.description) {
+      if (
+        !(
+          formData.trackId &&
+          formData.make &&
+          formData.model &&
+          formData.year &&
+          formData.dailyRate &&
+          formData.description
+        )
+      ) {
         alert("Please fill in all required fields")
         setIsSubmitting(false)
         return
@@ -205,14 +215,36 @@ export default function CreateVehiclePage() {
         return
       }
 
-      // Upload images to R2 and get keys
-      const imageKeys = await Promise.all(
-        images.map(async (img) => {
-          // useUploadFile handles: generating signed URL, uploading to R2, syncing metadata
+      // Upload images to R2 sequentially to avoid rate limiting and get better error messages
+      const imageKeys: string[] = []
+      for (let index = 0; index < images.length; index++) {
+        const img = images[index]
+        try {
+          console.log(
+            `Uploading image ${index + 1}/${images.length}: ${img.file.name} (${(img.file.size / 1024 / 1024).toFixed(2)} MB)`
+          )
+
+          // Add a small delay between uploads to avoid rate limiting
+          if (index > 0) {
+            await new Promise((resolve) => setTimeout(resolve, 500))
+          }
+
           const key = await uploadFile(img.file)
-          return key
-        })
-      )
+          console.log(`Successfully uploaded image ${index + 1}: ${key}`)
+          imageKeys.push(key)
+        } catch (error) {
+          console.error(`Failed to upload image ${index + 1} (${img.file.name}):`, error)
+          console.error("Error details:", {
+            name: error instanceof Error ? error.name : "Unknown",
+            message: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+          })
+          // Re-throw with more context
+          throw new Error(
+            `Failed to upload image "${img.file.name}" (${index + 1} of ${images.length}): ${error instanceof Error ? error.message : String(error)}`
+          )
+        }
+      }
 
       // Create vehicle with R2 image keys
       const vehicleId = await createVehicleWithImages({
@@ -240,7 +272,11 @@ export default function CreateVehiclePage() {
       router.push("/host/vehicles/list")
     } catch (error) {
       console.error("Error creating vehicle:", error)
-      alert("Failed to create vehicle. Please try again.")
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "An unknown error occurred. Please check the console for details."
+      alert(`Failed to create vehicle: ${errorMessage}`)
     } finally {
       setIsSubmitting(false)
     }
@@ -271,7 +307,7 @@ export default function CreateVehiclePage() {
     <div className="container mx-auto max-w-4xl px-4 py-8">
       <div className="mb-8">
         <Link href="/host/vehicles/list">
-          <Button variant="ghost" size="sm">
+          <Button size="sm" variant="ghost">
             <ArrowLeft className="mr-2 size-4" />
             Back to Vehicles
           </Button>
@@ -286,7 +322,7 @@ export default function CreateVehiclePage() {
       <div className="mb-8">
         <div className="flex items-center justify-between">
           {steps.map((step, index) => (
-            <div key={step.number} className="flex flex-1 items-center">
+            <div className="flex flex-1 items-center" key={step.number}>
               <div className="flex flex-col items-center">
                 <div
                   className={`flex size-10 items-center justify-center rounded-full border-2 font-semibold ${
@@ -301,7 +337,7 @@ export default function CreateVehiclePage() {
                 </div>
                 <div className="mt-2 hidden text-center md:block">
                   <p
-                    className={`text-xs font-medium ${
+                    className={`font-medium text-xs ${
                       currentStep === step.number ? "text-foreground" : "text-muted-foreground"
                     }`}
                   >
@@ -324,7 +360,9 @@ export default function CreateVehiclePage() {
       <form onSubmit={handleSubmit}>
         <Card>
           <CardHeader>
-            <CardTitle>Step {currentStep}: {steps[currentStep - 1].title}</CardTitle>
+            <CardTitle>
+              Step {currentStep}: {steps[currentStep - 1].title}
+            </CardTitle>
             <CardDescription>{steps[currentStep - 1].description}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -334,8 +372,8 @@ export default function CreateVehiclePage() {
                 <div className="space-y-2">
                   <Label htmlFor="trackId">Track Location *</Label>
                   <Select
-                    value={formData.trackId}
                     onValueChange={(value) => handleSelectChange("trackId", value)}
+                    value={formData.trackId}
                   >
                     <SelectTrigger id="trackId">
                       <SelectValue placeholder="Select a track" />
@@ -526,7 +564,7 @@ export default function CreateVehiclePage() {
 
                   <div className="flex flex-wrap gap-4">
                     {images.map((image, index) => (
-                      <div key={index} className="relative">
+                      <div className="relative" key={index}>
                         <div className="relative size-32 overflow-hidden rounded-lg border">
                           <img
                             alt={`Preview ${index + 1}`}
@@ -534,13 +572,13 @@ export default function CreateVehiclePage() {
                             src={image.preview}
                           />
                           {index === 0 && (
-                            <div className="absolute top-1 left-1 rounded bg-primary px-1.5 py-0.5 text-primary-foreground text-xs font-medium">
+                            <div className="absolute top-1 left-1 rounded bg-primary px-1.5 py-0.5 font-medium text-primary-foreground text-xs">
                               Primary
                             </div>
                           )}
                         </div>
                         <Button
-                          className="absolute -right-2 -top-2 size-6 rounded-full p-0"
+                          className="-right-2 -top-2 absolute size-6 rounded-full p-0"
                           onClick={() => removeImage(index)}
                           size="icon"
                           type="button"
@@ -551,7 +589,7 @@ export default function CreateVehiclePage() {
                       </div>
                     ))}
 
-                    <label className="flex size-32 cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/25 transition-colors hover:border-primary">
+                    <label className="flex size-32 cursor-pointer items-center justify-center rounded-lg border-2 border-muted-foreground/25 border-dashed transition-colors hover:border-primary">
                       <div className="text-center">
                         <Upload className="mx-auto mb-2 size-6 text-muted-foreground" />
                         <span className="text-muted-foreground text-xs">Add Photo</span>
@@ -582,8 +620,8 @@ export default function CreateVehiclePage() {
                   <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
                     {COMMON_AMENITIES.map((amenity) => (
                       <Button
-                        key={amenity}
                         className="justify-start"
+                        key={amenity}
                         onClick={(e) => {
                           e.preventDefault()
                           toggleAmenity(amenity)
@@ -591,7 +629,9 @@ export default function CreateVehiclePage() {
                         type="button"
                         variant={formData.amenities.includes(amenity) ? "default" : "outline"}
                       >
-                        {formData.amenities.includes(amenity) && <CheckCircle2 className="mr-2 size-4" />}
+                        {formData.amenities.includes(amenity) && (
+                          <CheckCircle2 className="mr-2 size-4" />
+                        )}
                         {amenity}
                       </Button>
                     ))}
@@ -612,8 +652,8 @@ export default function CreateVehiclePage() {
                     <div className="space-y-2">
                       {formData.addOns.map((addOn, index) => (
                         <div
-                          key={index}
                           className="flex items-center justify-between rounded-lg border p-3"
+                          key={index}
                         >
                           <div className="flex-1">
                             <p className="font-medium">{addOn.name}</p>
@@ -677,7 +717,12 @@ export default function CreateVehiclePage() {
 
             {/* Navigation Buttons */}
             <div className="flex justify-between pt-6">
-              <Button onClick={prevStep} type="button" variant="outline" disabled={currentStep === 1}>
+              <Button
+                disabled={currentStep === 1}
+                onClick={prevStep}
+                type="button"
+                variant="outline"
+              >
                 Previous
               </Button>
               {currentStep < 4 ? (
@@ -696,4 +741,3 @@ export default function CreateVehiclePage() {
     </div>
   )
 }
-

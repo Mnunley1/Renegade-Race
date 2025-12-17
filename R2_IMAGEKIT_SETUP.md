@@ -30,17 +30,47 @@ The application now uses:
 
 ### 2. Configure R2 CORS
 
-Add a CORS policy to your R2 bucket to allow uploads from your app:
+Add a CORS policy to your R2 bucket to allow uploads from your app. This is **critical** for browser-based uploads to work.
+
+1. In Cloudflare dashboard, go to your R2 bucket
+2. Click on **Settings** tab
+3. Scroll down to **CORS Policy** section
+4. Click **Edit CORS Policy**
+5. Paste the following JSON configuration:
 
 ```json
 [
   {
-    "AllowedOrigins": ["http://localhost:3000", "https://yourdomain.com"],
-    "AllowedMethods": ["GET", "PUT"],
-    "AllowedHeaders": ["Content-Type"]
+    "AllowedOrigins": [
+      "http://localhost:3000",
+      "http://localhost:3001",
+      "https://yourdomain.com"
+    ],
+    "AllowedMethods": ["GET", "PUT", "POST", "HEAD", "OPTIONS"],
+    "AllowedHeaders": [
+      "*"
+    ],
+    "ExposedHeaders": [
+      "ETag",
+      "x-amz-request-id",
+      "x-amz-id-2"
+    ],
+    "MaxAgeSeconds": 3600
   }
 ]
 ```
+
+**Important Notes:**
+- Replace `https://yourdomain.com` with your actual production domain
+- The `"AllowedHeaders": ["*"]` allows all headers, which is necessary for signed URL uploads that include AWS signature headers
+- `OPTIONS` method is required for CORS preflight requests
+- `MaxAgeSeconds` controls how long browsers cache the CORS preflight response (3600 = 1 hour)
+
+**If you're still getting CORS errors after updating:**
+- Make sure you've saved the CORS policy in the Cloudflare dashboard
+- Clear your browser cache or try an incognito window
+- Verify the origin in the error message matches exactly what's in `AllowedOrigins` (including protocol and port)
+- **See [R2_CORS_TROUBLESHOOTING.md](./R2_CORS_TROUBLESHOOTING.md) for detailed troubleshooting steps**
 
 ### 3. Create R2 API Token
 
@@ -150,20 +180,59 @@ The implementation maintains backward compatibility:
 
 ## Troubleshooting
 
+### "Failed to fetch" or "Failed to upload image" errors
+
+**⚠️ IMPORTANT: See [R2_CORS_TROUBLESHOOTING.md](./R2_CORS_TROUBLESHOOTING.md) for a complete step-by-step guide to fix CORS issues.**
+
+This error typically indicates one of the following issues:
+
+1. **CORS Configuration Not Applied**
+   - Verify you've saved the CORS policy in Cloudflare dashboard
+   - Clear browser cache or use incognito mode
+   - Check browser DevTools → Network tab to see if OPTIONS preflight request is failing
+   - Ensure your origin (e.g., `http://localhost:3000`) exactly matches what's in `AllowedOrigins`
+
+2. **R2 Environment Variables Not Set**
+   - Run `npx convex env ls` in `packages/backend` to verify all R2 variables are set:
+     - `R2_BUCKET`
+     - `R2_TOKEN`
+     - `R2_ACCESS_KEY_ID`
+     - `R2_SECRET_ACCESS_KEY`
+     - `R2_ENDPOINT`
+   - If any are missing, set them using `npx convex env set <VAR_NAME> <value>`
+
+3. **R2 API Token Permissions**
+   - Verify the API token has "Object Read & Write" permissions
+   - Ensure the token is scoped to the correct bucket
+   - Try creating a new API token if permissions are unclear
+
+4. **Network/Connectivity Issues**
+   - Check browser console for detailed error messages
+   - Verify the R2 endpoint URL is correct (should be something like `https://<account-id>.r2.cloudflarestorage.com`)
+   - Check if there are any firewall or network restrictions
+
+5. **Convex R2 Component Not Initialized**
+   - Verify `convex.config.ts` includes `app.use(r2)`
+   - Restart your Convex dev server after making changes
+   - Check Convex dashboard logs for any initialization errors
+
 ### Images not uploading
 - Check R2 environment variables are set correctly
 - Verify CORS policy allows your origin
 - Check browser console for errors
+- Verify file size is within limits (R2 supports large files, but check your app's limits)
 
 ### Images not displaying
 - Verify ImageKit URL endpoint is configured
 - Check ImageKit origin is pointing to your R2 bucket
 - Ensure R2 bucket is publicly accessible (or ImageKit has access)
+- Verify the R2 key is being stored correctly in your database
 
 ### Upload errors
 - Verify R2 API token has correct permissions
 - Check bucket name matches environment variable
 - Ensure endpoint URL is correct
+- Check file type and size restrictions
 
 ## Next Steps
 
