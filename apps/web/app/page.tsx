@@ -26,7 +26,7 @@ export default function HomePage() {
       const primaryImage = vehicle.images?.find((img) => img.isPrimary) || vehicle.images?.[0]
       return {
         id: vehicle._id,
-        image: primaryImage?.cardUrl || primaryImage?.imageUrl || "",
+        image: primaryImage?.cardUrl ?? "",
         name: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
         year: vehicle.year,
         make: vehicle.make,

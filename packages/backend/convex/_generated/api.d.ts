@@ -17,6 +17,7 @@ import type * as emails from "../emails.js";
 import type * as favorites from "../favorites.js";
 import type * as http from "../http.js";
 import type * as messages from "../messages.js";
+import type * as r2 from "../r2.js";
 import type * as rentalCompletions from "../rentalCompletions.js";
 import type * as reservations from "../reservations.js";
 import type * as reviews from "../reviews.js";
@@ -53,6 +54,7 @@ declare const fullApi: ApiFromModules<{
   favorites: typeof favorites;
   http: typeof http;
   messages: typeof messages;
+  r2: typeof r2;
   rentalCompletions: typeof rentalCompletions;
   reservations: typeof reservations;
   reviews: typeof reviews;

@@ -1,15 +1,15 @@
 "use client"
 
-import { Suspense } from "react"
-import { useSearchParams } from "next/navigation"
-import { useQuery } from "convex/react"
-import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Button } from "@workspace/ui/components/button"
+import { Card, CardContent } from "@workspace/ui/components/card"
 import { Separator } from "@workspace/ui/components/separator"
-import { CheckCircle2, Calendar, MapPin, Clock } from "lucide-react"
-import { api } from "@/lib/convex"
+import { useQuery } from "convex/react"
+import { Calendar, CheckCircle2, Clock, MapPin } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
+import { useSearchParams } from "next/navigation"
+import { Suspense } from "react"
+import { api } from "@/lib/convex"
 
 function CheckoutSuccessContent() {
   const searchParams = useSearchParams()
@@ -17,7 +17,7 @@ function CheckoutSuccessContent() {
 
   const reservation = useQuery(
     api.reservations.getById,
-    reservationId ? ({ id: reservationId as any }) : "skip"
+    reservationId ? { id: reservationId as any } : "skip"
   )
 
   if (!reservationId) {
@@ -59,7 +59,7 @@ function CheckoutSuccessContent() {
           <div className="mx-auto max-w-2xl text-center">
             <CheckCircle2 className="mx-auto mb-4 size-16 text-green-500" />
             <h1 className="mb-2 font-bold text-4xl">Reservation Confirmed!</h1>
-            <p className="mb-8 text-muted-foreground text-lg">
+            <p className="mb-8 text-lg text-muted-foreground">
               Your payment has been processed successfully. Your reservation details are below.
             </p>
 
@@ -145,7 +145,7 @@ function CheckoutSuccessContent() {
               <Button asChild size="lg">
                 <Link href="/trips">View My Trips</Link>
               </Button>
-              <Button asChild variant="outline" size="lg">
+              <Button asChild size="lg" variant="outline">
                 <Link href="/vehicles">Browse More Vehicles</Link>
               </Button>
             </div>
@@ -173,4 +173,3 @@ export default function CheckoutSuccessPage() {
     </Suspense>
   )
 }
-
