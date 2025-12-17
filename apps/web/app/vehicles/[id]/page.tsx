@@ -24,9 +24,9 @@ import {
   UserPlus,
   Zap,
 } from "lucide-react"
-import { useParams, useRouter } from "next/navigation"
-import { useState, useMemo, useEffect, useRef } from "react"
 import Link from "next/link"
+import { useParams, useRouter } from "next/navigation"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { VehicleGallery } from "@/components/vehicle-gallery"
 import { api } from "@/lib/convex"
 
@@ -42,18 +42,16 @@ export default function VehicleDetailsPage() {
   const vehicle = useQuery(api.vehicles.getById, { id: id as any })
   const reviews = useQuery(api.reviews.getByVehicle, id ? { vehicleId: id as any } : "skip")
   const reviewStats = useQuery(api.reviews.getVehicleStats, id ? { vehicleId: id as any } : "skip")
-  
+
   // Check if user has a completed reservation for this vehicle (to show "Write Review" button)
   const completedReservation = useQuery(
     api.reservations.getCompletedReservationForVehicle,
-    isSignedIn && user?.id && id
-      ? { userId: user.id, vehicleId: id as any }
-      : "skip"
+    isSignedIn && user?.id && id ? { userId: user.id, vehicleId: id as any } : "skip"
   )
 
   // Check if user has already written a review for this vehicle
   const hasUserReviewed = useMemo(() => {
-    if (!isSignedIn || !user?.id || !reviews) return false
+    if (!(isSignedIn && user?.id && reviews)) return false
     return reviews.some((review) => review.reviewerId === user.id)
   }, [isSignedIn, user?.id, reviews])
 
@@ -164,7 +162,7 @@ export default function VehicleDetailsPage() {
 
   // Handle share functionality
   const handleShare = async (platform: string) => {
-    if (!vehicle || !id) return
+    if (!(vehicle && id)) return
 
     const url = typeof window !== "undefined" ? window.location.href : ""
     const title = `${vehicle.year} ${vehicle.make} ${vehicle.model}`
@@ -219,7 +217,7 @@ export default function VehicleDetailsPage() {
   }
 
   // Extract image URLs
-  const images = vehicle.images?.map((img) => img.cardUrl || img.imageUrl || "") || []
+  const images = vehicle.images?.map((img) => img.cardUrl ?? "") || []
 
   // Host information from owner
   const host = {
@@ -473,11 +471,7 @@ export default function VehicleDetailsPage() {
                     </div>
                   )}
                   {completedReservation && (
-                    <Button
-                      asChild
-                      size="sm"
-                      variant="outline"
-                    >
+                    <Button asChild size="sm" variant="outline">
                       <Link href={`/trips/review/${completedReservation._id}`}>
                         <Star className="mr-2 size-4" />
                         {hasUserReviewed ? "Edit Review" : "Write Review"}
@@ -502,13 +496,15 @@ export default function VehicleDetailsPage() {
                             <div className="mb-1 flex items-center gap-2">
                               {review.reviewerId ? (
                                 <Link
-                                  href={`/r/${review.reviewerId}`}
                                   className="font-semibold transition-colors hover:text-primary"
+                                  href={`/r/${review.reviewerId}`}
                                 >
                                   {review.reviewer?.name || "Anonymous"}
                                 </Link>
                               ) : (
-                                <p className="font-semibold">{review.reviewer?.name || "Anonymous"}</p>
+                                <p className="font-semibold">
+                                  {review.reviewer?.name || "Anonymous"}
+                                </p>
                               )}
                               <div className="flex items-center gap-1">
                                 {Array.from({ length: 5 }).map((_, i) => (
@@ -537,14 +533,16 @@ export default function VehicleDetailsPage() {
                           </div>
                           {isUserReview && review.reservation && (
                             <Link href={`/trips/review/${review.reservation._id}`}>
-                              <Button size="sm" variant="ghost" className="gap-2">
+                              <Button className="gap-2" size="sm" variant="ghost">
                                 <Edit className="size-4" />
                                 Edit
                               </Button>
                             </Link>
                           )}
                         </div>
-                        {review.title && <p className="mb-2 font-semibold text-lg">{review.title}</p>}
+                        {review.title && (
+                          <p className="mb-2 font-semibold text-lg">{review.title}</p>
+                        )}
                         {review.review && (
                           <p className="text-muted-foreground leading-relaxed">{review.review}</p>
                         )}
@@ -619,7 +617,7 @@ export default function VehicleDetailsPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  <Link href={`/r/${vehicle.ownerId}`} className="block">
+                  <Link className="block" href={`/r/${vehicle.ownerId}`}>
                     <div className="flex items-center gap-4 transition-opacity hover:opacity-80">
                       <Avatar className="size-16">
                         <AvatarImage src={host.avatar} />

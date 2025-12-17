@@ -1,33 +1,30 @@
 "use client"
 
-import { useQuery } from "convex/react"
-import { Button } from "@workspace/ui/components/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
+import { useUser } from "@clerk/nextjs"
 import { Badge } from "@workspace/ui/components/badge"
+import { Button } from "@workspace/ui/components/button"
+import { Card, CardContent } from "@workspace/ui/components/card"
+import { useQuery } from "convex/react"
 import {
-  Car,
-  Edit,
   Calendar,
-  Settings,
-  Plus,
+  Car,
   CheckCircle2,
   Clock,
-  XCircle,
+  Edit,
   Eye,
   Loader2,
+  Plus,
+  Settings,
+  XCircle,
 } from "lucide-react"
 import Link from "next/link"
-import { useUser } from "@clerk/nextjs"
 import { api } from "@/lib/convex"
 
 export default function HostVehiclesListPage() {
   const { user } = useUser()
 
   // Fetch vehicles from Convex
-  const vehicles = useQuery(
-    api.vehicles.getByOwner,
-    user?.id ? { ownerId: user.id } : "skip"
-  )
+  const vehicles = useQuery(api.vehicles.getByOwner, user?.id ? { ownerId: user.id } : "skip")
 
   // Show loading state
   if (vehicles === undefined) {
@@ -125,16 +122,14 @@ export default function HostVehiclesListPage() {
           {vehicles.map((vehicle) => {
             const primaryImage =
               vehicle.images?.find((img) => img.isPrimary)?.cardUrl ||
-              vehicle.images?.find((img) => img.isPrimary)?.imageUrl ||
               vehicle.images?.[0]?.cardUrl ||
-              vehicle.images?.[0]?.imageUrl ||
               "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=400"
 
             return (
-              <Card key={vehicle._id} className="overflow-hidden">
+              <Card className="overflow-hidden" key={vehicle._id}>
                 <div className="flex flex-col md:flex-row">
                   {/* Vehicle Image */}
-                  <div className="relative h-48 w-full md:h-auto md:w-64 shrink-0 overflow-hidden">
+                  <div className="relative h-48 w-full shrink-0 overflow-hidden md:h-auto md:w-64">
                     <img
                       alt={`${vehicle.year} ${vehicle.make} ${vehicle.model}`}
                       className="size-full object-cover"
@@ -152,10 +147,10 @@ export default function HostVehiclesListPage() {
                           </h2>
                           {getStatusBadge(vehicle)}
                         </div>
-                        <p className="mb-2 text-muted-foreground line-clamp-2">
+                        <p className="mb-2 line-clamp-2 text-muted-foreground">
                           {vehicle.description}
                         </p>
-                        <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+                        <div className="flex flex-wrap items-center gap-4 text-muted-foreground text-sm">
                           <span className="flex items-center gap-1.5">
                             <Calendar className="size-4" />
                             Listed {formatDate(vehicle.createdAt)}
@@ -174,19 +169,19 @@ export default function HostVehiclesListPage() {
                     {/* Action Buttons */}
                     <div className="mt-auto flex flex-wrap gap-2">
                       <Link href={`/vehicles/${vehicle._id}`}>
-                        <Button variant="outline" size="sm">
+                        <Button size="sm" variant="outline">
                           <Eye className="mr-2 size-4" />
                           View Listing
                         </Button>
                       </Link>
                       <Link href={`/host/vehicles/${vehicle._id}`}>
-                        <Button variant="outline" size="sm">
+                        <Button size="sm" variant="outline">
                           <Settings className="mr-2 size-4" />
                           Manage
                         </Button>
                       </Link>
                       <Link href={`/host/vehicles/${vehicle._id}/edit`}>
-                        <Button variant="outline" size="sm">
+                        <Button size="sm" variant="outline">
                           <Edit className="mr-2 size-4" />
                           Edit
                         </Button>

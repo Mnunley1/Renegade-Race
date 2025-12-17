@@ -1,8 +1,8 @@
 import { R2 } from "@convex-dev/r2"
 import { v } from "convex/values"
 import { components } from "./_generated/api"
-import { getCurrentUser } from "./users"
 import { mutation } from "./_generated/server"
+import { getCurrentUser } from "./users"
 
 // Initialize R2 client
 export const r2 = new R2(components.r2)
@@ -31,8 +31,7 @@ export function getImageKitUrl(
 ): string {
   // Get ImageKit URL endpoint from environment
   // In production, this should be set via: npx convex env set IMAGEKIT_URL_ENDPOINT <your-url>
-  const imageKitEndpoint =
-    process.env.IMAGEKIT_URL_ENDPOINT || "https://ik.imgkit.net/default"
+  const imageKitEndpoint = process.env.IMAGEKIT_URL_ENDPOINT || "https://ik.imgkit.net/default"
 
   // Build transformation parameters
   const transformations: string[] = []
@@ -151,5 +150,35 @@ export const generateProfileImageUploadUrl = mutation({
     // Generate organized key: images/profiles/{userId}.{ext}
     const key = `images/profiles/${user._id}/${crypto.randomUUID()}`
     return r2.generateUploadUrl(key)
+  },
+})
+
+// Diagnostic mutation to test R2 configuration
+export const testR2Configuration = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const user = await getCurrentUser(ctx)
+    if (!user) {
+      throw new Error("Not authenticated")
+    }
+
+    try {
+      // Try to generate a test upload URL
+      const testKey = `test/${user._id}/${crypto.randomUUID()}`
+      const uploadUrl = await r2.generateUploadUrl(testKey)
+
+      return {
+        success: true,
+        message: "R2 configuration appears to be working",
+        testKey,
+        uploadUrl: uploadUrl.substring(0, 100) + "...", // Truncate for security
+      }
+    } catch (error) {
+      return {
+        success: false,
+        message: "R2 configuration error",
+        error: error instanceof Error ? error.message : String(error),
+      }
+    }
   },
 })
