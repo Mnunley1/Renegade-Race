@@ -1,15 +1,14 @@
 "use client"
 
-import { useQuery } from "convex/react"
-import { useParams } from "next/navigation"
 import { Avatar, AvatarFallback, AvatarImage } from "@workspace/ui/components/avatar"
-import { Badge } from "@workspace/ui/components/badge"
-import { Card, CardContent } from "@workspace/ui/components/card"
 import { Button } from "@workspace/ui/components/button"
+import { Card, CardContent } from "@workspace/ui/components/card"
+import { useQuery } from "convex/react"
+import { Car, Check, HelpCircle, Loader2, MapPin, Star } from "lucide-react"
+import { useParams } from "next/navigation"
+import { useMemo, useState } from "react"
 import { VehicleCard } from "@/components/vehicle-card"
 import { api } from "@/lib/convex"
-import { Calendar, Check, MapPin, Shield, Star, Car, Loader2, HelpCircle } from "lucide-react"
-import { useMemo, useState } from "react"
 
 export default function UserProfilePage() {
   const params = useParams()
@@ -28,7 +27,7 @@ export default function UserProfilePage() {
       const primaryImage = vehicle.images?.find((img) => img.isPrimary) || vehicle.images?.[0]
       return {
         id: vehicle._id,
-        image: primaryImage?.cardUrl || primaryImage?.imageUrl || "",
+        image: primaryImage?.cardUrl ?? "",
         name: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
         year: vehicle.year,
         make: vehicle.make,
@@ -57,7 +56,8 @@ export default function UserProfilePage() {
   // Truncate bio if needed
   const MAX_BIO_LENGTH = 200
   const shouldTruncate = bioText.length > MAX_BIO_LENGTH
-  const displayBio = showFullBio || !shouldTruncate ? bioText : `${bioText.substring(0, MAX_BIO_LENGTH)}...`
+  const displayBio =
+    showFullBio || !shouldTruncate ? bioText : `${bioText.substring(0, MAX_BIO_LENGTH)}...`
 
   // Show loading state
   if (user === undefined || vehicles === undefined) {
@@ -142,7 +142,8 @@ export default function UserProfilePage() {
                     <div>
                       <h3 className="mb-1 font-semibold text-lg">All-Star Host</h3>
                       <p className="text-muted-foreground text-sm">
-                        All-Star Hosts like {user.name?.split(" ")[0] || "this host"} are the top-rated and most experienced hosts on Renegade Rentals.
+                        All-Star Hosts like {user.name?.split(" ")[0] || "this host"} are the
+                        top-rated and most experienced hosts on Renegade Rentals.
                       </p>
                     </div>
                   </div>
@@ -153,7 +154,7 @@ export default function UserProfilePage() {
             {/* Verified Info */}
             <Card>
               <CardContent className="p-6">
-                <h3 className="mb-4 font-semibold uppercase tracking-wide text-sm text-muted-foreground">
+                <h3 className="mb-4 font-semibold text-muted-foreground text-sm uppercase tracking-wide">
                   Verified Info
                 </h3>
                 <div className="space-y-3">
@@ -181,7 +182,7 @@ export default function UserProfilePage() {
             {/* Languages */}
             <Card>
               <CardContent className="p-6">
-                <h3 className="mb-4 font-semibold uppercase tracking-wide text-sm text-muted-foreground">
+                <h3 className="mb-4 font-semibold text-muted-foreground text-sm uppercase tracking-wide">
                   Languages
                 </h3>
                 <p className="text-sm">English</p>
@@ -191,7 +192,7 @@ export default function UserProfilePage() {
             {/* Works - Placeholder for now */}
             <Card>
               <CardContent className="p-6">
-                <h3 className="mb-4 font-semibold uppercase tracking-wide text-sm text-muted-foreground">
+                <h3 className="mb-4 font-semibold text-muted-foreground text-sm uppercase tracking-wide">
                   Works
                 </h3>
                 <p className="text-sm">Not specified</p>
@@ -201,7 +202,7 @@ export default function UserProfilePage() {
             {/* School - Placeholder for now */}
             <Card>
               <CardContent className="p-6">
-                <h3 className="mb-4 font-semibold uppercase tracking-wide text-sm text-muted-foreground">
+                <h3 className="mb-4 font-semibold text-muted-foreground text-sm uppercase tracking-wide">
                   School
                 </h3>
                 <p className="text-sm">Not specified</p>
@@ -216,16 +217,16 @@ export default function UserProfilePage() {
             {/* About Section */}
             <Card>
               <CardContent className="p-6">
-                <h2 className="mb-4 font-semibold uppercase tracking-wide text-sm text-muted-foreground">
+                <h2 className="mb-4 font-semibold text-muted-foreground text-sm uppercase tracking-wide">
                   About {user.name?.split(" ")[0] || "User"}
                 </h2>
                 <div className="space-y-4">
-                  <p className="leading-relaxed text-muted-foreground">{displayBio}</p>
+                  <p className="text-muted-foreground leading-relaxed">{displayBio}</p>
                   {shouldTruncate && (
                     <Button
                       onClick={() => setShowFullBio(!showFullBio)}
-                      variant="outline"
                       size="sm"
+                      variant="outline"
                     >
                       {showFullBio ? "Show Less" : "More"}
                     </Button>
@@ -237,7 +238,7 @@ export default function UserProfilePage() {
             {/* Vehicles Section */}
             <Card>
               <CardContent className="p-6">
-                <h2 className="mb-6 font-semibold uppercase tracking-wide text-sm text-muted-foreground">
+                <h2 className="mb-6 font-semibold text-muted-foreground text-sm uppercase tracking-wide">
                   {user.name?.split(" ")[0] || "User"}'s Vehicles
                 </h2>
                 {mappedVehicles.length > 0 ? (

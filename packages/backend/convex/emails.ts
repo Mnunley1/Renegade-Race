@@ -1,15 +1,14 @@
-import { v } from 'convex/values'
-import { mutation, query, type MutationCtx } from './_generated/server'
-import { Resend } from 'resend'
-import { components } from './_generated/api'
-import { Resend as ResendComponent } from '@convex-dev/resend'
-import type { Id } from './_generated/dataModel'
+import { Resend as ResendComponent } from "@convex-dev/resend"
+import { v } from "convex/values"
+import { Resend } from "resend"
+import { components } from "./_generated/api"
+import { type MutationCtx, mutation, query } from "./_generated/server"
 
 // Helper function to check if user is admin
 async function checkAdmin(ctx: any) {
   const identity = await ctx.auth.getUserIdentity()
   if (!identity) {
-    throw new Error('Not authenticated')
+    throw new Error("Not authenticated")
   }
 
   // When session token is configured with { "metadata": "{{user.public_metadata}}" },
@@ -19,8 +18,8 @@ async function checkAdmin(ctx: any) {
     (identity as any).publicMetadata?.role || // Direct from Clerk
     (identity as any).orgRole
 
-  if (role !== 'admin') {
-    throw new Error('Admin access required')
+  if (role !== "admin") {
+    throw new Error("Admin access required")
   }
 
   return identity
@@ -30,7 +29,7 @@ async function checkAdmin(ctx: any) {
 function getResendClient() {
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey) {
-    throw new Error('RESEND_API_KEY environment variable is not set')
+    throw new Error("RESEND_API_KEY environment variable is not set")
   }
   return new Resend(apiKey)
 }
@@ -38,18 +37,15 @@ function getResendClient() {
 // Initialize Convex Resend component
 // testMode defaults to true for safety - set RESEND_TEST_MODE=false in production
 export const resendComponent = new ResendComponent(components.resend, {
-  testMode: process.env.RESEND_TEST_MODE !== 'false',
+  testMode: process.env.RESEND_TEST_MODE !== "false",
 })
 
 // Helper function to get user email from Clerk identity or database
-async function getUserEmail(
-  ctx: MutationCtx,
-  userId: string
-): Promise<string | null> {
+async function getUserEmail(ctx: MutationCtx, userId: string): Promise<string | null> {
   // First try to get from database
   const user = await ctx.db
-    .query('users')
-    .withIndex('by_external_id', q => q.eq('externalId', userId))
+    .query("users")
+    .withIndex("by_external_id", (q) => q.eq("externalId", userId))
     .first()
 
   if (user?.email) {
@@ -62,34 +58,57 @@ async function getUserEmail(
   return null
 }
 
+// Helper function to check if test mode is enabled
+function isTestMode(): boolean {
+  return process.env.RESEND_TEST_MODE !== "false"
+}
+
+// Helper function to get test domain
+// Note: @convex-dev/resend library only accepts @resend.dev addresses in test mode
+// Use @resend.dev for test mode, then configure Resend to forward to your custom domain
+function getTestDomain(): string {
+  // Library requires @resend.dev in test mode - use that and forward to custom domain
+  return "resend.dev"
+}
+
 // Helper function to get from email address
+// In test mode, uses Resend test address (library only accepts @resend.dev addresses)
 function getFromEmail(): string {
-  return (
-    process.env.RESEND_FROM_EMAIL ||
-    'Renegade Rentals <noreply@renegaderentals.com>'
-  )
+  if (isTestMode()) {
+    // Library requires @resend.dev addresses in test mode
+    // Use delivered@resend.dev which simulates successful delivery
+    return "delivered@resend.dev"
+  }
+  return process.env.RESEND_FROM_EMAIL || "Renegade Rentals <support@renegaderentals.com>"
 }
 
 // Helper function to get support email
+// In test mode, returns a Resend test address
 export function getSupportEmail(): string {
-  return process.env.SUPPORT_EMAIL || 'support@renegaderentals.com'
+  if (isTestMode()) {
+    // Library requires @resend.dev addresses in test mode
+    // Use delivered@resend.dev which simulates successful delivery
+    // Configure Resend to forward this to your custom domain if needed
+    return "delivered@resend.dev"
+  }
+  return process.env.SUPPORT_EMAIL || "support@yiakri.resend.app"
 }
 
 // Helper function to format currency
 function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
   }).format(amount)
 }
 
 // Helper function to format date
 function formatDate(dateString: string): string {
   const date = new Date(dateString)
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
+  return date.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
   })
 }
 
@@ -99,7 +118,7 @@ export function getWelcomeEmailTemplate(userName: string): {
   html: string
   text: string
 } {
-  const subject = 'Welcome to Renegade Race Rentals!'
+  const subject = "Welcome to Renegade Race Rentals!"
   const html = `
     <!DOCTYPE html>
     <html>
@@ -180,7 +199,7 @@ export function getReservationPendingOwnerEmailTemplate(data: {
         <p><strong>Renter:</strong> ${data.renterName}</p>
         <p><strong>Dates:</strong> ${formatDate(data.startDate)} - ${formatDate(data.endDate)}</p>
         <p><strong>Total Amount:</strong> ${formatCurrency(data.totalAmount)}</p>
-        ${data.renterMessage ? `<p><strong>Message from renter:</strong><br>${data.renterMessage}</p>` : ''}
+        ${data.renterMessage ? `<p><strong>Message from renter:</strong><br>${data.renterMessage}</p>` : ""}
       </div>
       <p style="text-align: center; margin: 30px 0;">
         <a href="${data.reservationUrl}" style="background-color: #1a1a1a; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">Review Reservation</a>
@@ -203,7 +222,7 @@ You have a new reservation request for your vehicle ${data.vehicleName}.
 Renter: ${data.renterName}
 Dates: ${formatDate(data.startDate)} - ${formatDate(data.endDate)}
 Total Amount: ${formatCurrency(data.totalAmount)}
-${data.renterMessage ? `\nMessage from renter:\n${data.renterMessage}\n` : ''}
+${data.renterMessage ? `\nMessage from renter:\n${data.renterMessage}\n` : ""}
 
 Review this reservation: ${data.reservationUrl}
 
@@ -244,7 +263,7 @@ export function getReservationConfirmedRenterEmailTemplate(data: {
         <p><strong>Vehicle:</strong> ${data.vehicleName}</p>
         <p><strong>Dates:</strong> ${formatDate(data.startDate)} - ${formatDate(data.endDate)}</p>
         <p><strong>Total Amount:</strong> ${formatCurrency(data.totalAmount)}</p>
-        ${data.ownerMessage ? `<p><strong>Message from owner:</strong><br>${data.ownerMessage}</p>` : ''}
+        ${data.ownerMessage ? `<p><strong>Message from owner:</strong><br>${data.ownerMessage}</p>` : ""}
       </div>
       <p style="text-align: center; margin: 30px 0;">
         <a href="${data.reservationUrl}" style="background-color: #1a1a1a; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">View Reservation</a>
@@ -267,7 +286,7 @@ Great news! Your reservation for ${data.vehicleName} has been confirmed.
 Vehicle: ${data.vehicleName}
 Dates: ${formatDate(data.startDate)} - ${formatDate(data.endDate)}
 Total Amount: ${formatCurrency(data.totalAmount)}
-${data.ownerMessage ? `\nMessage from owner:\n${data.ownerMessage}\n` : ''}
+${data.ownerMessage ? `\nMessage from owner:\n${data.ownerMessage}\n` : ""}
 
 View your reservation: ${data.reservationUrl}
 
@@ -300,7 +319,7 @@ export function getReservationDeclinedRenterEmailTemplate(data: {
       </div>
       <p>Hi ${data.renterName},</p>
       <p>Unfortunately, your reservation request for <strong>${data.vehicleName}</strong> has been declined by the owner.</p>
-      ${data.ownerMessage ? `<div style="background-color: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;"><p><strong>Message from owner:</strong><br>${data.ownerMessage}</p></div>` : ''}
+      ${data.ownerMessage ? `<div style="background-color: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;"><p><strong>Message from owner:</strong><br>${data.ownerMessage}</p></div>` : ""}
       <p>Don't worry - we have many other amazing vehicles available. Browse our selection to find your perfect track car!</p>
       <p style="margin-top: 30px;">
         Best regards,<br>
@@ -315,7 +334,7 @@ Reservation Declined
 Hi ${data.renterName},
 
 Unfortunately, your reservation request for ${data.vehicleName} has been declined by the owner.
-${data.ownerMessage ? `\nMessage from owner:\n${data.ownerMessage}\n` : ''}
+${data.ownerMessage ? `\nMessage from owner:\n${data.ownerMessage}\n` : ""}
 
 Don't worry - we have many other amazing vehicles available. Browse our selection to find your perfect track car!
 
@@ -330,7 +349,7 @@ Renegade Race Rentals
 export function getReservationCancelledEmailTemplate(data: {
   userName: string
   vehicleName: string
-  role: 'renter' | 'owner'
+  role: "renter" | "owner"
   cancellationReason?: string
 }): { subject: string; html: string; text: string } {
   const subject = `Reservation Cancelled: ${data.vehicleName}`
@@ -346,8 +365,8 @@ export function getReservationCancelledEmailTemplate(data: {
         <h1 style="color: #dc3545;">Reservation Cancelled</h1>
       </div>
       <p>Hi ${data.userName},</p>
-      <p>The reservation for <strong>${data.vehicleName}</strong> has been cancelled${data.role === 'renter' ? ' by you' : ' by the renter'}.</p>
-      ${data.cancellationReason ? `<div style="background-color: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;"><p><strong>Reason:</strong><br>${data.cancellationReason}</p></div>` : ''}
+      <p>The reservation for <strong>${data.vehicleName}</strong> has been cancelled${data.role === "renter" ? " by you" : " by the renter"}.</p>
+      ${data.cancellationReason ? `<div style="background-color: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;"><p><strong>Reason:</strong><br>${data.cancellationReason}</p></div>` : ""}
       <p>If you have any questions or concerns, please contact our support team.</p>
       <p style="margin-top: 30px;">
         Best regards,<br>
@@ -361,8 +380,8 @@ Reservation Cancelled
 
 Hi ${data.userName},
 
-The reservation for ${data.vehicleName} has been cancelled${data.role === 'renter' ? ' by you' : ' by the renter'}.
-${data.cancellationReason ? `\nReason:\n${data.cancellationReason}\n` : ''}
+The reservation for ${data.vehicleName} has been cancelled${data.role === "renter" ? " by you" : " by the renter"}.
+${data.cancellationReason ? `\nReason:\n${data.cancellationReason}\n` : ""}
 
 If you have any questions or concerns, please contact our support team.
 
@@ -441,7 +460,7 @@ export function getPaymentFailedEmailTemplate(data: {
   failureReason?: string
   reservationUrl: string
 }): { subject: string; html: string; text: string } {
-  const subject = `Payment Failed - Action Required`
+  const subject = "Payment Failed - Action Required"
   const html = `
     <!DOCTYPE html>
     <html>
@@ -457,7 +476,7 @@ export function getPaymentFailedEmailTemplate(data: {
       <p>Unfortunately, your payment for the reservation of <strong>${data.vehicleName}</strong> could not be processed.</p>
       <div style="background-color: #fff3cd; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ffc107;">
         <p><strong>Amount:</strong> ${formatCurrency(data.totalAmount)}</p>
-        ${data.failureReason ? `<p><strong>Reason:</strong> ${data.failureReason}</p>` : ''}
+        ${data.failureReason ? `<p><strong>Reason:</strong> ${data.failureReason}</p>` : ""}
       </div>
       <p style="text-align: center; margin: 30px 0;">
         <a href="${data.reservationUrl}" style="background-color: #1a1a1a; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">Update Payment Method</a>
@@ -478,7 +497,7 @@ Hi ${data.renterName},
 Unfortunately, your payment for the reservation of ${data.vehicleName} could not be processed.
 
 Amount: ${formatCurrency(data.totalAmount)}
-${data.failureReason ? `Reason: ${data.failureReason}` : ''}
+${data.failureReason ? `Reason: ${data.failureReason}` : ""}
 
 Update your payment method: ${data.reservationUrl}
 
@@ -495,7 +514,7 @@ Renegade Race Rentals
 export function getReservationCompletedEmailTemplate(data: {
   userName: string
   vehicleName: string
-  role: 'renter' | 'owner'
+  role: "renter" | "owner"
   reviewUrl: string
 }): { subject: string; html: string; text: string } {
   const subject = `How was your experience with ${data.vehicleName}?`
@@ -646,7 +665,7 @@ Renegade Race Rentals
 export function getDisputeCreatedEmailTemplate(data: {
   userName: string
   vehicleName: string
-  role: 'renter' | 'owner' | 'admin'
+  role: "renter" | "owner" | "admin"
   disputeUrl: string
 }): { subject: string; html: string; text: string } {
   const subject = `Dispute Created: ${data.vehicleName}`
@@ -663,7 +682,7 @@ export function getDisputeCreatedEmailTemplate(data: {
       </div>
       <p>Hi ${data.userName},</p>
       <p>A dispute has been created for the rental of <strong>${data.vehicleName}</strong>.</p>
-      ${data.role === 'admin' ? '<p>As an administrator, please review and resolve this dispute as soon as possible.</p>' : '<p>Our support team will review this dispute and work to resolve it fairly. We will keep you updated on the status.</p>'}
+      ${data.role === "admin" ? "<p>As an administrator, please review and resolve this dispute as soon as possible.</p>" : "<p>Our support team will review this dispute and work to resolve it fairly. We will keep you updated on the status.</p>"}
       <p style="text-align: center; margin: 30px 0;">
         <a href="${data.disputeUrl}" style="background-color: #1a1a1a; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">View Dispute</a>
       </p>
@@ -681,7 +700,7 @@ Dispute Created
 Hi ${data.userName},
 
 A dispute has been created for the rental of ${data.vehicleName}.
-${data.role === 'admin' ? '\nAs an administrator, please review and resolve this dispute as soon as possible.' : '\nOur support team will review this dispute and work to resolve it fairly. We will keep you updated on the status.'}
+${data.role === "admin" ? "\nAs an administrator, please review and resolve this dispute as soon as possible." : "\nOur support team will review this dispute and work to resolve it fairly. We will keep you updated on the status."}
 
 View dispute: ${data.disputeUrl}
 
@@ -751,6 +770,17 @@ Renegade Race Rentals Support Team
   return { subject, html, text }
 }
 
+// Helper function to convert email to test address if in test mode
+function getTestEmail(originalEmail: string): string {
+  if (isTestMode()) {
+    // Library requires @resend.dev addresses in test mode
+    // Use delivered@resend.dev which simulates successful delivery
+    // Configure Resend to forward this to your custom domain if needed
+    return "delivered@resend.dev"
+  }
+  return originalEmail
+}
+
 // Helper function to send transactional email
 export async function sendTransactionalEmail(
   ctx: MutationCtx,
@@ -758,16 +788,19 @@ export async function sendTransactionalEmail(
   template: { subject: string; html: string; text: string }
 ): Promise<string | null> {
   try {
+    // Convert to test address if in test mode
+    const recipientEmail = getTestEmail(to)
+
     const emailId = await resendComponent.sendEmail(ctx, {
       from: getFromEmail(),
-      to: [to],
+      to: [recipientEmail],
       subject: template.subject,
       html: template.html,
       text: template.text,
     })
     return emailId
   } catch (error) {
-    console.error('Failed to send transactional email:', error)
+    console.error("Failed to send transactional email:", error)
     // Don't throw - email failures shouldn't break the main flow
     return null
   }
@@ -777,10 +810,10 @@ export async function sendTransactionalEmail(
 export const sendMassEmail = mutation({
   args: {
     recipientType: v.union(
-      v.literal('all'),
-      v.literal('owners'),
-      v.literal('renters'),
-      v.literal('custom')
+      v.literal("all"),
+      v.literal("owners"),
+      v.literal("renters"),
+      v.literal("custom")
     ),
     customRecipients: v.optional(v.array(v.string())), // Array of email addresses
     subject: v.string(),
@@ -795,27 +828,25 @@ export const sendMassEmail = mutation({
     // Get recipients based on type
     let recipients: string[] = []
 
-    if (args.recipientType === 'custom' && args.customRecipients) {
+    if (args.recipientType === "custom" && args.customRecipients) {
       recipients = args.customRecipients
     } else {
       // Fetch users from database
-      const allUsers = await ctx.db.query('users').collect()
+      const allUsers = await ctx.db.query("users").collect()
 
-      if (args.recipientType === 'all') {
-        recipients = allUsers
-          .map((user) => user.email)
-          .filter((email): email is string => !!email)
-      } else if (args.recipientType === 'owners') {
+      if (args.recipientType === "all") {
+        recipients = allUsers.map((user) => user.email).filter((email): email is string => !!email)
+      } else if (args.recipientType === "owners") {
         // Get users who own vehicles
-        const vehicles = await ctx.db.query('vehicles').collect()
+        const vehicles = await ctx.db.query("vehicles").collect()
         const ownerIds = new Set(vehicles.map((v) => v.ownerId))
         recipients = allUsers
           .filter((user) => ownerIds.has(user.externalId))
           .map((user) => user.email)
           .filter((email): email is string => !!email)
-      } else if (args.recipientType === 'renters') {
+      } else if (args.recipientType === "renters") {
         // Get users who have made reservations
-        const reservations = await ctx.db.query('reservations').collect()
+        const reservations = await ctx.db.query("reservations").collect()
         const renterIds = new Set(reservations.map((r) => r.renterId))
         recipients = allUsers
           .filter((user) => renterIds.has(user.externalId))
@@ -825,7 +856,7 @@ export const sendMassEmail = mutation({
     }
 
     if (recipients.length === 0) {
-      throw new Error('No recipients found')
+      throw new Error("No recipients found")
     }
 
     // Send emails using Resend
@@ -835,19 +866,22 @@ export const sendMassEmail = mutation({
 
     for (const recipient of recipients) {
       try {
+        // Convert to test address if in test mode
+        const recipientEmail = isTestMode() ? getTestEmail(recipient) : recipient
+
         const result = await resend.emails.send({
-          from: process.env.RESEND_FROM_EMAIL || 'Renegade Rentals <noreply@renegaderentals.com>',
-          to: recipient,
+          from: getFromEmail(), // Use getFromEmail() which handles test mode
+          to: recipientEmail,
           subject: args.subject,
           html: args.htmlContent,
-          text: args.textContent || args.htmlContent.replace(/<[^>]*>/g, ''), // Strip HTML for text version
+          text: args.textContent || args.htmlContent.replace(/<[^>]*>/g, ""), // Strip HTML for text version
         })
 
         results.push({ recipient, success: true, id: result.data?.id })
       } catch (error) {
         errors.push({
           recipient,
-          error: error instanceof Error ? error.message : 'Unknown error',
+          error: error instanceof Error ? error.message : "Unknown error",
         })
       }
     }
@@ -888,8 +922,11 @@ export const sendContactFormEmail = mutation({
     message: v.string(),
   },
   handler: async (ctx, args) => {
-    const supportEmail = process.env.SUPPORT_EMAIL || 'support@renegaderentals.com'
-    const fromEmail = process.env.RESEND_FROM_EMAIL || 'Renegade Rentals <noreply@renegaderentals.com>'
+    // Use getSupportEmail() which handles test mode automatically
+    const supportEmail = getSupportEmail()
+    const fromEmail = getFromEmail()
+    // Convert replyTo to test address if in test mode
+    const replyToEmail = getTestEmail(args.email)
 
     // Create HTML email content
     const htmlContent = `
@@ -897,7 +934,7 @@ export const sendContactFormEmail = mutation({
       <p><strong>From:</strong> ${args.name} (${args.email})</p>
       <p><strong>Subject:</strong> ${args.subject}</p>
       <hr>
-      <p>${args.message.replace(/\n/g, '<br>')}</p>
+      <p>${args.message.replace(/\n/g, "<br>")}</p>
     `
 
     // Create plain text version
@@ -915,7 +952,7 @@ ${args.message}
       const emailId = await resendComponent.sendEmail(ctx, {
         from: fromEmail,
         to: [supportEmail],
-        replyTo: args.email, // Allow replying directly to the customer
+        replyTo: [replyToEmail], // Allow replying directly to the customer (converted to test address if needed)
         subject: `Contact Form: ${args.subject}`,
         html: htmlContent,
         text: textContent,
@@ -926,10 +963,7 @@ ${args.message}
         emailId,
       }
     } catch (error) {
-      throw new Error(
-        error instanceof Error ? error.message : 'Failed to send email'
-      )
+      throw new Error(error instanceof Error ? error.message : "Failed to send email")
     }
   },
 })
-
