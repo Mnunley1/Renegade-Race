@@ -58,6 +58,15 @@ export function getImageKitUrl(key: string, options?: ImageKitOptions): string {
  * Preset transformation helpers for common image sizes
  */
 export const imagePresets = {
+  avatar: (key: string) =>
+    getImageKitUrl(key, {
+      width: 224,
+      height: 224,
+      quality: 85,
+      format: "auto",
+      fit: "cover",
+      focus: "faces",
+    }),
   thumbnail: (key: string) =>
     getImageKitUrl(key, { width: 240, height: 160, quality: 70, format: "auto" }),
   card: (key: string) =>

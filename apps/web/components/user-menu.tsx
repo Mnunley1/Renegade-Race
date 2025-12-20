@@ -16,7 +16,6 @@ import {
   HeadphonesIcon,
   Heart,
   HelpCircle,
-  Info,
   LogOut,
   Menu,
   MessageSquare,
@@ -124,15 +123,9 @@ export function UserMenu() {
               </Link>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
-              <Link className="flex items-center text-sm" href="/help">
-                <Info className="mr-3 size-4" />
-                Why choose Renegade
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
               <Link className="flex items-center text-sm" href="/contact">
                 <HeadphonesIcon className="mr-3 size-4" />
-                Contact support
+                Contact Renegade
               </Link>
             </DropdownMenuItem>
 
