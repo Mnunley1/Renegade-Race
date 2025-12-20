@@ -1,5 +1,6 @@
 "use client"
 
+import { useUser } from "@clerk/nextjs"
 import { Button } from "@workspace/ui/components/button"
 import {
   Card,
@@ -18,12 +19,68 @@ import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import { Separator } from "@workspace/ui/components/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
-import { ArrowLeft, Moon, Sun } from "lucide-react"
+import { useAction, useQuery } from "convex/react"
+import { ArrowLeft, CreditCard, Download, Loader2, Moon, Sun, Trash2 } from "lucide-react"
 import Link from "next/link"
 import { useTheme } from "next-themes"
+import { useEffect, useState } from "react"
+import { api } from "@/lib/convex"
 
 export default function SettingsPage() {
   const { theme, setTheme } = useTheme()
+  const { user: clerkUser } = useUser()
+  const user = useQuery(
+    api.users.getByExternalId,
+    clerkUser?.id ? { externalId: clerkUser.id } : "skip"
+  )
+
+  const [paymentMethods, setPaymentMethods] = useState<any[]>([])
+  const [invoices, setInvoices] = useState<any[]>([])
+  const [isLoadingPaymentMethods, setIsLoadingPaymentMethods] = useState(false)
+  const [isLoadingInvoices, setIsLoadingInvoices] = useState(false)
+
+  const getPaymentMethods = useAction(api.stripe.getCustomerPaymentMethods)
+  const getInvoices = useAction(api.stripe.getCustomerInvoices)
+
+  useEffect(() => {
+    const loadBillingData = async () => {
+      if (!user?.stripeCustomerId) return
+
+      setIsLoadingPaymentMethods(true)
+      setIsLoadingInvoices(true)
+
+      try {
+        const [methods, invoiceData] = await Promise.all([
+          getPaymentMethods({ customerId: user.stripeCustomerId }),
+          getInvoices({ customerId: user.stripeCustomerId, limit: 10 }),
+        ])
+        setPaymentMethods(methods)
+        setInvoices(invoiceData)
+      } catch (error) {
+        console.error("Failed to load billing data:", error)
+      } finally {
+        setIsLoadingPaymentMethods(false)
+        setIsLoadingInvoices(false)
+      }
+    }
+
+    void loadBillingData()
+  }, [user?.stripeCustomerId, getPaymentMethods, getInvoices])
+
+  const formatCardBrand = (brand: string) => brand.charAt(0).toUpperCase() + brand.slice(1)
+
+  const formatCurrency = (amount: number, currency = "usd") =>
+    new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: currency.toUpperCase(),
+    }).format(amount / 100)
+
+  const formatDate = (timestamp: number) =>
+    new Date(timestamp * 1000).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    })
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="mb-6 flex items-center gap-4">
@@ -87,141 +144,144 @@ export default function SettingsPage() {
         </TabsContent>
 
         <TabsContent value="billing">
-          <Card>
-            <CardHeader>
-              <CardTitle>Payment Methods</CardTitle>
-              <CardDescription>Manage your payment information</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Current Payment Method */}
-              <div>
-                <Label className="mb-3 block text-muted-foreground text-sm">
-                  Current Payment Method
-                </Label>
-                <div className="rounded-lg border bg-muted/30 p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="flex size-10 items-center justify-center rounded-md bg-primary/10">
-                        <span className="font-bold text-primary">••••</span>
-                      </div>
-                      <div>
-                        <p className="font-semibold">•••• •••• •••• 4242</p>
-                        <p className="text-muted-foreground text-sm">Expires 12/2025</p>
-                      </div>
+          {user?.stripeCustomerId ? (
+            <>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Payment Methods</CardTitle>
+                  <CardDescription>Manage your payment information</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {isLoadingPaymentMethods ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="size-6 animate-spin text-muted-foreground" />
                     </div>
-                    <div className="flex gap-2">
-                      <Button size="sm" variant="outline">
-                        Edit
-                      </Button>
-                      <Button size="sm" variant="destructive">
-                        Remove
-                      </Button>
+                  ) : paymentMethods.length === 0 ? (
+                    <div className="py-8 text-center">
+                      <CreditCard className="mx-auto mb-4 size-12 text-muted-foreground" />
+                      <p className="text-muted-foreground">No payment methods saved</p>
+                      <p className="mt-2 text-muted-foreground text-sm">
+                        Payment methods are saved automatically when you complete a reservation.
+                      </p>
                     </div>
-                  </div>
-                </div>
-              </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {paymentMethods.map((pm) => (
+                        <div className="rounded-lg border bg-muted/30 p-4" key={pm.id}>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="flex size-10 items-center justify-center rounded-md bg-primary/10">
+                                <CreditCard className="size-5 text-primary" />
+                              </div>
+                              <div>
+                                <p className="font-semibold">
+                                  {pm.card
+                                    ? `${formatCardBrand(pm.card.brand)} •••• ${pm.card.last4}`
+                                    : "Payment Method"}
+                                </p>
+                                {pm.card && (
+                                  <p className="text-muted-foreground text-sm">
+                                    Expires {String(pm.card.expMonth).padStart(2, "0")}/
+                                    {pm.card.expYear}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                            <Button size="sm" variant="destructive">
+                              <Trash2 className="size-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
-              <Separator />
+                  <Separator />
 
-              {/* Add New Payment Method */}
-              <div>
-                <Label className="mb-3 block text-muted-foreground text-sm">
-                  Add New Payment Method
-                </Label>
-                <div className="space-y-4">
                   <div>
-                    <Label htmlFor="cardNumber">Card Number</Label>
-                    <Input id="cardNumber" placeholder="1234 5678 9012 3456" type="text" />
+                    <p className="mb-4 text-muted-foreground text-sm">
+                      To add a new payment method, complete a reservation and your payment method
+                      will be saved for future use.
+                    </p>
                   </div>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div>
-                      <Label htmlFor="expiry">Expiry Date</Label>
-                      <Input id="expiry" placeholder="MM/YY" type="text" />
-                    </div>
-                    <div>
-                      <Label htmlFor="cvv">CVV</Label>
-                      <Input id="cvv" placeholder="123" type="text" />
-                    </div>
-                  </div>
-                  <div>
-                    <Label htmlFor="cardName">Name on Card</Label>
-                    <Input id="cardName" placeholder="John Doe" type="text" />
-                  </div>
-                  <Button>Add Payment Method</Button>
-                </div>
-              </div>
+                </CardContent>
+              </Card>
 
-              <Separator />
-
-              {/* Billing Address */}
-              <div>
-                <Label className="mb-3 block text-muted-foreground text-sm">Billing Address</Label>
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="address">Street Address</Label>
-                    <Input id="address" placeholder="123 Main Street" type="text" />
-                  </div>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div>
-                      <Label htmlFor="city">City</Label>
-                      <Input id="city" placeholder="Daytona Beach" type="text" />
+              {/* Billing History */}
+              <Card className="mt-6">
+                <CardHeader>
+                  <CardTitle>Billing History</CardTitle>
+                  <CardDescription>View and download past invoices</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {isLoadingInvoices ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="size-6 animate-spin text-muted-foreground" />
                     </div>
-                    <div>
-                      <Label htmlFor="state">State</Label>
-                      <Input id="state" placeholder="FL" type="text" />
+                  ) : invoices.length === 0 ? (
+                    <div className="py-8 text-center">
+                      <p className="text-muted-foreground">No invoices found</p>
                     </div>
-                  </div>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div>
-                      <Label htmlFor="zipCode">ZIP Code</Label>
-                      <Input id="zipCode" placeholder="32114" type="text" />
+                  ) : (
+                    <div className="space-y-3">
+                      {invoices.map((invoice) => (
+                        <div
+                          className="flex items-center justify-between rounded-lg border p-4"
+                          key={invoice.id}
+                        >
+                          <div>
+                            <p className="font-semibold">
+                              {invoice.description || `Invoice ${invoice.number || invoice.id}`}
+                            </p>
+                            <p className="text-muted-foreground text-sm">
+                              {formatDate(invoice.created)}
+                            </p>
+                            <p className="mt-1 text-muted-foreground text-xs">
+                              Status: <span className="capitalize">{invoice.status}</span>
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-semibold">
+                              {formatCurrency(invoice.amount, invoice.currency)}
+                            </p>
+                            {invoice.hostedInvoiceUrl && (
+                              <div className="mt-2 flex gap-2">
+                                <Button
+                                  onClick={() => window.open(invoice.hostedInvoiceUrl, "_blank")}
+                                  size="sm"
+                                  variant="outline"
+                                >
+                                  View
+                                </Button>
+                                {invoice.invoicePdf && (
+                                  <Button
+                                    onClick={() => window.open(invoice.invoicePdf, "_blank")}
+                                    size="sm"
+                                    variant="outline"
+                                  >
+                                    <Download className="size-4" />
+                                  </Button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                    <div>
-                      <Label htmlFor="country">Country</Label>
-                      <Input id="country" placeholder="United States" type="text" />
-                    </div>
-                  </div>
-                  <Button variant="outline">Update Billing Address</Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Billing History */}
-          <Card className="mt-6">
-            <CardHeader>
-              <CardTitle>Billing History</CardTitle>
-              <CardDescription>View and download past invoices</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between rounded-lg border p-4">
-                  <div>
-                    <p className="font-semibold">Trip #12345</p>
-                    <p className="text-muted-foreground text-sm">Mar 15, 2024</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-semibold">$899.00</p>
-                    <Button className="mt-2" size="sm" variant="outline">
-                      Download
-                    </Button>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between rounded-lg border p-4">
-                  <div>
-                    <p className="font-semibold">Trip #12344</p>
-                    <p className="text-muted-foreground text-sm">Feb 28, 2024</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-semibold">$1,299.00</p>
-                    <Button className="mt-2" size="sm" variant="outline">
-                      Download
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+                  )}
+                </CardContent>
+              </Card>
+            </>
+          ) : (
+            <Card>
+              <CardContent className="py-8 text-center">
+                <p className="text-muted-foreground">
+                  No billing information available. Payment methods will be saved when you make your
+                  first reservation.
+                </p>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         <TabsContent value="notifications">

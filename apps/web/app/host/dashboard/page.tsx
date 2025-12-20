@@ -4,7 +4,7 @@ import { useUser } from "@clerk/nextjs"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
-import { useQuery } from "convex/react"
+import { useAction, useQuery } from "convex/react"
 import {
   AlertCircle,
   Calendar,
@@ -21,12 +21,25 @@ import {
   XCircle,
 } from "lucide-react"
 import Link from "next/link"
-import { useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { api } from "@/lib/convex"
 
 export default function HostDashboardPage() {
   const { user } = useUser()
   console.log("user", user)
+  const [isLoadingConnect, setIsLoadingConnect] = useState(false)
+  const [connectError, setConnectError] = useState<string | null>(null)
+  const [connectStatus, setConnectStatus] = useState<{
+    hasAccount: boolean
+    isComplete: boolean
+    chargesEnabled?: boolean
+    payoutsEnabled?: boolean
+    accountId?: string
+  } | null>(null)
+
+  const fetchConnectStatus = useAction(api.stripe.getConnectAccountStatus)
+  const startOrContinueOnboarding = useAction(api.stripe.createConnectAccount)
+  const createDashboardLink = useAction(api.stripe.createConnectLoginLink)
 
   // Fetch data from Convex
   const vehicles = useQuery(api.vehicles.getByOwner, user?.id ? { ownerId: user.id } : "skip")
@@ -43,6 +56,24 @@ export default function HostDashboardPage() {
     api.vehicleAnalytics.getAllVehicleAnalytics,
     user?.id ? { ownerId: user.id } : "skip"
   )
+
+  useEffect(() => {
+    const loadStatus = async () => {
+      if (!user?.id) return
+      setIsLoadingConnect(true)
+      setConnectError(null)
+      try {
+        const status = await fetchConnectStatus({ ownerId: user.id })
+        setConnectStatus(status)
+      } catch (error) {
+        setConnectError(error instanceof Error ? error.message : "Failed to load payout status")
+      } finally {
+        setIsLoadingConnect(false)
+      }
+    }
+
+    void loadStatus()
+  }, [fetchConnectStatus, user?.id])
 
   // Calculate stats from real data
   const stats = useMemo(() => {
@@ -184,6 +215,45 @@ export default function HostDashboardPage() {
     reviewStats === undefined ||
     vehicleAnalytics === undefined
 
+  const handleOnboarding = async () => {
+    if (!user?.id) return
+    setIsLoadingConnect(true)
+    setConnectError(null)
+    try {
+      const result = await startOrContinueOnboarding({ ownerId: user.id })
+      if (result.onboardingUrl) {
+        window.location.href = result.onboardingUrl
+        return
+      }
+      const status = await fetchConnectStatus({ ownerId: user.id })
+      setConnectStatus(status)
+    } catch (error) {
+      setConnectError(
+        error instanceof Error ? error.message : "Unable to start Stripe onboarding right now"
+      )
+    } finally {
+      setIsLoadingConnect(false)
+    }
+  }
+
+  const handleOpenDashboard = async () => {
+    if (!user?.id) return
+    setIsLoadingConnect(true)
+    setConnectError(null)
+    try {
+      const link = await createDashboardLink({ ownerId: user.id })
+      if (link.url) {
+        window.location.href = link.url
+      }
+    } catch (error) {
+      setConnectError(
+        error instanceof Error ? error.message : "Unable to open Stripe dashboard right now"
+      )
+    } finally {
+      setIsLoadingConnect(false)
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="container mx-auto max-w-7xl px-4 py-8">
@@ -217,23 +287,8 @@ export default function HostDashboardPage() {
       </div>
 
       {/* Stats Grid */}
-      <div className="mb-8 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="font-medium text-muted-foreground text-sm">
-              Total Vehicles
-            </CardTitle>
-            <Car className="size-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="font-bold text-2xl">{stats.totalVehicles}</div>
-            <p className="text-muted-foreground text-xs">
-              {stats.totalVehicles === 1 ? "vehicle listed" : "vehicles listed"}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
+      <div className="mb-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <Card className="h-full">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="font-medium text-muted-foreground text-sm">
               Pending Bookings
@@ -246,7 +301,7 @@ export default function HostDashboardPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="h-full">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="font-medium text-muted-foreground text-sm">
               Upcoming Bookings
@@ -259,7 +314,7 @@ export default function HostDashboardPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="h-full">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="font-medium text-muted-foreground text-sm">
               Total Earnings
@@ -274,7 +329,7 @@ export default function HostDashboardPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="h-full">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="font-medium text-muted-foreground text-sm">
               Average Rating
@@ -288,42 +343,43 @@ export default function HostDashboardPage() {
         </Card>
       </div>
 
-      {/* Analytics Grid */}
-      <div className="mb-8 grid gap-6 md:grid-cols-3">
+      {/* Engagement Stats */}
+      <div className="mb-8">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="font-medium text-muted-foreground text-sm">Total Views</CardTitle>
-            <Eye className="size-4 text-muted-foreground" />
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>Engagement</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="font-bold text-2xl">{stats.totalViews.toLocaleString()}</div>
-            <p className="text-muted-foreground text-xs">Listing views</p>
-          </CardContent>
-        </Card>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="rounded-lg border p-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground text-sm">Total Views</span>
+                  <Eye className="size-4 text-muted-foreground" />
+                </div>
+                <div className="mt-2 font-bold text-2xl">{stats.totalViews.toLocaleString()}</div>
+                <p className="text-muted-foreground text-xs">Listing views</p>
+              </div>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="font-medium text-muted-foreground text-sm">
-              Total Shares
-            </CardTitle>
-            <Share2 className="size-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="font-bold text-2xl">{stats.totalShares.toLocaleString()}</div>
-            <p className="text-muted-foreground text-xs">Times shared</p>
-          </CardContent>
-        </Card>
+              <div className="rounded-lg border p-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground text-sm">Total Shares</span>
+                  <Share2 className="size-4 text-muted-foreground" />
+                </div>
+                <div className="mt-2 font-bold text-2xl">{stats.totalShares.toLocaleString()}</div>
+                <p className="text-muted-foreground text-xs">Times shared</p>
+              </div>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="font-medium text-muted-foreground text-sm">
-              Total Favorites
-            </CardTitle>
-            <Heart className="size-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="font-bold text-2xl">{stats.totalFavorites.toLocaleString()}</div>
-            <p className="text-muted-foreground text-xs">Saved by users</p>
+              <div className="rounded-lg border p-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground text-sm">Total Favorites</span>
+                  <Heart className="size-4 text-muted-foreground" />
+                </div>
+                <div className="mt-2 font-bold text-2xl">
+                  {stats.totalFavorites.toLocaleString()}
+                </div>
+                <p className="text-muted-foreground text-xs">Saved by users</p>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -331,7 +387,7 @@ export default function HostDashboardPage() {
       <div className="grid gap-8 lg:grid-cols-3">
         {/* Recent Vehicles */}
         <div className="lg:col-span-2">
-          <Card>
+          <Card id="payouts">
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Your Vehicles</CardTitle>
               <Link href="/host/vehicles/list">
@@ -370,15 +426,13 @@ export default function HostDashboardPage() {
                         />
                       </div>
                       <div className="flex-1">
-                        <div className="mb-2 flex items-start justify-between">
-                          <div>
-                            <h3 className="font-semibold text-lg">
-                              {vehicle.year} {vehicle.make} {vehicle.model}
-                            </h3>
-                            <p className="text-muted-foreground text-sm">{vehicle.name}</p>
-                          </div>
+                        <div className="mb-2 flex flex-wrap items-center gap-2">
+                          <h3 className="font-semibold text-lg">
+                            {vehicle.year} {vehicle.make} {vehicle.model}
+                          </h3>
                           {getStatusBadge(vehicle.status)}
                         </div>
+                        <p className="text-muted-foreground text-sm">{vehicle.name}</p>
                         <div className="flex items-center gap-4 text-sm">
                           <span className="text-muted-foreground">{vehicle.bookings} bookings</span>
                           <span className="text-muted-foreground">•</span>
@@ -401,9 +455,68 @@ export default function HostDashboardPage() {
         </div>
 
         {/* Sidebar */}
-        <div>
+        <div className="space-y-6">
+          {/* Stripe / Payouts */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Payments & Payouts</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {connectError && (
+                <p className="text-destructive text-sm" role="alert">
+                  {connectError}
+                </p>
+              )}
+              <div className="space-y-1 text-sm">
+                <p className="font-medium">
+                  {connectStatus?.isComplete
+                    ? "Stripe account connected"
+                    : connectStatus?.hasAccount
+                      ? "Finish Stripe onboarding to enable payouts"
+                      : "Set up Stripe to receive payouts"}
+                </p>
+                <p className="text-muted-foreground">
+                  {connectStatus?.isComplete
+                    ? connectStatus?.payoutsEnabled
+                      ? "Payouts are enabled."
+                      : "Account connected. Payouts pending Stripe review."
+                    : "You'll be redirected to Stripe to complete onboarding."}
+                </p>
+                {connectStatus?.accountId && (
+                  <p className="text-muted-foreground text-xs">
+                    Account ID: {connectStatus.accountId}
+                  </p>
+                )}
+              </div>
+              <div className="flex flex-col gap-2">
+                <Button
+                  disabled={isLoadingConnect || !user?.id}
+                  onClick={handleOnboarding}
+                  variant="default"
+                >
+                  {isLoadingConnect
+                    ? "Working..."
+                    : connectStatus?.isComplete
+                      ? "Revisit Stripe onboarding"
+                      : connectStatus?.hasAccount
+                        ? "Continue Stripe onboarding"
+                        : "Start Stripe onboarding"}
+                </Button>
+                {connectStatus?.isComplete && (
+                  <Button
+                    disabled={isLoadingConnect || !user?.id}
+                    onClick={handleOpenDashboard}
+                    variant="outline"
+                  >
+                    Open Stripe dashboard
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Quick Actions */}
-          <Card className="mb-6">
+          <Card>
             <CardHeader>
               <CardTitle>Quick Actions</CardTitle>
             </CardHeader>
