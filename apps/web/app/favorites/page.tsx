@@ -105,9 +105,7 @@ export default function FavoritesPage() {
     <div className="container mx-auto px-4 py-8">
       <div className="mb-8">
         <h1 className="mb-2 font-bold text-3xl">Favorites</h1>
-        <p className="text-muted-foreground">
-          {favorites.length === 0 ? "No favorites yet" : `${favorites.length} saved vehicles`}
-        </p>
+        <p className="text-muted-foreground">Manage your favorite vehicles</p>
       </div>
 
       {favorites.length === 0 ? (

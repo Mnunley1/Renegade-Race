@@ -147,9 +147,11 @@ export const generateProfileImageUploadUrl = mutation({
       throw new Error("Not authenticated")
     }
 
-    // Generate organized key: images/profiles/{userId}.{ext}
+    // Generate organized key: images/profiles/{userId}/{uuid}
     const key = `images/profiles/${user._id}/${crypto.randomUUID()}`
-    return r2.generateUploadUrl(key)
+    const uploadResult = r2.generateUploadUrl(key)
+    // r2.generateUploadUrl returns an object with 'url' property
+    return { ...uploadResult, key }
   },
 })
 
