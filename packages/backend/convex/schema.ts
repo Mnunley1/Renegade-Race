@@ -26,6 +26,14 @@ export default defineSchema({
         v.literal("disabled")
       )
     ),
+    // Stripe Customer fields (for renters)
+    stripeCustomerId: v.optional(v.string()),
+    // User interests/preferences
+    interests: v.optional(v.array(v.string())), // e.g., ['Track Racing', 'GT3 Cars', 'Formula Racing', 'Endurance']
+    // User profile fields
+    bio: v.optional(v.string()),
+    location: v.optional(v.string()),
+    experience: v.optional(v.string()),
   }).index("by_external_id", ["externalId"]),
 
   tracks: defineTable({
@@ -75,7 +83,8 @@ export default defineSchema({
 
   vehicleImages: defineTable({
     vehicleId: v.id("vehicles"),
-    r2Key: v.string(), // R2 object key for the original image
+    r2Key: v.optional(v.string()), // R2 object key for the original image
+    imageUrl: v.optional(v.string()), // Legacy/external image URL
     isPrimary: v.boolean(),
     order: v.number(),
     metadata: v.optional(
