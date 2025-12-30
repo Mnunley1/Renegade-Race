@@ -56,9 +56,8 @@ export default function MessagesPage() {
       setMessageContent("")
       setVehicleId("")
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to send message"
-      )
+      console.error("Failed to send message:", error)
+      toast.error("An error occurred")
     } finally {
       setIsSending(false)
     }

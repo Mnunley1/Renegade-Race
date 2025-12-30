@@ -1,9 +1,13 @@
 "use client"
 
-import { useQuery, useMutation } from "convex/react"
-import { useEffect, useState } from "react"
 import { Button } from "@workspace/ui/components/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import {
@@ -15,9 +19,11 @@ import {
 } from "@workspace/ui/components/select"
 import { Separator } from "@workspace/ui/components/separator"
 import { Textarea } from "@workspace/ui/components/textarea"
+import { useMutation, useQuery } from "convex/react"
 import { ArrowLeft, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
+import { useEffect, useState } from "react"
 import { api } from "@/lib/convex"
 
 const TRANSMISSION_OPTIONS = ["Manual", "Automatic", "PDK", "DCT", "CVT"]
@@ -49,10 +55,7 @@ export default function EditVehiclePage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Fetch vehicle and tracks from Convex
-  const vehicle = useQuery(
-    api.vehicles.getById,
-    vehicleId ? { id: vehicleId as any } : "skip"
-  )
+  const vehicle = useQuery(api.vehicles.getById, vehicleId ? { id: vehicleId as any } : "skip")
   const tracks = useQuery(api.tracks.getAll, {})
 
   // Mutations
@@ -201,7 +204,7 @@ export default function EditVehiclePage() {
     <div className="container mx-auto max-w-4xl px-4 py-8">
       <div className="mb-8">
         <Link href={`/host/vehicles/${vehicleId}`}>
-          <Button variant="ghost" size="sm">
+          <Button className="mb-6" variant="outline">
             <ArrowLeft className="mr-2 size-4" />
             Back to Vehicle
           </Button>
@@ -220,8 +223,8 @@ export default function EditVehiclePage() {
             <div className="space-y-2">
               <Label htmlFor="trackId">Track Location *</Label>
               <Select
-                value={formData.trackId}
                 onValueChange={(value) => handleSelectChange("trackId", value)}
+                value={formData.trackId}
               >
                 <SelectTrigger id="trackId">
                   <SelectValue placeholder="Select a track" />
@@ -395,8 +398,8 @@ export default function EditVehiclePage() {
               <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
                 {COMMON_AMENITIES.map((amenity) => (
                   <Button
-                    key={amenity}
                     className="justify-start"
+                    key={amenity}
                     onClick={(e) => {
                       e.preventDefault()
                       toggleAmenity(amenity)
@@ -405,7 +408,7 @@ export default function EditVehiclePage() {
                     variant={formData.amenities.includes(amenity) ? "default" : "outline"}
                   >
                     {formData.amenities.includes(amenity) && (
-                      <span className="mr-2 size-4 rounded-full bg-primary-foreground text-primary text-xs flex items-center justify-center">
+                      <span className="mr-2 flex size-4 items-center justify-center rounded-full bg-primary-foreground text-primary text-xs">
                         ✓
                       </span>
                     )}

@@ -59,9 +59,8 @@ export default function DisputeDetailPage() {
       toast.success("Dispute resolved successfully")
       router.push("/disputes")
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to resolve dispute"
-      )
+      console.error("Failed to resolve dispute:", error)
+      toast.error("An error occurred")
     } finally {
       setIsResolving(false)
     }
@@ -82,9 +81,8 @@ export default function DisputeDetailPage() {
       toast.success("Message added")
       setAdminMessage("")
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to add message"
-      )
+      console.error("Failed to add message:", error)
+      toast.error("An error occurred")
     } finally {
       setIsAddingMessage(false)
     }

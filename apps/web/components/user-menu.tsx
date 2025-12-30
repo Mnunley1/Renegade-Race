@@ -2,6 +2,7 @@
 
 import { useAuth, useUser } from "@clerk/nextjs"
 import { Avatar, AvatarFallback, AvatarImage } from "@workspace/ui/components/avatar"
+import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import {
   DropdownMenu,
@@ -10,6 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu"
+import { useQuery } from "convex/react"
 import {
   Calendar,
   Car,
@@ -24,11 +26,13 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { api } from "@/lib/convex"
 
 export function UserMenu() {
   const { user, isSignedIn } = useUser()
   const { signOut } = useAuth()
   const pathname = usePathname()
+  const onboardingStatus = useQuery(api.users.getHostOnboardingStatus, isSignedIn ? {} : "skip")
 
   const handleSignOut = async () => {
     await signOut()
@@ -87,12 +91,35 @@ export function UserMenu() {
             <DropdownMenuSeparator />
 
             {/* Host Section */}
-            <DropdownMenuItem asChild>
-              <Link className="flex items-center text-sm" href="/host/dashboard">
-                <Car className="mr-3 size-4" />
-                Host Dashboard
-              </Link>
-            </DropdownMenuItem>
+            {isSignedIn && (
+              <>
+                {!onboardingStatus || onboardingStatus.status === "not_started" ? (
+                  <DropdownMenuItem asChild>
+                    <Link className="flex items-center text-sm" href="/host/onboarding">
+                      <Car className="mr-3 size-4" />
+                      Become a Host
+                    </Link>
+                  </DropdownMenuItem>
+                ) : onboardingStatus.status === "in_progress" ? (
+                  <DropdownMenuItem asChild>
+                    <Link className="flex items-center text-sm" href="/host/onboarding">
+                      <Car className="mr-3 size-4" />
+                      <span>Complete Host Setup</span>
+                      <Badge className="ml-auto" variant="secondary">
+                        In Progress
+                      </Badge>
+                    </Link>
+                  </DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem asChild>
+                    <Link className="flex items-center text-sm" href="/host/dashboard">
+                      <Car className="mr-3 size-4" />
+                      Host Dashboard
+                    </Link>
+                  </DropdownMenuItem>
+                )}
+              </>
+            )}
 
             <DropdownMenuSeparator />
 

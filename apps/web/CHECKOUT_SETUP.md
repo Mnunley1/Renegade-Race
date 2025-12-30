@@ -92,7 +92,6 @@ pnpm dev
 - `apps/web/convex.json` - Convex configuration
 - `apps/web/lib/convex.ts` - Convex API exports
 - `apps/web/components/providers.tsx` - Added ConvexProvider
-- `apps/web/components/booking-form.tsx` - Integrated with Convex
 - `apps/web/app/checkout/page.tsx` - Checkout page with Stripe
 - `apps/web/app/checkout/success/page.tsx` - Success page
 

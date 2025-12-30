@@ -63,9 +63,8 @@ export default function MassEmailsPage() {
       setHtmlContent("")
       setCustomRecipients("")
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to send emails"
-      )
+      console.error("Failed to send emails:", error)
+      toast.error("An error occurred")
     } finally {
       setIsSending(false)
     }
