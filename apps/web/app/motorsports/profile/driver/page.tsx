@@ -31,7 +31,7 @@ import { toast } from "sonner"
 import { api } from "@/lib/convex"
 import { imagePresets } from "@/lib/imagekit"
 
-// Force dynamic rendering - this page requires authentication
+// Force dynamic rendering - this page requires authentication and client-side hooks
 export const dynamic = "force-dynamic"
 
 const EXPERIENCE_LEVELS = [
