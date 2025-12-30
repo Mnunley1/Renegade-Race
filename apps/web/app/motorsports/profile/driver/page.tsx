@@ -31,6 +31,9 @@ import { toast } from "sonner"
 import { api } from "@/lib/convex"
 import { imagePresets } from "@/lib/imagekit"
 
+// Force dynamic rendering - this page requires authentication
+export const dynamic = "force-dynamic"
+
 const EXPERIENCE_LEVELS = [
   { value: "beginner", label: "Beginner" },
   { value: "intermediate", label: "Intermediate" },
