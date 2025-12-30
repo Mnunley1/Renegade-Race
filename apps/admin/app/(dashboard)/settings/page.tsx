@@ -70,9 +70,8 @@ export default function SettingsPage() {
       })
       toast.success("Platform settings updated successfully")
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to update platform settings"
-      )
+      console.error("Failed to update platform settings:", error)
+      toast.error("An error occurred")
     } finally {
       setIsSaving(false)
     }

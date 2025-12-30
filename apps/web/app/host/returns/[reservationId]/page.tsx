@@ -1,19 +1,19 @@
 "use client"
 
-import { useQuery, useMutation } from "convex/react"
 import { useUser } from "@clerk/nextjs"
-import { useParams, useRouter } from "next/navigation"
-import { useState } from "react"
+import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
+import { Checkbox } from "@workspace/ui/components/checkbox"
 import { Label } from "@workspace/ui/components/label"
 import { Textarea } from "@workspace/ui/components/textarea"
-import { Badge } from "@workspace/ui/components/badge"
-import { Checkbox } from "@workspace/ui/components/checkbox"
-import { Loader2, ArrowLeft, CheckCircle2, XCircle, Upload } from "lucide-react"
+import { useMutation, useQuery } from "convex/react"
+import { ArrowLeft, CheckCircle2, Loader2, Upload } from "lucide-react"
 import Link from "next/link"
-import { api } from "@/lib/convex"
+import { useParams, useRouter } from "next/navigation"
+import { useState } from "react"
 import { toast } from "sonner"
+import { api } from "@/lib/convex"
 
 export default function ReturnReviewPage() {
   const { user } = useUser()
@@ -87,7 +87,7 @@ export default function ReturnReviewPage() {
   const reservation = completion.reservation
   const renter = completion.renter
 
-  if (!vehicle || !reservation) {
+  if (!(vehicle && reservation)) {
     return (
       <div className="container mx-auto max-w-4xl px-4 py-8">
         <Card>
@@ -108,7 +108,7 @@ export default function ReturnReviewPage() {
       <div className="container mx-auto max-w-4xl px-4 py-8">
         <div className="mb-6">
           <Link href="/host/reservations">
-            <Button variant="ghost" size="sm">
+            <Button className="mb-6" variant="outline">
               <ArrowLeft className="mr-2 size-4" />
               Back to Reservations
             </Button>
@@ -134,7 +134,7 @@ export default function ReturnReviewPage() {
       <div className="container mx-auto max-w-4xl px-4 py-8">
         <div className="mb-6">
           <Link href="/host/reservations">
-            <Button variant="ghost" size="sm">
+            <Button className="mb-6" variant="outline">
               <ArrowLeft className="mr-2 size-4" />
               Back to Reservations
             </Button>
@@ -160,7 +160,7 @@ export default function ReturnReviewPage() {
     <div className="container mx-auto max-w-4xl px-4 py-8">
       <div className="mb-6">
         <Link href="/host/reservations">
-          <Button variant="ghost" size="sm">
+          <Button size="sm" variant="ghost">
             <ArrowLeft className="mr-2 size-4" />
             Back to Reservations
           </Button>
@@ -174,7 +174,7 @@ export default function ReturnReviewPage() {
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form className="space-y-6" onSubmit={handleSubmit}>
         {/* Renter's Return Form Summary */}
         <Card>
           <CardHeader>
@@ -190,7 +190,7 @@ export default function ReturnReviewPage() {
               </div>
               <div>
                 <Label>Vehicle Condition</Label>
-                <Badge variant="outline" className="mt-1">
+                <Badge className="mt-1" variant="outline">
                   {renterReturnForm.vehicleCondition.charAt(0).toUpperCase() +
                     renterReturnForm.vehicleCondition.slice(1)}
                 </Badge>
@@ -207,7 +207,7 @@ export default function ReturnReviewPage() {
             {renterReturnForm.notes && (
               <div>
                 <Label>Notes</Label>
-                <p className="mt-1 text-sm text-muted-foreground">{renterReturnForm.notes}</p>
+                <p className="mt-1 text-muted-foreground text-sm">{renterReturnForm.notes}</p>
               </div>
             )}
             {renterReturnForm.photos && renterReturnForm.photos.length > 0 && (
@@ -216,9 +216,9 @@ export default function ReturnReviewPage() {
                 <div className="mt-2 flex flex-wrap gap-2">
                   {renterReturnForm.photos.map((photo, index) => (
                     <img
-                      key={index}
                       alt={`Return photo ${index + 1}`}
                       className="h-24 w-24 rounded-lg object-cover"
+                      key={index}
                       src={photo}
                     />
                   ))}
@@ -236,11 +236,11 @@ export default function ReturnReviewPage() {
           <CardContent className="space-y-6">
             <div className="flex items-center space-x-2">
               <Checkbox
-                id="vehicleReceived"
                 checked={vehicleReceived}
+                id="vehicleReceived"
                 onCheckedChange={(checked) => setVehicleReceived(checked === true)}
               />
-              <Label htmlFor="vehicleReceived" className="cursor-pointer">
+              <Label className="cursor-pointer" htmlFor="vehicleReceived">
                 Vehicle has been received
               </Label>
             </div>
@@ -250,46 +250,46 @@ export default function ReturnReviewPage() {
               <div className="space-y-3">
                 <div className="flex items-center space-x-2">
                   <Checkbox
-                    id="conditionMatches"
                     checked={conditionMatches}
+                    id="conditionMatches"
                     onCheckedChange={(checked) => setConditionMatches(checked === true)}
                   />
-                  <Label htmlFor="conditionMatches" className="cursor-pointer">
+                  <Label className="cursor-pointer" htmlFor="conditionMatches">
                     Vehicle condition matches renter's report
                   </Label>
                 </div>
                 <div className="flex items-center space-x-2">
                   <Checkbox
-                    id="fuelLevelMatches"
                     checked={fuelLevelMatches}
+                    id="fuelLevelMatches"
                     onCheckedChange={(checked) => setFuelLevelMatches(checked === true)}
                   />
-                  <Label htmlFor="fuelLevelMatches" className="cursor-pointer">
+                  <Label className="cursor-pointer" htmlFor="fuelLevelMatches">
                     Fuel level matches renter's report
                   </Label>
                 </div>
                 <div className="flex items-center space-x-2">
                   <Checkbox
-                    id="mileageMatches"
                     checked={mileageMatches}
+                    id="mileageMatches"
                     onCheckedChange={(checked) => setMileageMatches(checked === true)}
                   />
-                  <Label htmlFor="mileageMatches" className="cursor-pointer">
+                  <Label className="cursor-pointer" htmlFor="mileageMatches">
                     Mileage matches renter's report
                   </Label>
                 </div>
               </div>
             </div>
 
-            {(!conditionMatches || !fuelLevelMatches || !mileageMatches) && (
+            {!(conditionMatches && fuelLevelMatches && mileageMatches) && (
               <div>
                 <Label htmlFor="damageReported">Damage or Discrepancy Report</Label>
                 <Textarea
                   id="damageReported"
-                  value={damageReported}
                   onChange={(e) => setDamageReported(e.target.value)}
                   placeholder="Describe any damage or discrepancies found..."
                   rows={4}
+                  value={damageReported}
                 />
               </div>
             )}
@@ -298,10 +298,10 @@ export default function ReturnReviewPage() {
               <Label htmlFor="notes">Additional Notes</Label>
               <Textarea
                 id="notes"
-                value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Any additional notes about the return..."
                 rows={4}
+                value={notes}
               />
             </div>
 
@@ -309,7 +309,7 @@ export default function ReturnReviewPage() {
               <Label>Photos (Optional)</Label>
               <div className="mt-2 flex flex-wrap gap-2">
                 {photos.map((photo, index) => (
-                  <div key={index} className="relative">
+                  <div className="relative" key={index}>
                     <img
                       alt={`Review photo ${index + 1}`}
                       className="h-24 w-24 rounded-lg object-cover"
@@ -318,15 +318,15 @@ export default function ReturnReviewPage() {
                   </div>
                 ))}
                 <Button
+                  className="h-24 w-24"
+                  onClick={handlePhotoUpload}
                   type="button"
                   variant="outline"
-                  onClick={handlePhotoUpload}
-                  className="h-24 w-24"
                 >
                   <Upload className="size-4" />
                 </Button>
               </div>
-              <p className="mt-2 text-xs text-muted-foreground">
+              <p className="mt-2 text-muted-foreground text-xs">
                 Upload photos if there are discrepancies or damage
               </p>
             </div>
@@ -334,7 +334,7 @@ export default function ReturnReviewPage() {
         </Card>
 
         <div className="flex gap-4">
-          <Button type="submit" disabled={isSubmitting || !vehicleReceived} className="flex-1">
+          <Button className="flex-1" disabled={isSubmitting || !vehicleReceived} type="submit">
             {isSubmitting ? (
               <>
                 <Loader2 className="mr-2 size-4 animate-spin" />
@@ -354,4 +354,3 @@ export default function ReturnReviewPage() {
     </div>
   )
 }
-

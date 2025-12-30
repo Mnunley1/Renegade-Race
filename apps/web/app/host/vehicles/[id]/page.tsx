@@ -126,7 +126,7 @@ export default function HostVehicleDetailPage() {
     <div className="container mx-auto max-w-7xl px-4 py-8">
       <div className="mb-6">
         <Link href="/host/vehicles/list">
-          <Button size="sm" variant="ghost">
+          <Button className="mb-6" variant="outline">
             <ArrowLeft className="mr-2 size-4" />
             Back to Vehicles
           </Button>

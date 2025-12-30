@@ -1,20 +1,25 @@
 "use client"
 
-import { useQuery, useMutation } from "convex/react"
 import { useUser } from "@clerk/nextjs"
-import { useParams, useRouter } from "next/navigation"
-import { useState } from "react"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@workspace/ui/components/select"
 import { Textarea } from "@workspace/ui/components/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@workspace/ui/components/select"
-import { Badge } from "@workspace/ui/components/badge"
-import { Calendar, Upload, Loader2, ArrowLeft } from "lucide-react"
+import { useMutation, useQuery } from "convex/react"
+import { ArrowLeft, Calendar, Loader2, Upload } from "lucide-react"
 import Link from "next/link"
-import { api } from "@/lib/convex"
+import { useParams, useRouter } from "next/navigation"
+import { useState } from "react"
 import { toast } from "sonner"
+import { api } from "@/lib/convex"
 
 export default function ReturnSubmissionPage() {
   const { user } = useUser()
@@ -23,7 +28,9 @@ export default function ReturnSubmissionPage() {
   const reservationId = params.reservationId as string
 
   const [returnDate, setReturnDate] = useState("")
-  const [vehicleCondition, setVehicleCondition] = useState<"excellent" | "good" | "fair" | "poor" | "damaged">("excellent")
+  const [vehicleCondition, setVehicleCondition] = useState<
+    "excellent" | "good" | "fair" | "poor" | "damaged"
+  >("excellent")
   const [fuelLevel, setFuelLevel] = useState<"full" | "3/4" | "1/2" | "1/4" | "empty">("full")
   const [mileage, setMileage] = useState("")
   const [notes, setNotes] = useState("")
@@ -46,7 +53,7 @@ export default function ReturnSubmissionPage() {
 
   // Initialize completion if needed
   const handleInitializeCompletion = async () => {
-    if (!reservationId || !reservation) return
+    if (!(reservationId && reservation)) return
 
     try {
       await createCompletion({ reservationId: reservationId as any })
@@ -64,7 +71,7 @@ export default function ReturnSubmissionPage() {
       return
     }
 
-    if (!returnDate || !mileage) {
+    if (!(returnDate && mileage)) {
       toast.error("Please fill in all required fields")
       return
     }
@@ -76,7 +83,7 @@ export default function ReturnSubmissionPage() {
         returnDate,
         vehicleCondition,
         fuelLevel,
-        mileage: parseFloat(mileage),
+        mileage: Number.parseFloat(mileage),
         notes: notes || undefined,
         photos,
       })
@@ -120,13 +127,14 @@ export default function ReturnSubmissionPage() {
   }
 
   const vehicleName = `${vehicle.year} ${vehicle.make} ${vehicle.model}`
-  const isAlreadySubmitted = completion?.status === "pending_owner" || completion?.status === "completed"
+  const isAlreadySubmitted =
+    completion?.status === "pending_owner" || completion?.status === "completed"
 
   return (
     <div className="container mx-auto max-w-4xl px-4 py-8">
       <div className="mb-6">
         <Link href="/trips">
-          <Button variant="ghost" size="sm">
+          <Button className="mb-6" variant="outline">
             <ArrowLeft className="mr-2 size-4" />
             Back to Trips
           </Button>
@@ -135,9 +143,7 @@ export default function ReturnSubmissionPage() {
 
       <div className="mb-8">
         <h1 className="mb-2 font-bold text-3xl">Return Vehicle</h1>
-        <p className="text-muted-foreground">
-          Submit your return form for {vehicleName}
-        </p>
+        <p className="text-muted-foreground">Submit your return form for {vehicleName}</p>
       </div>
 
       {isAlreadySubmitted ? (
@@ -154,7 +160,7 @@ export default function ReturnSubmissionPage() {
           </CardContent>
         </Card>
       ) : (
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form className="space-y-6" onSubmit={handleSubmit}>
           {/* Vehicle Info Card */}
           <Card>
             <CardHeader>
@@ -168,14 +174,14 @@ export default function ReturnSubmissionPage() {
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
                   <Label>Rental Period</Label>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-muted-foreground text-sm">
                     {new Date(reservation.startDate).toLocaleDateString()} -{" "}
                     {new Date(reservation.endDate).toLocaleDateString()}
                   </p>
                 </div>
                 <div>
                   <Label>Total Days</Label>
-                  <p className="text-sm text-muted-foreground">{reservation.totalDays} days</p>
+                  <p className="text-muted-foreground text-sm">{reservation.totalDays} days</p>
                 </div>
               </div>
             </CardContent>
@@ -193,11 +199,11 @@ export default function ReturnSubmissionPage() {
                 </Label>
                 <Input
                   id="returnDate"
-                  type="date"
-                  value={returnDate}
+                  max={new Date().toISOString().split("T")[0]}
                   onChange={(e) => setReturnDate(e.target.value)}
                   required
-                  max={new Date().toISOString().split("T")[0]}
+                  type="date"
+                  value={returnDate}
                 />
               </div>
 
@@ -205,7 +211,10 @@ export default function ReturnSubmissionPage() {
                 <Label htmlFor="vehicleCondition">
                   Vehicle Condition <span className="text-red-500">*</span>
                 </Label>
-                <Select value={vehicleCondition} onValueChange={(value: any) => setVehicleCondition(value)}>
+                <Select
+                  onValueChange={(value: any) => setVehicleCondition(value)}
+                  value={vehicleCondition}
+                >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -223,7 +232,7 @@ export default function ReturnSubmissionPage() {
                 <Label htmlFor="fuelLevel">
                   Fuel Level <span className="text-red-500">*</span>
                 </Label>
-                <Select value={fuelLevel} onValueChange={(value: any) => setFuelLevel(value)}>
+                <Select onValueChange={(value: any) => setFuelLevel(value)} value={fuelLevel}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -243,12 +252,12 @@ export default function ReturnSubmissionPage() {
                 </Label>
                 <Input
                   id="mileage"
-                  type="number"
-                  value={mileage}
+                  min={0}
                   onChange={(e) => setMileage(e.target.value)}
                   placeholder="Enter current mileage"
                   required
-                  min={0}
+                  type="number"
+                  value={mileage}
                 />
               </div>
 
@@ -256,10 +265,10 @@ export default function ReturnSubmissionPage() {
                 <Label htmlFor="notes">Additional Notes</Label>
                 <Textarea
                   id="notes"
-                  value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   placeholder="Any additional information about the vehicle condition..."
                   rows={4}
+                  value={notes}
                 />
               </div>
 
@@ -267,7 +276,7 @@ export default function ReturnSubmissionPage() {
                 <Label>Photos (Optional)</Label>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {photos.map((photo, index) => (
-                    <div key={index} className="relative">
+                    <div className="relative" key={index}>
                       <img
                         alt={`Return photo ${index + 1}`}
                         className="h-24 w-24 rounded-lg object-cover"
@@ -276,15 +285,15 @@ export default function ReturnSubmissionPage() {
                     </div>
                   ))}
                   <Button
+                    className="h-24 w-24"
+                    onClick={handlePhotoUpload}
                     type="button"
                     variant="outline"
-                    onClick={handlePhotoUpload}
-                    className="h-24 w-24"
                   >
                     <Upload className="size-4" />
                   </Button>
                 </div>
-                <p className="mt-2 text-xs text-muted-foreground">
+                <p className="mt-2 text-muted-foreground text-xs">
                   Upload photos of the vehicle condition
                 </p>
               </div>
@@ -292,7 +301,7 @@ export default function ReturnSubmissionPage() {
           </Card>
 
           <div className="flex gap-4">
-            <Button type="submit" disabled={isSubmitting} className="flex-1">
+            <Button className="flex-1" disabled={isSubmitting} type="submit">
               {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 size-4 animate-spin" />
@@ -313,4 +322,3 @@ export default function ReturnSubmissionPage() {
     </div>
   )
 }
-

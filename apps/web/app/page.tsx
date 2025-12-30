@@ -3,7 +3,7 @@
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent } from "@workspace/ui/components/card"
 import { useQuery } from "convex/react"
-import { ArrowRight, Award, Car, CheckCircle2, CreditCard, Search, Zap } from "lucide-react"
+import { ArrowRight, Car, CheckCircle2, CreditCard, Search, Zap } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { useMemo, useState } from "react"
@@ -110,16 +110,6 @@ export default function HomePage() {
                 <Button className="w-full sm:w-auto" size="lg">
                   <Car className="mr-2 size-5" />
                   Browse Vehicles
-                </Button>
-              </Link>
-              <Link href="/motorsports">
-                <Button
-                  className="w-full border-white/20 bg-white text-black hover:bg-white/90 sm:w-auto"
-                  size="lg"
-                  variant="outline"
-                >
-                  <Award className="mr-2 size-5" />
-                  Motorsports
                 </Button>
               </Link>
             </div>
@@ -340,7 +330,7 @@ export default function HomePage() {
               </Link>
               <Link href="/host/dashboard">
                 <Button
-                  className="w-full border-white/20 bg-white/10 text-white backdrop-blur-sm hover:bg-white/20 sm:w-auto"
+                  className="w-full border-white/30 bg-white/15 text-white backdrop-blur-sm hover:bg-white/25 sm:w-auto dark:border-white/40 dark:bg-white/20 dark:hover:bg-white/30"
                   size="lg"
                   variant="outline"
                 >
