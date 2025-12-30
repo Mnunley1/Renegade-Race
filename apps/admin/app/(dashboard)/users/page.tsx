@@ -37,9 +37,8 @@ export default function UsersPage() {
       await banUser({ userId })
       toast.success("User banned successfully")
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to ban user"
-      )
+      console.error("Failed to ban user:", error)
+      toast.error("An error occurred")
     } finally {
       setProcessingId(null)
     }
@@ -51,9 +50,8 @@ export default function UsersPage() {
       await unbanUser({ userId })
       toast.success("User unbanned successfully")
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to unban user"
-      )
+      console.error("Failed to unban user:", error)
+      toast.error("An error occurred")
     } finally {
       setProcessingId(null)
     }

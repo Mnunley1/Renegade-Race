@@ -66,7 +66,7 @@ function CheckoutSuccessContent() {
             <div className="mb-8 rounded-lg border bg-muted/50 p-6 text-left">
               {vehicle && (
                 <div className="mb-6 flex gap-4">
-                  {primaryImage && (
+                  {primaryImage && primaryImage.trim() !== "" ? (
                     <div className="relative h-32 w-48 shrink-0 overflow-hidden rounded-lg">
                       <Image
                         alt={`${vehicle.year} ${vehicle.make} ${vehicle.model}`}
@@ -76,7 +76,7 @@ function CheckoutSuccessContent() {
                         src={primaryImage}
                       />
                     </div>
-                  )}
+                  ) : null}
                   <div className="flex-1">
                     <h2 className="mb-2 font-bold text-2xl">
                       {vehicle.year} {vehicle.make} {vehicle.model}

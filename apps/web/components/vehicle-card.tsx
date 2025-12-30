@@ -29,6 +29,7 @@ interface VehicleCardProps extends ComponentProps<"div"> {
   horsepower?: number
   transmission?: string
   drivetrain?: string
+  raceCarClass?: string
 }
 
 export function VehicleCard({
@@ -45,6 +46,7 @@ export function VehicleCard({
   reviews,
   horsepower,
   transmission,
+  raceCarClass,
   className,
   ...props
 }: VehicleCardProps) {
@@ -85,8 +87,8 @@ export function VehicleCard({
     try {
       await toggleFavorite({ vehicleId: id as any })
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to toggle favorite"
       console.error("Error toggling favorite:", error)
+      toast.error("An error occurred")
 
       // If authentication error, show login dialog
       if (errorMessage.includes("Not authenticated") || errorMessage.includes("authentication")) {
@@ -110,13 +112,19 @@ export function VehicleCard({
         {...props}
       >
         <div className="relative h-64 w-full shrink-0 overflow-hidden bg-muted">
-          <Image
-            alt={name}
-            className="object-cover"
-            fill
-            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-            src={image}
-          />
+          {image ? (
+            <Image
+              alt={name}
+              className="object-cover"
+              fill
+              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+              src={image}
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center bg-muted">
+              <Car className="size-16 text-muted-foreground" />
+            </div>
+          )}
 
           {/* Favorite Button */}
           <Button

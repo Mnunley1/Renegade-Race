@@ -23,6 +23,16 @@ interface TeamCardProps extends ComponentProps<"div"> {
 
 const MAX_VISIBLE_SPECIALTIES = 3
 
+function getRacingTypeLabel(racingType: "real-world" | "sim-racing" | "both"): string {
+  if (racingType === "sim-racing") {
+    return "🎮 Sim Racing"
+  }
+  if (racingType === "both") {
+    return "🏎️🎮 Both"
+  }
+  return "🏎️ Real-World"
+}
+
 export function TeamCard({
   id,
   name,
@@ -40,10 +50,10 @@ export function TeamCard({
   ...props
 }: TeamCardProps) {
   return (
-    <Link href={`/motorsports/teams/${id}`} className="h-full">
+    <Link className="flex h-full" href={`/motorsports/teams/${id}`}>
       <Card
         className={cn(
-          "group relative flex h-full flex-col overflow-hidden border-2 transition-all hover:scale-[1.02] hover:shadow-xl",
+          "group relative flex h-full w-full flex-col overflow-hidden border-2 transition-all hover:scale-[1.02] hover:shadow-xl",
           className
         )}
         {...props}
@@ -58,8 +68,8 @@ export function TeamCard({
               src={logoUrl}
             />
           ) : (
-            <div className="flex h-full items-center justify-center bg-gradient-to-br from-primary/20 to-primary/5">
-              <span className="text-6xl">🏎️</span>
+            <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-primary">
+              <h3 className="font-bold text-2xl text-white">{name}</h3>
             </div>
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
@@ -76,10 +86,8 @@ export function TeamCard({
                   <span>{location}</span>
                 </div>
                 {racingType && (
-                  <Badge variant="outline" className="text-xs">
-                    {racingType === "sim-racing" ? "🎮 Sim Racing" : 
-                     racingType === "both" ? "🏎️🎮 Both" : 
-                     "🏎️ Real-World"}
+                  <Badge className="text-xs" variant="outline">
+                    {getRacingTypeLabel(racingType)}
                   </Badge>
                 )}
               </div>

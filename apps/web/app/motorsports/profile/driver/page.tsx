@@ -1,9 +1,7 @@
 "use client"
 
-import { useMutation } from "convex/react"
-import { useState, useEffect } from "react"
-import { useRouter, usePathname } from "next/navigation"
 import { useUser } from "@clerk/nextjs"
+import type { Id } from "@renegade/backend/convex/_generated/dataModel"
 import { Button } from "@workspace/ui/components/button"
 import {
   Card,
@@ -23,9 +21,15 @@ import {
 } from "@workspace/ui/components/select"
 import { Separator } from "@workspace/ui/components/separator"
 import { Textarea } from "@workspace/ui/components/textarea"
-import { ArrowLeft, Check, Loader2 } from "lucide-react"
+import { useMutation, useQuery } from "convex/react"
+import { ArrowLeft, Check, Loader2, Upload, X } from "lucide-react"
+import Image from "next/image"
 import Link from "next/link"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import { useEffect, useRef, useState } from "react"
+import { toast } from "sonner"
 import { api } from "@/lib/convex"
+import { imagePresets } from "@/lib/imagekit"
 
 const EXPERIENCE_LEVELS = [
   { value: "beginner", label: "Beginner" },
@@ -36,7 +40,7 @@ const EXPERIENCE_LEVELS = [
 
 const COMMON_LICENSES = ["FIA", "NASA", "SCCA", "IMSA", "HPDE", "Other"]
 
-const COMMON_CATEGORIES = [
+const REAL_WORLD_CATEGORIES = [
   "GT3",
   "GT4",
   "Formula",
@@ -47,7 +51,9 @@ const COMMON_CATEGORIES = [
   "Club Racing",
   "Vintage Racing",
   "Track Days",
-  // Sim Racing Categories
+]
+
+const SIM_RACING_CATEGORIES = [
   "iRacing",
   "Assetto Corsa Competizione",
   "Gran Turismo",
@@ -84,8 +90,11 @@ const AVAILABILITY_OPTIONS = [
 export default function CreateDriverProfilePage() {
   const router = useRouter()
   const pathname = usePathname()
+  const searchParams = useSearchParams()
   const { isSignedIn, isLoaded: userLoaded } = useUser()
+  const editProfileId = searchParams.get("edit") as Id<"driverProfiles"> | null
   const [formData, setFormData] = useState({
+    headline: "",
     bio: "",
     achievements: "",
     experience: "",
@@ -110,15 +119,72 @@ export default function CreateDriverProfilePage() {
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [customLicense, setCustomLicense] = useState("")
+  const [avatarUrl, setAvatarUrl] = useState<string>("")
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const createDriverProfile = useMutation(api.driverProfiles.create)
+  const updateDriverProfile = useMutation(api.driverProfiles.update)
+  const generateDriverImageUploadUrl = useMutation(api.r2.generateDriverProfileImageUploadUrl)
+  const existingProfile = useQuery(api.driverProfiles.getByUser, isSignedIn ? {} : "skip")
+  const profileToEdit = useQuery(
+    api.driverProfiles.getById,
+    editProfileId && isSignedIn ? { profileId: editProfileId } : "skip"
+  )
+
+  const MAX_IMAGE_SIZE_MB = 5
+  const BYTES_PER_KB = 1024
+  const KB_PER_MB = 1024
+  const MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * KB_PER_MB * BYTES_PER_KB
 
   // Redirect to sign-in if not authenticated
   useEffect(() => {
     if (userLoaded && !isSignedIn) {
-      router.push(`/sign-in?redirect_url=${encodeURIComponent(pathname || "/motorsports/profile/driver")}`)
+      router.push(
+        `/sign-in?redirect_url=${encodeURIComponent(pathname || "/motorsports/profile/driver")}`
+      )
     }
   }, [isSignedIn, userLoaded, router, pathname])
+
+  // Redirect to existing profile if user already has one (unless editing)
+  useEffect(() => {
+    if (existingProfile && existingProfile.length > 0 && !editProfileId) {
+      router.push(`/motorsports/drivers/${existingProfile[0]._id}`)
+    }
+  }, [existingProfile, router, editProfileId])
+
+  // Load existing profile data when editing
+  useEffect(() => {
+    if (profileToEdit?.isOwner) {
+      setFormData({
+        headline: profileToEdit.headline || "",
+        bio: profileToEdit.bio,
+        achievements: profileToEdit.achievements || "",
+        experience:
+          profileToEdit.experience.charAt(0).toUpperCase() + profileToEdit.experience.slice(1),
+        racingType: profileToEdit.racingType || "",
+        simRacingPlatforms: profileToEdit.simRacingPlatforms || [],
+        simRacingRating: profileToEdit.simRacingRating || "",
+        location: profileToEdit.location,
+        licenses: profileToEdit.licenses,
+        preferredCategories: profileToEdit.preferredCategories,
+        availability: profileToEdit.availability,
+        contactInfo: {
+          phone: profileToEdit.contactInfo?.phone || "",
+          email: profileToEdit.contactInfo?.email || "",
+        },
+        socialLinks: {
+          instagram: profileToEdit.socialLinks?.instagram || "",
+          twitter: profileToEdit.socialLinks?.twitter || "",
+          linkedin: profileToEdit.socialLinks?.linkedin || "",
+          website: profileToEdit.socialLinks?.website || "",
+        },
+      })
+      if (profileToEdit.avatarUrl) {
+        setAvatarUrl(profileToEdit.avatarUrl)
+      }
+    }
+  }, [profileToEdit])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -126,34 +192,75 @@ export default function CreateDriverProfilePage() {
 
     try {
       // Map experience to match Convex schema
-      const experienceMap: Record<string, "beginner" | "intermediate" | "advanced" | "professional"> = {
+      const experienceMap: Record<
+        string,
+        "beginner" | "intermediate" | "advanced" | "professional"
+      > = {
         Beginner: "beginner",
         Intermediate: "intermediate",
         Advanced: "advanced",
         Professional: "professional",
       }
 
-      await createDriverProfile({
-        bio: formData.bio,
-        experience: experienceMap[formData.experience] || "beginner",
-        racingType: formData.racingType ? (formData.racingType as "real-world" | "sim-racing" | "both") : undefined,
-        simRacingPlatforms: formData.simRacingPlatforms.length > 0 ? formData.simRacingPlatforms : undefined,
-        simRacingRating: formData.simRacingRating || undefined,
-        licenses: formData.licenses,
-        preferredCategories: formData.preferredCategories,
-        availability: formData.availability,
-        location: formData.location,
-        contactInfo: {
-          phone: formData.contactInfo.phone || undefined,
-          email: formData.contactInfo.email || undefined,
-        },
-      })
-
-      // Redirect to drivers page after successful creation
-      router.push("/motorsports/drivers")
+      if (editProfileId && profileToEdit?.isOwner) {
+        // Update existing profile
+        await updateDriverProfile({
+          profileId: editProfileId,
+          avatarUrl: avatarUrl || undefined,
+          headline: formData.headline || undefined,
+          bio: formData.bio,
+          experience: experienceMap[formData.experience] || undefined,
+          racingType: formData.racingType
+            ? (formData.racingType as "real-world" | "sim-racing" | "both")
+            : undefined,
+          simRacingPlatforms:
+            formData.simRacingPlatforms.length > 0 ? formData.simRacingPlatforms : undefined,
+          simRacingRating: formData.simRacingRating || undefined,
+          licenses: formData.licenses,
+          preferredCategories: formData.preferredCategories,
+          availability: formData.availability,
+          location: formData.location,
+          contactInfo: {
+            phone: formData.contactInfo.phone || undefined,
+            email: formData.contactInfo.email || undefined,
+          },
+          socialLinks: {
+            instagram: formData.socialLinks.instagram || undefined,
+            twitter: formData.socialLinks.twitter || undefined,
+            linkedin: formData.socialLinks.linkedin || undefined,
+            website: formData.socialLinks.website || undefined,
+          },
+        })
+        toast.success("Profile updated successfully!")
+        router.push(`/motorsports/drivers/${editProfileId}`)
+      } else {
+        // Create new profile
+        await createDriverProfile({
+          avatarUrl: avatarUrl || undefined,
+          headline: formData.headline || undefined,
+          bio: formData.bio,
+          experience: experienceMap[formData.experience] || "beginner",
+          racingType: formData.racingType
+            ? (formData.racingType as "real-world" | "sim-racing" | "both")
+            : undefined,
+          simRacingPlatforms:
+            formData.simRacingPlatforms.length > 0 ? formData.simRacingPlatforms : undefined,
+          simRacingRating: formData.simRacingRating || undefined,
+          licenses: formData.licenses,
+          preferredCategories: formData.preferredCategories,
+          availability: formData.availability,
+          location: formData.location,
+          contactInfo: {
+            phone: formData.contactInfo.phone || undefined,
+            email: formData.contactInfo.email || undefined,
+          },
+        })
+        toast.success("Profile created successfully!")
+        router.push("/motorsports/drivers")
+      }
     } catch (error) {
-      console.error("Error creating driver profile:", error)
-      alert("Failed to create driver profile. Please try again.")
+      console.error("Failed to create driver profile:", error)
+      toast.error("An error occurred")
     } finally {
       setIsSubmitting(false)
     }
@@ -162,13 +269,13 @@ export default function CreateDriverProfilePage() {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
     if (name.startsWith("contactInfo.")) {
-      const field = name.split(".")[1]
+      const field = name.split(".")[1] as keyof typeof formData.contactInfo
       setFormData({
         ...formData,
         contactInfo: { ...formData.contactInfo, [field]: value },
       })
     } else if (name.startsWith("socialLinks.")) {
-      const field = name.split(".")[1]
+      const field = name.split(".")[1] as keyof typeof formData.socialLinks
       setFormData({
         ...formData,
         socialLinks: { ...formData.socialLinks, [field]: value },
@@ -223,8 +330,73 @@ export default function CreateDriverProfilePage() {
     }
   }
 
-  // Show loading state while checking authentication
-  if (!userLoaded) {
+  const validateImageFile = (file: File): boolean => {
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select an image file")
+      return false
+    }
+    if (file.size > MAX_IMAGE_SIZE_BYTES) {
+      toast.error(`Image size must be less than ${MAX_IMAGE_SIZE_MB}MB`)
+      return false
+    }
+    return true
+  }
+
+  const uploadImageToR2 = async (file: File, uploadUrl: string): Promise<void> => {
+    const uploadResponse = await fetch(uploadUrl, {
+      method: "PUT",
+      body: file,
+      headers: {
+        "Content-Type": file.type,
+      },
+    })
+
+    if (!uploadResponse.ok) {
+      const errorText = await uploadResponse.text()
+      throw new Error(`Upload failed: ${uploadResponse.status} ${errorText}`)
+    }
+  }
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) {
+      return
+    }
+
+    if (!validateImageFile(file)) {
+      return
+    }
+
+    setIsUploadingAvatar(true)
+    try {
+      const result = await generateDriverImageUploadUrl({})
+      if (!result || typeof result !== "object" || !result.url || !result.key) {
+        throw new Error(`Failed to generate upload URL: ${JSON.stringify(result)}`)
+      }
+
+      const { url: uploadUrl, key } = result
+      await uploadImageToR2(file, uploadUrl)
+
+      const imageKitUrl = imagePresets.avatar(key)
+      setAvatarUrl(imageKitUrl)
+      toast.success("Driver image uploaded successfully")
+    } catch (error) {
+      console.error("Failed to upload driver image:", error)
+      toast.error("An error occurred")
+    } finally {
+      setIsUploadingAvatar(false)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ""
+      }
+    }
+  }
+
+  const handleRemoveAvatar = () => {
+    setAvatarUrl("")
+  }
+
+  // Show loading state while checking authentication and existing profile
+  if (!userLoaded || (isSignedIn && existingProfile === undefined)) {
     return (
       <div className="container mx-auto max-w-4xl px-4 py-8">
         <div className="flex min-h-[60vh] items-center justify-center">
@@ -242,19 +414,61 @@ export default function CreateDriverProfilePage() {
     return null
   }
 
+  // Don't render form if user already has a profile (will redirect) - unless editing
+  if (existingProfile && existingProfile.length > 0 && !editProfileId) {
+    return null
+  }
+
+  // Show loading state when fetching profile to edit
+  if (editProfileId && profileToEdit === undefined) {
+    return (
+      <div className="container mx-auto max-w-4xl px-4 py-8">
+        <div className="flex min-h-[60vh] items-center justify-center">
+          <div className="text-center">
+            <Loader2 className="mx-auto mb-4 size-8 animate-spin text-muted-foreground" />
+            <p className="text-muted-foreground">Loading profile...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Show error if trying to edit a profile that doesn't exist or user doesn't own
+  if (editProfileId && profileToEdit && !profileToEdit.isOwner) {
+    return (
+      <div className="container mx-auto max-w-4xl px-4 py-8">
+        <div className="flex min-h-[60vh] items-center justify-center">
+          <div className="text-center">
+            <p className="mb-2 font-semibold text-lg">Not Authorized</p>
+            <p className="mb-6 text-muted-foreground text-sm">
+              You don't have permission to edit this profile.
+            </p>
+            <Button asChild>
+              <Link href="/motorsports/drivers">Back to Drivers</Link>
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="container mx-auto max-w-4xl px-4 py-8">
-      <Link href="/motorsports/drivers">
-        <Button className="mb-6" variant="ghost">
+      <Link href={editProfileId ? `/motorsports/drivers/${editProfileId}` : "/motorsports/drivers"}>
+        <Button className="mb-6" variant="outline">
           <ArrowLeft className="mr-2 size-4" />
           Back to Drivers
         </Button>
       </Link>
 
       <div className="mb-8">
-        <h1 className="mb-2 font-bold text-3xl">Create Driver Profile</h1>
+        <h1 className="mb-2 font-bold text-3xl">
+          {editProfileId ? "Edit Driver Profile" : "Create Driver Profile"}
+        </h1>
         <p className="text-muted-foreground">
-          Create your driver profile to connect with racing teams
+          {editProfileId
+            ? "Update your driver profile information"
+            : "Create your driver profile to connect with racing teams"}
         </p>
       </div>
 
@@ -267,6 +481,74 @@ export default function CreateDriverProfilePage() {
               <CardDescription>Tell teams about yourself and your experience</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
+              {/* Driver Image */}
+              <div className="space-y-2">
+                <Label>Driver Image (Optional)</Label>
+                {avatarUrl ? (
+                  <div className="relative inline-block">
+                    <div className="relative size-32 overflow-hidden rounded-full border-2 border-primary/20">
+                      <Image alt="Driver avatar" className="object-cover" fill src={avatarUrl} />
+                    </div>
+                    <Button
+                      className="-right-2 -top-2 absolute size-8 rounded-full p-0"
+                      onClick={handleRemoveAvatar}
+                      type="button"
+                      variant="destructive"
+                    >
+                      <X className="size-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-4">
+                    <div className="relative flex size-32 items-center justify-center overflow-hidden rounded-full border-2 border-muted-foreground/25 border-dashed bg-muted">
+                      {isUploadingAvatar ? (
+                        <Loader2 className="size-8 animate-spin text-muted-foreground" />
+                      ) : (
+                        <Upload className="size-8 text-muted-foreground" />
+                      )}
+                    </div>
+                    <div>
+                      <Label className="cursor-pointer" htmlFor="avatar-upload">
+                        <Button
+                          disabled={isUploadingAvatar}
+                          onClick={() => fileInputRef.current?.click()}
+                          type="button"
+                          variant="outline"
+                        >
+                          {isUploadingAvatar ? "Uploading..." : "Upload Image"}
+                        </Button>
+                      </Label>
+                      <input
+                        accept="image/*"
+                        className="hidden"
+                        id="avatar-upload"
+                        onChange={handleAvatarChange}
+                        ref={fileInputRef}
+                        type="file"
+                      />
+                      <p className="mt-2 text-muted-foreground text-xs">
+                        JPG, PNG or GIF. Max size: {MAX_IMAGE_SIZE_MB}MB
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <Separator />
+              <div className="space-y-2">
+                <Label htmlFor="headline">Headline (Optional)</Label>
+                <Input
+                  id="headline"
+                  name="headline"
+                  onChange={handleChange}
+                  placeholder="e.g., Professional GT3 Driver | 5+ Years Experience"
+                  value={formData.headline}
+                />
+                <p className="text-muted-foreground text-xs">
+                  A short, attention-grabbing headline that summarizes your racing profile
+                </p>
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="bio">Bio *</Label>
                 <Textarea
@@ -331,7 +613,7 @@ export default function CreateDriverProfilePage() {
             </CardContent>
           </Card>
 
-          {/* Racing Type */}
+          {/* Racing Type Selection */}
           <Card>
             <CardHeader>
               <CardTitle>Racing Type</CardTitle>
@@ -339,7 +621,7 @@ export default function CreateDriverProfilePage() {
                 Select whether you participate in real-world racing, sim racing, or both
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
+            <CardContent>
               <div className="space-y-2">
                 <Label htmlFor="racingType">Racing Type *</Label>
                 <Select
@@ -359,43 +641,118 @@ export default function CreateDriverProfilePage() {
                   </SelectContent>
                 </Select>
               </div>
+            </CardContent>
+          </Card>
 
-              {(formData.racingType === "sim-racing" || formData.racingType === "both") && (
-                <>
-                  <Separator />
-                  <div className="space-y-3">
-                    <Label>Sim Racing Platforms</Label>
+          {/* Real-World Racing Card */}
+          {(formData.racingType === "real-world" || formData.racingType === "both") && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Real-World Racing</CardTitle>
+                <CardDescription>
+                  Specify your licenses, preferred categories, and availability for real-world
+                  racing
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="space-y-3">
+                  <Label>Licenses *</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {COMMON_LICENSES.map((license) => (
+                      <button
+                        className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition-colors hover:bg-accent"
+                        key={license}
+                        onClick={(e) => {
+                          e.preventDefault()
+                          handleLicenseToggle(license)
+                        }}
+                        type="button"
+                      >
+                        {formData.licenses.includes(license) && (
+                          <Check className="size-3 text-primary" />
+                        )}
+                        {license}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      onChange={(e) => setCustomLicense(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault()
+                          addCustomLicense()
+                        }
+                      }}
+                      placeholder="Add custom license"
+                      value={customLicense}
+                    />
+                    <Button onClick={addCustomLicense} type="button" variant="outline">
+                      Add
+                    </Button>
+                  </div>
+                  {formData.licenses.length > 0 && (
                     <div className="flex flex-wrap gap-2">
-                      {SIM_RACING_PLATFORMS.map((platform) => (
-                        <button
-                          className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition-colors hover:bg-accent"
-                          key={platform}
-                          onClick={(e) => {
-                            e.preventDefault()
-                            handleSimPlatformToggle(platform)
-                          }}
-                          type="button"
+                      {formData.licenses.map((license) => (
+                        <span
+                          className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-1 text-primary text-xs"
+                          key={license}
                         >
-                          {formData.simRacingPlatforms.includes(platform) && (
-                            <Check className="size-3 text-primary" />
-                          )}
-                          {platform}
-                        </button>
+                          {license}
+                          <button
+                            className="hover:text-primary/80"
+                            onClick={(e) => {
+                              e.preventDefault()
+                              handleLicenseToggle(license)
+                            }}
+                            type="button"
+                          >
+                            ×
+                          </button>
+                        </span>
                       ))}
                     </div>
-                    {formData.simRacingPlatforms.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        {formData.simRacingPlatforms.map((platform) => (
+                  )}
+                </div>
+
+                <Separator />
+
+                <div className="space-y-3">
+                  <Label>Preferred Categories *</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {REAL_WORLD_CATEGORIES.map((category) => (
+                      <button
+                        className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition-colors hover:bg-accent"
+                        key={category}
+                        onClick={(e) => {
+                          e.preventDefault()
+                          handleCategoryToggle(category)
+                        }}
+                        type="button"
+                      >
+                        {formData.preferredCategories.includes(category) && (
+                          <Check className="size-3 text-primary" />
+                        )}
+                        {category}
+                      </button>
+                    ))}
+                  </div>
+                  {formData.preferredCategories.filter((cat) => REAL_WORLD_CATEGORIES.includes(cat))
+                    .length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {formData.preferredCategories
+                        .filter((cat) => REAL_WORLD_CATEGORIES.includes(cat))
+                        .map((category) => (
                           <span
                             className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-1 text-primary text-xs"
-                            key={platform}
+                            key={category}
                           >
-                            {platform}
+                            {category}
                             <button
                               className="hover:text-primary/80"
                               onClick={(e) => {
                                 e.preventDefault()
-                                handleSimPlatformToggle(platform)
+                                handleCategoryToggle(category)
                               }}
                               type="button"
                             >
@@ -403,168 +760,183 @@ export default function CreateDriverProfilePage() {
                             </button>
                           </span>
                         ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="simRacingRating">Sim Racing Rating (Optional)</Label>
-                    <Input
-                      id="simRacingRating"
-                      name="simRacingRating"
-                      onChange={handleChange}
-                      placeholder="e.g., A License, iRating: 3500, S Rating"
-                      value={formData.simRacingRating}
-                    />
-                    <p className="text-muted-foreground text-xs">
-                      Your rating or license level on your primary sim racing platform
-                    </p>
-                  </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Racing Details */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Racing Details</CardTitle>
-              <CardDescription>
-                Specify your licenses, preferred categories, and availability
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-3">
-                <Label>Licenses *</Label>
-                <div className="flex flex-wrap gap-2">
-                  {COMMON_LICENSES.map((license) => (
-                    <button
-                      className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition-colors hover:bg-accent"
-                      key={license}
-                      onClick={(e) => {
-                        e.preventDefault()
-                        handleLicenseToggle(license)
-                      }}
-                      type="button"
-                    >
-                      {formData.licenses.includes(license) && (
-                        <Check className="size-3 text-primary" />
-                      )}
-                      {license}
-                    </button>
-                  ))}
+                    </div>
+                  )}
                 </div>
-                <div className="flex gap-2">
+
+                <Separator />
+
+                <div className="space-y-3">
+                  <Label>Availability *</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {AVAILABILITY_OPTIONS.map((option) => (
+                      <button
+                        className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition-colors hover:bg-accent"
+                        key={option.value}
+                        onClick={(e) => {
+                          e.preventDefault()
+                          handleAvailabilityToggle(option.value)
+                        }}
+                        type="button"
+                      >
+                        {formData.availability.includes(option.value) && (
+                          <Check className="size-3 text-primary" />
+                        )}
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Sim Racing Card */}
+          {(formData.racingType === "sim-racing" || formData.racingType === "both") && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Sim Racing</CardTitle>
+                <CardDescription>
+                  Specify your sim racing platforms, rating, preferred categories, and availability
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="space-y-3">
+                  <Label>Sim Racing Platforms</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {SIM_RACING_PLATFORMS.map((platform) => (
+                      <button
+                        className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition-colors hover:bg-accent"
+                        key={platform}
+                        onClick={(e) => {
+                          e.preventDefault()
+                          handleSimPlatformToggle(platform)
+                        }}
+                        type="button"
+                      >
+                        {formData.simRacingPlatforms.includes(platform) && (
+                          <Check className="size-3 text-primary" />
+                        )}
+                        {platform}
+                      </button>
+                    ))}
+                  </div>
+                  {formData.simRacingPlatforms.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {formData.simRacingPlatforms.map((platform) => (
+                        <span
+                          className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-1 text-primary text-xs"
+                          key={platform}
+                        >
+                          {platform}
+                          <button
+                            className="hover:text-primary/80"
+                            onClick={(e) => {
+                              e.preventDefault()
+                              handleSimPlatformToggle(platform)
+                            }}
+                            type="button"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="simRacingRating">Sim Racing Rating (Optional)</Label>
                   <Input
-                    onChange={(e) => setCustomLicense(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault()
-                        addCustomLicense()
-                      }
-                    }}
-                    placeholder="Add custom license"
-                    value={customLicense}
+                    id="simRacingRating"
+                    name="simRacingRating"
+                    onChange={handleChange}
+                    placeholder="e.g., A License, iRating: 3500, S Rating"
+                    value={formData.simRacingRating}
                   />
-                  <Button onClick={addCustomLicense} type="button" variant="outline">
-                    Add
-                  </Button>
+                  <p className="text-muted-foreground text-xs">
+                    Your rating or license level on your primary sim racing platform
+                  </p>
                 </div>
-                {formData.licenses.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {formData.licenses.map((license) => (
-                      <span
-                        className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-1 text-primary text-xs"
-                        key={license}
-                      >
-                        {license}
-                        <button
-                          className="hover:text-primary/80"
-                          onClick={(e) => {
-                            e.preventDefault()
-                            handleLicenseToggle(license)
-                          }}
-                          type="button"
-                        >
-                          ×
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
 
-              <Separator />
+                <Separator />
 
-              <div className="space-y-3">
-                <Label>Preferred Categories *</Label>
-                <div className="flex flex-wrap gap-2">
-                  {COMMON_CATEGORIES.map((category) => (
-                    <button
-                      className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition-colors hover:bg-accent"
-                      key={category}
-                      onClick={(e) => {
-                        e.preventDefault()
-                        handleCategoryToggle(category)
-                      }}
-                      type="button"
-                    >
-                      {formData.preferredCategories.includes(category) && (
-                        <Check className="size-3 text-primary" />
-                      )}
-                      {category}
-                    </button>
-                  ))}
-                </div>
-                {formData.preferredCategories.length > 0 && (
+                <div className="space-y-3">
+                  <Label>Preferred Categories *</Label>
                   <div className="flex flex-wrap gap-2">
-                    {formData.preferredCategories.map((category) => (
-                      <span
-                        className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-1 text-primary text-xs"
+                    {SIM_RACING_CATEGORIES.map((category) => (
+                      <button
+                        className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition-colors hover:bg-accent"
                         key={category}
+                        onClick={(e) => {
+                          e.preventDefault()
+                          handleCategoryToggle(category)
+                        }}
+                        type="button"
                       >
+                        {formData.preferredCategories.includes(category) && (
+                          <Check className="size-3 text-primary" />
+                        )}
                         {category}
-                        <button
-                          className="hover:text-primary/80"
-                          onClick={(e) => {
-                            e.preventDefault()
-                            handleCategoryToggle(category)
-                          }}
-                          type="button"
-                        >
-                          ×
-                        </button>
-                      </span>
+                      </button>
                     ))}
                   </div>
-                )}
-              </div>
-
-              <Separator />
-
-              <div className="space-y-3">
-                <Label>Availability *</Label>
-                <div className="flex flex-wrap gap-2">
-                  {AVAILABILITY_OPTIONS.map((option) => (
-                    <button
-                      className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition-colors hover:bg-accent"
-                      key={option.value}
-                      onClick={(e) => {
-                        e.preventDefault()
-                        handleAvailabilityToggle(option.value)
-                      }}
-                      type="button"
-                    >
-                      {formData.availability.includes(option.value) && (
-                        <Check className="size-3 text-primary" />
-                      )}
-                      {option.label}
-                    </button>
-                  ))}
+                  {formData.preferredCategories.filter((cat) => SIM_RACING_CATEGORIES.includes(cat))
+                    .length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {formData.preferredCategories
+                        .filter((cat) => SIM_RACING_CATEGORIES.includes(cat))
+                        .map((category) => (
+                          <span
+                            className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-1 text-primary text-xs"
+                            key={category}
+                          >
+                            {category}
+                            <button
+                              className="hover:text-primary/80"
+                              onClick={(e) => {
+                                e.preventDefault()
+                                handleCategoryToggle(category)
+                              }}
+                              type="button"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                    </div>
+                  )}
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+
+                {formData.racingType === "sim-racing" && (
+                  <>
+                    <Separator />
+                    <div className="space-y-3">
+                      <Label>Availability *</Label>
+                      <div className="flex flex-wrap gap-2">
+                        {AVAILABILITY_OPTIONS.map((option) => (
+                          <button
+                            className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition-colors hover:bg-accent"
+                            key={option.value}
+                            onClick={(e) => {
+                              e.preventDefault()
+                              handleAvailabilityToggle(option.value)
+                            }}
+                            type="button"
+                          >
+                            {formData.availability.includes(option.value) && (
+                              <Check className="size-3 text-primary" />
+                            )}
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Contact Information */}
           <Card>
@@ -667,7 +1039,12 @@ export default function CreateDriverProfilePage() {
               </Button>
             </Link>
             <Button disabled={isSubmitting} size="lg" type="submit">
-              {isSubmitting ? "Creating Profile..." : "Create Driver Profile"}
+              {(() => {
+                if (isSubmitting) {
+                  return editProfileId ? "Updating Profile..." : "Creating Profile..."
+                }
+                return editProfileId ? "Update Profile" : "Create Profile"
+              })()}
             </Button>
           </div>
         </div>

@@ -24,6 +24,7 @@ import type * as reviews from "../reviews.js";
 import type * as seed from "../seed.js";
 import type * as stripe from "../stripe.js";
 import type * as teamApplications from "../teamApplications.js";
+import type * as teamDriverConnections from "../teamDriverConnections.js";
 import type * as teams from "../teams.js";
 import type * as tracks from "../tracks.js";
 import type * as users from "../users.js";
@@ -61,6 +62,7 @@ declare const fullApi: ApiFromModules<{
   seed: typeof seed;
   stripe: typeof stripe;
   teamApplications: typeof teamApplications;
+  teamDriverConnections: typeof teamDriverConnections;
   teams: typeof teams;
   tracks: typeof tracks;
   users: typeof users;

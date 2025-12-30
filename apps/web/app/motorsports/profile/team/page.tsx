@@ -1,8 +1,5 @@
 "use client"
 
-import { useMutation } from "convex/react"
-import { useState, useEffect } from "react"
-import { useRouter, usePathname } from "next/navigation"
 import { useUser } from "@clerk/nextjs"
 import { Button } from "@workspace/ui/components/button"
 import {
@@ -23,8 +20,11 @@ import {
 } from "@workspace/ui/components/select"
 import { Separator } from "@workspace/ui/components/separator"
 import { Textarea } from "@workspace/ui/components/textarea"
-import { ArrowLeft, Check, Plus, X, Loader2 } from "lucide-react"
+import { useMutation } from "convex/react"
+import { ArrowLeft, Check, Loader2, Plus, X } from "lucide-react"
 import Link from "next/link"
+import { usePathname, useRouter } from "next/navigation"
+import { useEffect, useState } from "react"
 import { api } from "@/lib/convex"
 
 const COMMON_SPECIALTIES = [
@@ -102,7 +102,9 @@ export default function CreateTeamProfilePage() {
   // Redirect to sign-in if not authenticated
   useEffect(() => {
     if (userLoaded && !isSignedIn) {
-      router.push(`/sign-in?redirect_url=${encodeURIComponent(pathname || "/motorsports/profile/team")}`)
+      router.push(
+        `/sign-in?redirect_url=${encodeURIComponent(pathname || "/motorsports/profile/team")}`
+      )
     }
   }, [isSignedIn, userLoaded, router, pathname])
 
@@ -116,8 +118,11 @@ export default function CreateTeamProfilePage() {
         description: formData.description,
         logoUrl: formData.logoUrl || undefined,
         location: formData.location,
-        racingType: formData.racingType ? (formData.racingType as "real-world" | "sim-racing" | "both") : undefined,
-        simRacingPlatforms: formData.simRacingPlatforms.length > 0 ? formData.simRacingPlatforms : undefined,
+        racingType: formData.racingType
+          ? (formData.racingType as "real-world" | "sim-racing" | "both")
+          : undefined,
+        simRacingPlatforms:
+          formData.simRacingPlatforms.length > 0 ? formData.simRacingPlatforms : undefined,
         specialties: formData.specialties,
         availableSeats: formData.availableSeats,
         requirements: formData.requirements,
@@ -232,7 +237,7 @@ export default function CreateTeamProfilePage() {
   return (
     <div className="container mx-auto max-w-4xl px-4 py-8">
       <Link href="/motorsports/teams">
-        <Button className="mb-6" variant="ghost">
+        <Button className="mb-6" variant="outline">
           <ArrowLeft className="mr-2 size-4" />
           Back to Teams
         </Button>
