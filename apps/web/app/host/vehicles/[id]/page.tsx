@@ -1,29 +1,31 @@
 "use client"
 
-import { useMemo } from "react"
-import { useQuery } from "convex/react"
+import { useUser } from "@clerk/nextjs"
+import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
-import { Badge } from "@workspace/ui/components/badge"
+import { useQuery } from "convex/react"
 import {
+  ArrowLeft,
   Calendar as CalendarIcon,
   Car,
-  Edit,
-  Settings,
-  DollarSign,
   CheckCircle2,
   Clock,
-  XCircle,
-  ArrowLeft,
-  MapPin,
-  Gauge,
-  Users,
-  Loader2,
+  DollarSign,
+  Edit,
   Eye,
+  Gauge,
+  Heart,
+  Loader2,
+  MapPin,
+  Settings,
+  Share2,
+  Users,
+  XCircle,
 } from "lucide-react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
-import { useUser } from "@clerk/nextjs"
+import { useMemo } from "react"
 import { api } from "@/lib/convex"
 
 export default function HostVehicleDetailPage() {
@@ -32,10 +34,7 @@ export default function HostVehicleDetailPage() {
   const vehicleId = params.id as string
 
   // Fetch vehicle from Convex
-  const vehicle = useQuery(
-    api.vehicles.getById,
-    vehicleId ? { id: vehicleId as any } : "skip"
-  )
+  const vehicle = useQuery(api.vehicles.getById, vehicleId ? { id: vehicleId as any } : "skip")
 
   // Fetch reservations for this vehicle (as owner)
   const allReservations = useQuery(
@@ -43,15 +42,21 @@ export default function HostVehicleDetailPage() {
     user?.id ? { userId: user.id, role: "owner" as const } : "skip"
   )
 
+  // Fetch analytics for this vehicle
+  const analytics = useQuery(
+    api.vehicleAnalytics.getVehicleAnalytics,
+    vehicleId && user?.id ? { vehicleId: vehicleId as any } : "skip"
+  )
+
   // Filter reservations for this vehicle
   const vehicleReservations = useMemo(() => {
-    if (!allReservations || !vehicle) return []
+    if (!(allReservations && vehicle)) return []
     return allReservations.filter((res) => res.vehicleId === vehicle._id)
   }, [allReservations, vehicle])
 
   // Calculate stats from reservations
   const stats = useMemo(() => {
-    if (!vehicleReservations || !vehicle) {
+    if (!(vehicleReservations && vehicle)) {
       return {
         totalBookings: 0,
         totalEarnings: 0,
@@ -61,13 +66,8 @@ export default function HostVehicleDetailPage() {
     }
 
     const totalBookings = vehicleReservations.length
-    const totalEarnings = vehicleReservations.reduce(
-      (sum, res) => sum + (res.totalAmount || 0),
-      0
-    )
-    const completedTrips = vehicleReservations.filter(
-      (res) => res.status === "completed"
-    ).length
+    const totalEarnings = vehicleReservations.reduce((sum, res) => sum + (res.totalAmount || 0), 0)
+    const completedTrips = vehicleReservations.filter((res) => res.status === "completed").length
 
     // TODO: Calculate average rating from reviews if needed
     const averageRating = 0
@@ -79,7 +79,6 @@ export default function HostVehicleDetailPage() {
       completedTrips,
     }
   }, [vehicleReservations, vehicle])
-
 
   // Show loading state
   if (vehicle === undefined || allReservations === undefined) {
@@ -121,14 +120,13 @@ export default function HostVehicleDetailPage() {
     vehicle.images?.[0]?.heroUrl ||
     vehicle.images?.[0]?.detailUrl ||
     vehicle.images?.[0]?.cardUrl ||
-    vehicle.images?.[0]?.imageUrl ||
     "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=1200"
 
   return (
     <div className="container mx-auto max-w-7xl px-4 py-8">
       <div className="mb-6">
         <Link href="/host/vehicles/list">
-          <Button variant="ghost" size="sm">
+          <Button className="mb-6" variant="outline">
             <ArrowLeft className="mr-2 size-4" />
             Back to Vehicles
           </Button>
@@ -170,14 +168,16 @@ export default function HostVehicleDetailPage() {
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Main Content */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="space-y-6 lg:col-span-2">
           {/* Vehicle Image */}
           <Card className="overflow-hidden">
             <div className="relative h-96 w-full">
               <img
                 alt={`${vehicle.year} ${vehicle.make} ${vehicle.model}`}
                 className="size-full object-cover"
-                src={primaryImage || "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=1200"}
+                src={
+                  primaryImage || "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=1200"
+                }
               />
             </div>
           </Card>
@@ -247,7 +247,10 @@ export default function HostVehicleDetailPage() {
                   <h3 className="mb-3 font-semibold text-lg">Add-ons</h3>
                   <div className="space-y-2">
                     {vehicle.addOns.map((addOn, index) => (
-                      <div key={index} className="flex items-center justify-between rounded-lg border p-3">
+                      <div
+                        className="flex items-center justify-between rounded-lg border p-3"
+                        key={index}
+                      >
                         <div>
                           <p className="font-medium">{addOn.name}</p>
                           {addOn.description && (
@@ -307,26 +310,58 @@ export default function HostVehicleDetailPage() {
             </CardContent>
           </Card>
 
+          {/* Analytics */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Analytics</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <div className="mb-1 flex items-center justify-between">
+                  <p className="text-muted-foreground text-sm">Total Views</p>
+                  <Eye className="size-4 text-muted-foreground" />
+                </div>
+                <p className="font-bold text-2xl">{analytics?.totalViews.toLocaleString() || 0}</p>
+              </div>
+              <div>
+                <div className="mb-1 flex items-center justify-between">
+                  <p className="text-muted-foreground text-sm">Shares</p>
+                  <Share2 className="size-4 text-muted-foreground" />
+                </div>
+                <p className="font-bold text-2xl">{analytics?.totalShares.toLocaleString() || 0}</p>
+              </div>
+              <div>
+                <div className="mb-1 flex items-center justify-between">
+                  <p className="text-muted-foreground text-sm">Favorites</p>
+                  <Heart className="size-4 text-muted-foreground" />
+                </div>
+                <p className="font-bold text-2xl">
+                  {analytics?.favoriteCount.toLocaleString() || 0}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Vehicle Actions */}
           <Card>
             <CardHeader>
               <CardTitle>Vehicle Actions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              <Link href={`/host/vehicles/${vehicleId}/availability`} className="block">
-                <Button className="w-full justify-start" variant="outline" size="sm">
+              <Link className="block" href={`/host/vehicles/${vehicleId}/availability`}>
+                <Button className="w-full justify-start" size="sm" variant="outline">
                   <CalendarIcon className="mr-2 size-4" />
                   Manage Availability
                 </Button>
               </Link>
-              <Link href="/host/reservations" className="block">
-                <Button className="w-full justify-start" variant="outline" size="sm">
+              <Link className="block" href="/host/reservations">
+                <Button className="w-full justify-start" size="sm" variant="outline">
                   <Users className="mr-2 size-4" />
                   View All Reservations
                 </Button>
               </Link>
-              <Link href={`/vehicles/${vehicleId}`} className="block">
-                <Button className="w-full justify-start" variant="outline" size="sm">
+              <Link className="block" href={`/vehicles/${vehicleId}`}>
+                <Button className="w-full justify-start" size="sm" variant="outline">
                   <Eye className="mr-2 size-4" />
                   View Public Listing
                 </Button>

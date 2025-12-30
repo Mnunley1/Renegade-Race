@@ -1,187 +1,152 @@
-import { v } from 'convex/values';
-import { mutation, query } from './_generated/server';
+import { v } from "convex/values"
+import { mutation, query } from "./_generated/server"
+import { imagePresets, r2 } from "./r2"
 
 // Get all active and approved vehicles with optimized images
 export const getAllWithOptimizedImages = query({
   args: {
-    trackId: v.optional(v.id('tracks')),
+    trackId: v.optional(v.id("tracks")),
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const { trackId, limit = 50 } = args;
+    const { trackId, limit = 50 } = args
 
-    let vehicles;
+    let vehicles
     if (trackId) {
       vehicles = await ctx.db
-        .query('vehicles')
-        .withIndex('by_track', q => q.eq('trackId', trackId))
-        .filter(q =>
-          q.and(
-            q.eq(q.field('isActive'), true),
-            q.eq(q.field('isApproved'), true)
-          )
-        )
-        .order('desc')
-        .take(limit);
+        .query("vehicles")
+        .withIndex("by_track", (q) => q.eq("trackId", trackId))
+        .filter((q) => q.and(q.eq(q.field("isActive"), true), q.eq(q.field("isApproved"), true)))
+        .order("desc")
+        .take(limit)
     } else {
       vehicles = await ctx.db
-        .query('vehicles')
-        .withIndex('by_active_approved', q =>
-          q.eq('isActive', true).eq('isApproved', true)
-        )
-        .order('desc')
-        .take(limit);
+        .query("vehicles")
+        .withIndex("by_active_approved", (q) => q.eq("isActive", true).eq("isApproved", true))
+        .order("desc")
+        .take(limit)
     }
 
     // Get vehicle images and owner details
     const vehiclesWithDetails = await Promise.all(
-      vehicles.map(async vehicle => {
+      vehicles.map(async (vehicle) => {
         const [images, owner, track] = await Promise.all([
           ctx.db
-            .query('vehicleImages')
-            .withIndex('by_vehicle', q => q.eq('vehicleId', vehicle._id))
-            .order('asc')
+            .query("vehicleImages")
+            .withIndex("by_vehicle", (q) => q.eq("vehicleId", vehicle._id))
+            .order("asc")
             .collect(),
           ctx.db
-            .query('users')
-            .withIndex('by_external_id', q =>
-              q.eq('externalId', vehicle.ownerId)
-            )
+            .query("users")
+            .withIndex("by_external_id", (q) => q.eq("externalId", vehicle.ownerId))
             .first(),
           ctx.db.get(vehicle.trackId),
-        ]);
+        ])
 
-        // Add optimized URLs for each image
-        const optimizedImages = await Promise.all(
-          images.map(async image => {
-            const [thumbnailUrl, cardUrl, detailUrl, heroUrl] =
-              await Promise.all([
-                image.thumbnailStorageId
-                  ? ctx.storage.getUrl(image.thumbnailStorageId)
-                  : image.imageUrl,
-                image.cardStorageId
-                  ? ctx.storage.getUrl(image.cardStorageId)
-                  : image.imageUrl,
-                image.detailStorageId
-                  ? ctx.storage.getUrl(image.detailStorageId)
-                  : image.imageUrl,
-                image.heroStorageId
-                  ? ctx.storage.getUrl(image.heroStorageId)
-                  : image.imageUrl,
-              ]);
-
-            return {
-              ...image,
-              thumbnailUrl,
-              cardUrl,
-              detailUrl,
-              heroUrl,
-            };
-          })
-        );
+        const optimizedImages = images
+          .filter((image) => image.r2Key)
+          .map((image) => ({
+            ...image,
+            thumbnailUrl: imagePresets.thumbnail(image.r2Key as string),
+            cardUrl: imagePresets.card(image.r2Key as string),
+            detailUrl: imagePresets.detail(image.r2Key as string),
+            heroUrl: imagePresets.hero(image.r2Key as string),
+            originalUrl: imagePresets.original(image.r2Key as string),
+          }))
 
         return {
           ...vehicle,
           images: optimizedImages,
           owner,
           track,
-        };
+        }
       })
-    );
+    )
 
-    return vehiclesWithDetails;
+    return vehiclesWithDetails
   },
-});
+})
 
 // Get all active and approved vehicles (legacy function for backward compatibility)
 export const getAll = query({
   args: {
-    trackId: v.optional(v.id('tracks')),
+    trackId: v.optional(v.id("tracks")),
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const { trackId, limit = 50 } = args;
+    const { trackId, limit = 50 } = args
 
-    let vehicles;
+    let vehicles
     if (trackId) {
       vehicles = await ctx.db
-        .query('vehicles')
-        .withIndex('by_track', q => q.eq('trackId', trackId))
-        .filter(q =>
-          q.and(
-            q.eq(q.field('isActive'), true),
-            q.eq(q.field('isApproved'), true)
-          )
-        )
-        .order('desc')
-        .take(limit);
+        .query("vehicles")
+        .withIndex("by_track", (q) => q.eq("trackId", trackId))
+        .filter((q) => q.and(q.eq(q.field("isActive"), true), q.eq(q.field("isApproved"), true)))
+        .order("desc")
+        .take(limit)
     } else {
       vehicles = await ctx.db
-        .query('vehicles')
-        .withIndex('by_active_approved', q =>
-          q.eq('isActive', true).eq('isApproved', true)
-        )
-        .order('desc')
-        .take(limit);
+        .query("vehicles")
+        .withIndex("by_active_approved", (q) => q.eq("isActive", true).eq("isApproved", true))
+        .order("desc")
+        .take(limit)
     }
 
     // Get vehicle images and owner details
     const vehiclesWithDetails = await Promise.all(
-      vehicles.map(async vehicle => {
+      vehicles.map(async (vehicle) => {
         const [images, owner, track] = await Promise.all([
           ctx.db
-            .query('vehicleImages')
-            .withIndex('by_vehicle', q => q.eq('vehicleId', vehicle._id))
-            .order('asc')
+            .query("vehicleImages")
+            .withIndex("by_vehicle", (q) => q.eq("vehicleId", vehicle._id))
+            .order("asc")
             .collect(),
           ctx.db
-            .query('users')
-            .withIndex('by_external_id', q =>
-              q.eq('externalId', vehicle.ownerId)
-            )
+            .query("users")
+            .withIndex("by_external_id", (q) => q.eq("externalId", vehicle.ownerId))
             .first(),
           ctx.db.get(vehicle.trackId),
-        ]);
+        ])
 
         return {
           ...vehicle,
           images,
           owner,
           track,
-        };
+        }
       })
-    );
+    )
 
-    return vehiclesWithDetails;
+    return vehiclesWithDetails
   },
-});
+})
 
 // Get vehicle by ID with all details
 export const getById = query({
-  args: { id: v.id('vehicles') },
+  args: { id: v.id("vehicles") },
   handler: async (ctx, args) => {
-    const vehicle = await ctx.db.get(args.id);
+    const vehicle = await ctx.db.get(args.id)
     if (vehicle === null) {
-      throw new Error('NOT_FOUND');
+      throw new Error("NOT_FOUND")
     }
 
     const [images, owner, track, availability] = await Promise.all([
       ctx.db
-        .query('vehicleImages')
-        .withIndex('by_vehicle', q => q.eq('vehicleId', args.id))
-        .order('asc')
+        .query("vehicleImages")
+        .withIndex("by_vehicle", (q) => q.eq("vehicleId", args.id))
+        .order("asc")
         .collect(),
       ctx.db
-        .query('users')
-        .withIndex('by_external_id', q => q.eq('externalId', vehicle.ownerId))
+        .query("users")
+        .withIndex("by_external_id", (q) => q.eq("externalId", vehicle.ownerId))
         .first(),
       ctx.db.get(vehicle.trackId),
       ctx.db
-        .query('availability')
-        .withIndex('by_vehicle_date', q => q.eq('vehicleId', args.id))
-        .order('asc')
+        .query("availability")
+        .withIndex("by_vehicle_date", (q) => q.eq("vehicleId", args.id))
+        .order("asc")
         .collect(),
-    ]);
+    ])
 
     return {
       ...vehicle,
@@ -189,95 +154,89 @@ export const getById = query({
       owner,
       track,
       availability,
-    };
+    }
   },
-});
+})
 
 // Get vehicle image by ID
 export const getVehicleImageById = query({
-  args: { id: v.id('vehicleImages') },
+  args: { id: v.id("vehicleImages") },
   handler: async (ctx, args) => {
-    const image = await ctx.db.get(args.id);
-    if (!image) return null;
-
-    // Get optimized URLs
-    const [thumbnailUrl, cardUrl, detailUrl, heroUrl] = await Promise.all([
-      image.thumbnailStorageId
-        ? ctx.storage.getUrl(image.thumbnailStorageId)
-        : image.imageUrl,
-      image.cardStorageId
-        ? ctx.storage.getUrl(image.cardStorageId)
-        : image.imageUrl,
-      image.detailStorageId
-        ? ctx.storage.getUrl(image.detailStorageId)
-        : image.imageUrl,
-      image.heroStorageId
-        ? ctx.storage.getUrl(image.heroStorageId)
-        : image.imageUrl,
-    ]);
+    const image = await ctx.db.get(args.id)
+    if (!(image && image.r2Key)) return null
 
     return {
       ...image,
-      thumbnailUrl,
-      cardUrl,
-      detailUrl,
-      heroUrl,
-    };
+      thumbnailUrl: imagePresets.thumbnail(image.r2Key),
+      cardUrl: imagePresets.card(image.r2Key),
+      detailUrl: imagePresets.detail(image.r2Key),
+      heroUrl: imagePresets.hero(image.r2Key),
+      originalUrl: imagePresets.original(image.r2Key),
+    }
   },
-});
+})
 
 // Get vehicles by owner
 export const getByOwner = query({
   args: { ownerId: v.string() },
   handler: async (ctx, args) => {
     const vehicles = await ctx.db
-      .query('vehicles')
-      .withIndex('by_owner_active', q =>
-        q.eq('ownerId', args.ownerId).eq('isActive', true)
-      )
-      .order('desc')
-      .collect();
+      .query("vehicles")
+      .withIndex("by_owner_active", (q) => q.eq("ownerId", args.ownerId).eq("isActive", true))
+      .order("desc")
+      .collect()
 
     const vehiclesWithDetails = await Promise.all(
-      vehicles.map(async vehicle => {
+      vehicles.map(async (vehicle) => {
         const [images, track] = await Promise.all([
           ctx.db
-            .query('vehicleImages')
-            .withIndex('by_vehicle', q => q.eq('vehicleId', vehicle._id))
-            .order('asc')
+            .query("vehicleImages")
+            .withIndex("by_vehicle", (q) => q.eq("vehicleId", vehicle._id))
+            .order("asc")
             .collect(),
           ctx.db.get(vehicle.trackId),
-        ]);
+        ])
+
+        const optimizedImages = images
+          .filter((image) => image.r2Key)
+          .map((image) => ({
+            ...image,
+            thumbnailUrl: imagePresets.thumbnail(image.r2Key as string),
+            cardUrl: imagePresets.card(image.r2Key as string),
+            detailUrl: imagePresets.detail(image.r2Key as string),
+            heroUrl: imagePresets.hero(image.r2Key as string),
+            originalUrl: imagePresets.original(image.r2Key as string),
+          }))
 
         return {
           ...vehicle,
-          images,
+          images: optimizedImages,
           track,
-        };
+        }
       })
-    );
+    )
 
-    return vehiclesWithDetails;
+    return vehiclesWithDetails
   },
-});
+})
 
-// Generate upload URL for file storage
+// Generate upload URL for file storage (legacy - use R2 mutations instead)
 export const generateUploadUrl = mutation({
   args: {},
-  handler: async ctx => {
-    const identity = await ctx.auth.getUserIdentity();
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity()
     if (!identity) {
-      throw new Error('Not authenticated');
+      throw new Error("Not authenticated")
     }
 
-    return await ctx.storage.generateUploadUrl();
+    return await ctx.storage.generateUploadUrl()
   },
-});
+})
 
 // Create a new vehicle with processed images
 export const createVehicleWithImages = mutation({
   args: {
-    trackId: v.id('tracks'),
+    trackId: v.optional(v.id("tracks")),
     make: v.string(),
     model: v.string(),
     year: v.number(),
@@ -299,14 +258,21 @@ export const createVehicleWithImages = mutation({
         })
       )
     ),
+    address: v.optional(
+      v.object({
+        street: v.string(),
+        city: v.string(),
+        state: v.string(),
+        zipCode: v.string(),
+      })
+    ),
+    advanceNotice: v.optional(v.string()),
+    minTripDuration: v.optional(v.string()),
+    maxTripDuration: v.optional(v.string()),
+    requireWeekendMin: v.optional(v.boolean()),
     images: v.array(
       v.object({
-        storageId: v.optional(v.id('_storage')),
-        thumbnailStorageId: v.optional(v.id('_storage')),
-        cardStorageId: v.optional(v.id('_storage')),
-        detailStorageId: v.optional(v.id('_storage')),
-        heroStorageId: v.optional(v.id('_storage')),
-        imageUrl: v.optional(v.string()), // For legacy support
+        r2Key: v.string(),
         isPrimary: v.boolean(),
         order: v.number(),
         metadata: v.optional(
@@ -325,16 +291,30 @@ export const createVehicleWithImages = mutation({
     ),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await ctx.auth.getUserIdentity()
     if (!identity) {
-      throw new Error('Not authenticated');
+      throw new Error("Not authenticated")
     }
 
-    const userId = identity.subject;
-    const now = Date.now();
+    const userId = identity.subject
+    const now = Date.now()
+
+    // If no trackId provided, we need to handle it - but schema requires trackId
+    // For now, we'll require it or throw an error
+    if (!args.trackId) {
+      // Get the first active track as default
+      const defaultTrack = await ctx.db
+        .query("tracks")
+        .withIndex("by_active", (q) => q.eq("isActive", true))
+        .first()
+      if (!defaultTrack) {
+        throw new Error("No active tracks available. Please select a track.")
+      }
+      args.trackId = defaultTrack._id
+    }
 
     // Create the vehicle
-    const vehicleId = await ctx.db.insert('vehicles', {
+    const vehicleId = await ctx.db.insert("vehicles", {
       ownerId: userId,
       trackId: args.trackId,
       make: args.make,
@@ -349,124 +329,79 @@ export const createVehicleWithImages = mutation({
       mileage: args.mileage,
       amenities: args.amenities,
       addOns: args.addOns || [],
+      address: args.address,
+      advanceNotice: args.advanceNotice,
+      minTripDuration: args.minTripDuration,
+      maxTripDuration: args.maxTripDuration,
+      requireWeekendMin: args.requireWeekendMin,
       isActive: true,
       isApproved: false,
       createdAt: now,
       updatedAt: now,
-    });
+    })
 
-    // Create vehicle images with storage IDs
+    // Create vehicle images (R2 only)
     await Promise.all(
-      args.images.map(async image => {
-        // Get URLs for all storage IDs
-        const [imageUrl] = await Promise.all([
-          image.storageId
-            ? ctx.storage.getUrl(image.storageId)
-            : image.imageUrl || '',
-          image.thumbnailStorageId
-            ? ctx.storage.getUrl(image.thumbnailStorageId)
-            : null,
-          image.cardStorageId ? ctx.storage.getUrl(image.cardStorageId) : null,
-          image.detailStorageId
-            ? ctx.storage.getUrl(image.detailStorageId)
-            : null,
-          image.heroStorageId ? ctx.storage.getUrl(image.heroStorageId) : null,
-        ]);
-
-        return ctx.db.insert('vehicleImages', {
+      args.images.map(async (image) =>
+        ctx.db.insert("vehicleImages", {
           vehicleId,
-          storageId: image.storageId,
-          thumbnailStorageId: image.thumbnailStorageId,
-          cardStorageId: image.cardStorageId,
-          detailStorageId: image.detailStorageId,
-          heroStorageId: image.heroStorageId,
-          imageUrl: imageUrl || image.imageUrl || '', // Use hero URL as primary or fallback to provided URL
+          r2Key: image.r2Key,
           isPrimary: image.isPrimary,
           order: image.order,
           metadata: image.metadata,
-        });
-      })
-    );
-
-    return vehicleId;
-  },
-});
-
-// Create a new vehicle (legacy function for backward compatibility)
-export const create = mutation({
-  args: {
-    trackId: v.id('tracks'),
-    make: v.string(),
-    model: v.string(),
-    year: v.number(),
-    dailyRate: v.number(),
-    description: v.string(),
-    horsepower: v.optional(v.number()),
-    transmission: v.optional(v.string()),
-    drivetrain: v.optional(v.string()),
-    engineType: v.optional(v.string()),
-    mileage: v.optional(v.number()),
-    amenities: v.array(v.string()),
-    images: v.array(
-      v.object({
-        imageUrl: v.string(),
-        isPrimary: v.boolean(),
-      })
-    ),
-  },
-  handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error('Not authenticated');
-    }
-
-    const userId = identity.subject;
-    const now = Date.now();
-
-    // Create the vehicle
-    const vehicleId = await ctx.db.insert('vehicles', {
-      ownerId: userId,
-      trackId: args.trackId,
-      make: args.make,
-      model: args.model,
-      year: args.year,
-      dailyRate: args.dailyRate,
-      description: args.description,
-      horsepower: args.horsepower,
-      transmission: args.transmission,
-      drivetrain: args.drivetrain,
-      engineType: args.engineType,
-      mileage: args.mileage,
-      amenities: args.amenities,
-      addOns: [],
-      isActive: true,
-      isApproved: false,
-      createdAt: now,
-      updatedAt: now,
-    });
-
-    // Create vehicle images
-    await Promise.all(
-      args.images.map((image, index) =>
-        ctx.db.insert('vehicleImages', {
-          vehicleId,
-          storageId: undefined, // Optional field for legacy support
-          imageUrl: image.imageUrl,
-          isPrimary: image.isPrimary,
-          order: index,
         })
       )
-    );
+    )
 
-    return vehicleId;
+    // Check if this is the user's first vehicle and update onboarding status
+    const existingVehicles = await ctx.db
+      .query("vehicles")
+      .withIndex("by_owner", (q) => q.eq("ownerId", userId))
+      .collect()
+
+    // If this is the first vehicle, mark vehicleAdded step as complete
+    if (existingVehicles.length === 1) {
+      const user = await ctx.db
+        .query("users")
+        .withIndex("by_external_id", (q) => q.eq("externalId", userId))
+        .first()
+
+      if (user) {
+        const currentSteps = user.hostOnboardingSteps || {
+          personalInfo: false,
+          vehicleAdded: false,
+          payoutSetup: false,
+          safetyStandards: false,
+        }
+
+        const updatedSteps = {
+          ...currentSteps,
+          vehicleAdded: true,
+        }
+
+        // Check if all steps are complete
+        const allStepsComplete = Object.values(updatedSteps).every((step) => step === true)
+
+        await ctx.db.patch(user._id, {
+          hostOnboardingSteps: updatedSteps,
+          hostOnboardingStatus: allStepsComplete
+            ? "completed"
+            : user.hostOnboardingStatus === "not_started"
+              ? "in_progress"
+              : user.hostOnboardingStatus || "in_progress",
+        })
+      }
+    }
+
+    return vehicleId
   },
-});
+})
 
 // Update vehicle
 export const update = mutation({
   args: {
-    id: v.id('vehicles'),
-    trackId: v.optional(v.id('tracks')),
+    id: v.id("vehicles"),
+    trackId: v.optional(v.id("tracks")),
     make: v.optional(v.string()),
     model: v.optional(v.string()),
     year: v.optional(v.number()),
@@ -506,249 +441,216 @@ export const update = mutation({
         })
       )
     ),
+    advanceNotice: v.optional(v.string()),
+    minTripDuration: v.optional(v.string()),
+    maxTripDuration: v.optional(v.string()),
+    requireWeekendMin: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await ctx.auth.getUserIdentity()
     if (!identity) {
-      throw new Error('Not authenticated');
+      throw new Error("Not authenticated")
     }
 
-    const vehicle = await ctx.db.get(args.id);
+    const vehicle = await ctx.db.get(args.id)
     if (!vehicle) {
-      throw new Error('Vehicle not found');
+      throw new Error("Vehicle not found")
     }
 
     if (vehicle.ownerId !== identity.subject) {
-      throw new Error('Not authorized to update this vehicle');
+      throw new Error("Not authorized to update this vehicle")
     }
 
-    const { id, ...updateData } = args;
-    void id; // Exclude id from updateData
+    const { id, ...updateData } = args
+    void id // Exclude id from updateData
     await ctx.db.patch(args.id, {
       ...updateData,
       updatedAt: Date.now(),
-    });
+    })
 
-    return args.id;
+    return args.id
   },
-});
+})
 
 // Delete vehicle (soft delete)
 export const remove = mutation({
-  args: { id: v.id('vehicles') },
+  args: { id: v.id("vehicles") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await ctx.auth.getUserIdentity()
     if (!identity) {
-      throw new Error('Not authenticated');
+      throw new Error("Not authenticated")
     }
 
-    const vehicle = await ctx.db.get(args.id);
+    const vehicle = await ctx.db.get(args.id)
     if (!vehicle) {
-      throw new Error('Vehicle not found');
+      throw new Error("Vehicle not found")
     }
 
     if (vehicle.ownerId !== identity.subject) {
-      throw new Error('Not authorized to delete this vehicle');
+      throw new Error("Not authorized to delete this vehicle")
     }
 
     await ctx.db.patch(args.id, {
       isActive: false,
       updatedAt: Date.now(),
-    });
+    })
 
-    return args.id;
+    return args.id
   },
-});
+})
 
 // Add vehicle image
 export const addImage = mutation({
   args: {
-    vehicleId: v.id('vehicles'),
-    imageUrl: v.string(),
+    vehicleId: v.id("vehicles"),
+    r2Key: v.string(),
     isPrimary: v.boolean(),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await ctx.auth.getUserIdentity()
     if (!identity) {
-      throw new Error('Not authenticated');
+      throw new Error("Not authenticated")
     }
 
-    const vehicle = await ctx.db.get(args.vehicleId);
+    const vehicle = await ctx.db.get(args.vehicleId)
     if (!vehicle) {
-      throw new Error('Vehicle not found');
+      throw new Error("Vehicle not found")
     }
 
     if (vehicle.ownerId !== identity.subject) {
-      throw new Error('Not authorized to modify this vehicle');
+      throw new Error("Not authorized to modify this vehicle")
     }
 
     // Get current image count for order
     const existingImages = await ctx.db
-      .query('vehicleImages')
-      .withIndex('by_vehicle', q => q.eq('vehicleId', args.vehicleId))
-      .collect();
+      .query("vehicleImages")
+      .withIndex("by_vehicle", (q) => q.eq("vehicleId", args.vehicleId))
+      .collect()
 
-    const imageId = await ctx.db.insert('vehicleImages', {
+    const imageId = await ctx.db.insert("vehicleImages", {
       vehicleId: args.vehicleId,
-      storageId: undefined, // Optional field for legacy support
-      imageUrl: args.imageUrl,
+      r2Key: args.r2Key,
       isPrimary: args.isPrimary,
       order: existingImages.length,
-    });
+    })
 
     // If this is primary, unset other primary images
     if (args.isPrimary) {
       await Promise.all(
         existingImages
-          .filter(img => img.isPrimary)
-          .map(img => ctx.db.patch(img._id, { isPrimary: false }))
-      );
+          .filter((img) => img.isPrimary)
+          .map((img) => ctx.db.patch(img._id, { isPrimary: false }))
+      )
     }
 
-    return imageId;
+    return imageId
   },
-});
+})
 
 // Remove vehicle image
 export const removeImage = mutation({
-  args: { imageId: v.id('vehicleImages') },
+  args: { imageId: v.id("vehicleImages") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await ctx.auth.getUserIdentity()
     if (!identity) {
-      throw new Error('Not authenticated');
+      throw new Error("Not authenticated")
     }
 
-    const image = await ctx.db.get(args.imageId);
+    const image = await ctx.db.get(args.imageId)
     if (!image) {
-      throw new Error('Image not found');
+      throw new Error("Image not found")
     }
 
-    const vehicle = await ctx.db.get(image.vehicleId);
+    const vehicle = await ctx.db.get(image.vehicleId)
     if (!vehicle || vehicle.ownerId !== identity.subject) {
-      throw new Error('Not authorized to modify this vehicle');
+      throw new Error("Not authorized to modify this vehicle")
     }
 
-    await ctx.db.delete(args.imageId);
-    return args.imageId;
+    // Delete from R2 if r2Key exists
+    if (image.r2Key) {
+      try {
+        await r2.deleteObject(ctx, image.r2Key)
+      } catch (error) {
+        console.error(`Failed to delete R2 object ${image.r2Key}:`, error)
+        // Continue with database deletion even if R2 deletion fails
+      }
+    }
+
+    await ctx.db.delete(args.imageId)
+    return args.imageId
   },
-});
+})
 
 // Get all tracks
 export const getTracks = query({
-  handler: async ctx => await ctx.db
-      .query('tracks')
-      .withIndex('by_active', q => q.eq('isActive', true))
-      .order('asc')
+  handler: async (ctx) =>
+    await ctx.db
+      .query("tracks")
+      .withIndex("by_active", (q) => q.eq("isActive", true))
+      .order("asc")
       .collect(),
-});
+})
 
-// Migration function to fix existing vehicle images
-export const migrateVehicleImages = mutation({
-  args: {},
-  handler: async ctx => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error('Not authenticated');
-    }
+// Helper function to check if user is admin via Clerk metadata
+async function checkAdmin(ctx: any) {
+  const identity = await ctx.auth.getUserIdentity()
+  if (!identity) {
+    throw new Error("Not authenticated")
+  }
 
-    // Get all vehicle images that don't have storageId
-    const imagesToMigrate = await ctx.db
-      .query('vehicleImages')
-      .filter(q => q.eq(q.field('storageId'), undefined))
-      .collect();
+  // When session token is configured with { "metadata": "{{user.public_metadata}}" },
+  // the metadata is available in identity.metadata
+  const role =
+    (identity as any).metadata?.role || // From session token (recommended)
+    (identity as any).publicMetadata?.role || // Direct from Clerk
+    (identity as any).orgRole
 
-    console.log(`Found ${imagesToMigrate.length} images to migrate`);
+  if (role !== "admin") {
+    throw new Error("Admin access required")
+  }
 
-    // For now, we'll just ensure all images have the required fields
-    // In a real migration, you might want to upload the images to Convex storage
-    const migrationResults = await Promise.all(
-      imagesToMigrate.map(async image => {
-        // Ensure the image has all required fields
-        const updateData: Record<string, unknown> = {};
-
-        // If storageId is missing, we'll leave it as undefined for now
-        // The imageUrl field should already be present
-
-        // Ensure order is a number
-        if (typeof image.order !== 'number') {
-          updateData.order = 0;
-        }
-
-        // Ensure isPrimary is a boolean
-        if (typeof image.isPrimary !== 'boolean') {
-          updateData.isPrimary = false;
-        }
-
-        if (Object.keys(updateData).length > 0) {
-          await ctx.db.patch(image._id, updateData);
-          return { id: image._id, updated: true, changes: updateData };
-        }
-
-        return { id: image._id, updated: false };
-      })
-    );
-
-    return {
-      totalImages: imagesToMigrate.length,
-      migratedImages: migrationResults.filter(r => r.updated).length,
-      results: migrationResults,
-    };
-  },
-});
+  return identity
+}
 
 // Admin function to approve a vehicle
 export const approveVehicle = mutation({
-  args: { vehicleId: v.id('vehicles') },
+  args: { vehicleId: v.id("vehicles") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error('Not authenticated');
-    }
+    await checkAdmin(ctx)
 
-    // TODO: Add admin role check here
-    // For now, any authenticated user can approve vehicles
-    // In production, you should check if the user has admin privileges
-
-    const vehicle = await ctx.db.get(args.vehicleId);
+    const vehicle = await ctx.db.get(args.vehicleId)
     if (!vehicle) {
-      throw new Error('Vehicle not found');
+      throw new Error("Vehicle not found")
     }
 
     await ctx.db.patch(args.vehicleId, {
       isApproved: true,
       updatedAt: Date.now(),
-    });
+    })
 
-    return args.vehicleId;
+    return args.vehicleId
   },
-});
+})
 
 // Admin function to reject a vehicle
 export const rejectVehicle = mutation({
-  args: { vehicleId: v.id('vehicles') },
+  args: { vehicleId: v.id("vehicles") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error('Not authenticated');
-    }
+    await checkAdmin(ctx)
 
-    // TODO: Add admin role check here
-    // For now, any authenticated user can reject vehicles
-    // In production, you should check if the user has admin privileges
-
-    const vehicle = await ctx.db.get(args.vehicleId);
+    const vehicle = await ctx.db.get(args.vehicleId)
     if (!vehicle) {
-      throw new Error('Vehicle not found');
+      throw new Error("Vehicle not found")
     }
 
     await ctx.db.patch(args.vehicleId, {
       isApproved: false,
       updatedAt: Date.now(),
-    });
+    })
 
-    return args.vehicleId;
+    return args.vehicleId
   },
-});
+})
 
 // Admin function to get all pending vehicles for review
 export const getPendingVehicles = query({
@@ -756,52 +658,41 @@ export const getPendingVehicles = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error('Not authenticated');
-    }
+    await checkAdmin(ctx)
 
-    // TODO: Add admin role check here
-    // For now, any authenticated user can view pending vehicles
-    // In production, you should check if the user has admin privileges
-
-    const { limit = 50 } = args;
+    const { limit = 50 } = args
 
     const vehicles = await ctx.db
-      .query('vehicles')
-      .withIndex('by_active_approved', q =>
-        q.eq('isActive', true).eq('isApproved', false)
-      )
-      .order('desc')
-      .take(limit);
+      .query("vehicles")
+      .withIndex("by_active_approved", (q) => q.eq("isActive", true).eq("isApproved", false))
+      .order("desc")
+      .take(limit)
 
     // Get vehicle images and owner details
     const vehiclesWithDetails = await Promise.all(
-      vehicles.map(async vehicle => {
+      vehicles.map(async (vehicle) => {
         const [images, owner, track] = await Promise.all([
           ctx.db
-            .query('vehicleImages')
-            .withIndex('by_vehicle', q => q.eq('vehicleId', vehicle._id))
-            .order('asc')
+            .query("vehicleImages")
+            .withIndex("by_vehicle", (q) => q.eq("vehicleId", vehicle._id))
+            .order("asc")
             .collect(),
           ctx.db
-            .query('users')
-            .withIndex('by_external_id', q =>
-              q.eq('externalId', vehicle.ownerId)
-            )
+            .query("users")
+            .withIndex("by_external_id", (q) => q.eq("externalId", vehicle.ownerId))
             .first(),
           ctx.db.get(vehicle.trackId),
-        ]);
+        ])
 
         return {
           ...vehicle,
           images,
           owner,
           track,
-        };
+        }
       })
-    );
+    )
 
-    return vehiclesWithDetails;
+    return vehiclesWithDetails
   },
-});
+})

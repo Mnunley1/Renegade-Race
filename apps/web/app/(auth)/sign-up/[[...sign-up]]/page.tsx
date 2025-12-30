@@ -13,7 +13,7 @@ import {
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import { Separator } from "@workspace/ui/components/separator"
-import { ArrowRight, Lock, Mail, User } from "lucide-react"
+import { ArrowRight, Eye, EyeOff, Lock, Mail, User } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
@@ -23,11 +23,12 @@ type ClerkError = {
 }
 
 export default function SignUpPage() {
-  const { signUp, isLoaded } = useSignUp()
+  const { signUp, isLoaded, setActive } = useSignUp()
   const [firstName, setFirstName] = useState("")
   const [lastName, setLastName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
   const router = useRouter()
@@ -42,20 +43,69 @@ export default function SignUpPage() {
     setError("")
 
     try {
-      await signUp.create({
+      // Create the sign-up
+      const result = await signUp.create({
         firstName,
         lastName,
         emailAddress: email,
         password,
       })
 
-      // Send email verification
-      await signUp.prepareEmailAddressVerification({ strategy: "email_code" })
+      console.log("Sign-up result status:", result.status)
+      console.log("Sign-up object:", {
+        status: signUp.status,
+        emailAddress: signUp.emailAddress,
+        unverifiedFields: signUp.unverifiedFields,
+      })
 
-      // Redirect to verification page
-      router.push("/verify-email")
+      // Check if email verification is needed
+      if (result.status === "missing_requirements") {
+        // Check if email verification is actually needed
+        const needsEmailVerification =
+          signUp.unverifiedFields?.includes("email_address") ||
+          signUp.status === "missing_requirements"
+
+        if (needsEmailVerification) {
+          // Send email verification
+          try {
+            console.log("Preparing email verification...")
+            const verifyResult = await signUp.prepareEmailAddressVerification({
+              strategy: "email_code",
+            })
+            console.log("Email verification prepared:", verifyResult)
+            // Redirect to verification page
+            router.push("/verify-email")
+          } catch (verifyErr: unknown) {
+            const verifyError = verifyErr as ClerkError
+            console.error("Email verification error:", verifyError)
+            console.error("Full error details:", JSON.stringify(verifyError, null, 2))
+            setError(
+              verifyError?.errors?.[0]?.message ||
+                "Account created but failed to send verification email. Please try resending from the verification page."
+            )
+            setIsLoading(false)
+            // Still redirect to verification page so user can resend
+            setTimeout(() => router.push("/verify-email"), 2000)
+          }
+        } else {
+          // If sign-up is complete, redirect to home
+          router.push("/")
+        }
+      } else if (result.status === "complete") {
+        // Sign-up is complete, set active session
+        if (result.createdSessionId && setActive) {
+          await setActive({ session: result.createdSessionId })
+        }
+        router.push("/")
+      } else {
+        // Unknown status, redirect to verification page as fallback
+        console.warn("Unknown sign-up status:", result.status)
+        router.push("/verify-email")
+      }
     } catch (err: unknown) {
       const clerkError = err as ClerkError
+      console.error("Sign-up error:", clerkError)
+      console.error("Full error details:", JSON.stringify(clerkError, null, 2))
       setError(clerkError?.errors?.[0]?.message || "Failed to create account")
       setIsLoading(false)
     }
@@ -70,7 +120,7 @@ export default function SignUpPage() {
         </p>
       </div>
 
-      <Card className="border-2 shadow-xl bg-card">
+      <Card className="border-2 bg-card shadow-xl">
         <CardHeader>
           <CardTitle>Sign up for free</CardTitle>
           <CardDescription>Create your account to start renting track cars</CardDescription>
@@ -136,20 +186,33 @@ export default function SignUpPage() {
               <div className="relative">
                 <Lock className="-translate-y-1/2 absolute top-1/2 left-3 size-4 text-muted-foreground" />
                 <Input
-                  className="pl-10"
+                  className="pr-10 pl-10"
                   disabled={isLoading}
                   id="password"
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Create a strong password"
                   required
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   value={password}
                 />
+                <button
+                  className="-translate-y-1/2 absolute top-1/2 right-3 text-muted-foreground transition-colors hover:text-foreground"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    setShowPassword(!showPassword)
+                  }}
+                  type="button"
+                >
+                  {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                </button>
               </div>
               <p className="text-muted-foreground text-sm">
                 Must be at least 8 characters with a mix of letters and numbers
               </p>
             </div>
+
+            {/* Clerk CAPTCHA widget */}
+            <div data-cl-theme="auto" id="clerk-captcha" />
 
             <Button className="w-full" disabled={isLoading} size="lg" type="submit">
               {isLoading ? "Creating account..." : "Create account"}
@@ -160,8 +223,10 @@ export default function SignUpPage() {
 
         <CardFooter className="flex flex-col space-y-4">
           <div className="relative w-full text-center text-sm">
-            <span className="relative bg-card px-2 text-muted-foreground">Or sign up with</span>
             <Separator className="absolute top-1/2 right-0 left-0" />
+            <span className="relative z-10 bg-card px-2 text-muted-foreground">
+              Or sign up with
+            </span>
           </div>
 
           <Button
@@ -169,7 +234,11 @@ export default function SignUpPage() {
             disabled={isLoading || !isLoaded}
             onClick={() => {
               if (signUp) {
-                signUp.authenticateWithRedirect({ strategy: "oauth_google", redirectUrl: "/" })
+                signUp.authenticateWithRedirect({
+                  strategy: "oauth_google",
+                  redirectUrl: "/",
+                  redirectUrlComplete: "/",
+                })
               }
             }}
             type="button"

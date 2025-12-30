@@ -1,7 +1,7 @@
 import { Badge } from "@workspace/ui/components/badge"
 import { Card, CardContent } from "@workspace/ui/components/card"
 import { cn } from "@workspace/ui/lib/utils"
-import { Award, MapPin, Star } from "lucide-react"
+import { Award, MapPin, User } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import type { ComponentProps } from "react"
@@ -12,13 +12,24 @@ interface DriverCardProps extends ComponentProps<"div"> {
   avatarUrl?: string
   location: string
   experience: "beginner" | "intermediate" | "advanced" | "professional"
+  racingType?: "real-world" | "sim-racing" | "both"
+  simRacingPlatforms?: string[]
+  simRacingRating?: string
   licenses: string[]
   preferredCategories: string[]
+  headline?: string
   bio: string
 }
 
-const MAX_VISIBLE_LICENSES = 3
-const MAX_VISIBLE_CATEGORIES = 2
+function getRacingTypeLabel(racingType: "real-world" | "sim-racing" | "both"): string {
+  if (racingType === "sim-racing") {
+    return "🎮 Sim Racing"
+  }
+  if (racingType === "both") {
+    return "🏎️🎮 Both"
+  }
+  return "Real-World Racing"
+}
 
 const experienceColors = {
   beginner: "bg-green-500/10 text-green-600 dark:text-green-400",
@@ -27,82 +38,83 @@ const experienceColors = {
   professional: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400",
 }
 
+const MAX_BIO_PREVIEW_LENGTH = 80
+
 export function DriverCard({
   id,
   name,
   avatarUrl,
   location,
   experience,
-  licenses,
-  preferredCategories,
+  racingType,
+  headline,
   bio,
   className,
   ...props
 }: DriverCardProps) {
-  const MAX_BIO_LENGTH = 100
-  const truncatedBio = bio.length > MAX_BIO_LENGTH ? `${bio.substring(0, MAX_BIO_LENGTH)}...` : bio
+  // Use headline if available, otherwise use first part of bio as fallback
+  const displayText =
+    headline ||
+    (bio
+      ? `${bio.substring(0, MAX_BIO_PREVIEW_LENGTH)}${bio.length > MAX_BIO_PREVIEW_LENGTH ? "..." : ""}`
+      : "")
 
   return (
-    <Link href={`/motorsports/drivers/${id}`} className="h-full">
+    <Link className="flex h-full" href={`/motorsports/drivers/${id}`}>
       <Card
         className={cn(
-          "group relative flex h-full flex-col overflow-hidden border-2 transition-all hover:scale-[1.02] hover:shadow-xl cursor-pointer",
+          "group relative flex h-full w-full cursor-pointer flex-col overflow-hidden border-2 transition-all hover:scale-[1.02] hover:shadow-xl",
           className
         )}
         {...props}
       >
-        <CardContent className="flex flex-1 flex-col p-6">
-        <div className="flex flex-1 flex-col space-y-4">
-          <div className="flex items-start gap-4">
-            <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-full border-2 border-primary/20">
-              {avatarUrl ? (
-                <Image alt={name} className="object-cover" fill src={avatarUrl} />
-              ) : (
-                <div className="flex h-full items-center justify-center bg-gradient-to-br from-primary/20 to-primary/5">
-                  <span className="text-xl">👤</span>
+        <CardContent className="flex flex-1 flex-col p-4">
+          <div className="flex flex-1 flex-col space-y-3">
+            <div className="flex items-start gap-4">
+              <div className="relative h-24 w-24 flex-shrink-0 overflow-hidden rounded-full border-2 border-primary/20">
+                {avatarUrl && avatarUrl.trim() !== "" ? (
+                  <Image alt={name} className="object-cover" fill src={avatarUrl} />
+                ) : (
+                  <div className="flex h-full items-center justify-center bg-primary">
+                    <User className="size-12 text-white" />
+                  </div>
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="font-bold text-2xl transition-colors group-hover:text-primary">
+                  {name}
+                </h3>
+                <div className="mt-1.5 flex items-center gap-2 text-lg text-muted-foreground">
+                  <MapPin className="size-5" />
+                  <span className="truncate">{location}</span>
                 </div>
-              )}
-            </div>
-            <div className="flex-1">
-              <h3 className="font-bold text-xl transition-colors group-hover:text-primary">
-                {name}
-              </h3>
-              <div className="mt-1 flex items-center gap-2 text-muted-foreground text-sm">
-                <MapPin className="size-3" />
-                <span>{location}</span>
               </div>
             </div>
-          </div>
 
-          <div className="flex items-center gap-2">
-            <Badge className={experienceColors[experience]}>
-              <Award className="mr-1 size-3" />
-              {experience.charAt(0).toUpperCase() + experience.slice(1)}
-            </Badge>
-          </div>
+            {displayText && (
+              <p
+                className={
+                  headline
+                    ? "font-semibold text-base text-foreground"
+                    : "line-clamp-2 text-muted-foreground text-sm leading-relaxed"
+                }
+              >
+                {displayText}
+              </p>
+            )}
 
-          <p className="text-muted-foreground text-sm">{truncatedBio}</p>
-
-          <div className="mt-auto space-y-2">
-            <div className="flex flex-wrap gap-2">
-              {licenses.slice(0, MAX_VISIBLE_LICENSES).map((license) => (
-                <Badge key={license} variant="outline">
-                  {license}
-                </Badge>
-              ))}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {preferredCategories.slice(0, MAX_VISIBLE_CATEGORIES).map((category) => (
-                <Badge key={category} variant="secondary">
-                  <Star className="mr-1 size-3" />
-                  {category}
-                </Badge>
-              ))}
+            <div className="mt-auto flex flex-wrap items-center gap-2">
+              <Badge className={experienceColors[experience]}>
+                <Award className="mr-1 size-3" />
+                {experience.charAt(0).toUpperCase() + experience.slice(1)}
+              </Badge>
+              <Badge variant="outline">
+                {racingType ? getRacingTypeLabel(racingType) : "Real-World Racing"}
+              </Badge>
             </div>
           </div>
-        </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
     </Link>
   )
 }
