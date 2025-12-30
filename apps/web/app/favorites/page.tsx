@@ -1,29 +1,27 @@
 "use client"
 
-import { useQuery } from "convex/react"
 import { useUser } from "@clerk/nextjs"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent } from "@workspace/ui/components/card"
+import { useQuery } from "convex/react"
 import { Heart, Loader2 } from "lucide-react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
+import { useMemo } from "react"
 import { VehicleCard } from "@/components/vehicle-card"
 import { api } from "@/lib/convex"
-import { useMemo } from "react"
 
 export default function FavoritesPage() {
   const { user, isSignedIn, isLoaded: userLoaded } = useUser()
   const router = useRouter()
-  
+  const pathname = usePathname()
+
   // Fetch user's favorites from Convex
-  const favoritesData = useQuery(
-    api.favorites.getUserFavorites,
-    isSignedIn ? {} : "skip"
-  )
+  const favoritesData = useQuery(api.favorites.getUserFavorites, isSignedIn ? {} : "skip")
 
   // Map favorites to the format expected by VehicleCard
   const favorites = useMemo(() => {
-    if (!favoritesData || !favoritesData.length) return []
+    if (!(favoritesData && favoritesData.length)) return []
     return favoritesData
       .map((fav) => {
         const vehicle = fav.vehicle
@@ -31,7 +29,7 @@ export default function FavoritesPage() {
         const primaryImage = vehicle.images?.find((img) => img.isPrimary) || vehicle.images?.[0]
         return {
           id: vehicle._id,
-          image: primaryImage?.cardUrl || primaryImage?.imageUrl || "",
+          image: primaryImage?.cardUrl ?? "",
           name: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
           year: vehicle.year,
           make: vehicle.make,
@@ -89,7 +87,12 @@ export default function FavoritesPage() {
             <p className="mb-6 max-w-md text-muted-foreground">
               Create an account or sign in to save your favorite vehicles and access them anytime.
             </p>
-            <Button onClick={() => router.push("/sign-in")} size="lg">
+            <Button
+              onClick={() =>
+                router.push(`/sign-in?redirect_url=${encodeURIComponent(pathname || "/")}`)
+              }
+              size="lg"
+            >
               Sign In
             </Button>
           </CardContent>
@@ -102,9 +105,7 @@ export default function FavoritesPage() {
     <div className="container mx-auto px-4 py-8">
       <div className="mb-8">
         <h1 className="mb-2 font-bold text-3xl">Favorites</h1>
-        <p className="text-muted-foreground">
-          {favorites.length === 0 ? "No favorites yet" : `${favorites.length} saved vehicles`}
-        </p>
+        <p className="text-muted-foreground">Manage your favorite vehicles</p>
       </div>
 
       {favorites.length === 0 ? (
@@ -126,20 +127,20 @@ export default function FavoritesPage() {
         <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
           {favorites.map((vehicle) => (
             <VehicleCard
-              key={vehicle.id}
+              horsepower={vehicle.horsepower}
               id={vehicle.id}
               image={vehicle.image}
-              name={vehicle.name}
-              year={vehicle.year}
+              key={vehicle.id}
+              location={vehicle.location}
               make={vehicle.make}
               model={vehicle.model}
+              name={vehicle.name}
               pricePerDay={vehicle.pricePerDay}
-              location={vehicle.location}
-              track={vehicle.track}
               rating={vehicle.rating}
               reviews={vehicle.reviews}
-              horsepower={vehicle.horsepower}
+              track={vehicle.track}
               transmission={vehicle.transmission}
+              year={vehicle.year}
             />
           ))}
         </div>

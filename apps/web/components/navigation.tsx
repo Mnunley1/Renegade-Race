@@ -1,8 +1,6 @@
 "use client"
 
-import { Input } from "@workspace/ui/components/input"
 import { cn } from "@workspace/ui/lib/utils"
-import { Search } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -24,7 +22,7 @@ export function Navigation() {
                 src="/logo.png"
                 width={32}
               />
-              <span className="font-semibold text-foreground text-lg tracking-tight">Renegade</span>
+              <span className="font-semibold text-foreground text-lg tracking-tight" style={{ fontFamily: 'var(--font-header), sans-serif' }}>Renegade</span>
             </Link>
             <div className="hidden items-center gap-8 md:flex">
               <Link
@@ -52,19 +50,6 @@ export function Navigation() {
 
           <div className="flex items-center gap-4">
             <UserMenu />
-          </div>
-        </div>
-
-        <div className="mb-4 flex items-center gap-2 md:hidden">
-          <div className="relative flex-1">
-            <Search className="-translate-y-1/2 absolute top-1/2 left-3 size-4 text-muted-foreground" />
-            <Input
-              className="border-border pl-9"
-              onClick={() => {
-                window.location.href = "/vehicles"
-              }}
-              placeholder="Search vehicles..."
-            />
           </div>
         </div>
       </div>

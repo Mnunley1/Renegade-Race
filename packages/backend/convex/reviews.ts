@@ -1,6 +1,59 @@
 import { v } from 'convex/values';
 import type { Id } from './_generated/dataModel';
 import { mutation, query } from './_generated/server';
+import {
+  getReviewResponseEmailTemplate,
+  sendTransactionalEmail,
+} from './emails';
+
+// Get review by completion ID for current user
+export const getByCompletion = query({
+  args: {
+    completionId: v.id('rentalCompletions'),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return null;
+    }
+
+    const review = await ctx.db
+      .query('rentalReviews')
+      .withIndex('by_rental_completion', q =>
+        q.eq('rentalCompletionId', args.completionId)
+      )
+      .filter(q => q.eq(q.field('reviewerId'), identity.subject))
+      .first();
+
+    if (!review) return null;
+
+    // Get related data
+    const [vehicle, reviewer, reviewed, reservation] = await Promise.all([
+      ctx.db.get(review.vehicleId),
+      ctx.db
+        .query('users')
+        .withIndex('by_external_id', q =>
+          q.eq('externalId', review.reviewerId)
+        )
+        .first(),
+      ctx.db
+        .query('users')
+        .withIndex('by_external_id', q =>
+          q.eq('externalId', review.reviewedId)
+        )
+        .first(),
+      ctx.db.get(review.reservationId),
+    ]);
+
+    return {
+      ...review,
+      vehicle,
+      reviewer,
+      reviewed,
+      reservation,
+    };
+  },
+});
 
 // Get reviews for a user (as reviewer or reviewed)
 export const getByUser = query({
@@ -77,7 +130,7 @@ export const getByVehicle = query({
     // Get related data
     const reviewsWithDetails = await Promise.all(
       reviews.map(async review => {
-        const [reviewer, reviewed] = await Promise.all([
+        const [reviewer, reviewed, reservation] = await Promise.all([
           ctx.db
             .query('users')
             .withIndex('by_external_id', q =>
@@ -90,12 +143,14 @@ export const getByVehicle = query({
               q.eq('externalId', review.reviewedId)
             )
             .first(),
+          ctx.db.get(review.reservationId),
         ]);
 
         return {
           ...review,
           reviewer,
           reviewed,
+          reservation,
         };
       })
     );
@@ -328,9 +383,43 @@ export const submitResponse = mutation({
         respondedAt: Date.now(),
       },
       updatedAt: Date.now(),
-    });
+    })
 
-    return args.reviewId;
+    // Send email to reviewer about review response
+    try {
+      const [vehicle, reviewer, reviewed] = await Promise.all([
+        ctx.db.get(review.vehicleId),
+        ctx.db
+          .query('users')
+          .withIndex('by_external_id', q =>
+            q.eq('externalId', review.reviewerId)
+          )
+          .first(),
+        ctx.db
+          .query('users')
+          .withIndex('by_external_id', q =>
+            q.eq('externalId', review.reviewedId)
+          )
+          .first(),
+      ])
+
+      if (vehicle && reviewer?.email && reviewed) {
+        const vehicleName = `${vehicle.year} ${vehicle.make} ${vehicle.model}`
+        const webUrl = process.env.WEB_URL || 'https://renegaderentals.com'
+        const template = getReviewResponseEmailTemplate({
+          reviewerName: reviewer.name || 'Guest',
+          reviewedName: reviewed.name || 'Guest',
+          vehicleName,
+          reviewUrl: `${webUrl}/profile`,
+        })
+        await sendTransactionalEmail(ctx, reviewer.email, template)
+      }
+    } catch (error) {
+      console.error('Failed to send review response email:', error)
+      // Don't fail the mutation if email fails
+    }
+
+    return args.reviewId
   },
 });
 
@@ -421,6 +510,104 @@ export const getPendingResponses = query({
     );
 
     return reviewsWithDetails;
+  },
+});
+
+// Update a review (only by reviewer)
+export const updateReview = mutation({
+  args: {
+    reviewId: v.id('rentalReviews'),
+    rating: v.number(),
+    communication: v.optional(v.number()),
+    vehicleCondition: v.optional(v.number()),
+    professionalism: v.optional(v.number()),
+    overallExperience: v.optional(v.number()),
+    title: v.string(),
+    review: v.string(),
+    photos: v.optional(v.array(v.string())),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error('Not authenticated');
+    }
+
+    const existingReview = await ctx.db.get(args.reviewId);
+    if (!existingReview) {
+      throw new Error('Review not found');
+    }
+
+    if (existingReview.reviewerId !== identity.subject) {
+      throw new Error('Not authorized to update this review');
+    }
+
+    await ctx.db.patch(args.reviewId, {
+      rating: args.rating,
+      communication: args.communication,
+      vehicleCondition: args.vehicleCondition,
+      professionalism: args.professionalism,
+      overallExperience: args.overallExperience,
+      title: args.title,
+      review: args.review,
+      photos: args.photos,
+      updatedAt: Date.now(),
+    });
+
+    // TODO: Update the reviewed user's rating via scheduler
+    // await ctx.scheduler.runAfter(0, api.reviews.updateUserRating, {
+    //   userId: existingReview.reviewedId,
+    // });
+
+    return args.reviewId;
+  },
+});
+
+// Get review by ID for current user
+export const getById = query({
+  args: {
+    reviewId: v.id('rentalReviews'),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return null;
+    }
+
+    const review = await ctx.db.get(args.reviewId);
+    if (!review) {
+      return null;
+    }
+
+    // Only return if user is the reviewer
+    if (review.reviewerId !== identity.subject) {
+      return null;
+    }
+
+    // Get related data
+    const [vehicle, reviewer, reviewed, reservation] = await Promise.all([
+      ctx.db.get(review.vehicleId),
+      ctx.db
+        .query('users')
+        .withIndex('by_external_id', q =>
+          q.eq('externalId', review.reviewerId)
+        )
+        .first(),
+      ctx.db
+        .query('users')
+        .withIndex('by_external_id', q =>
+          q.eq('externalId', review.reviewedId)
+        )
+        .first(),
+      ctx.db.get(review.reservationId),
+    ]);
+
+    return {
+      ...review,
+      vehicle,
+      reviewer,
+      reviewed,
+      reservation,
+    };
   },
 });
 

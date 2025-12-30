@@ -45,28 +45,6 @@ export default function NotFound() {
             </Button>
           </Link>
         </div>
-
-        {/* Helpful Links */}
-        <div className="mt-16">
-          <p className="mb-4 text-muted-foreground text-sm">Or try these popular pages:</p>
-          <div className="flex flex-wrap justify-center gap-4">
-            <Link href="/vehicles">
-              <Button className="text-sm" variant="ghost">
-                All Vehicles
-              </Button>
-            </Link>
-            <Link href="/profile">
-              <Button className="text-sm" variant="ghost">
-                My Profile
-              </Button>
-            </Link>
-            <Link href="/messages">
-              <Button className="text-sm" variant="ghost">
-                Messages
-              </Button>
-            </Link>
-          </div>
-        </div>
       </div>
     </div>
   )

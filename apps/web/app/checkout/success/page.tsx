@@ -1,22 +1,23 @@
 "use client"
 
-import { useSearchParams } from "next/navigation"
-import { useQuery } from "convex/react"
-import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Button } from "@workspace/ui/components/button"
+import { Card, CardContent } from "@workspace/ui/components/card"
 import { Separator } from "@workspace/ui/components/separator"
-import { CheckCircle2, Calendar, MapPin, Clock } from "lucide-react"
-import { api } from "@/lib/convex"
+import { useQuery } from "convex/react"
+import { Calendar, CheckCircle2, Clock, MapPin } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
+import { useSearchParams } from "next/navigation"
+import { Suspense } from "react"
+import { api } from "@/lib/convex"
 
-export default function CheckoutSuccessPage() {
+function CheckoutSuccessContent() {
   const searchParams = useSearchParams()
   const reservationId = searchParams.get("reservationId")
 
   const reservation = useQuery(
     api.reservations.getById,
-    reservationId ? ({ id: reservationId as any }) : "skip"
+    reservationId ? { id: reservationId as any } : "skip"
   )
 
   if (!reservationId) {
@@ -58,14 +59,14 @@ export default function CheckoutSuccessPage() {
           <div className="mx-auto max-w-2xl text-center">
             <CheckCircle2 className="mx-auto mb-4 size-16 text-green-500" />
             <h1 className="mb-2 font-bold text-4xl">Reservation Confirmed!</h1>
-            <p className="mb-8 text-muted-foreground text-lg">
+            <p className="mb-8 text-lg text-muted-foreground">
               Your payment has been processed successfully. Your reservation details are below.
             </p>
 
             <div className="mb-8 rounded-lg border bg-muted/50 p-6 text-left">
               {vehicle && (
                 <div className="mb-6 flex gap-4">
-                  {primaryImage && (
+                  {primaryImage && primaryImage.trim() !== "" ? (
                     <div className="relative h-32 w-48 shrink-0 overflow-hidden rounded-lg">
                       <Image
                         alt={`${vehicle.year} ${vehicle.make} ${vehicle.model}`}
@@ -75,7 +76,7 @@ export default function CheckoutSuccessPage() {
                         src={primaryImage}
                       />
                     </div>
-                  )}
+                  ) : null}
                   <div className="flex-1">
                     <h2 className="mb-2 font-bold text-2xl">
                       {vehicle.year} {vehicle.make} {vehicle.model}
@@ -144,7 +145,7 @@ export default function CheckoutSuccessPage() {
               <Button asChild size="lg">
                 <Link href="/trips">View My Trips</Link>
               </Button>
-              <Button asChild variant="outline" size="lg">
+              <Button asChild size="lg" variant="outline">
                 <Link href="/vehicles">Browse More Vehicles</Link>
               </Button>
             </div>
@@ -155,3 +156,20 @@ export default function CheckoutSuccessPage() {
   )
 }
 
+export default function CheckoutSuccessPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="container mx-auto max-w-4xl px-4 py-8">
+          <Card>
+            <CardContent className="py-12 text-center">
+              <p className="text-muted-foreground">Loading...</p>
+            </CardContent>
+          </Card>
+        </div>
+      }
+    >
+      <CheckoutSuccessContent />
+    </Suspense>
+  )
+}

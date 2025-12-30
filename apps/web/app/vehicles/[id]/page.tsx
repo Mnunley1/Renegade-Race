@@ -9,21 +9,25 @@ import { Dialog, DialogContent } from "@workspace/ui/components/dialog"
 import { cn } from "@workspace/ui/lib/utils"
 import { useMutation, useQuery } from "convex/react"
 import {
+  ArrowLeft,
   Car,
   Check,
+  Edit,
   Gauge,
   Heart,
   LogIn,
   MapPin,
   MessageSquare,
   Route,
+  Share2,
   Shield,
   Star,
   UserPlus,
   Zap,
 } from "lucide-react"
+import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
-import { useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { VehicleGallery } from "@/components/vehicle-gallery"
 import { api } from "@/lib/convex"
 
@@ -34,10 +38,23 @@ export default function VehicleDetailsPage() {
   const id = params.id as string
   const [showLoginDialog, setShowLoginDialog] = useState(false)
   const [isCreatingConversation, setIsCreatingConversation] = useState(false)
+  const hasTrackedView = useRef(false)
 
   const vehicle = useQuery(api.vehicles.getById, { id: id as any })
   const reviews = useQuery(api.reviews.getByVehicle, id ? { vehicleId: id as any } : "skip")
   const reviewStats = useQuery(api.reviews.getVehicleStats, id ? { vehicleId: id as any } : "skip")
+
+  // Check if user has a completed reservation for this vehicle (to show "Write Review" button)
+  const completedReservation = useQuery(
+    api.reservations.getCompletedReservationForVehicle,
+    isSignedIn && user?.id && id ? { userId: user.id, vehicleId: id as any } : "skip"
+  )
+
+  // Check if user has already written a review for this vehicle
+  const hasUserReviewed = useMemo(() => {
+    if (!(isSignedIn && user?.id && reviews)) return false
+    return reviews.some((review) => review.reviewerId === user.id)
+  }, [isSignedIn, user?.id, reviews])
 
   // Check if vehicle is favorited
   const isFavorite = useQuery(
@@ -50,6 +67,10 @@ export default function VehicleDetailsPage() {
 
   // Create conversation mutation
   const createConversation = useMutation(api.conversations.create)
+
+  // Track view and share mutations
+  const trackView = useMutation(api.vehicleAnalytics.trackView)
+  const trackShare = useMutation(api.vehicleAnalytics.trackShare)
 
   const handleFavoriteClick = async () => {
     // If not signed in, show login dialog
@@ -72,12 +93,14 @@ export default function VehicleDetailsPage() {
     try {
       await toggleFavorite({ vehicleId: id as any })
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to toggle favorite"
       console.error("Error toggling favorite:", error)
 
       // If authentication error, show login dialog
+      const errorMessage = error instanceof Error ? error.message : ""
       if (errorMessage.includes("Not authenticated") || errorMessage.includes("authentication")) {
         setShowLoginDialog(true)
+      } else {
+        toast.error("An error occurred")
       }
     }
   }
@@ -115,14 +138,70 @@ export default function VehicleDetailsPage() {
       // Navigate to the messages page
       router.push(`/messages/${conversationId as string}`)
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to start conversation"
+      console.error("Failed to start conversation:", error)
 
       // If authentication error, show login dialog
+      const errorMessage = error instanceof Error ? error.message : ""
       if (errorMessage.includes("Not authenticated") || errorMessage.includes("authentication")) {
         setShowLoginDialog(true)
+      } else {
+        toast.error("An error occurred")
       }
     } finally {
       setIsCreatingConversation(false)
+    }
+  }
+
+  // Track view when page loads (only once per page load)
+  useEffect(() => {
+    // Only track if we haven't tracked yet, vehicle is loaded and active, and we have an ID
+    if (!hasTrackedView.current && vehicle && vehicle.isActive && id) {
+      hasTrackedView.current = true
+      trackView({ vehicleId: id as any }).catch(console.error)
+    }
+  }, [vehicle, id, trackView])
+
+  // Reset tracking ref when vehicle ID changes (user navigates to different vehicle)
+  useEffect(() => {
+    hasTrackedView.current = false
+  }, [id])
+
+  // Handle share functionality
+  const handleShare = async (platform: string) => {
+    if (!(vehicle && id)) return
+
+    const url = typeof window !== "undefined" ? window.location.href : ""
+    const title = `${vehicle.year} ${vehicle.make} ${vehicle.model}`
+    const text = `Check out this ${title} on Renegade Rentals!`
+
+    try {
+      if (platform === "copy_link") {
+        await navigator.clipboard.writeText(url)
+        // You could add a toast notification here
+      } else if (platform === "facebook") {
+        window.open(
+          `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`,
+          "_blank"
+        )
+      } else if (platform === "twitter") {
+        window.open(
+          `https://twitter.com/intent/tweet?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`,
+          "_blank"
+        )
+      } else if (platform === "linkedin") {
+        window.open(
+          `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`,
+          "_blank"
+        )
+      }
+
+      // Track the share
+      await trackShare({
+        vehicleId: id as any,
+        platform,
+      })
+    } catch (error) {
+      console.error("Error sharing:", error)
     }
   }
 
@@ -144,7 +223,7 @@ export default function VehicleDetailsPage() {
   }
 
   // Extract image URLs
-  const images = vehicle.images?.map((img) => img.cardUrl || img.imageUrl || "") || []
+  const images = vehicle.images?.map((img) => img.cardUrl ?? "") || []
 
   // Host information from owner
   const host = {
@@ -158,8 +237,9 @@ export default function VehicleDetailsPage() {
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="mb-8">
-        <Button className="mb-6" onClick={() => router.back()} variant="ghost">
-          ← Back
+        <Button className="mb-6" onClick={() => router.back()} variant="outline">
+          <ArrowLeft className="mr-2 size-4" />
+          Back
         </Button>
 
         {/* Header Section */}
@@ -191,7 +271,7 @@ export default function VehicleDetailsPage() {
                 </div>
                 {reviewStats && reviewStats.averageRating > 0 && (
                   <div className="flex items-center gap-1">
-                    <Star className="size-4 fill-yellow-400 text-yellow-400" />
+                    <Star className="size-4 fill-primary text-primary" />
                     <span className="font-semibold">{reviewStats.averageRating.toFixed(1)}</span>
                     <span className="text-muted-foreground text-sm">
                       ({reviewStats.totalReviews || 0})
@@ -388,63 +468,112 @@ export default function VehicleDetailsPage() {
                     </span>
                   )}
                 </CardTitle>
-                {reviewStats && reviewStats.averageRating > 0 && (
-                  <div className="flex items-center gap-2 rounded-lg bg-primary/10 px-4 py-2">
-                    <Star className="size-5 fill-yellow-400 text-yellow-400" />
-                    <span className="font-bold text-lg">
-                      {reviewStats.averageRating.toFixed(1)}
-                    </span>
-                  </div>
-                )}
+                <div className="flex items-center gap-3">
+                  {reviewStats && reviewStats.averageRating > 0 && (
+                    <div className="flex items-center gap-2 rounded-lg bg-primary/10 px-4 py-2">
+                      <Star className="size-5 fill-primary text-primary" />
+                      <span className="font-bold text-lg">
+                        {reviewStats.averageRating.toFixed(1)}
+                      </span>
+                    </div>
+                  )}
+                  {completedReservation && (
+                    <Button asChild size="sm" variant="outline">
+                      <Link href={`/trips/review/${completedReservation._id}`}>
+                        <Star className="mr-2 size-4" />
+                        {hasUserReviewed ? "Edit Review" : "Write Review"}
+                      </Link>
+                    </Button>
+                  )}
+                </div>
               </div>
             </CardHeader>
             <CardContent>
               {reviews && reviews.length > 0 ? (
                 <div className="space-y-6">
-                  {reviews.map((review) => (
-                    <div
-                      className="rounded-lg border bg-muted/30 p-4 transition-colors hover:bg-muted/50"
-                      key={review._id}
-                    >
-                      <div className="mb-3 flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="mb-1 flex items-center gap-2">
-                            <p className="font-semibold">{review.reviewer?.name || "Anonymous"}</p>
-                            <div className="flex items-center gap-1">
-                              {Array.from({ length: 5 }).map((_, i) => (
-                                <Star
-                                  className={cn(
-                                    "size-4",
-                                    i < review.rating
-                                      ? "fill-yellow-400 text-yellow-400"
-                                      : "text-muted-foreground"
-                                  )}
-                                  key={i}
-                                />
-                              ))}
+                  {reviews.map((review) => {
+                    const isUserReview = review.reviewerId === user?.id
+                    return (
+                      <div
+                        className="rounded-lg border bg-muted/30 p-4 transition-colors hover:bg-muted/50"
+                        key={review._id}
+                      >
+                        <div className="mb-3 flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="mb-1 flex items-center gap-2">
+                              {review.reviewerId ? (
+                                <Link
+                                  className="font-semibold transition-colors hover:text-primary"
+                                  href={`/r/${review.reviewerId}`}
+                                >
+                                  {review.reviewer?.name || "Anonymous"}
+                                </Link>
+                              ) : (
+                                <p className="font-semibold">
+                                  {review.reviewer?.name || "Anonymous"}
+                                </p>
+                              )}
+                              <div className="flex items-center gap-1">
+                                {Array.from({ length: 5 }).map((_, i) => (
+                                  <Star
+                                    className={cn(
+                                      "size-4",
+                                      i < review.rating
+                                        ? "fill-primary text-primary"
+                                        : "text-muted-foreground"
+                                    )}
+                                    key={i}
+                                  />
+                                ))}
+                              </div>
                             </div>
+                            <p className="text-muted-foreground text-sm">
+                              {new Date(review.createdAt).toLocaleDateString("en-US", {
+                                year: "numeric",
+                                month: "long",
+                                day: "numeric",
+                              })}
+                              {review.updatedAt && review.updatedAt !== review.createdAt && (
+                                <span className="ml-2 text-xs">(edited)</span>
+                              )}
+                            </p>
                           </div>
-                          <p className="text-muted-foreground text-sm">
-                            {new Date(review.createdAt).toLocaleDateString("en-US", {
-                              year: "numeric",
-                              month: "long",
-                              day: "numeric",
-                            })}
-                          </p>
+                          {isUserReview && review.reservation && (
+                            <Link href={`/trips/review/${review.reservation._id}`}>
+                              <Button className="gap-2" size="sm" variant="ghost">
+                                <Edit className="size-4" />
+                                Edit
+                              </Button>
+                            </Link>
+                          )}
                         </div>
+                        {review.title && (
+                          <p className="mb-2 font-semibold text-lg">{review.title}</p>
+                        )}
+                        {review.review && (
+                          <p className="text-muted-foreground leading-relaxed">{review.review}</p>
+                        )}
                       </div>
-                      {review.title && <p className="mb-2 font-semibold text-lg">{review.title}</p>}
-                      {review.review && (
-                        <p className="text-muted-foreground leading-relaxed">{review.review}</p>
-                      )}
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               ) : (
                 <div className="py-12 text-center">
                   <Star className="mx-auto mb-4 size-12 text-muted-foreground/30" />
                   <p className="mb-2 font-semibold text-lg">No reviews yet</p>
-                  <p className="text-muted-foreground">Be the first to review this vehicle!</p>
+                  <p className="mb-4 text-muted-foreground">
+                    {completedReservation
+                      ? "Share your experience with this vehicle!"
+                      : "Be the first to review this vehicle!"}
+                  </p>
+                  {completedReservation && (
+                    <Button asChild variant="outline">
+                      <Link href={`/trips/review/${completedReservation._id}`}>
+                        <Star className="mr-2 size-4" />
+                        {hasUserReviewed ? "Edit Review" : "Write Review"}
+                      </Link>
+                    </Button>
+                  )}
                 </div>
               )}
             </CardContent>
@@ -495,29 +624,33 @@ export default function VehicleDetailsPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  <div className="flex items-center gap-4">
-                    <Avatar className="size-16">
-                      <AvatarImage src={host.avatar} />
-                      <AvatarFallback>{host.name[0]?.toUpperCase() || "U"}</AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-semibold">{host.name}</h3>
-                        {host.verified && (
-                          <Badge className="bg-green-500" variant="default">
-                            <Shield className="mr-1 size-3" />
-                            Verified
-                          </Badge>
-                        )}
+                  <Link className="block" href={`/r/${vehicle.ownerId}`}>
+                    <div className="flex items-center gap-4 transition-opacity hover:opacity-80">
+                      <Avatar className="size-16">
+                        <AvatarImage src={host.avatar} />
+                        <AvatarFallback>{host.name[0]?.toUpperCase() || "U"}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-semibold transition-colors hover:text-primary">
+                            {host.name}
+                          </h3>
+                          {host.verified && (
+                            <Badge className="bg-green-500" variant="default">
+                              <Shield className="mr-1 size-3" />
+                              Verified
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-muted-foreground text-sm">
+                          {host.memberSince && `Member since ${host.memberSince}`}
+                          {host.memberSince && host.tripsCompleted > 0 && " • "}
+                          {host.tripsCompleted > 0 && `${host.tripsCompleted} trips`}
+                          {!host.memberSince && host.tripsCompleted === 0 && "New member"}
+                        </p>
                       </div>
-                      <p className="text-muted-foreground text-sm">
-                        {host.memberSince && `Member since ${host.memberSince}`}
-                        {host.memberSince && host.tripsCompleted > 0 && " • "}
-                        {host.tripsCompleted > 0 && `${host.tripsCompleted} trips`}
-                        {!host.memberSince && host.tripsCompleted === 0 && "New member"}
-                      </p>
                     </div>
-                  </div>
+                  </Link>
                   {vehicle.ownerId !== user?.id && (
                     <Button
                       className="w-full"
@@ -529,6 +662,52 @@ export default function VehicleDetailsPage() {
                       {isCreatingConversation ? "Loading..." : "Message Host"}
                     </Button>
                   )}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Share2 className="size-5 text-primary" />
+                  Share Listing
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    className="w-full"
+                    onClick={() => handleShare("copy_link")}
+                    size="sm"
+                    variant="outline"
+                  >
+                    <Share2 className="mr-2 size-4" />
+                    Copy Link
+                  </Button>
+                  <Button
+                    className="w-full"
+                    onClick={() => handleShare("facebook")}
+                    size="sm"
+                    variant="outline"
+                  >
+                    Facebook
+                  </Button>
+                  <Button
+                    className="w-full"
+                    onClick={() => handleShare("twitter")}
+                    size="sm"
+                    variant="outline"
+                  >
+                    Twitter
+                  </Button>
+                  <Button
+                    className="w-full"
+                    onClick={() => handleShare("linkedin")}
+                    size="sm"
+                    variant="outline"
+                  >
+                    LinkedIn
+                  </Button>
                 </div>
               </CardContent>
             </Card>

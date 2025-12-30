@@ -1,103 +1,85 @@
 import Image from "next/image"
 import Link from "next/link"
+import { Facebook, Instagram, Twitter, Youtube } from "lucide-react"
 
 export function Footer() {
   return (
     <footer className="border-t border-border bg-background">
-      <div className="container mx-auto px-4 sm:px-6 py-16">
-        <div className="grid grid-cols-1 gap-12 md:grid-cols-4">
-          <div>
-            <div className="mb-6 flex items-center gap-2.5">
-              <Image
-                alt="Renegade"
-                className="rounded-full"
-                height={28}
-                src="/logo.png"
-                width={28}
-              />
-              <h3 className="font-semibold text-foreground text-lg tracking-tight">Renegade</h3>
-            </div>
-            <p className="text-muted-foreground text-sm leading-relaxed">
-              The fastest way to rent track cars. Experience the thrill of racing on the track.
-            </p>
+      <div className="container mx-auto px-4 sm:px-6 py-12">
+        <div className="flex flex-col items-center gap-8 md:flex-row md:justify-between">
+          <div className="flex items-center gap-2.5">
+            <Image
+              alt="Renegade"
+              className="rounded-full"
+              height={24}
+              src="/logo.png"
+              width={24}
+            />
+            <h3 className="font-semibold text-foreground text-base tracking-tight">Renegade</h3>
           </div>
 
-          <div>
-            <h4 className="mb-6 text-sm font-semibold text-foreground">For Renters</h4>
-            <ul className="space-y-3 text-sm">
-              <li>
-                <Link
-                  className="text-muted-foreground transition-colors hover:text-foreground"
-                  href="/vehicles"
-                >
-                  Browse Vehicles
-                </Link>
-              </li>
-              <li>
-                <Link
-                  className="text-muted-foreground transition-colors hover:text-foreground"
-                  href="/vehicles"
-                >
-                  How It Works
-                </Link>
-              </li>
-              <li>
-                <Link
-                  className="text-muted-foreground transition-colors hover:text-foreground"
-                  href="/profile"
-                >
-                  My Trips
-                </Link>
-              </li>
-            </ul>
-          </div>
+          <nav className="flex flex-wrap items-center justify-center gap-6 text-sm">
+            <Link
+              className="text-muted-foreground transition-colors hover:text-foreground"
+              href="/vehicles"
+            >
+              Browse Vehicles
+            </Link>
+            <Link
+              className="text-muted-foreground transition-colors hover:text-foreground"
+              href="/help"
+            >
+              Help Center
+            </Link>
+            <Link
+              className="text-muted-foreground transition-colors hover:text-foreground"
+              href="/contact"
+            >
+              Contact Us
+            </Link>
+          </nav>
 
-          <div>
-            <h4 className="mb-6 text-sm font-semibold text-foreground">For Hosts</h4>
-            <ul className="space-y-3 text-sm">
-              <li>
-                <Link
-                  className="text-muted-foreground transition-colors hover:text-foreground"
-                  href="/host"
-                >
-                  List Your Car
-                </Link>
-              </li>
-              <li>
-                <Link
-                  className="text-muted-foreground transition-colors hover:text-foreground"
-                  href="/host"
-                >
-                  Host Resources
-                </Link>
-              </li>
-            </ul>
-          </div>
-
-          <div>
-            <h4 className="mb-6 text-sm font-semibold text-foreground">Support</h4>
-            <ul className="space-y-3 text-sm">
-              <li>
-                <Link
-                  className="text-muted-foreground transition-colors hover:text-foreground"
-                  href="/help"
-                >
-                  Help Center
-                </Link>
-              </li>
-              <li>
-                <Link
-                  className="text-muted-foreground transition-colors hover:text-foreground"
-                  href="/contact"
-                >
-                  Contact Us
-                </Link>
-              </li>
-            </ul>
+          <div className="flex items-center gap-4">
+            <Link
+              aria-label="Instagram"
+              className="text-muted-foreground transition-colors hover:text-foreground"
+              href="https://instagram.com"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Instagram className="size-5" />
+            </Link>
+            <Link
+              aria-label="Twitter"
+              className="text-muted-foreground transition-colors hover:text-foreground"
+              href="https://twitter.com"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Twitter className="size-5" />
+            </Link>
+            <Link
+              aria-label="Facebook"
+              className="text-muted-foreground transition-colors hover:text-foreground"
+              href="https://facebook.com"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Facebook className="size-5" />
+            </Link>
+            <Link
+              aria-label="YouTube"
+              className="text-muted-foreground transition-colors hover:text-foreground"
+              href="https://youtube.com"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Youtube className="size-5" />
+            </Link>
           </div>
         </div>
 
-        <div className="mt-12 border-t border-border pt-8">
+        <div className="mt-8 border-t border-border pt-8">
           <p className="text-center text-muted-foreground text-sm">
             © {new Date().getFullYear()} Renegade. All rights reserved.
           </p>
