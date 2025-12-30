@@ -29,7 +29,7 @@ import {
 import Image from "next/image"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { useEffect, useState } from "react"
+import { Suspense, useEffect, useState } from "react"
 import { api } from "@/lib/convex"
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "")
@@ -133,7 +133,7 @@ function PaymentForm({
   )
 }
 
-export default function CheckoutPage() {
+function CheckoutPageContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const { isSignedIn, user } = useUser()
@@ -349,11 +349,7 @@ export default function CheckoutPage() {
   if (reservation && clientSecret) {
     const vehicle = reservation.vehicle
     const primaryImage =
-      vehicle?.images?.find((img) => img.isPrimary)?.cardUrl ||
-      vehicle?.images?.find((img) => img.isPrimary)?.imageUrl ||
-      vehicle?.images?.[0]?.cardUrl ||
-      vehicle?.images?.[0]?.imageUrl ||
-      ""
+      vehicle?.images?.find((img) => img.isPrimary)?.cardUrl || vehicle?.images?.[0]?.cardUrl || ""
 
     const options: StripeElementsOptions = {
       clientSecret,
@@ -364,7 +360,7 @@ export default function CheckoutPage() {
 
     return (
       <div className="container mx-auto max-w-6xl px-4 py-8">
-        <Button className="mb-6" onClick={() => router.back()} variant="ghost">
+        <Button className="mb-6" onClick={() => router.back()} variant="outline">
           <ArrowLeft className="mr-2 size-4" />
           Back
         </Button>
@@ -380,7 +376,7 @@ export default function CheckoutPage() {
               <CardContent className="space-y-4">
                 {vehicle && (
                   <div className="flex gap-4">
-                    {primaryImage && (
+                    {primaryImage && primaryImage.trim() !== "" ? (
                       <div className="relative h-24 w-40 shrink-0 overflow-hidden rounded-lg">
                         <Image
                           alt={`${vehicle.year} ${vehicle.make} ${vehicle.model}`}
@@ -390,7 +386,7 @@ export default function CheckoutPage() {
                           src={primaryImage}
                         />
                       </div>
-                    )}
+                    ) : null}
                     <div className="flex-1">
                       <h3 className="font-semibold text-lg">
                         {vehicle.year} {vehicle.make} {vehicle.model}
@@ -522,11 +518,7 @@ export default function CheckoutPage() {
   if (!vehicle) return null
 
   const primaryImage =
-    vehicle.images?.find((img) => img.isPrimary)?.cardUrl ||
-    vehicle.images?.find((img) => img.isPrimary)?.imageUrl ||
-    vehicle.images?.[0]?.cardUrl ||
-    vehicle.images?.[0]?.imageUrl ||
-    ""
+    vehicle.images?.find((img) => img.isPrimary)?.cardUrl || vehicle.images?.[0]?.cardUrl || ""
   // Check if form is valid and dates don't contain blocked dates
   const isValid =
     pickupDate &&
@@ -554,7 +546,7 @@ export default function CheckoutPage() {
             <CardContent className="space-y-6">
               {vehicle && (
                 <div className="flex gap-4">
-                  {primaryImage && (
+                  {primaryImage && primaryImage.trim() !== "" ? (
                     <div className="relative h-24 w-40 shrink-0 overflow-hidden rounded-lg">
                       <Image
                         alt={`${vehicle.year} ${vehicle.make} ${vehicle.model}`}
@@ -564,7 +556,7 @@ export default function CheckoutPage() {
                         src={primaryImage}
                       />
                     </div>
-                  )}
+                  ) : null}
                   <div className="flex-1">
                     <h3 className="font-semibold text-lg">
                       {vehicle.year} {vehicle.make} {vehicle.model}
@@ -893,5 +885,26 @@ export default function CheckoutPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function CheckoutPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="container mx-auto max-w-4xl px-4 py-8">
+          <div className="flex min-h-[60vh] items-center justify-center">
+            <div className="text-center">
+              <div className="mb-4 flex justify-center">
+                <div className="size-12 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+              </div>
+              <p className="font-medium text-lg text-muted-foreground">Loading...</p>
+            </div>
+          </div>
+        </div>
+      }
+    >
+      <CheckoutPageContent />
+    </Suspense>
   )
 }

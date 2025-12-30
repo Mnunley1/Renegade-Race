@@ -1,20 +1,10 @@
 "use client"
 
-import { useQuery, useMutation } from "convex/react"
-import { useState, useEffect, useMemo } from "react"
 import { useUser } from "@clerk/nextjs"
 import { Avatar, AvatarFallback, AvatarImage } from "@workspace/ui/components/avatar"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@workspace/ui/components/dialog"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import {
@@ -24,12 +14,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select"
-import { Separator } from "@workspace/ui/components/separator"
 import { Textarea } from "@workspace/ui/components/textarea"
-import { Calendar, MapPin, Pencil, Shield, Star, Loader2 } from "lucide-react"
+import { useMutation, useQuery } from "convex/react"
+import { Calendar, Camera, Heart, Loader2, Pencil, Shield, Star } from "lucide-react"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { toast } from "sonner"
 import { api } from "@/lib/convex"
+import { imagePresets } from "@/lib/imagekit"
 
 const DEFAULT_MEMBER_YEAR = 2024
+const MAX_IMAGE_SIZE_MB = 5
+const MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024
 
 export default function ProfilePage() {
   const { user } = useUser()
@@ -37,21 +32,22 @@ export default function ProfilePage() {
   const [bio, setBio] = useState("")
   const [location, setLocation] = useState("")
   const [experience, setExperience] = useState("")
+  const [isUploadingImage, setIsUploadingImage] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Fetch user data, review stats, reservations, and favorites from Convex
   const convexUser = useQuery(api.users.current, {})
-  const reviewStats = useQuery(
-    api.reviews.getUserStats,
-    user?.id ? { userId: user.id } : "skip"
-  )
+  const reviewStats = useQuery(api.reviews.getUserStats, user?.id ? { userId: user.id } : "skip")
   const reservations = useQuery(
     api.reservations.getByUser,
     user?.id ? { userId: user.id, role: "renter" as const } : "skip"
   )
-  const favorites = useQuery(
-    api.favorites.getUserFavorites,
-    user?.id ? {} : "skip"
-  )
+  const favorites = useQuery(api.favorites.getUserFavorites, user?.id ? {} : "skip")
+
+  // Mutations
+  const updateProfile = useMutation(api.users.updateProfile)
+  const updateProfileImage = useMutation(api.users.updateProfileImage)
+  const generateProfileImageUploadUrl = useMutation(api.r2.generateProfileImageUploadUrl)
 
   // Calculate stats
   const stats = useMemo(() => {
@@ -69,11 +65,9 @@ export default function ProfilePage() {
   // Initialize form data from user profile
   useEffect(() => {
     if (convexUser) {
-      // Note: Bio, location, and experience may need to be added to the users schema
-      // For now, using defaults or storing in local state
-      setBio("")
-      setLocation("")
-      setExperience("Advanced")
+      setBio(convexUser.bio || "")
+      setLocation(convexUser.location || "")
+      setExperience(convexUser.experience || "Advanced")
     }
   }, [convexUser])
 
@@ -81,32 +75,118 @@ export default function ProfilePage() {
     setIsEditing(true)
   }
 
-  const updateProfile = useMutation(api.users.updateProfile)
-
   const handleSave = async () => {
     try {
-      // Update user profile (name, email, phone)
-      // Note: Bio, location, and experience may need separate storage or schema update
+      // Update user profile (name, email, phone, bio, location, experience)
       await updateProfile({
         name: user?.fullName || "",
         email: user?.emailAddresses?.[0]?.emailAddress || undefined,
+        bio: bio || undefined,
+        location: location || undefined,
+        experience: experience || undefined,
       })
       setIsEditing(false)
     } catch (error) {
-      console.error("Error updating profile:", error)
-      alert("Failed to update profile. Please try again.")
+      // Error updating profile - user will see the error state
+      setIsEditing(false)
     }
   }
 
   const handleCancel = () => {
     setIsEditing(false)
+    // Reset form to original values
+    if (convexUser) {
+      setBio(convexUser.bio || "")
+      setLocation(convexUser.location || "")
+      setExperience(convexUser.experience || "Advanced")
+    }
   }
+
+  const handleEditProfilePicture = () => {
+    fileInputRef.current?.click()
+  }
+
+  const handleProfilePictureChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) {
+      return
+    }
+
+    // Validate file type
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select an image file")
+      return
+    }
+
+    // Validate file size
+    if (file.size > MAX_IMAGE_SIZE_BYTES) {
+      toast.error(`Image size must be less than ${MAX_IMAGE_SIZE_MB}MB`)
+      return
+    }
+
+    setIsUploadingImage(true)
+    try {
+      // Generate upload URL and key
+      const result = await generateProfileImageUploadUrl({})
+      if (!result || typeof result !== "object" || !result.url || !result.key) {
+        throw new Error(`Failed to generate upload URL: ${JSON.stringify(result)}`)
+      }
+
+      const { url: uploadUrl, key } = result
+
+      // Upload to R2
+      const uploadResponse = await fetch(uploadUrl, {
+        method: "PUT",
+        body: file,
+        headers: {
+          "Content-Type": file.type,
+        },
+      })
+
+      if (!uploadResponse.ok) {
+        const errorText = await uploadResponse.text()
+        throw new Error(`Upload failed: ${uploadResponse.status} ${errorText}`)
+      }
+
+      // Update profile image in Convex
+      await updateProfileImage({ r2Key: key })
+      toast.success("Profile picture updated successfully")
+    } catch (error) {
+      console.error("Failed to upload profile picture:", error)
+      toast.error("An error occurred")
+    } finally {
+      setIsUploadingImage(false)
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ""
+      }
+    }
+  }
+
+  // Compute profile image URL with ImageKit sizing
+  const profileImageUrl = useMemo(() => {
+    if (convexUser?.profileImageR2Key) {
+      // Use R2 key with ImageKit avatar preset for optimal sizing
+      return imagePresets.avatar(convexUser.profileImageR2Key)
+    }
+    if (convexUser?.profileImage) {
+      // Fallback to stored ImageKit URL (already optimized)
+      return convexUser.profileImage
+    }
+    // Fallback to Clerk's image URL
+    return user?.imageUrl
+  }, [convexUser?.profileImageR2Key, convexUser?.profileImage, user?.imageUrl])
 
   const userInitials = user?.firstName?.[0] || user?.emailAddresses?.[0]?.emailAddress?.[0] || "U"
   const memberSince = user?.createdAt ? new Date(user.createdAt).getFullYear() : DEFAULT_MEMBER_YEAR
 
   // Show loading state
-  if (convexUser === undefined || reviewStats === undefined || reservations === undefined || favorites === undefined) {
+  if (
+    convexUser === undefined ||
+    reviewStats === undefined ||
+    reservations === undefined ||
+    favorites === undefined
+  ) {
     return (
       <div className="container mx-auto max-w-5xl px-4 py-8">
         <div className="flex min-h-[60vh] items-center justify-center">
@@ -126,10 +206,39 @@ export default function ProfilePage() {
         <Card className="overflow-hidden border-0 bg-gradient-to-br from-primary/5 via-background to-background shadow-lg">
           <CardContent className="p-8">
             <div className="flex flex-col items-start gap-6 md:flex-row md:items-center">
-              <Avatar className="size-28 shadow-lg ring-4 ring-background">
-                <AvatarImage alt={user?.fullName || "User"} src={user?.imageUrl} />
-                <AvatarFallback className="text-2xl">{userInitials.toUpperCase()}</AvatarFallback>
-              </Avatar>
+              <div className="flex flex-col items-center gap-3">
+                <Avatar className="size-28 shadow-lg ring-4 ring-background">
+                  <AvatarImage alt={user?.fullName || "User"} src={profileImageUrl} />
+                  <AvatarFallback className="text-2xl">{userInitials.toUpperCase()}</AvatarFallback>
+                </Avatar>
+                {isEditing && (
+                  <Button
+                    disabled={isUploadingImage}
+                    onClick={handleEditProfilePicture}
+                    size="sm"
+                    variant="default"
+                  >
+                    {isUploadingImage ? (
+                      <>
+                        <Loader2 className="mr-2 size-4 animate-spin" />
+                        Uploading...
+                      </>
+                    ) : (
+                      <>
+                        <Camera className="mr-2 size-4" />
+                        Edit Profile Picture
+                      </>
+                    )}
+                  </Button>
+                )}
+                <input
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleProfilePictureChange}
+                  ref={fileInputRef}
+                  type="file"
+                />
+              </div>
 
               <div className="flex-1 space-y-3">
                 <div className="flex items-start justify-between gap-4">
@@ -152,15 +261,9 @@ export default function ProfilePage() {
                     Super Host
                   </Badge>
                   <Badge className="gap-1.5" variant="outline">
-                    <Calendar className="size-3.5" />{stats.tripsCount} Trips Completed
+                    <Calendar className="size-3.5" />
+                    {stats.tripsCount} Trips Completed
                   </Badge>
-                </div>
-
-                <div className="pt-2">
-                  <Button onClick={handleEdit} size="lg" variant="default">
-                    <Pencil className="mr-2 size-4" />
-                    Edit Profile
-                  </Button>
                 </div>
               </div>
             </div>
@@ -196,7 +299,7 @@ export default function ProfilePage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="font-medium text-muted-foreground text-sm">Favorites</CardTitle>
-              <Star className="size-4 text-muted-foreground" />
+              <Heart className="size-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="font-bold text-2xl">{stats.favoritesCount}</div>
@@ -211,114 +314,102 @@ export default function ProfilePage() {
             <CardTitle>About Me</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="space-y-3">
-              <Label className="text-muted-foreground text-sm">Bio</Label>
-              <div className="rounded-lg border bg-muted/30 p-4">
-                <p className="text-muted-foreground leading-relaxed">
-                  {bio || "No bio added yet. Click Edit Profile to add one!"}
-                </p>
-              </div>
-            </div>
-
-            <div className="grid gap-6 md:grid-cols-2">
-              <div className="space-y-3">
-                <Label className="flex items-center gap-2 text-muted-foreground text-sm">
-                  <MapPin className="size-4" />
-                  Location
-                </Label>
-                <div className="rounded-lg border bg-muted/30 p-3">
-                  <p className="font-semibold">{location || "Not set"}</p>
+            {isEditing ? (
+              <>
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground text-sm" htmlFor="bio">
+                    Bio
+                  </Label>
+                  <Textarea
+                    className="min-h-24 resize-none"
+                    id="bio"
+                    onChange={(e) => setBio(e.target.value)}
+                    placeholder="Tell us about yourself..."
+                    value={bio}
+                  />
                 </div>
-              </div>
 
-              <div className="space-y-3">
-                <Label className="text-muted-foreground text-sm">Experience Level</Label>
-                <div className="rounded-lg border bg-muted/30 p-3">
-                  <p className="font-semibold">{experience}</p>
+                <div className="grid gap-6 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground text-sm" htmlFor="location">
+                      Location
+                    </Label>
+                    <Input
+                      id="location"
+                      onChange={(e) => setLocation(e.target.value)}
+                      placeholder="City, State or Country"
+                      value={location}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground text-sm" htmlFor="experience">
+                      Experience Level
+                    </Label>
+                    <Select onValueChange={setExperience} value={experience}>
+                      <SelectTrigger id="experience">
+                        <SelectValue placeholder="Select experience level" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Beginner">Beginner</SelectItem>
+                        <SelectItem value="Intermediate">Intermediate</SelectItem>
+                        <SelectItem value="Advanced">Advanced</SelectItem>
+                        <SelectItem value="Professional">Professional</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-              </div>
-            </div>
+              </>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground text-sm">Bio</Label>
+                  <div className="rounded-lg border bg-muted/30 p-4">
+                    <p className="text-muted-foreground leading-relaxed">
+                      {bio || "No bio added yet. Click Edit Profile to add one!"}
+                    </p>
+                  </div>
+                </div>
 
-            <Separator />
+                <div className="grid gap-6 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground text-sm">Location</Label>
+                    <div className="rounded-lg border bg-muted/30 p-3">
+                      <p className="text-muted-foreground">{location || "No location set"}</p>
+                    </div>
+                  </div>
 
-            <div className="space-y-3">
-              <Label className="text-muted-foreground text-sm">Interests</Label>
-              <div className="flex flex-wrap gap-2">
-                <Badge className="gap-1.5" variant="secondary">
-                  <Star className="size-3.5" />
-                  Track Racing
-                </Badge>
-                <Badge className="gap-1.5" variant="secondary">
-                  <Calendar className="size-3.5" />
-                  GT3 Cars
-                </Badge>
-                <Badge className="gap-1.5" variant="secondary">
-                  <Shield className="size-3.5" />
-                  Formula Racing
-                </Badge>
-                <Badge className="gap-1.5" variant="secondary">
-                  Endurance
-                </Badge>
-              </div>
-            </div>
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground text-sm">Experience Level</Label>
+                    <div className="rounded-lg border bg-muted/30 p-3">
+                      <p className="font-semibold">{experience}</p>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
-      </div>
 
-      {/* Edit Dialog */}
-      <Dialog onOpenChange={handleCancel} open={isEditing}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit Profile</DialogTitle>
-            <DialogDescription>Update your profile information.</DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="bio">Bio</Label>
-              <Textarea
-                className="min-h-24 resize-none"
-                id="bio"
-                onChange={(e) => setBio(e.target.value)}
-                placeholder="Tell us about yourself..."
-                value={bio}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="location">Location</Label>
-              <Input
-                id="location"
-                onChange={(e) => setLocation(e.target.value)}
-                placeholder="City, State or Country"
-                value={location}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="experience">Experience Level</Label>
-              <Select onValueChange={setExperience} value={experience}>
-                <SelectTrigger id="experience">
-                  <SelectValue placeholder="Select experience level" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Beginner">Beginner</SelectItem>
-                  <SelectItem value="Intermediate">Intermediate</SelectItem>
-                  <SelectItem value="Advanced">Advanced</SelectItem>
-                  <SelectItem value="Professional">Professional</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button onClick={handleCancel} variant="outline">
+        {/* Action Buttons */}
+        {isEditing ? (
+          <div className="flex gap-3">
+            <Button onClick={handleSave} size="lg">
+              Save Profile
+            </Button>
+            <Button onClick={handleCancel} size="lg" variant="outline">
               Cancel
             </Button>
-            <Button onClick={handleSave}>Save Changes</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        ) : (
+          <div>
+            <Button onClick={handleEdit} size="lg" variant="default">
+              <Pencil className="mr-2 size-4" />
+              Edit Profile
+            </Button>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

@@ -4,7 +4,6 @@ import { useUser } from "@clerk/nextjs"
 import type { Id } from "@workspace/backend/convex/_generated/dataModel"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardHeader } from "@workspace/ui/components/card"
-import { Input } from "@workspace/ui/components/input"
 import {
   Dialog,
   DialogContent,
@@ -19,6 +18,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu"
+import { Input } from "@workspace/ui/components/input"
+import { cn } from "@workspace/ui/lib/utils"
 import { useMutation, useQuery } from "convex/react"
 import {
   Archive,
@@ -32,12 +33,10 @@ import {
   Trash2,
   X,
 } from "lucide-react"
-import { useEffect, useMemo, useRef, useState } from "react"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
-import Link from "next/link"
-import { api } from "@/lib/convex"
-import { cn } from "@workspace/ui/lib/utils"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
+import { api } from "@/lib/convex"
 
 export default function ChatPage() {
   const { user, isSignedIn } = useUser()
@@ -94,21 +93,25 @@ export default function ChatPage() {
   // Fetch conversation details - skip if navigating away to prevent errors
   const conversation = useQuery(
     api.conversations.getById,
-    conversationId && user?.id && !isNavigatingAway ? { conversationId: conversationId as Id<"conversations">, userId: user.id } : "skip"
+    conversationId && user?.id && !isNavigatingAway
+      ? { conversationId: conversationId as Id<"conversations">, userId: user.id }
+      : "skip"
   )
 
   // Fetch messages for the conversation - skip if navigating away to prevent errors
   const messages = useQuery(
     api.messages.getByConversation,
-    conversationId && user?.id && !isNavigatingAway ? { conversationId: conversationId as Id<"conversations">, userId: user.id } : "skip"
+    conversationId && user?.id && !isNavigatingAway
+      ? { conversationId: conversationId as Id<"conversations">, userId: user.id }
+      : "skip"
   )
 
   // Compute the external ID of the other user to stabilize the query
   const otherUserExternalId = useMemo(() => {
-    if (!conversation || !user?.id) return undefined
+    if (!(conversation && user?.id)) return
     if (user.id === conversation.renterId) return conversation.ownerId
     if (user.id === conversation.ownerId) return conversation.renterId
-    return undefined
+    return
   }, [conversation, user?.id])
 
   // Fetch participant details
@@ -186,7 +189,7 @@ export default function ChatPage() {
       // Already navigating, don't re-navigate
       return
     }
-    
+
     if (conversationId && conversation === null && messages === undefined && user?.id) {
       // Conversation was deleted or not found, navigate to messages page
       setIsNavigatingAway(true)
@@ -194,15 +197,17 @@ export default function ChatPage() {
     }
   }, [conversation, conversationId, messages, router, isNavigatingAway, user?.id])
 
-  if (!isSignedIn || !user) {
+  if (!(isSignedIn && user)) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center bg-background">
         <Card className="w-full max-w-md">
           <CardContent className="p-6">
             <div className="text-center">
-              <MessageSquare className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h2 className="text-xl font-semibold text-foreground mb-2">Please sign in</h2>
-              <p className="text-muted-foreground">You need to be signed in to view conversations.</p>
+              <MessageSquare className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
+              <h2 className="mb-2 font-semibold text-foreground text-xl">Please sign in</h2>
+              <p className="text-muted-foreground">
+                You need to be signed in to view conversations.
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -210,16 +215,20 @@ export default function ChatPage() {
     )
   }
 
-  if (!conversationId && !pendingConversation) {
+  if (!(conversationId || pendingConversation)) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center bg-background">
         <Card className="w-full max-w-md">
           <CardContent className="p-6">
             <div className="text-center">
-              <MessageSquare className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h2 className="text-xl font-semibold text-foreground mb-2">No conversation selected</h2>
-              <p className="text-muted-foreground">Please select a conversation to view messages.</p>
-              <Button onClick={() => router.push("/messages")} className="mt-4">
+              <MessageSquare className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
+              <h2 className="mb-2 font-semibold text-foreground text-xl">
+                No conversation selected
+              </h2>
+              <p className="text-muted-foreground">
+                Please select a conversation to view messages.
+              </p>
+              <Button className="mt-4" onClick={() => router.push("/messages")}>
                 Back to Messages
               </Button>
             </div>
@@ -236,11 +245,11 @@ export default function ChatPage() {
 
   if (!pendingConversation && (conversation === undefined || messages === undefined)) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center bg-background">
         <Card className="w-full max-w-md">
           <CardContent className="p-6">
             <div className="text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#EF1C25] mx-auto mb-4"></div>
+              <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-[#EF1C25] border-b-2" />
               <p className="text-muted-foreground">Loading conversation...</p>
             </div>
           </CardContent>
@@ -249,18 +258,18 @@ export default function ChatPage() {
     )
   }
 
-  if (!pendingConversation && !conversation) {
+  if (!(pendingConversation || conversation)) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center bg-background">
         <Card className="w-full max-w-md">
           <CardContent className="p-6">
             <div className="text-center">
-              <MessageSquare className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h2 className="text-xl font-semibold text-foreground mb-2">Conversation not found</h2>
+              <MessageSquare className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
+              <h2 className="mb-2 font-semibold text-foreground text-xl">Conversation not found</h2>
               <p className="text-muted-foreground">
                 This conversation may have been deleted or you don't have access to it.
               </p>
-              <Button onClick={() => router.push("/messages")} className="mt-4">
+              <Button className="mt-4" onClick={() => router.push("/messages")}>
                 Back to Messages
               </Button>
             </div>
@@ -323,9 +332,8 @@ export default function ChatPage() {
       setShowDeleteMessageDialog(false)
       setMessageToDelete(null)
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to delete message. Please try again."
-      setDeleteError(errorMessage)
       console.error("Failed to delete message:", error)
+      setDeleteError("An error occurred")
     } finally {
       setIsDeletingMessage(false)
     }
@@ -351,7 +359,7 @@ export default function ChatPage() {
   }
 
   const handleSaveEdit = async () => {
-    if (!editingMessage || !editMessageContent.trim()) return
+    if (!(editingMessage && editMessageContent.trim())) return
 
     setIsEditingMessage(true)
     try {
@@ -409,8 +417,8 @@ export default function ChatPage() {
     } catch (error) {
       // If deletion fails, reset the navigation flag
       setIsNavigatingAway(false)
-      const errorMessage = error instanceof Error ? error.message : "Failed to delete conversation. Please try again."
-      setDeleteError(errorMessage)
+      console.error("Failed to delete conversation:", error)
+      setDeleteError("An error occurred")
       console.error("Failed to delete conversation:", error)
     } finally {
       setIsDeletingConversation(false)
@@ -446,26 +454,27 @@ export default function ChatPage() {
     if (diffInHours < 1) {
       const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60))
       return `${diffInMinutes}m ago`
-    } else if (diffInHours < 24) {
-      return `${Math.floor(diffInHours)}h ago`
-    } else {
-      return date.toLocaleDateString()
     }
+    if (diffInHours < 24) {
+      return `${Math.floor(diffInHours)}h ago`
+    }
+    return date.toLocaleDateString()
   }
 
   return (
     <div className="bg-background py-6">
-      <div className="max-w-4xl mx-auto px-6">
-        <Card className="h-[calc(100vh-12rem)] max-h-[800px] flex flex-col">
+      <div className="mx-auto max-w-4xl px-6">
+        <Card className="flex h-[calc(100vh-12rem)] max-h-[800px] flex-col">
           {/* Header */}
           <CardHeader className="border-b">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
-                <Button variant="ghost" size="sm" onClick={() => router.push("/messages")}>
-                  <ArrowLeft className="h-4 w-4" />
+                <Button className="mb-6" onClick={() => router.push("/messages")} variant="outline">
+                  <ArrowLeft className="mr-2 size-4" />
+                  Back to Messages
                 </Button>
                 <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 rounded-full bg-[#EF1C25] flex items-center justify-center text-white font-medium">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#EF1C25] font-medium text-white">
                     {(pendingConversation ? recipientUser : otherUser)?.name?.[0]?.toUpperCase() ||
                       "U"}
                   </div>
@@ -473,7 +482,7 @@ export default function ChatPage() {
                     <h2 className="font-semibold text-foreground">
                       {(pendingConversation ? recipientUser : otherUser)?.name || "Unknown User"}
                     </h2>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-muted-foreground text-sm">
                       {(pendingConversation ? pendingVehicle : vehicle)
                         ? `${
                             (pendingConversation ? pendingVehicle : vehicle)?.year
@@ -488,17 +497,20 @@ export default function ChatPage() {
               {!pendingConversation && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm">
+                    <Button size="sm" variant="ghost">
                       <MoreVertical className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem onClick={handleArchiveConversation}>
-                      <Archive className="h-4 w-4 mr-2" />
+                      <Archive className="mr-2 h-4 w-4" />
                       Archive Conversation
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={handleDeleteConversation} className="text-destructive">
-                      <Trash2 className="h-4 w-4 mr-2" />
+                    <DropdownMenuItem
+                      className="text-destructive"
+                      onClick={handleDeleteConversation}
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
                       Delete Conversation
                     </DropdownMenuItem>
                   </DropdownMenuContent>
@@ -511,13 +523,13 @@ export default function ChatPage() {
           <CardContent className="flex-1 overflow-y-auto p-4">
             {pendingConversation ? (
               // Pending conversation - show recipient info
-              <div className="flex items-center justify-center h-full">
+              <div className="flex h-full items-center justify-center">
                 <div className="text-center">
-                  <MessageSquare className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold text-foreground mb-2">
+                  <MessageSquare className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
+                  <h3 className="mb-2 font-semibold text-foreground text-lg">
                     Start a conversation
                   </h3>
-                  <p className="text-muted-foreground text-sm mb-4">
+                  <p className="mb-4 text-muted-foreground text-sm">
                     Send your first message to {recipientUser?.name || "this user"} about the{" "}
                     {pendingVehicle
                       ? `${pendingVehicle.year} ${pendingVehicle.make} ${pendingVehicle.model}`
@@ -530,18 +542,18 @@ export default function ChatPage() {
               <div className="space-y-4">
                 {messages.map((message) => (
                   <div
-                    key={message._id}
                     className={cn(
-                      "flex items-start gap-2 group",
+                      "group flex items-start gap-2",
                       message.senderId === user.id ? "justify-end" : "justify-start"
                     )}
+                    key={message._id}
                     onMouseEnter={() => setHoveredMessage(message._id)}
                     onMouseLeave={() => setHoveredMessage(null)}
                   >
                     {/* Message action menu for user's own messages - positioned to the left */}
                     <div
                       className={cn(
-                        "overflow-hidden transition-all duration-200 mt-1",
+                        "mt-1 overflow-hidden transition-all duration-200",
                         message.senderId === user.id &&
                           hoveredMessage === message._id &&
                           editingMessage !== message._id
@@ -554,38 +566,38 @@ export default function ChatPage() {
                         editingMessage !== message._id && (
                           <div className="flex gap-1 whitespace-nowrap">
                             <Button
-                              size="sm"
-                              variant="ghost"
                               className="h-6 w-6 p-0"
                               onClick={() => handleCopyMessage(message.content)}
+                              size="sm"
                               title="Copy message"
+                              variant="ghost"
                             >
                               <Copy className="h-3 w-3" />
                             </Button>
                             {canEditMessage(message) && (
                               <Button
-                                size="sm"
-                                variant="ghost"
                                 className="h-6 w-6 p-0"
                                 onClick={() => handleEditMessage(message._id, message.content)}
+                                size="sm"
                                 title="Edit message"
+                                variant="ghost"
                               >
                                 <Edit className="h-3 w-3" />
                               </Button>
                             )}
                             <Button
-                              size="sm"
-                              variant="ghost"
                               className="h-6 w-6 p-0 text-destructive hover:text-destructive"
                               onClick={() => handleDeleteMessage(message._id)}
+                              size="sm"
                               title="Delete message"
+                              variant="ghost"
                             >
                               <Trash2 className="h-3 w-3" />
                             </Button>
                           </div>
                         )}
                     </div>
-                    <div className="max-w-xs lg:max-w-md relative">
+                    <div className="relative max-w-xs lg:max-w-md">
                       {editingMessage === message._id ? (
                         <div
                           className={cn(
@@ -596,18 +608,27 @@ export default function ChatPage() {
                           )}
                         >
                           <Input
-                            value={editMessageContent}
+                            className="mb-2"
                             onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                               setEditMessageContent(e.target.value)
                             }
-                            className="mb-2"
                             placeholder="Edit your message..."
+                            value={editMessageContent}
                           />
                           <div className="flex gap-2">
-                            <Button size="sm" onClick={handleSaveEdit} disabled={isEditingMessage || !editMessageContent.trim()}>
+                            <Button
+                              disabled={isEditingMessage || !editMessageContent.trim()}
+                              onClick={handleSaveEdit}
+                              size="sm"
+                            >
                               {isEditingMessage ? "Saving..." : "Save"}
                             </Button>
-                            <Button size="sm" variant="outline" onClick={handleCancelEdit} disabled={isEditingMessage}>
+                            <Button
+                              disabled={isEditingMessage}
+                              onClick={handleCancelEdit}
+                              size="sm"
+                              variant="outline"
+                            >
                               Cancel
                             </Button>
                           </div>
@@ -626,7 +647,7 @@ export default function ChatPage() {
                             {message.repliedToMessage && (
                               <div
                                 className={cn(
-                                  "mb-2 pb-2 border-l-2 pl-2 text-xs truncate",
+                                  "mb-2 truncate border-l-2 pb-2 pl-2 text-xs",
                                   message.senderId === user.id
                                     ? "border-white/30 text-white/80"
                                     : "border-muted-foreground/30 text-muted-foreground"
@@ -635,14 +656,12 @@ export default function ChatPage() {
                                 <div className="font-medium">
                                   {message.repliedToMessage.sender?.name || "Unknown"}
                                 </div>
-                                <div className="truncate">
-                                  {message.repliedToMessage.content}
-                                </div>
+                                <div className="truncate">{message.repliedToMessage.content}</div>
                               </div>
                             )}
                             <p className="text-sm">{message.content}</p>
                           </div>
-                          <p className="text-xs text-muted-foreground mt-1 px-1">
+                          <p className="mt-1 px-1 text-muted-foreground text-xs">
                             {formatTime(message.createdAt)}
                           </p>
                         </>
@@ -651,37 +670,38 @@ export default function ChatPage() {
                     {/* Reply button for other user's messages - positioned to the right */}
                     <div
                       className={cn(
-                        "overflow-hidden transition-all duration-200 mt-1",
+                        "mt-1 overflow-hidden transition-all duration-200",
                         message.senderId !== user.id && hoveredMessage === message._id
                           ? "w-auto"
                           : "w-0"
                       )}
                     >
-                      {message.senderId !== user.id &&
-                        hoveredMessage === message._id && (
-                          <div className="flex gap-1 whitespace-nowrap">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-6 w-6 p-0"
-                              onClick={() => handleReplyToMessage(message)}
-                              title="Reply to message"
-                            >
-                              <Reply className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        )}
+                      {message.senderId !== user.id && hoveredMessage === message._id && (
+                        <div className="flex gap-1 whitespace-nowrap">
+                          <Button
+                            className="h-6 w-6 p-0"
+                            onClick={() => handleReplyToMessage(message)}
+                            size="sm"
+                            title="Reply to message"
+                            variant="ghost"
+                          >
+                            <Reply className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
                 <div ref={messagesEndRef} />
               </div>
             ) : (
-              <div className="flex items-center justify-center h-full">
+              <div className="flex h-full items-center justify-center">
                 <div className="text-center">
-                  <MessageSquare className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold text-foreground mb-2">No messages yet</h3>
-                  <p className="text-muted-foreground text-sm">Start the conversation by sending a message.</p>
+                  <MessageSquare className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
+                  <h3 className="mb-2 font-semibold text-foreground text-lg">No messages yet</h3>
+                  <p className="text-muted-foreground text-sm">
+                    Start the conversation by sending a message.
+                  </p>
                 </div>
               </div>
             )}
@@ -691,15 +711,20 @@ export default function ChatPage() {
           <div className="border-t p-4">
             {/* Reply indicator */}
             {replyingToMessage && (
-              <div className="mb-3 p-3 bg-muted rounded-lg border-l-4 border-[#EF1C25]">
+              <div className="mb-3 rounded-lg border-[#EF1C25] border-l-4 bg-muted p-3">
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
-                    <p className="text-xs text-muted-foreground mb-1">Replying to:</p>
-                    <p className="text-sm text-foreground truncate">
+                    <p className="mb-1 text-muted-foreground text-xs">Replying to:</p>
+                    <p className="truncate text-foreground text-sm">
                       {messages?.find((m) => m._id === replyingToMessage)?.content}
                     </p>
                   </div>
-                  <Button size="sm" variant="ghost" onClick={handleCancelReply} className="ml-2 h-6 w-6 p-0">
+                  <Button
+                    className="ml-2 h-6 w-6 p-0"
+                    onClick={handleCancelReply}
+                    size="sm"
+                    variant="ghost"
+                  >
                     <X className="h-3 w-3" />
                   </Button>
                 </div>
@@ -708,17 +733,17 @@ export default function ChatPage() {
 
             <div className="flex space-x-2">
               <Input
-                placeholder={replyingToMessage ? "Type your reply..." : "Type a message..."}
-                value={newMessage}
+                className="flex-1"
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewMessage(e.target.value)}
                 onKeyPress={(e: React.KeyboardEvent<HTMLInputElement>) => {
                   if (e.key === "Enter") {
                     handleSendMessage()
                   }
                 }}
-                className="flex-1"
+                placeholder={replyingToMessage ? "Type your reply..." : "Type a message..."}
+                value={newMessage}
               />
-              <Button onClick={handleSendMessage} disabled={!newMessage.trim()} size="sm">
+              <Button disabled={!newMessage.trim()} onClick={handleSendMessage} size="sm">
                 <Send className="h-4 w-4" />
               </Button>
             </div>
@@ -727,10 +752,13 @@ export default function ChatPage() {
       </div>
 
       {/* Confirmation Dialogs */}
-      <Dialog open={showDeleteMessageDialog} onOpenChange={(open) => {
-        setShowDeleteMessageDialog(open)
-        if (!open) setDeleteError(null)
-      }}>
+      <Dialog
+        onOpenChange={(open) => {
+          setShowDeleteMessageDialog(open)
+          if (!open) setDeleteError(null)
+        }}
+        open={showDeleteMessageDialog}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete Message</DialogTitle>
@@ -744,30 +772,40 @@ export default function ChatPage() {
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => {
-              setShowDeleteMessageDialog(false)
-              setDeleteError(null)
-            }}>
+            <Button
+              onClick={() => {
+                setShowDeleteMessageDialog(false)
+                setDeleteError(null)
+              }}
+              variant="outline"
+            >
               Cancel
             </Button>
-            <Button variant="destructive" onClick={confirmDeleteMessage} disabled={isDeletingMessage}>
+            <Button
+              disabled={isDeletingMessage}
+              onClick={confirmDeleteMessage}
+              variant="destructive"
+            >
               {isDeletingMessage ? "Deleting..." : "Delete"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showDeleteConversationDialog} onOpenChange={(open) => {
-        setShowDeleteConversationDialog(open)
-        if (!open) setDeleteError(null)
-      }}>
+      <Dialog
+        onOpenChange={(open) => {
+          setShowDeleteConversationDialog(open)
+          if (!open) setDeleteError(null)
+        }}
+        open={showDeleteConversationDialog}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete Conversation</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete this conversation? This will remove it from your messages
-              list. The other participant will still be able to see the conversation. If both participants
-              delete the conversation, it will be permanently deleted.
+              Are you sure you want to delete this conversation? This will remove it from your
+              messages list. The other participant will still be able to see the conversation. If
+              both participants delete the conversation, it will be permanently deleted.
             </DialogDescription>
           </DialogHeader>
           {deleteError && (
@@ -776,20 +814,27 @@ export default function ChatPage() {
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => {
-              setShowDeleteConversationDialog(false)
-              setDeleteError(null)
-            }}>
+            <Button
+              onClick={() => {
+                setShowDeleteConversationDialog(false)
+                setDeleteError(null)
+              }}
+              variant="outline"
+            >
               Cancel
             </Button>
-            <Button variant="destructive" onClick={confirmDeleteConversation} disabled={isDeletingConversation}>
+            <Button
+              disabled={isDeletingConversation}
+              onClick={confirmDeleteConversation}
+              variant="destructive"
+            >
               {isDeletingConversation ? "Deleting..." : "Delete"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showArchiveConversationDialog} onOpenChange={setShowArchiveConversationDialog}>
+      <Dialog onOpenChange={setShowArchiveConversationDialog} open={showArchiveConversationDialog}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Archive Conversation</DialogTitle>
@@ -799,10 +844,10 @@ export default function ChatPage() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowArchiveConversationDialog(false)}>
+            <Button onClick={() => setShowArchiveConversationDialog(false)} variant="outline">
               Cancel
             </Button>
-            <Button onClick={confirmArchiveConversation} disabled={isArchivingConversation}>
+            <Button disabled={isArchivingConversation} onClick={confirmArchiveConversation}>
               {isArchivingConversation ? "Archiving..." : "Archive"}
             </Button>
           </DialogFooter>

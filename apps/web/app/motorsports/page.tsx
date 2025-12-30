@@ -1,10 +1,11 @@
 "use client"
 
-import { useQuery } from "convex/react"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
-import { ArrowRight, Plus, Users } from "lucide-react"
+import { useQuery } from "convex/react"
+import { ArrowRight, Car, Flag, Plus, RefreshCw, User, Users, Zap } from "lucide-react"
+import Image from "next/image"
 import Link from "next/link"
 import { api } from "@/lib/convex"
 
@@ -20,9 +21,9 @@ export default function MotorsportsPage() {
     <div className="container mx-auto px-4 py-8">
       <div className="mb-12">
         <h1 className="mb-2 font-bold text-3xl">Motorsports</h1>
-        <p className="text-muted-foreground text-lg">
+        <p className="text-lg text-muted-foreground">
           Connect drivers with racing teams. Find your perfect match and accelerate your racing
-          career.
+          career in real-world racing or sim racing.
         </p>
       </div>
 
@@ -32,19 +33,28 @@ export default function MotorsportsPage() {
           <CardContent className="p-8 md:p-12">
             <div className="grid gap-8 md:grid-cols-2 md:items-center">
               <div className="space-y-4">
-                <Badge className="px-4 py-1 text-sm">🏎️ Motorsports Network</Badge>
+                <Badge className="px-4 py-1 text-sm">
+                  <Car className="mr-1 inline size-4" />
+                  Motorsports Network
+                </Badge>
                 <h2 className="font-bold text-3xl md:text-4xl">
                   Connect Drivers with Racing Teams
                 </h2>
                 <p className="text-lg text-muted-foreground leading-relaxed">
                   Renegade Motorsports is the premier platform connecting talented drivers with
                   professional racing teams. Whether you're a seasoned professional or an
-                  up-and-coming driver, find your perfect match and accelerate your racing career.
+                  up-and-coming driver in real-world racing or sim racing, find your perfect match
+                  and accelerate your racing career.
                 </p>
               </div>
               <div className="hidden md:block">
-                <div className="relative flex aspect-square items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5">
-                  <span className="text-9xl">🏁</span>
+                <div className="relative flex aspect-square items-center justify-center overflow-hidden rounded-2xl">
+                  <Image
+                    alt="Motorsports racing"
+                    className="object-cover"
+                    fill
+                    src="/images/christian-palazzolo-UF0QX-zaNXc-unsplash.jpg"
+                  />
                 </div>
               </div>
             </div>
@@ -56,7 +66,7 @@ export default function MotorsportsPage() {
           <Card>
             <CardHeader>
               <div className="mb-4 flex size-12 items-center justify-center rounded-lg bg-primary/10">
-                🏁
+                <Flag className="size-6 text-primary" />
               </div>
               <CardTitle>For Drivers</CardTitle>
             </CardHeader>
@@ -81,7 +91,7 @@ export default function MotorsportsPage() {
           <Card>
             <CardHeader>
               <div className="mb-4 flex size-12 items-center justify-center rounded-lg bg-primary/10">
-                ⚡
+                <Zap className="size-6 text-primary" />
               </div>
               <CardTitle>For Teams</CardTitle>
             </CardHeader>
@@ -106,7 +116,7 @@ export default function MotorsportsPage() {
           <Card>
             <CardHeader>
               <div className="mb-4 flex size-12 items-center justify-center rounded-lg bg-primary/10">
-                🔄
+                <RefreshCw className="size-6 text-primary" />
               </div>
               <CardTitle>How It Works</CardTitle>
             </CardHeader>
@@ -157,7 +167,7 @@ export default function MotorsportsPage() {
         <Card className="group relative overflow-hidden border-2 transition-all hover:scale-[1.02] hover:shadow-xl">
           <CardContent className="p-8">
             <div className="mb-4 flex size-16 items-center justify-center rounded-full bg-primary/10">
-              <span className="text-4xl">🏎️</span>
+              <User className="size-8 text-primary" />
             </div>
             <h3 className="mb-2 font-bold text-2xl">Find a Driver</h3>
             <p className="mb-6 text-muted-foreground">
