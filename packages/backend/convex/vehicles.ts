@@ -236,7 +236,7 @@ export const generateUploadUrl = mutation({
 // Create a new vehicle with processed images
 export const createVehicleWithImages = mutation({
   args: {
-    trackId: v.id("tracks"),
+    trackId: v.optional(v.id("tracks")),
     make: v.string(),
     model: v.string(),
     year: v.number(),
@@ -258,6 +258,18 @@ export const createVehicleWithImages = mutation({
         })
       )
     ),
+    address: v.optional(
+      v.object({
+        street: v.string(),
+        city: v.string(),
+        state: v.string(),
+        zipCode: v.string(),
+      })
+    ),
+    advanceNotice: v.optional(v.string()),
+    minTripDuration: v.optional(v.string()),
+    maxTripDuration: v.optional(v.string()),
+    requireWeekendMin: v.optional(v.boolean()),
     images: v.array(
       v.object({
         r2Key: v.string(),
@@ -287,6 +299,20 @@ export const createVehicleWithImages = mutation({
     const userId = identity.subject
     const now = Date.now()
 
+    // If no trackId provided, we need to handle it - but schema requires trackId
+    // For now, we'll require it or throw an error
+    if (!args.trackId) {
+      // Get the first active track as default
+      const defaultTrack = await ctx.db
+        .query("tracks")
+        .withIndex("by_active", (q) => q.eq("isActive", true))
+        .first()
+      if (!defaultTrack) {
+        throw new Error("No active tracks available. Please select a track.")
+      }
+      args.trackId = defaultTrack._id
+    }
+
     // Create the vehicle
     const vehicleId = await ctx.db.insert("vehicles", {
       ownerId: userId,
@@ -303,6 +329,11 @@ export const createVehicleWithImages = mutation({
       mileage: args.mileage,
       amenities: args.amenities,
       addOns: args.addOns || [],
+      address: args.address,
+      advanceNotice: args.advanceNotice,
+      minTripDuration: args.minTripDuration,
+      maxTripDuration: args.maxTripDuration,
+      requireWeekendMin: args.requireWeekendMin,
       isActive: true,
       isApproved: false,
       createdAt: now,
@@ -321,6 +352,46 @@ export const createVehicleWithImages = mutation({
         })
       )
     )
+
+    // Check if this is the user's first vehicle and update onboarding status
+    const existingVehicles = await ctx.db
+      .query("vehicles")
+      .withIndex("by_owner", (q) => q.eq("ownerId", userId))
+      .collect()
+
+    // If this is the first vehicle, mark vehicleAdded step as complete
+    if (existingVehicles.length === 1) {
+      const user = await ctx.db
+        .query("users")
+        .withIndex("by_external_id", (q) => q.eq("externalId", userId))
+        .first()
+
+      if (user) {
+        const currentSteps = user.hostOnboardingSteps || {
+          personalInfo: false,
+          vehicleAdded: false,
+          payoutSetup: false,
+          safetyStandards: false,
+        }
+
+        const updatedSteps = {
+          ...currentSteps,
+          vehicleAdded: true,
+        }
+
+        // Check if all steps are complete
+        const allStepsComplete = Object.values(updatedSteps).every((step) => step === true)
+
+        await ctx.db.patch(user._id, {
+          hostOnboardingSteps: updatedSteps,
+          hostOnboardingStatus: allStepsComplete
+            ? "completed"
+            : user.hostOnboardingStatus === "not_started"
+              ? "in_progress"
+              : user.hostOnboardingStatus || "in_progress",
+        })
+      }
+    }
 
     return vehicleId
   },
@@ -370,6 +441,10 @@ export const update = mutation({
         })
       )
     ),
+    advanceNotice: v.optional(v.string()),
+    minTripDuration: v.optional(v.string()),
+    maxTripDuration: v.optional(v.string()),
+    requireWeekendMin: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()
