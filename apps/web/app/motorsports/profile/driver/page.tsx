@@ -1,7 +1,6 @@
 "use client"
 
 import { useUser } from "@clerk/nextjs"
-import type { Id } from "@renegade/backend/convex/_generated/dataModel"
 import { Button } from "@workspace/ui/components/button"
 import {
   Card,
@@ -25,14 +24,11 @@ import { useMutation, useQuery } from "convex/react"
 import { ArrowLeft, Check, Loader2, Upload, X } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
-import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/lib/convex"
 import { imagePresets } from "@/lib/imagekit"
-
-// Force dynamic rendering - this page requires authentication and client-side hooks
-export const dynamic = "force-dynamic"
 
 const EXPERIENCE_LEVELS = [
   { value: "beginner", label: "Beginner" },
@@ -93,9 +89,7 @@ const AVAILABILITY_OPTIONS = [
 export default function CreateDriverProfilePage() {
   const router = useRouter()
   const pathname = usePathname()
-  const searchParams = useSearchParams()
   const { isSignedIn, isLoaded: userLoaded } = useUser()
-  const editProfileId = searchParams.get("edit") as Id<"driverProfiles"> | null
   const [formData, setFormData] = useState({
     headline: "",
     bio: "",
@@ -127,13 +121,8 @@ export default function CreateDriverProfilePage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const createDriverProfile = useMutation(api.driverProfiles.create)
-  const updateDriverProfile = useMutation(api.driverProfiles.update)
-  const generateDriverImageUploadUrl = useMutation(api.r2.generateDriverProfileImageUploadUrl)
+  const generateDriverImageUploadUrl = useMutation(api.r2.generateProfileImageUploadUrl)
   const existingProfile = useQuery(api.driverProfiles.getByUser, isSignedIn ? {} : "skip")
-  const profileToEdit = useQuery(
-    api.driverProfiles.getById,
-    editProfileId && isSignedIn ? { profileId: editProfileId } : "skip"
-  )
 
   const MAX_IMAGE_SIZE_MB = 5
   const BYTES_PER_KB = 1024
@@ -149,45 +138,12 @@ export default function CreateDriverProfilePage() {
     }
   }, [isSignedIn, userLoaded, router, pathname])
 
-  // Redirect to existing profile if user already has one (unless editing)
+  // Redirect to existing profile if user already has one
   useEffect(() => {
-    if (existingProfile && existingProfile.length > 0 && !editProfileId) {
+    if (existingProfile && existingProfile.length > 0) {
       router.push(`/motorsports/drivers/${existingProfile[0]._id}`)
     }
-  }, [existingProfile, router, editProfileId])
-
-  // Load existing profile data when editing
-  useEffect(() => {
-    if (profileToEdit?.isOwner) {
-      setFormData({
-        headline: profileToEdit.headline || "",
-        bio: profileToEdit.bio,
-        achievements: profileToEdit.achievements || "",
-        experience:
-          profileToEdit.experience.charAt(0).toUpperCase() + profileToEdit.experience.slice(1),
-        racingType: profileToEdit.racingType || "",
-        simRacingPlatforms: profileToEdit.simRacingPlatforms || [],
-        simRacingRating: profileToEdit.simRacingRating || "",
-        location: profileToEdit.location,
-        licenses: profileToEdit.licenses,
-        preferredCategories: profileToEdit.preferredCategories,
-        availability: profileToEdit.availability,
-        contactInfo: {
-          phone: profileToEdit.contactInfo?.phone || "",
-          email: profileToEdit.contactInfo?.email || "",
-        },
-        socialLinks: {
-          instagram: profileToEdit.socialLinks?.instagram || "",
-          twitter: profileToEdit.socialLinks?.twitter || "",
-          linkedin: profileToEdit.socialLinks?.linkedin || "",
-          website: profileToEdit.socialLinks?.website || "",
-        },
-      })
-      if (profileToEdit.avatarUrl) {
-        setAvatarUrl(profileToEdit.avatarUrl)
-      }
-    }
-  }, [profileToEdit])
+  }, [existingProfile, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -205,64 +161,30 @@ export default function CreateDriverProfilePage() {
         Professional: "professional",
       }
 
-      if (editProfileId && profileToEdit?.isOwner) {
-        // Update existing profile
-        await updateDriverProfile({
-          profileId: editProfileId,
-          avatarUrl: avatarUrl || undefined,
-          headline: formData.headline || undefined,
-          bio: formData.bio,
-          experience: experienceMap[formData.experience] || undefined,
-          racingType: formData.racingType
-            ? (formData.racingType as "real-world" | "sim-racing" | "both")
-            : undefined,
-          simRacingPlatforms:
-            formData.simRacingPlatforms.length > 0 ? formData.simRacingPlatforms : undefined,
-          simRacingRating: formData.simRacingRating || undefined,
-          licenses: formData.licenses,
-          preferredCategories: formData.preferredCategories,
-          availability: formData.availability,
-          location: formData.location,
-          contactInfo: {
-            phone: formData.contactInfo.phone || undefined,
-            email: formData.contactInfo.email || undefined,
-          },
-          socialLinks: {
-            instagram: formData.socialLinks.instagram || undefined,
-            twitter: formData.socialLinks.twitter || undefined,
-            linkedin: formData.socialLinks.linkedin || undefined,
-            website: formData.socialLinks.website || undefined,
-          },
-        })
-        toast.success("Profile updated successfully!")
-        router.push(`/motorsports/drivers/${editProfileId}`)
-      } else {
-        // Create new profile
-        await createDriverProfile({
-          avatarUrl: avatarUrl || undefined,
-          headline: formData.headline || undefined,
-          bio: formData.bio,
-          experience: experienceMap[formData.experience] || "beginner",
-          racingType: formData.racingType
-            ? (formData.racingType as "real-world" | "sim-racing" | "both")
-            : undefined,
-          simRacingPlatforms:
-            formData.simRacingPlatforms.length > 0 ? formData.simRacingPlatforms : undefined,
-          simRacingRating: formData.simRacingRating || undefined,
-          licenses: formData.licenses,
-          preferredCategories: formData.preferredCategories,
-          availability: formData.availability,
-          location: formData.location,
-          contactInfo: {
-            phone: formData.contactInfo.phone || undefined,
-            email: formData.contactInfo.email || undefined,
-          },
-        })
-        toast.success("Profile created successfully!")
-        router.push("/motorsports/drivers")
-      }
-    } catch (error) {
-      console.error("Failed to create driver profile:", error)
+      // Create new profile
+      await createDriverProfile({
+        avatarUrl: avatarUrl || undefined,
+        headline: formData.headline || undefined,
+        bio: formData.bio,
+        experience: experienceMap[formData.experience] || "beginner",
+        racingType: formData.racingType
+          ? (formData.racingType as "real-world" | "sim-racing" | "both")
+          : undefined,
+        simRacingPlatforms:
+          formData.simRacingPlatforms.length > 0 ? formData.simRacingPlatforms : undefined,
+        simRacingRating: formData.simRacingRating || undefined,
+        licenses: formData.licenses,
+        preferredCategories: formData.preferredCategories,
+        availability: formData.availability,
+        location: formData.location,
+        contactInfo: {
+          phone: formData.contactInfo.phone || undefined,
+          email: formData.contactInfo.email || undefined,
+        },
+      })
+      toast.success("Profile created successfully!")
+      router.push("/motorsports/drivers")
+    } catch {
       toast.error("An error occurred")
     } finally {
       setIsSubmitting(false)
@@ -383,8 +305,7 @@ export default function CreateDriverProfilePage() {
       const imageKitUrl = imagePresets.avatar(key)
       setAvatarUrl(imageKitUrl)
       toast.success("Driver image uploaded successfully")
-    } catch (error) {
-      console.error("Failed to upload driver image:", error)
+    } catch {
       toast.error("An error occurred")
     } finally {
       setIsUploadingAvatar(false)
@@ -417,47 +338,14 @@ export default function CreateDriverProfilePage() {
     return null
   }
 
-  // Don't render form if user already has a profile (will redirect) - unless editing
-  if (existingProfile && existingProfile.length > 0 && !editProfileId) {
+  // Don't render form if user already has a profile (will redirect)
+  if (existingProfile && existingProfile.length > 0) {
     return null
-  }
-
-  // Show loading state when fetching profile to edit
-  if (editProfileId && profileToEdit === undefined) {
-    return (
-      <div className="container mx-auto max-w-4xl px-4 py-8">
-        <div className="flex min-h-[60vh] items-center justify-center">
-          <div className="text-center">
-            <Loader2 className="mx-auto mb-4 size-8 animate-spin text-muted-foreground" />
-            <p className="text-muted-foreground">Loading profile...</p>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  // Show error if trying to edit a profile that doesn't exist or user doesn't own
-  if (editProfileId && profileToEdit && !profileToEdit.isOwner) {
-    return (
-      <div className="container mx-auto max-w-4xl px-4 py-8">
-        <div className="flex min-h-[60vh] items-center justify-center">
-          <div className="text-center">
-            <p className="mb-2 font-semibold text-lg">Not Authorized</p>
-            <p className="mb-6 text-muted-foreground text-sm">
-              You don't have permission to edit this profile.
-            </p>
-            <Button asChild>
-              <Link href="/motorsports/drivers">Back to Drivers</Link>
-            </Button>
-          </div>
-        </div>
-      </div>
-    )
   }
 
   return (
     <div className="container mx-auto max-w-4xl px-4 py-8">
-      <Link href={editProfileId ? `/motorsports/drivers/${editProfileId}` : "/motorsports/drivers"}>
+      <Link href="/motorsports/drivers">
         <Button className="mb-6" variant="outline">
           <ArrowLeft className="mr-2 size-4" />
           Back to Drivers
@@ -465,13 +353,9 @@ export default function CreateDriverProfilePage() {
       </Link>
 
       <div className="mb-8">
-        <h1 className="mb-2 font-bold text-3xl">
-          {editProfileId ? "Edit Driver Profile" : "Create Driver Profile"}
-        </h1>
+        <h1 className="mb-2 font-bold text-3xl">Create Driver Profile</h1>
         <p className="text-muted-foreground">
-          {editProfileId
-            ? "Update your driver profile information"
-            : "Create your driver profile to connect with racing teams"}
+          Create your driver profile to connect with racing teams
         </p>
       </div>
 
@@ -1042,12 +926,7 @@ export default function CreateDriverProfilePage() {
               </Button>
             </Link>
             <Button disabled={isSubmitting} size="lg" type="submit">
-              {(() => {
-                if (isSubmitting) {
-                  return editProfileId ? "Updating Profile..." : "Creating Profile..."
-                }
-                return editProfileId ? "Update Profile" : "Create Profile"
-              })()}
+              {isSubmitting ? "Creating Profile..." : "Create Profile"}
             </Button>
           </div>
         </div>
