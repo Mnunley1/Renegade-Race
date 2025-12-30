@@ -28,9 +28,8 @@ export default function VehicleApprovalsPage() {
       await approveVehicle({ vehicleId })
       toast.success("Vehicle approved successfully")
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to approve vehicle"
-      )
+      console.error("Failed to approve vehicle:", error)
+      toast.error("An error occurred")
     } finally {
       setProcessingId(null)
     }
@@ -42,9 +41,8 @@ export default function VehicleApprovalsPage() {
       await rejectVehicle({ vehicleId })
       toast.success("Vehicle rejected")
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to reject vehicle"
-      )
+      console.error("Failed to reject vehicle:", error)
+      toast.error("An error occurred")
     } finally {
       setProcessingId(null)
     }

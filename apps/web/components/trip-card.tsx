@@ -100,13 +100,19 @@ export function TripCard({
     >
       {/* Vehicle Image */}
       <div className="relative h-48 w-full shrink-0 overflow-hidden bg-muted md:h-auto md:w-2/5 lg:w-2/5">
-        <Image
-          alt={vehicleName}
-          className="object-cover transition-transform duration-500 group-hover:scale-110"
-          fill
-          sizes="(max-width: 768px) 100vw, 40vw"
-          src={vehicleImage}
-        />
+        {vehicleImage ? (
+          <Image
+            alt={vehicleName}
+            className="object-cover transition-transform duration-500 group-hover:scale-110"
+            fill
+            sizes="(max-width: 768px) 100vw, 40vw"
+            src={vehicleImage}
+          />
+        ) : (
+          <div className="flex h-full items-center justify-center bg-muted">
+            <Car className="size-16 text-muted-foreground" />
+          </div>
+        )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent opacity-0 transition-opacity group-hover:opacity-100 md:bg-gradient-to-r md:from-black/80 md:via-black/40 md:to-transparent" />
 
         {/* Status Badge */}

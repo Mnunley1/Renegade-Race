@@ -85,8 +85,9 @@ export default function SettingsPage() {
     <div className="container mx-auto px-4 py-8">
       <div className="mb-6 flex items-center gap-4">
         <Link href="/profile">
-          <Button size="icon" variant="ghost">
-            <ArrowLeft className="size-4" />
+          <Button className="mb-6" variant="outline">
+            <ArrowLeft className="mr-2 size-4" />
+            Back to Profile
           </Button>
         </Link>
         <h1 className="font-bold text-3xl">Settings</h1>

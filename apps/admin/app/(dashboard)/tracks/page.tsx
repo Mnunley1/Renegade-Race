@@ -85,9 +85,8 @@ export default function TracksPage() {
       setIsCreateOpen(false)
       resetForm()
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to create track"
-      )
+      console.error("Failed to create track:", error)
+      toast.error("An error occurred")
     } finally {
       setIsProcessing(false)
     }
@@ -114,9 +113,8 @@ export default function TracksPage() {
       setEditingTrack(null)
       resetForm()
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to update track"
-      )
+      console.error("Failed to update track:", error)
+      toast.error("An error occurred")
     } finally {
       setIsProcessing(false)
     }
@@ -132,9 +130,8 @@ export default function TracksPage() {
       await deleteTrack({ id: trackId })
       toast.success("Track deleted successfully")
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to delete track"
-      )
+      console.error("Failed to delete track:", error)
+      toast.error("An error occurred")
     } finally {
       setIsDeleting(null)
     }

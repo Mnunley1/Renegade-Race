@@ -152,9 +152,8 @@ export default function ProfilePage() {
       await updateProfileImage({ r2Key: key })
       toast.success("Profile picture updated successfully")
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : "Failed to upload profile picture"
-      toast.error(errorMessage)
+      console.error("Failed to upload profile picture:", error)
+      toast.error("An error occurred")
     } finally {
       setIsUploadingImage(false)
       // Reset file input

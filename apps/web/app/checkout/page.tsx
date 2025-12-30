@@ -360,7 +360,7 @@ function CheckoutPageContent() {
 
     return (
       <div className="container mx-auto max-w-6xl px-4 py-8">
-        <Button className="mb-6" onClick={() => router.back()} variant="ghost">
+        <Button className="mb-6" onClick={() => router.back()} variant="outline">
           <ArrowLeft className="mr-2 size-4" />
           Back
         </Button>
@@ -376,7 +376,7 @@ function CheckoutPageContent() {
               <CardContent className="space-y-4">
                 {vehicle && (
                   <div className="flex gap-4">
-                    {primaryImage && (
+                    {primaryImage && primaryImage.trim() !== "" ? (
                       <div className="relative h-24 w-40 shrink-0 overflow-hidden rounded-lg">
                         <Image
                           alt={`${vehicle.year} ${vehicle.make} ${vehicle.model}`}
@@ -386,7 +386,7 @@ function CheckoutPageContent() {
                           src={primaryImage}
                         />
                       </div>
-                    )}
+                    ) : null}
                     <div className="flex-1">
                       <h3 className="font-semibold text-lg">
                         {vehicle.year} {vehicle.make} {vehicle.model}
@@ -546,7 +546,7 @@ function CheckoutPageContent() {
             <CardContent className="space-y-6">
               {vehicle && (
                 <div className="flex gap-4">
-                  {primaryImage && (
+                  {primaryImage && primaryImage.trim() !== "" ? (
                     <div className="relative h-24 w-40 shrink-0 overflow-hidden rounded-lg">
                       <Image
                         alt={`${vehicle.year} ${vehicle.make} ${vehicle.model}`}
@@ -556,7 +556,7 @@ function CheckoutPageContent() {
                         src={primaryImage}
                       />
                     </div>
-                  )}
+                  ) : null}
                   <div className="flex-1">
                     <h3 className="font-semibold text-lg">
                       {vehicle.year} {vehicle.make} {vehicle.model}

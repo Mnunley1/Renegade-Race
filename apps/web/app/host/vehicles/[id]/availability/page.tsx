@@ -1,22 +1,17 @@
 "use client"
 
-import { useMemo, useState } from "react"
-import { useMutation, useQuery } from "convex/react"
 import { Button } from "@workspace/ui/components/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Calendar } from "@workspace/ui/components/calendar"
-import type { DateRange } from "react-day-picker"
-import { toast } from "sonner"
-import {
-  ArrowLeft,
-  Loader2,
-  XCircle,
-  Calendar as CalendarIcon,
-} from "lucide-react"
+import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
+import { useMutation, useQuery } from "convex/react"
+import { format } from "date-fns"
+import { ArrowLeft, Calendar as CalendarIcon, Loader2, XCircle } from "lucide-react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
+import { useMemo, useState } from "react"
+import type { DateRange } from "react-day-picker"
+import { toast } from "sonner"
 import { api } from "@/lib/convex"
-import { format } from "date-fns"
 
 export default function HostVehicleAvailabilityPage() {
   const params = useParams()
@@ -28,10 +23,7 @@ export default function HostVehicleAvailabilityPage() {
   const [isSelectingRange, setIsSelectingRange] = useState(false)
 
   // Fetch vehicle from Convex
-  const vehicle = useQuery(
-    api.vehicles.getById,
-    vehicleId ? { id: vehicleId as any } : "skip"
-  )
+  const vehicle = useQuery(api.vehicles.getById, vehicleId ? { id: vehicleId as any } : "skip")
 
   // Fetch availability data for the current month
   const calendarData = useQuery(
@@ -84,25 +76,25 @@ export default function HostVehicleAvailabilityPage() {
     const year = selectedMonth.getFullYear()
     const month = selectedMonth.getMonth()
     const daysInMonth = new Date(year, month + 1, 0).getDate()
-    
+
     // Count blocked and reserved dates in the current month
     const monthStart = new Date(year, month, 1)
     monthStart.setHours(0, 0, 0, 0)
     const monthEnd = new Date(year, month + 1, 0)
     monthEnd.setHours(23, 59, 59, 999)
-    
+
     const blockedInMonth = blockedDates.filter((d) => {
       const date = new Date(d)
       date.setHours(0, 0, 0, 0)
       return date >= monthStart && date <= monthEnd
     }).length
-    
+
     const reservedInMonth = reservedDates.filter((d) => {
       const date = new Date(d)
       date.setHours(0, 0, 0, 0)
       return date >= monthStart && date <= monthEnd
     }).length
-    
+
     return daysInMonth - blockedInMonth - reservedInMonth
   }, [selectedMonth, blockedDates, reservedDates])
 
@@ -142,20 +134,20 @@ export default function HostVehicleAvailabilityPage() {
 
   // Handle date selection - toggle blocked state
   const handleDateSelect = async (date: Date | undefined) => {
-    if (!vehicle?._id || !date) return
+    if (!(vehicle?._id && date)) return
 
     // Extract date components directly to avoid any timezone conversion issues
     // react-day-picker passes dates in local time, so we use the components directly
     const year = date.getFullYear()
     const month = date.getMonth() + 1 // getMonth() returns 0-11, we need 1-12
     const day = date.getDate()
-    
+
     // Create date string directly from components to avoid any timezone issues
     const dateString = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`
-    
+
     // Create normalized date for comparisons
     const normalizedDate = new Date(year, date.getMonth(), day)
-    
+
     // Don't allow blocking reserved dates
     if (isDateReserved(normalizedDate)) {
       toast.error("Cannot block reserved dates")
@@ -179,23 +171,22 @@ export default function HostVehicleAvailabilityPage() {
         toast.success("Date blocked")
       }
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : `Failed to ${isBlocked ? "unblock" : "block"} date`
-      )
+      console.error(`Failed to ${isBlocked ? "unblock" : "block"} date:`, error)
+      toast.error("An error occurred")
     }
   }
 
   // Handle range selection - block or unblock entire range
   const handleRangeSelect = async (range: DateRange | undefined) => {
-    if (!vehicle?._id || !range?.from) return
+    if (!(vehicle?._id && range?.from)) return
 
     // Extract date components directly to avoid any timezone conversion issues
     const fromYear = range.from.getFullYear()
     const fromMonth = range.from.getMonth() + 1
     const fromDay = range.from.getDate()
-    
+
     const startDate = `${fromYear}-${String(fromMonth).padStart(2, "0")}-${String(fromDay).padStart(2, "0")}`
-    
+
     let endDate = startDate
     if (range.to) {
       const toYear = range.to.getFullYear()
@@ -285,7 +276,7 @@ export default function HostVehicleAvailabilityPage() {
     <div className="container mx-auto max-w-7xl px-4 py-8">
       <div className="mb-6">
         <Link href={`/host/vehicles/${vehicleId}`}>
-          <Button variant="ghost" size="sm">
+          <Button className="mb-6" variant="outline">
             <ArrowLeft className="mr-2 size-4" />
             Back to Vehicle
           </Button>
@@ -313,12 +304,12 @@ export default function HostVehicleAvailabilityPage() {
               </p>
             </div>
             <Button
-              variant={isSelectingRange ? "default" : "outline"}
-              size="sm"
               onClick={() => {
                 setIsSelectingRange(!isSelectingRange)
                 setSelectedRange(undefined)
               }}
+              size="sm"
+              variant={isSelectingRange ? "default" : "outline"}
             >
               <CalendarIcon className="mr-2 size-4" />
               {isSelectingRange ? "Single Date Mode" : "Range Mode"}
@@ -332,35 +323,38 @@ export default function HostVehicleAvailabilityPage() {
               {isSelectingRange ? (
                 <div className="space-y-4">
                   <Calendar
+                    className="rounded-md border"
+                    disabled={(date) => {
+                      // Don't allow blocking dates in the past or reserved dates
+                      const today = new Date()
+                      today.setHours(0, 0, 0, 0)
+                      const normalizedDate = new Date(
+                        date.getFullYear(),
+                        date.getMonth(),
+                        date.getDate()
+                      )
+                      normalizedDate.setHours(0, 0, 0, 0)
+                      return normalizedDate < today || isDateReserved(normalizedDate)
+                    }}
                     mode="range"
-                    month={selectedMonth}
-                    onMonthChange={setSelectedMonth}
-                    selected={selectedRange}
-                    onSelect={setSelectedRange}
                     modifiers={{
                       blocked: blockedDates,
                       reserved: reservedDates,
                     }}
                     modifiersClassNames={{
                       blocked: "bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400",
-                      reserved:
-                        "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400",
+                      reserved: "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400",
                     }}
-                    className="rounded-md border"
-                    disabled={(date) => {
-                      // Don't allow blocking dates in the past or reserved dates
-                      const today = new Date()
-                      today.setHours(0, 0, 0, 0)
-                      const normalizedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate())
-                      normalizedDate.setHours(0, 0, 0, 0)
-                      return normalizedDate < today || isDateReserved(normalizedDate)
-                    }}
+                    month={selectedMonth}
                     numberOfMonths={2}
+                    onMonthChange={setSelectedMonth}
+                    onSelect={setSelectedRange}
+                    selected={selectedRange}
                   />
                   {selectedRange?.from && (
                     <div className="flex items-center justify-between rounded-lg border p-4">
                       <div className="space-y-1">
-                        <p className="text-sm font-medium">Selected Range</p>
+                        <p className="font-medium text-sm">Selected Range</p>
                         <p className="text-muted-foreground text-sm">
                           {selectedRange.from ? format(selectedRange.from, "PPP") : "Start date"}
                           {selectedRange.to ? ` - ${format(selectedRange.to, "PPP")}` : ""}
@@ -368,22 +362,22 @@ export default function HostVehicleAvailabilityPage() {
                       </div>
                       <div className="flex gap-2">
                         <Button
-                          variant="outline"
-                          size="sm"
                           onClick={() => {
                             setSelectedRange(undefined)
                           }}
+                          size="sm"
+                          variant="outline"
                         >
                           Clear
                         </Button>
                         {selectedRange.to && (
                           <Button
-                            size="sm"
                             onClick={() => {
                               if (selectedRange?.from && selectedRange?.to) {
                                 handleRangeSelect(selectedRange)
                               }
                             }}
+                            size="sm"
                           >
                             Apply Range
                           </Button>
@@ -394,27 +388,30 @@ export default function HostVehicleAvailabilityPage() {
                 </div>
               ) : (
                 <Calendar
+                  className="rounded-md border"
+                  disabled={(date) => {
+                    // Don't allow blocking dates in the past
+                    const today = new Date()
+                    today.setHours(0, 0, 0, 0)
+                    const normalizedDate = new Date(
+                      date.getFullYear(),
+                      date.getMonth(),
+                      date.getDate()
+                    )
+                    normalizedDate.setHours(0, 0, 0, 0)
+                    return normalizedDate < today
+                  }}
                   mode="single"
-                  month={selectedMonth}
-                  onMonthChange={setSelectedMonth}
                   modifiers={{
                     blocked: blockedDates,
                     reserved: reservedDates,
                   }}
                   modifiersClassNames={{
                     blocked: "bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400",
-                    reserved:
-                      "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400",
+                    reserved: "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400",
                   }}
-                  className="rounded-md border"
-                  disabled={(date) => {
-                    // Don't allow blocking dates in the past
-                    const today = new Date()
-                    today.setHours(0, 0, 0, 0)
-                    const normalizedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate())
-                    normalizedDate.setHours(0, 0, 0, 0)
-                    return normalizedDate < today
-                  }}
+                  month={selectedMonth}
+                  onMonthChange={setSelectedMonth}
                   onSelect={handleDateSelect}
                 />
               )}
@@ -424,15 +421,15 @@ export default function HostVehicleAvailabilityPage() {
             <div className="flex flex-wrap items-center gap-4 rounded-lg border p-4">
               <div className="flex items-center gap-2">
                 <div className="size-4 rounded bg-red-100 dark:bg-red-900/20" />
-                <span className="text-sm font-medium">Blocked</span>
+                <span className="font-medium text-sm">Blocked</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="size-4 rounded bg-blue-100 dark:bg-blue-900/20" />
-                <span className="text-sm font-medium">Reserved</span>
+                <span className="font-medium text-sm">Reserved</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="size-4 rounded border" />
-                <span className="text-sm font-medium">Available</span>
+                <span className="font-medium text-sm">Available</span>
               </div>
               <div className="ml-auto text-muted-foreground text-sm">
                 {isSelectingRange
@@ -462,4 +459,3 @@ export default function HostVehicleAvailabilityPage() {
     </div>
   )
 }
-

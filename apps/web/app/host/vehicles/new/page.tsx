@@ -1,5 +1,6 @@
 "use client"
 
+import { useUser } from "@clerk/nextjs"
 import { useUploadFile } from "@convex-dev/r2/react"
 import { Button } from "@workspace/ui/components/button"
 import {
@@ -24,7 +25,7 @@ import { useMutation, useQuery } from "convex/react"
 import { ArrowLeft, CheckCircle2, Loader2, Plus, Upload, X } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { api } from "@/lib/convex"
 
 const TRANSMISSION_OPTIONS = ["Manual", "Automatic", "PDK", "DCT", "CVT"]
@@ -51,8 +52,19 @@ const COMMON_AMENITIES = [
 
 export default function CreateVehiclePage() {
   const router = useRouter()
+  const { user } = useUser()
   const [currentStep, setCurrentStep] = useState(1)
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // Check onboarding status - protect this route
+  const onboardingStatus = useQuery(api.users.getHostOnboardingStatus, user?.id ? {} : "skip")
+
+  // Redirect to onboarding if not completed
+  useEffect(() => {
+    if (onboardingStatus && onboardingStatus.status !== "completed") {
+      router.push("/host/onboarding")
+    }
+  }, [onboardingStatus, router])
 
   // Fetch tracks from Convex
   const tracks = useQuery(api.tracks.getAll, {})
@@ -239,10 +251,8 @@ export default function CreateVehiclePage() {
             message: error instanceof Error ? error.message : String(error),
             stack: error instanceof Error ? error.stack : undefined,
           })
-          // Re-throw with more context
-          throw new Error(
-            `Failed to upload image "${img.file.name}" (${index + 1} of ${images.length}): ${error instanceof Error ? error.message : String(error)}`
-          )
+          // Re-throw with generic error
+          throw new Error("Failed to upload image")
         }
       }
 
@@ -268,7 +278,7 @@ export default function CreateVehiclePage() {
         })),
       })
 
-      // Redirect to vehicle list after successful creation
+      // Normal flow - redirect to vehicle list (onboarding users use /host/onboarding/new-vehicle)
       router.push("/host/vehicles/list")
     } catch (error) {
       console.error("Error creating vehicle:", error)
@@ -280,6 +290,20 @@ export default function CreateVehiclePage() {
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  // Show loading or redirect if onboarding not complete
+  if (!onboardingStatus || onboardingStatus.status !== "completed") {
+    return (
+      <div className="container mx-auto max-w-4xl px-4 py-8">
+        <div className="flex min-h-[60vh] items-center justify-center">
+          <div className="text-center">
+            <Loader2 className="mx-auto mb-4 size-8 animate-spin text-muted-foreground" />
+            <p className="text-muted-foreground">Loading...</p>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   // Show loading state while tracks are loading

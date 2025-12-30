@@ -21,12 +21,15 @@ import {
   XCircle,
 } from "lucide-react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useEffect, useMemo, useState } from "react"
+import { HostOnboardingChecklist } from "@/components/host-onboarding-checklist"
 import { api } from "@/lib/convex"
 
 export default function HostDashboardPage() {
   const { user } = useUser()
-  console.log("user", user)
+  const router = useRouter()
+  const [showChecklist, setShowChecklist] = useState(false)
   const [isLoadingConnect, setIsLoadingConnect] = useState(false)
   const [connectError, setConnectError] = useState<string | null>(null)
   const [connectStatus, setConnectStatus] = useState<{
@@ -40,6 +43,16 @@ export default function HostDashboardPage() {
   const fetchConnectStatus = useAction(api.stripe.getConnectAccountStatus)
   const startOrContinueOnboarding = useAction(api.stripe.createConnectAccount)
   const createDashboardLink = useAction(api.stripe.createConnectLoginLink)
+
+  // Check onboarding status
+  const onboardingStatus = useQuery(api.users.getHostOnboardingStatus, user?.id ? {} : "skip")
+
+  // Redirect if onboarding not complete
+  useEffect(() => {
+    if (onboardingStatus && onboardingStatus.status !== "completed") {
+      router.push("/host/onboarding")
+    }
+  }, [onboardingStatus, router])
 
   // Fetch data from Convex
   const vehicles = useQuery(api.vehicles.getByOwner, user?.id ? { ownerId: user.id } : "skip")
@@ -66,13 +79,14 @@ export default function HostDashboardPage() {
         const status = await fetchConnectStatus({ ownerId: user.id })
         setConnectStatus(status)
       } catch (error) {
-        setConnectError(error instanceof Error ? error.message : "Failed to load payout status")
+        console.error("Failed to load payout status:", error)
+        setConnectError("An error occurred")
       } finally {
         setIsLoadingConnect(false)
       }
     }
 
-    void loadStatus()
+    loadStatus()
   }, [fetchConnectStatus, user?.id])
 
   // Calculate stats from real data
@@ -228,9 +242,8 @@ export default function HostDashboardPage() {
       const status = await fetchConnectStatus({ ownerId: user.id })
       setConnectStatus(status)
     } catch (error) {
-      setConnectError(
-        error instanceof Error ? error.message : "Unable to start Stripe onboarding right now"
-      )
+      console.error("Failed to start Stripe onboarding:", error)
+      setConnectError("An error occurred")
     } finally {
       setIsLoadingConnect(false)
     }
@@ -246,15 +259,15 @@ export default function HostDashboardPage() {
         window.location.href = link.url
       }
     } catch (error) {
-      setConnectError(
-        error instanceof Error ? error.message : "Unable to open Stripe dashboard right now"
-      )
+      console.error("Failed to open Stripe dashboard:", error)
+      setConnectError("An error occurred")
     } finally {
       setIsLoadingConnect(false)
     }
   }
 
-  if (isLoading) {
+  // Show loading or redirect if onboarding not complete
+  if (isLoading || !onboardingStatus) {
     return (
       <div className="container mx-auto max-w-7xl px-4 py-8">
         <div className="flex min-h-[60vh] items-center justify-center">
@@ -267,304 +280,315 @@ export default function HostDashboardPage() {
     )
   }
 
+  if (onboardingStatus.status !== "completed") {
+    return null // Will redirect via useEffect
+  }
+
   return (
-    <div className="container mx-auto max-w-7xl px-4 py-8">
-      <div className="mb-8">
-        <div className="mb-2 flex items-center justify-between">
-          <div>
-            <h1 className="font-bold text-3xl">Host Dashboard</h1>
-            <p className="mt-2 text-muted-foreground">
-              Manage your vehicles, bookings, and earnings all in one place
-            </p>
+    <>
+      <HostOnboardingChecklist onOpenChange={setShowChecklist} open={showChecklist} />
+      <div className="container mx-auto max-w-7xl px-4 py-8">
+        <div className="mb-8">
+          <div className="mb-2 flex items-center justify-between">
+            <div>
+              <h1 className="font-bold text-3xl">Host Dashboard</h1>
+              <p className="mt-2 text-muted-foreground">
+                Manage your vehicles, bookings, and earnings all in one place
+              </p>
+            </div>
+            <Link href="/host/vehicles/new">
+              <Button size="lg">
+                <Plus className="mr-2 size-4" />
+                List Your Vehicle
+              </Button>
+            </Link>
           </div>
-          <Link href="/host/vehicles/new">
-            <Button size="lg">
-              <Plus className="mr-2 size-4" />
-              List Your Vehicle
-            </Button>
-          </Link>
         </div>
-      </div>
 
-      {/* Stats Grid */}
-      <div className="mb-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="h-full">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="font-medium text-muted-foreground text-sm">
-              Pending Bookings
-            </CardTitle>
-            <Clock className="size-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="font-bold text-2xl">{stats.pendingBookings}</div>
-            <p className="text-muted-foreground text-xs">Awaiting your response</p>
-          </CardContent>
-        </Card>
-
-        <Card className="h-full">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="font-medium text-muted-foreground text-sm">
-              Upcoming Bookings
-            </CardTitle>
-            <Calendar className="size-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="font-bold text-2xl">{stats.upcomingBookings}</div>
-            <p className="text-muted-foreground text-xs">Confirmed reservations</p>
-          </CardContent>
-        </Card>
-
-        <Card className="h-full">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="font-medium text-muted-foreground text-sm">
-              Total Earnings
-            </CardTitle>
-            <DollarSign className="size-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="font-bold text-2xl">
-              ${Math.round(stats.totalEarnings / 100).toLocaleString()}
-            </div>
-            <p className="text-muted-foreground text-xs">All-time earnings</p>
-          </CardContent>
-        </Card>
-
-        <Card className="h-full">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="font-medium text-muted-foreground text-sm">
-              Average Rating
-            </CardTitle>
-            <TrendingUp className="size-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="font-bold text-2xl">{stats.averageRating}</div>
-            <p className="text-muted-foreground text-xs">From renters</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Engagement Stats */}
-      <div className="mb-8">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Engagement</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div className="rounded-lg border p-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground text-sm">Total Views</span>
-                  <Eye className="size-4 text-muted-foreground" />
-                </div>
-                <div className="mt-2 font-bold text-2xl">{stats.totalViews.toLocaleString()}</div>
-                <p className="text-muted-foreground text-xs">Listing views</p>
-              </div>
-
-              <div className="rounded-lg border p-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground text-sm">Total Shares</span>
-                  <Share2 className="size-4 text-muted-foreground" />
-                </div>
-                <div className="mt-2 font-bold text-2xl">{stats.totalShares.toLocaleString()}</div>
-                <p className="text-muted-foreground text-xs">Times shared</p>
-              </div>
-
-              <div className="rounded-lg border p-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground text-sm">Total Favorites</span>
-                  <Heart className="size-4 text-muted-foreground" />
-                </div>
-                <div className="mt-2 font-bold text-2xl">
-                  {stats.totalFavorites.toLocaleString()}
-                </div>
-                <p className="text-muted-foreground text-xs">Saved by users</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-8 lg:grid-cols-3">
-        {/* Recent Vehicles */}
-        <div className="lg:col-span-2">
-          <Card id="payouts">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Your Vehicles</CardTitle>
-              <Link href="/host/vehicles/list">
-                <Button size="sm" variant="outline">
-                  View All
-                </Button>
-              </Link>
+        {/* Stats Grid */}
+        <div className="mb-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          <Card className="h-full">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="font-medium text-muted-foreground text-sm">
+                Pending Bookings
+              </CardTitle>
+              <Clock className="size-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              {recentVehicles.length === 0 ? (
-                <div className="py-12 text-center">
-                  <Car className="mx-auto mb-4 size-12 text-muted-foreground" />
-                  <p className="mb-2 font-semibold text-lg">No vehicles yet</p>
-                  <p className="mb-6 text-muted-foreground">
-                    List your first vehicle to start earning
-                  </p>
-                  <Link href="/host/vehicles/new">
-                    <Button>
-                      <Plus className="mr-2 size-4" />
-                      List Your Vehicle
-                    </Button>
-                  </Link>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {recentVehicles.map((vehicle) => (
-                    <div
-                      className="flex items-center gap-4 rounded-lg border p-4 transition-colors hover:bg-muted/50"
-                      key={vehicle.id}
-                    >
-                      <div className="relative size-20 shrink-0 overflow-hidden rounded-lg">
-                        <img
-                          alt={vehicle.name}
-                          className="size-full object-cover"
-                          src={vehicle.image}
-                        />
-                      </div>
-                      <div className="flex-1">
-                        <div className="mb-2 flex flex-wrap items-center gap-2">
-                          <h3 className="font-semibold text-lg">
-                            {vehicle.year} {vehicle.make} {vehicle.model}
-                          </h3>
-                          {getStatusBadge(vehicle.status)}
-                        </div>
-                        <p className="text-muted-foreground text-sm">{vehicle.name}</p>
-                        <div className="flex items-center gap-4 text-sm">
-                          <span className="text-muted-foreground">{vehicle.bookings} bookings</span>
-                          <span className="text-muted-foreground">•</span>
-                          <span className="font-semibold">
-                            ${vehicle.earnings.toLocaleString()} earned
-                          </span>
-                        </div>
-                      </div>
-                      <Link href={`/host/vehicles/${vehicle.id}`}>
-                        <Button size="sm" variant="outline">
-                          Manage
-                        </Button>
-                      </Link>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <div className="font-bold text-2xl">{stats.pendingBookings}</div>
+              <p className="text-muted-foreground text-xs">Awaiting your response</p>
+            </CardContent>
+          </Card>
+
+          <Card className="h-full">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="font-medium text-muted-foreground text-sm">
+                Upcoming Bookings
+              </CardTitle>
+              <Calendar className="size-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="font-bold text-2xl">{stats.upcomingBookings}</div>
+              <p className="text-muted-foreground text-xs">Confirmed reservations</p>
+            </CardContent>
+          </Card>
+
+          <Card className="h-full">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="font-medium text-muted-foreground text-sm">
+                Total Earnings
+              </CardTitle>
+              <DollarSign className="size-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="font-bold text-2xl">
+                ${Math.round(stats.totalEarnings / 100).toLocaleString()}
+              </div>
+              <p className="text-muted-foreground text-xs">All-time earnings</p>
+            </CardContent>
+          </Card>
+
+          <Card className="h-full">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="font-medium text-muted-foreground text-sm">
+                Average Rating
+              </CardTitle>
+              <TrendingUp className="size-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="font-bold text-2xl">{stats.averageRating}</div>
+              <p className="text-muted-foreground text-xs">From renters</p>
             </CardContent>
           </Card>
         </div>
 
-        {/* Sidebar */}
-        <div className="space-y-6">
-          {/* Stripe / Payouts */}
+        {/* Engagement Stats */}
+        <div className="mb-8">
           <Card>
-            <CardHeader>
-              <CardTitle>Payments & Payouts</CardTitle>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Engagement</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
-              {connectError && (
-                <p className="text-destructive text-sm" role="alert">
-                  {connectError}
-                </p>
-              )}
-              <div className="space-y-1 text-sm">
-                <p className="font-medium">
-                  {connectStatus?.isComplete
-                    ? "Stripe account connected"
-                    : connectStatus?.hasAccount
-                      ? "Finish Stripe onboarding to enable payouts"
-                      : "Set up Stripe to receive payouts"}
-                </p>
-                <p className="text-muted-foreground">
-                  {connectStatus?.isComplete
-                    ? connectStatus?.payoutsEnabled
-                      ? "Payouts are enabled."
-                      : "Account connected. Payouts pending Stripe review."
-                    : "You'll be redirected to Stripe to complete onboarding."}
-                </p>
-                {connectStatus?.accountId && (
-                  <p className="text-muted-foreground text-xs">
-                    Account ID: {connectStatus.accountId}
+            <CardContent>
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div className="rounded-lg border p-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground text-sm">Total Views</span>
+                    <Eye className="size-4 text-muted-foreground" />
+                  </div>
+                  <div className="mt-2 font-bold text-2xl">{stats.totalViews.toLocaleString()}</div>
+                  <p className="text-muted-foreground text-xs">Listing views</p>
+                </div>
+
+                <div className="rounded-lg border p-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground text-sm">Total Shares</span>
+                    <Share2 className="size-4 text-muted-foreground" />
+                  </div>
+                  <div className="mt-2 font-bold text-2xl">
+                    {stats.totalShares.toLocaleString()}
+                  </div>
+                  <p className="text-muted-foreground text-xs">Times shared</p>
+                </div>
+
+                <div className="rounded-lg border p-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground text-sm">Total Favorites</span>
+                    <Heart className="size-4 text-muted-foreground" />
+                  </div>
+                  <div className="mt-2 font-bold text-2xl">
+                    {stats.totalFavorites.toLocaleString()}
+                  </div>
+                  <p className="text-muted-foreground text-xs">Saved by users</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="grid gap-8 lg:grid-cols-3">
+          {/* Recent Vehicles */}
+          <div className="lg:col-span-2">
+            <Card id="payouts">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle>Your Vehicles</CardTitle>
+                <Link href="/host/vehicles/list">
+                  <Button size="sm" variant="outline">
+                    View All
+                  </Button>
+                </Link>
+              </CardHeader>
+              <CardContent>
+                {recentVehicles.length === 0 ? (
+                  <div className="py-12 text-center">
+                    <Car className="mx-auto mb-4 size-12 text-muted-foreground" />
+                    <p className="mb-2 font-semibold text-lg">No vehicles yet</p>
+                    <p className="mb-6 text-muted-foreground">
+                      List your first vehicle to start earning
+                    </p>
+                    <Link href="/host/vehicles/new">
+                      <Button>
+                        <Plus className="mr-2 size-4" />
+                        List Your Vehicle
+                      </Button>
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {recentVehicles.map((vehicle) => (
+                      <div
+                        className="flex items-center gap-4 rounded-lg border p-4 transition-colors hover:bg-muted/50"
+                        key={vehicle.id}
+                      >
+                        <div className="relative size-20 shrink-0 overflow-hidden rounded-lg">
+                          <img
+                            alt={vehicle.name}
+                            className="size-full object-cover"
+                            src={vehicle.image}
+                          />
+                        </div>
+                        <div className="flex-1">
+                          <div className="mb-2 flex flex-wrap items-center gap-2">
+                            <h3 className="font-semibold text-lg">
+                              {vehicle.year} {vehicle.make} {vehicle.model}
+                            </h3>
+                            {getStatusBadge(vehicle.status)}
+                          </div>
+                          <p className="text-muted-foreground text-sm">{vehicle.name}</p>
+                          <div className="flex items-center gap-4 text-sm">
+                            <span className="text-muted-foreground">
+                              {vehicle.bookings} bookings
+                            </span>
+                            <span className="text-muted-foreground">•</span>
+                            <span className="font-semibold">
+                              ${vehicle.earnings.toLocaleString()} earned
+                            </span>
+                          </div>
+                        </div>
+                        <Link href={`/host/vehicles/${vehicle.id}`}>
+                          <Button size="sm" variant="outline">
+                            Manage
+                          </Button>
+                        </Link>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Sidebar */}
+          <div className="space-y-6">
+            {/* Stripe / Payouts */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Payments & Payouts</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {connectError && (
+                  <p className="text-destructive text-sm" role="alert">
+                    {connectError}
                   </p>
                 )}
-              </div>
-              <div className="flex flex-col gap-2">
-                <Button
-                  disabled={isLoadingConnect || !user?.id}
-                  onClick={handleOnboarding}
-                  variant="default"
-                >
-                  {isLoadingConnect
-                    ? "Working..."
-                    : connectStatus?.isComplete
-                      ? "Revisit Stripe onboarding"
+                <div className="space-y-1 text-sm">
+                  <p className="font-medium">
+                    {connectStatus?.isComplete
+                      ? "Stripe account connected"
                       : connectStatus?.hasAccount
-                        ? "Continue Stripe onboarding"
-                        : "Start Stripe onboarding"}
-                </Button>
-                {connectStatus?.isComplete && (
+                        ? "Finish Stripe onboarding to enable payouts"
+                        : "Set up Stripe to receive payouts"}
+                  </p>
+                  <p className="text-muted-foreground">
+                    {connectStatus?.isComplete
+                      ? connectStatus?.payoutsEnabled
+                        ? "Payouts are enabled."
+                        : "Account connected. Payouts pending Stripe review."
+                      : "You'll be redirected to Stripe to complete onboarding."}
+                  </p>
+                  {connectStatus?.accountId && (
+                    <p className="text-muted-foreground text-xs">
+                      Account ID: {connectStatus.accountId}
+                    </p>
+                  )}
+                </div>
+                <div className="flex flex-col gap-2">
                   <Button
                     disabled={isLoadingConnect || !user?.id}
-                    onClick={handleOpenDashboard}
-                    variant="outline"
+                    onClick={handleOnboarding}
+                    variant="default"
                   >
-                    Open Stripe dashboard
+                    {isLoadingConnect
+                      ? "Working..."
+                      : connectStatus?.isComplete
+                        ? "Revisit Stripe onboarding"
+                        : connectStatus?.hasAccount
+                          ? "Continue Stripe onboarding"
+                          : "Start Stripe onboarding"}
                   </Button>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Quick Actions */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Quick Actions</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <Link className="block" href="/host/reservations">
-                <Button className="w-full justify-start" size="sm" variant="outline">
-                  <Calendar className="mr-2 size-4" />
-                  View All Reservations
-                </Button>
-              </Link>
-              <Link className="block" href="/host/vehicles/list">
-                <Button className="w-full justify-start" size="sm" variant="outline">
-                  <Car className="mr-2 size-4" />
-                  Manage Vehicles
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
-
-          {/* Recent Activity */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Recent Activity</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {recentActivity.length === 0 ? (
-                <div className="py-8 text-center">
-                  <Clock className="mx-auto mb-4 size-8 text-muted-foreground" />
-                  <p className="text-muted-foreground text-sm">No recent activity</p>
+                  {connectStatus?.isComplete && (
+                    <Button
+                      disabled={isLoadingConnect || !user?.id}
+                      onClick={handleOpenDashboard}
+                      variant="outline"
+                    >
+                      Open Stripe dashboard
+                    </Button>
+                  )}
                 </div>
-              ) : (
-                <div className="space-y-4">
-                  {recentActivity.map((activity) => (
-                    <div className="flex gap-3" key={activity.id}>
-                      <div className="mt-0.5 shrink-0">{getActivityIcon(activity.type)}</div>
-                      <div className="flex-1 space-y-1">
-                        <p className="font-medium text-sm">{activity.title}</p>
-                        <p className="text-muted-foreground text-xs">{activity.description}</p>
-                        <p className="text-muted-foreground text-xs">{activity.time}</p>
+              </CardContent>
+            </Card>
+
+            {/* Quick Actions */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Quick Actions</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <Link className="block" href="/host/reservations">
+                  <Button className="w-full justify-start" size="sm" variant="outline">
+                    <Calendar className="mr-2 size-4" />
+                    View All Reservations
+                  </Button>
+                </Link>
+                <Link className="block" href="/host/vehicles/list">
+                  <Button className="w-full justify-start" size="sm" variant="outline">
+                    <Car className="mr-2 size-4" />
+                    Manage Vehicles
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
+
+            {/* Recent Activity */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Recent Activity</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {recentActivity.length === 0 ? (
+                  <div className="py-8 text-center">
+                    <Clock className="mx-auto mb-4 size-8 text-muted-foreground" />
+                    <p className="text-muted-foreground text-sm">No recent activity</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {recentActivity.map((activity) => (
+                      <div className="flex gap-3" key={activity.id}>
+                        <div className="mt-0.5 shrink-0">{getActivityIcon(activity.type)}</div>
+                        <div className="flex-1 space-y-1">
+                          <p className="font-medium text-sm">{activity.title}</p>
+                          <p className="text-muted-foreground text-xs">{activity.description}</p>
+                          <p className="text-muted-foreground text-xs">{activity.time}</p>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   )
 }

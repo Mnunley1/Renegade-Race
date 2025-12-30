@@ -35,27 +35,30 @@ export function VehicleGallery({ images, vehicleName }: VehicleGalleryProps) {
     setTimeout(() => setIsTransitioning(false), 300)
   }
 
+  // Filter out empty image strings
+  const validImages = images.filter((img) => img && img.trim() !== "")
+
   const goToPrevious = () => {
     if (isTransitioning) return
-    const newIndex = currentIndex > 0 ? currentIndex - 1 : images.length - 1
+    const newIndex = currentIndex > 0 ? currentIndex - 1 : validImages.length - 1
     goToSlide(newIndex)
   }
 
   const goToNext = () => {
     if (isTransitioning) return
-    const newIndex = currentIndex < images.length - 1 ? currentIndex + 1 : 0
+    const newIndex = currentIndex < validImages.length - 1 ? currentIndex + 1 : 0
     goToSlide(newIndex)
   }
 
   const goToPreviousModal = () => {
     if (selectedIndex === null) return
-    const newIndex = selectedIndex > 0 ? selectedIndex - 1 : images.length - 1
+    const newIndex = selectedIndex > 0 ? selectedIndex - 1 : validImages.length - 1
     setSelectedIndex(newIndex)
   }
 
   const goToNextModal = () => {
     if (selectedIndex === null) return
-    const newIndex = selectedIndex < images.length - 1 ? selectedIndex + 1 : 0
+    const newIndex = selectedIndex < validImages.length - 1 ? selectedIndex + 1 : 0
     setSelectedIndex(newIndex)
   }
 
@@ -69,18 +72,18 @@ export function VehicleGallery({ images, vehicleName }: VehicleGalleryProps) {
         setSelectedIndex(null)
       } else if (e.key === "ArrowLeft") {
         e.preventDefault()
-        const newIndex = selectedIndex > 0 ? selectedIndex - 1 : images.length - 1
+        const newIndex = selectedIndex > 0 ? selectedIndex - 1 : validImages.length - 1
         setSelectedIndex(newIndex)
       } else if (e.key === "ArrowRight") {
         e.preventDefault()
-        const newIndex = selectedIndex < images.length - 1 ? selectedIndex + 1 : 0
+        const newIndex = selectedIndex < validImages.length - 1 ? selectedIndex + 1 : 0
         setSelectedIndex(newIndex)
       }
     }
 
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [isOpen, selectedIndex, images.length])
+  }, [isOpen, selectedIndex, validImages.length])
 
   // Keyboard navigation for carousel (when modal is not open)
   useEffect(() => {
@@ -90,13 +93,13 @@ export function VehicleGallery({ images, vehicleName }: VehicleGalleryProps) {
       if (isTransitioning) return
       if (e.key === "ArrowLeft") {
         e.preventDefault()
-        const newIndex = currentIndex > 0 ? currentIndex - 1 : images.length - 1
+        const newIndex = currentIndex > 0 ? currentIndex - 1 : validImages.length - 1
         setIsTransitioning(true)
         setCurrentIndex(newIndex)
         setTimeout(() => setIsTransitioning(false), 300)
       } else if (e.key === "ArrowRight") {
         e.preventDefault()
-        const newIndex = currentIndex < images.length - 1 ? currentIndex + 1 : 0
+        const newIndex = currentIndex < validImages.length - 1 ? currentIndex + 1 : 0
         setIsTransitioning(true)
         setCurrentIndex(newIndex)
         setTimeout(() => setIsTransitioning(false), 300)
@@ -105,9 +108,9 @@ export function VehicleGallery({ images, vehicleName }: VehicleGalleryProps) {
 
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [isOpen, currentIndex, images.length, isTransitioning])
+  }, [isOpen, currentIndex, validImages.length, isTransitioning])
 
-  if (images.length === 0) return null
+  if (validImages.length === 0) return null
 
   return (
     <>
@@ -121,7 +124,7 @@ export function VehicleGallery({ images, vehicleName }: VehicleGalleryProps) {
               transform: `translateX(-${currentIndex * 100}%)`,
             }}
           >
-            {images.map((image, index) => (
+            {validImages.map((image, index) => (
               <div
                 aria-hidden={index !== currentIndex}
                 className="relative min-w-full shrink-0"
@@ -148,7 +151,7 @@ export function VehicleGallery({ images, vehicleName }: VehicleGalleryProps) {
           </div>
 
           {/* Navigation Buttons */}
-          {images.length > 1 && (
+          {validImages.length > 1 && (
             <>
               <Button
                 aria-label="Previous image"
@@ -174,9 +177,9 @@ export function VehicleGallery({ images, vehicleName }: VehicleGalleryProps) {
           )}
 
           {/* Dot Indicators */}
-          {images.length > 1 && (
+          {validImages.length > 1 && (
             <div className="-translate-x-1/2 absolute bottom-4 left-1/2 z-10 flex gap-2">
-              {images.map((_, index) => (
+              {validImages.map((_, index) => (
                 <button
                   aria-current={index === currentIndex ? "true" : "false"}
                   aria-label={`Go to image ${index + 1}`}
@@ -193,10 +196,10 @@ export function VehicleGallery({ images, vehicleName }: VehicleGalleryProps) {
           )}
 
           {/* Image Counter */}
-          {images.length > 1 && (
+          {validImages.length > 1 && (
             <div className="absolute top-4 right-4 z-10 rounded-full bg-black/50 px-3 py-1.5 text-white backdrop-blur-sm">
               <span className="font-medium text-sm">
-                {currentIndex + 1} / {images.length}
+                {currentIndex + 1} / {validImages.length}
               </span>
             </div>
           )}
@@ -209,10 +212,10 @@ export function VehicleGallery({ images, vehicleName }: VehicleGalleryProps) {
           <div className="relative flex h-full flex-col">
             {/* Header with Close Button and Counter */}
             <div className="absolute top-0 right-0 left-0 z-50 flex items-center justify-between p-4">
-              {images.length > 1 && selectedIndex !== null && (
+              {validImages.length > 1 && selectedIndex !== null && (
                 <div className="rounded-full bg-black/50 px-4 py-2 text-white backdrop-blur-sm">
                   <span className="font-medium text-sm">
-                    {selectedIndex + 1} / {images.length}
+                    {selectedIndex + 1} / {validImages.length}
                   </span>
                 </div>
               )}
@@ -230,7 +233,7 @@ export function VehicleGallery({ images, vehicleName }: VehicleGalleryProps) {
 
             {/* Main Image Area */}
             <div className="relative flex flex-1 items-center justify-center overflow-hidden p-4 pb-20">
-              {selectedIndex !== null && (
+              {selectedIndex !== null && validImages[selectedIndex] && (
                 <div className="relative size-full max-h-full">
                   <Image
                     alt={`${vehicleName} - Image ${selectedIndex + 1}`}
@@ -238,13 +241,13 @@ export function VehicleGallery({ images, vehicleName }: VehicleGalleryProps) {
                     fill
                     priority
                     sizes="100vw"
-                    src={images[selectedIndex]}
+                    src={validImages[selectedIndex]}
                   />
                 </div>
               )}
 
               {/* Previous Button */}
-              {images.length > 1 && (
+              {validImages.length > 1 && (
                 <Button
                   aria-label="Previous image"
                   className="-translate-y-1/2 absolute top-1/2 left-4 bg-black/50 text-white backdrop-blur-sm hover:bg-black/70 focus:outline-none focus:ring-2 focus:ring-white"
@@ -257,7 +260,7 @@ export function VehicleGallery({ images, vehicleName }: VehicleGalleryProps) {
               )}
 
               {/* Next Button */}
-              {images.length > 1 && (
+              {validImages.length > 1 && (
                 <Button
                   aria-label="Next image"
                   className="-translate-y-1/2 absolute top-1/2 right-4 bg-black/50 text-white backdrop-blur-sm hover:bg-black/70 focus:outline-none focus:ring-2 focus:ring-white"
@@ -271,10 +274,10 @@ export function VehicleGallery({ images, vehicleName }: VehicleGalleryProps) {
             </div>
 
             {/* Thumbnail Strip - No background */}
-            {images.length > 1 && (
+            {validImages.length > 1 && (
               <div className="absolute right-0 bottom-0 left-0 z-50 pt-2 pb-4">
                 <div className="mx-auto flex max-w-5xl justify-center gap-2 overflow-x-auto px-4">
-                  {images.map((image, index) => (
+                  {validImages.map((image, index) => (
                     <button
                       aria-label={`Go to image ${index + 1}`}
                       className={cn(

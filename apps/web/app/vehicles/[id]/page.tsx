@@ -9,6 +9,7 @@ import { Dialog, DialogContent } from "@workspace/ui/components/dialog"
 import { cn } from "@workspace/ui/lib/utils"
 import { useMutation, useQuery } from "convex/react"
 import {
+  ArrowLeft,
   Car,
   Check,
   Edit,
@@ -92,12 +93,14 @@ export default function VehicleDetailsPage() {
     try {
       await toggleFavorite({ vehicleId: id as any })
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to toggle favorite"
       console.error("Error toggling favorite:", error)
 
       // If authentication error, show login dialog
+      const errorMessage = error instanceof Error ? error.message : ""
       if (errorMessage.includes("Not authenticated") || errorMessage.includes("authentication")) {
         setShowLoginDialog(true)
+      } else {
+        toast.error("An error occurred")
       }
     }
   }
@@ -135,11 +138,14 @@ export default function VehicleDetailsPage() {
       // Navigate to the messages page
       router.push(`/messages/${conversationId as string}`)
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to start conversation"
+      console.error("Failed to start conversation:", error)
 
       // If authentication error, show login dialog
+      const errorMessage = error instanceof Error ? error.message : ""
       if (errorMessage.includes("Not authenticated") || errorMessage.includes("authentication")) {
         setShowLoginDialog(true)
+      } else {
+        toast.error("An error occurred")
       }
     } finally {
       setIsCreatingConversation(false)
@@ -231,8 +237,9 @@ export default function VehicleDetailsPage() {
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="mb-8">
-        <Button className="mb-6" onClick={() => router.back()} variant="ghost">
-          ← Back
+        <Button className="mb-6" onClick={() => router.back()} variant="outline">
+          <ArrowLeft className="mr-2 size-4" />
+          Back
         </Button>
 
         {/* Header Section */}
