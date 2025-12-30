@@ -6,15 +6,13 @@ export default defineSchema({
   users: defineTable({
     externalId: v.string(),
     name: v.string(),
-    role: v.optional(v.string()),
     email: v.optional(v.string()),
     phone: v.optional(v.string()),
     rating: v.optional(v.number()),
     totalRentals: v.optional(v.number()),
     memberSince: v.optional(v.string()),
-    profileImage: v.optional(v.string()), // Legacy URL field
     profileImageR2Key: v.optional(v.string()), // R2 object key for profile image
-    userType: v.optional(v.union(v.literal("driver"), v.literal("team"), v.literal("both"))),
+    isHost: v.optional(v.boolean()),
     isBanned: v.optional(v.boolean()),
     // Stripe Connect fields
     stripeAccountId: v.optional(v.string()),
@@ -34,6 +32,80 @@ export default defineSchema({
     bio: v.optional(v.string()),
     location: v.optional(v.string()),
     experience: v.optional(v.string()),
+    // Host onboarding fields
+    hostOnboardingStatus: v.optional(
+      v.union(v.literal("not_started"), v.literal("in_progress"), v.literal("completed"))
+    ),
+    hostOnboardingSteps: v.optional(
+      v.object({
+        personalInfo: v.boolean(),
+        vehicleAdded: v.boolean(),
+        payoutSetup: v.boolean(),
+        safetyStandards: v.boolean(),
+      })
+    ),
+    // Temporary storage for vehicle address during onboarding
+    onboardingVehicleAddress: v.optional(
+      v.object({
+        street: v.string(),
+        city: v.string(),
+        state: v.string(),
+        zipCode: v.string(),
+      })
+    ),
+    // Temporary storage for onboarding draft data (allows users to save progress)
+    hostOnboardingDraft: v.optional(
+      v.object({
+        address: v.optional(
+          v.object({
+            street: v.string(),
+            city: v.string(),
+            state: v.string(),
+            zipCode: v.string(),
+          })
+        ),
+        vehicleData: v.optional(
+          v.object({
+            trackId: v.optional(v.string()),
+            make: v.string(),
+            model: v.string(),
+            year: v.number(),
+            dailyRate: v.number(),
+            description: v.string(),
+            horsepower: v.optional(v.number()),
+            transmission: v.optional(v.string()),
+            drivetrain: v.optional(v.string()),
+            engineType: v.optional(v.string()),
+            mileage: v.optional(v.number()),
+            amenities: v.array(v.string()),
+            addOns: v.array(
+              v.object({
+                name: v.string(),
+                price: v.number(),
+                description: v.optional(v.string()),
+                isRequired: v.optional(v.boolean()),
+              })
+            ),
+            advanceNotice: v.optional(v.string()),
+            minTripDuration: v.optional(v.string()),
+            maxTripDuration: v.optional(v.string()),
+            requireWeekendMin: v.optional(v.boolean()),
+          })
+        ),
+        currentStep: v.optional(v.number()),
+        lastSavedAt: v.optional(v.number()),
+        // Uploaded image keys from R2 (stored when photos are uploaded)
+        images: v.optional(
+          v.array(
+            v.object({
+              r2Key: v.string(),
+              isPrimary: v.boolean(),
+              order: v.number(),
+            })
+          )
+        ),
+      })
+    ),
   }).index("by_external_id", ["externalId"]),
 
   tracks: defineTable({

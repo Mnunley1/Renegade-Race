@@ -12,10 +12,10 @@ import {
 } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
-import { ArrowRight, Mail, Loader2 } from "lucide-react"
+import { ArrowRight, Loader2, Mail } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useState, useEffect } from "react"
+import { useEffect, useState } from "react"
 
 type ClerkError = {
   errors?: Array<{ message: string }>
@@ -39,7 +39,7 @@ export default function VerifyEmailPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!isLoaded || !signUp) {
+    if (!(isLoaded && signUp)) {
       return
     }
 
@@ -67,7 +67,7 @@ export default function VerifyEmailPage() {
   }
 
   const handleResendCode = async () => {
-    if (!isLoaded || !signUp) {
+    if (!(isLoaded && signUp)) {
       return
     }
 
@@ -80,13 +80,22 @@ export default function VerifyEmailPage() {
       setTimeout(() => setResendSuccess(false), 5000)
     } catch (err: unknown) {
       const clerkError = err as ClerkError
-      setError(clerkError?.errors?.[0]?.message || "Failed to resend code")
+      console.error("Resend verification code error:", clerkError)
+      const errorMessage = clerkError?.errors?.[0]?.message || "Failed to resend code"
+      setError(errorMessage)
+
+      // Show helpful message if it's a rate limit or email issue
+      if (errorMessage.includes("limit") || errorMessage.includes("email")) {
+        setError(
+          `${errorMessage}. In development mode, Clerk has a limit of 100 emails per month. Try using a test email with +clerk_test (e.g., yourname+clerk_test@example.com) or check your spam folder.`
+        )
+      }
     } finally {
       setIsResending(false)
     }
   }
 
-  if (!isLoaded || !signUp) {
+  if (!(isLoaded && signUp)) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <div className="text-center">
@@ -103,9 +112,7 @@ export default function VerifyEmailPage() {
         <h1 className="mb-2 font-bold text-3xl">Verify Your Email</h1>
         <p className="text-muted-foreground text-sm">
           We sent a verification code to <br />
-          <span className="font-medium text-foreground">
-            {signUp.emailAddress || "your email"}
-          </span>
+          <span className="font-medium text-foreground">{signUp.emailAddress || "your email"}</span>
         </p>
       </div>
 
@@ -125,7 +132,7 @@ export default function VerifyEmailPage() {
             )}
 
             {resendSuccess && (
-              <div className="rounded-lg border border-green-500/50 bg-green-500/10 p-3 text-green-700 dark:text-green-400 text-sm">
+              <div className="rounded-lg border border-green-500/50 bg-green-500/10 p-3 text-green-700 text-sm dark:text-green-400">
                 Verification code sent! Please check your email.
               </div>
             )}
@@ -149,9 +156,19 @@ export default function VerifyEmailPage() {
               <p className="text-muted-foreground text-xs">
                 Enter the 6-digit code sent to your email
               </p>
+              {signUp.emailAddress?.includes("+clerk_test") && (
+                <p className="font-medium text-primary text-xs">
+                  Using test email? Use code: <span className="font-mono">424242</span>
+                </p>
+              )}
             </div>
 
-            <Button className="w-full" disabled={isLoading || code.length !== 6} size="lg" type="submit">
+            <Button
+              className="w-full"
+              disabled={isLoading || code.length !== 6}
+              size="lg"
+              type="submit"
+            >
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 size-4 animate-spin" />
@@ -169,7 +186,7 @@ export default function VerifyEmailPage() {
 
         <CardFooter className="flex flex-col space-y-4">
           <div className="text-center text-sm">
-            <p className="text-muted-foreground mb-2">Didn't receive the code?</p>
+            <p className="mb-2 text-muted-foreground">Didn't receive the code?</p>
             <Button
               className="w-full"
               disabled={isResending || !isLoaded}
@@ -202,4 +219,3 @@ export default function VerifyEmailPage() {
     </div>
   )
 }
-

@@ -228,11 +228,17 @@ export const createConnectAccount = action({
       stripeAccountId: account.id,
     })
 
+    // Mark payoutSetup step as complete in onboarding (account created, even if not fully onboarded)
+    await ctx.runMutation(api.users.updateHostOnboardingStep, {
+      step: "payoutSetup",
+      completed: true,
+    })
+
     // Create account link for onboarding
     const accountLink = await stripe.accountLinks.create({
       account: account.id,
-      refresh_url: `${process.env.WEB_URL || "https://renegaderentals.com"}/host/onboarding/refresh`,
-      return_url: `${process.env.WEB_URL || "https://renegaderentals.com"}/host/onboarding/complete`,
+      refresh_url: `${process.env.WEB_URL || "https://renegaderentals.com"}/host/onboarding/wizard?step=7`,
+      return_url: `${process.env.WEB_URL || "https://renegaderentals.com"}/host/onboarding/wizard?step=7&stripe_return=true`,
       type: "account_onboarding",
     })
 
