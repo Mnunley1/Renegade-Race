@@ -322,6 +322,8 @@ export default defineSchema({
 
   driverProfiles: defineTable({
     userId: v.string(),
+    avatarUrl: v.optional(v.string()),
+    headline: v.optional(v.string()),
     bio: v.string(),
     achievements: v.optional(v.string()),
     experience: v.union(
