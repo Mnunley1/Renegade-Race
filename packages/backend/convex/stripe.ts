@@ -352,8 +352,24 @@ export const createCheckoutSession = action({
     const stripe = getStripe()
     const connectAccount = await stripe.accounts.retrieve(owner.stripeAccountId)
 
-    if (!(connectAccount.details_submitted && connectAccount.charges_enabled)) {
-      throw new Error("Owner account is not fully set up")
+    if (!connectAccount.details_submitted) {
+      throw new Error("Owner account onboarding is not complete. Please complete Stripe onboarding.")
+    }
+
+    if (!connectAccount.charges_enabled) {
+      throw new Error("Owner account cannot accept charges yet. Please complete Stripe onboarding.")
+    }
+
+    // Check if transfers capability is enabled (required for destination payments)
+    const transfersEnabled =
+      connectAccount.capabilities?.transfers === "active" ||
+      connectAccount.capabilities?.crypto_transfers === "active" ||
+      connectAccount.capabilities?.legacy_payments === "active"
+
+    if (!transfersEnabled) {
+      throw new Error(
+        "Owner account does not have transfers enabled. Please complete Stripe onboarding to enable transfers capability."
+      )
     }
 
     // Calculate platform fee
@@ -485,6 +501,30 @@ export const createPaymentIntent = action({
       throw new Error("Owner must complete Stripe onboarding before accepting payments")
     }
 
+    // Verify Connect account is ready and has required capabilities
+    const stripe = getStripe()
+    const connectAccount = await stripe.accounts.retrieve(owner.stripeAccountId)
+
+    if (!connectAccount.details_submitted) {
+      throw new Error("Owner account onboarding is not complete. Please complete Stripe onboarding.")
+    }
+
+    if (!connectAccount.charges_enabled) {
+      throw new Error("Owner account cannot accept charges yet. Please complete Stripe onboarding.")
+    }
+
+    // Check if transfers capability is enabled (required for destination payments)
+    const transfersEnabled =
+      connectAccount.capabilities?.transfers === "active" ||
+      connectAccount.capabilities?.crypto_transfers === "active" ||
+      connectAccount.capabilities?.legacy_payments === "active"
+
+    if (!transfersEnabled) {
+      throw new Error(
+        "Owner account does not have transfers enabled. Please complete Stripe onboarding to enable transfers capability."
+      )
+    }
+
     // Calculate platform fee
     const { platformFee, ownerAmount } = await ctx.runMutation(api.stripe.calculatePlatformFee, {
       amount: args.amount,
@@ -509,7 +549,6 @@ export const createPaymentIntent = action({
     }
 
     // Create Stripe Payment Intent with Connect
-    const stripe = getStripe()
     const paymentIntent = await stripe.paymentIntents.create({
       amount: args.amount,
       currency: "usd",
