@@ -54,28 +54,22 @@ export const checkAvailability = query({
     const blockedDates = availability.filter(a => !a.isAvailable);
 
     // Get conflicting reservations
+    // Two date ranges overlap if: existingStart <= newEnd AND existingEnd >= newStart
     const conflictingReservations = await ctx.db
       .query('reservations')
       .withIndex('by_vehicle', q => q.eq('vehicleId', vehicleId))
       .filter(q =>
         q.and(
+          // Only check active reservations (pending or confirmed)
           q.or(
             q.eq(q.field('status'), 'pending'),
             q.eq(q.field('status'), 'confirmed')
           ),
-          q.or(
-            q.and(
-              q.lte(q.field('startDate'), startDate),
-              q.gte(q.field('endDate'), startDate)
-            ),
-            q.and(
-              q.lte(q.field('startDate'), endDate),
-              q.gte(q.field('endDate'), endDate)
-            ),
-            q.and(
-              q.gte(q.field('startDate'), startDate),
-              q.lte(q.field('endDate'), endDate)
-            )
+          // Check for date overlap: existing reservation overlaps if
+          // existingStart <= newEnd AND existingEnd >= newStart
+          q.and(
+            q.lte(q.field('startDate'), endDate),
+            q.gte(q.field('endDate'), startDate)
           )
         )
       )

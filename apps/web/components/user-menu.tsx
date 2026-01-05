@@ -33,6 +33,10 @@ export function UserMenu() {
   const { signOut } = useAuth()
   const pathname = usePathname()
   const onboardingStatus = useQuery(api.users.getHostOnboardingStatus, isSignedIn ? {} : "skip")
+  const unreadCount = useQuery(
+    api.messages.getUnreadCount,
+    isSignedIn && user?.id ? { userId: user.id } : "skip"
+  )
 
   const handleSignOut = async () => {
     await signOut()
@@ -45,24 +49,31 @@ export function UserMenu() {
       <DropdownMenuTrigger asChild>
         <Button className="relative flex items-center gap-2 px-3 py-5" variant="ghost">
           <Menu className="size-5" />
-          <Avatar className="size-8">
-            {isSignedIn ? (
-              <>
-                <AvatarImage alt={user?.firstName || "User"} src={user?.imageUrl} />
+          <div className="relative">
+            <Avatar className="size-8">
+              {isSignedIn ? (
+                <>
+                  <AvatarImage alt={user?.firstName || "User"} src={user?.imageUrl} />
+                  <AvatarFallback>
+                    {(
+                      user?.firstName?.[0] ||
+                      user?.emailAddresses?.[0]?.emailAddress?.[0] ||
+                      "U"
+                    ).toUpperCase()}
+                  </AvatarFallback>
+                </>
+              ) : (
                 <AvatarFallback>
-                  {(
-                    user?.firstName?.[0] ||
-                    user?.emailAddresses?.[0]?.emailAddress?.[0] ||
-                    "U"
-                  ).toUpperCase()}
+                  <User className="size-5" />
                 </AvatarFallback>
-              </>
-            ) : (
-              <AvatarFallback>
-                <User className="size-5" />
-              </AvatarFallback>
+              )}
+            </Avatar>
+            {unreadCount !== undefined && unreadCount > 0 && (
+              <span className="absolute -right-1 -top-1 flex min-w-[1.25rem] items-center justify-center rounded-full bg-primary px-1 py-0.5 text-primary-foreground text-xs font-semibold leading-none">
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </span>
             )}
-          </Avatar>
+          </div>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">
@@ -84,7 +95,12 @@ export function UserMenu() {
             <DropdownMenuItem asChild>
               <Link className="flex items-center text-sm" href="/messages">
                 <MessageSquare className="mr-3 size-4" />
-                Inbox
+                <span>Inbox</span>
+                {unreadCount !== undefined && unreadCount > 0 && (
+                  <Badge className="ml-auto" variant="destructive">
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </Badge>
+                )}
               </Link>
             </DropdownMenuItem>
 

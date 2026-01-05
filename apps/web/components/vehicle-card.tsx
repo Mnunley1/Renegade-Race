@@ -1,17 +1,18 @@
 "use client"
 
 import { useUser } from "@clerk/nextjs"
+import { Image } from "@imagekit/next"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent } from "@workspace/ui/components/card"
 import { Dialog, DialogContent } from "@workspace/ui/components/dialog"
 import { cn } from "@workspace/ui/lib/utils"
 import { useMutation, useQuery } from "convex/react"
 import { Car, Heart, LogIn, MapPin, UserPlus } from "lucide-react"
-import Image from "next/image"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import type { ComponentProps } from "react"
 import { useState } from "react"
+import { toast } from "sonner"
 import { api } from "@/lib/convex"
 
 interface VehicleCardProps extends ComponentProps<"div"> {
@@ -91,6 +92,7 @@ export function VehicleCard({
       toast.error("An error occurred")
 
       // If authentication error, show login dialog
+      const errorMessage = error instanceof Error ? error.message : String(error)
       if (errorMessage.includes("Not authenticated") || errorMessage.includes("authentication")) {
         setShowLoginDialog(true)
       }
@@ -119,6 +121,7 @@ export function VehicleCard({
               fill
               sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
               src={image}
+              urlEndpoint="https://ik.imagekit.io/renegaderace"
             />
           ) : (
             <div className="flex h-full items-center justify-center bg-muted">

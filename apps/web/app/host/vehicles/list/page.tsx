@@ -6,6 +6,7 @@ import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent } from "@workspace/ui/components/card"
 import { useQuery } from "convex/react"
 import {
+  ArrowLeft,
   Calendar,
   Car,
   CheckCircle2,
@@ -85,6 +86,12 @@ export default function HostVehiclesListPage() {
   return (
     <div className="container mx-auto max-w-7xl px-4 py-8">
       <div className="mb-8">
+        <Link href="/host/dashboard">
+          <Button className="mb-4" variant="ghost">
+            <ArrowLeft className="mr-2 size-4" />
+            Back to Dashboard
+          </Button>
+        </Link>
         <div className="mb-2 flex items-center justify-between">
           <div>
             <h1 className="font-bold text-3xl">Your Vehicles</h1>
