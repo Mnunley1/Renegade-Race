@@ -110,12 +110,12 @@ function PaymentForm({
       <div className="space-y-4">
         <div className="flex items-center justify-between text-sm">
           <span className="text-muted-foreground">Subtotal</span>
-          <span className="font-medium">${(totalAmount / 100).toLocaleString()}</span>
+          <span className="font-medium">${totalAmount.toLocaleString()}</span>
         </div>
         <Separator />
         <div className="flex items-center justify-between">
           <span className="font-semibold text-lg">Total</span>
-          <span className="font-bold text-2xl">${(totalAmount / 100).toLocaleString()}</span>
+          <span className="font-bold text-2xl">${totalAmount.toLocaleString()}</span>
         </div>
       </div>
 
@@ -126,7 +126,7 @@ function PaymentForm({
             Processing...
           </>
         ) : (
-          `Pay $${(totalAmount / 100).toLocaleString()}`
+          `Pay $${totalAmount.toLocaleString()}`
         )}
       </Button>
     </form>
@@ -450,7 +450,7 @@ function CheckoutPageContent() {
                   <div className="flex justify-between">
                     <span className="font-semibold">Total</span>
                     <span className="font-bold text-lg">
-                      ${((reservation.totalAmount || 0) / 100).toLocaleString()}
+                      ${(reservation.totalAmount || 0).toLocaleString()}
                     </span>
                   </div>
                 </div>
