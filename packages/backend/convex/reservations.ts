@@ -221,28 +221,22 @@ export const create = mutation({
     }
 
     // Check for conflicting reservations
+    // Two date ranges overlap if: existingStart <= newEnd AND existingEnd >= newStart
     const conflictingReservations = await ctx.db
       .query('reservations')
       .withIndex('by_vehicle', q => q.eq('vehicleId', args.vehicleId))
       .filter(q =>
         q.and(
+          // Only check active reservations (pending or confirmed)
           q.or(
             q.eq(q.field('status'), 'pending'),
             q.eq(q.field('status'), 'confirmed')
           ),
-          q.or(
-            q.and(
-              q.lte(q.field('startDate'), args.startDate),
-              q.gte(q.field('endDate'), args.startDate)
-            ),
-            q.and(
-              q.lte(q.field('startDate'), args.endDate),
-              q.gte(q.field('endDate'), args.endDate)
-            ),
-            q.and(
-              q.gte(q.field('startDate'), args.startDate),
-              q.lte(q.field('endDate'), args.endDate)
-            )
+          // Check for date overlap: existing reservation overlaps if
+          // existingStart <= newEnd AND existingEnd >= newStart
+          q.and(
+            q.lte(q.field('startDate'), args.endDate),
+            q.gte(q.field('endDate'), args.startDate)
           )
         )
       )

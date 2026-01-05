@@ -2,16 +2,56 @@
 
 import { Button } from "@workspace/ui/components/button"
 import { Calendar } from "@workspace/ui/components/calendar"
-import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
+import { Checkbox } from "@workspace/ui/components/checkbox"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@workspace/ui/components/dialog"
+import { Input } from "@workspace/ui/components/input"
+import { Label } from "@workspace/ui/components/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@workspace/ui/components/select"
+import { Textarea } from "@workspace/ui/components/textarea"
 import { useMutation, useQuery } from "convex/react"
 import { format } from "date-fns"
-import { ArrowLeft, Calendar as CalendarIcon, Loader2, XCircle } from "lucide-react"
+import { ArrowLeft, Calendar as CalendarIcon, Edit, Info, Loader2, Settings, XCircle } from "lucide-react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import type { DateRange } from "react-day-picker"
 import { toast } from "sonner"
 import { api } from "@/lib/convex"
+
+const ADVANCE_NOTICE_OPTIONS = [
+  { value: "same-day", label: "Same day" },
+  { value: "1-day", label: "1 day (recommended)" },
+  { value: "2-days", label: "2 days" },
+  { value: "3-days", label: "3 days" },
+  { value: "1-week", label: "1 week" },
+]
+
+const TRIP_DURATION_OPTIONS = [
+  { value: "1-day", label: "1 day (recommended)" },
+  { value: "2-days", label: "2 days" },
+  { value: "3-days", label: "3 days" },
+  { value: "1-week", label: "1 week" },
+  { value: "2-weeks", label: "2 weeks" },
+  { value: "3-weeks", label: "3 weeks (recommended)" },
+  { value: "1-month", label: "1 month" },
+  { value: "2-months", label: "2 months" },
+  { value: "3-months", label: "3 months" },
+  { value: "unlimited", label: "Unlimited" },
+]
 
 export default function HostVehicleAvailabilityPage() {
   const params = useParams()
@@ -21,6 +61,13 @@ export default function HostVehicleAvailabilityPage() {
   const [selectedMonth, setSelectedMonth] = useState(new Date())
   const [selectedRange, setSelectedRange] = useState<DateRange | undefined>(undefined)
   const [isSelectingRange, setIsSelectingRange] = useState(false)
+  const [blockDialogOpen, setBlockDialogOpen] = useState(false)
+  const [selectedDateForBlock, setSelectedDateForBlock] = useState<Date | null>(null)
+  const [blockReason, setBlockReason] = useState("")
+  const [priceOverride, setPriceOverride] = useState<string>("")
+  const [rangeBlockDialogOpen, setRangeBlockDialogOpen] = useState(false)
+  const [rangeBlockReason, setRangeBlockReason] = useState("")
+  const [rangePriceOverride, setRangePriceOverride] = useState<string>("")
 
   // Fetch vehicle from Convex
   const vehicle = useQuery(api.vehicles.getById, vehicleId ? { id: vehicleId as any } : "skip")
@@ -42,6 +89,25 @@ export default function HostVehicleAvailabilityPage() {
   const unblockDateRange = useMutation(api.availability.unblockDateRange)
   const blockDate = useMutation(api.availability.blockDate)
   const unblockDate = useMutation(api.availability.unblockDate)
+  const updateVehicle = useMutation(api.vehicles.update)
+
+  // State for editing availability settings
+  const [editSettingsDialogOpen, setEditSettingsDialogOpen] = useState(false)
+  const [advanceNotice, setAdvanceNotice] = useState("1-day")
+  const [minTripDuration, setMinTripDuration] = useState("1-day")
+  const [maxTripDuration, setMaxTripDuration] = useState("3-weeks")
+  const [requireWeekendMin, setRequireWeekendMin] = useState(false)
+  const [isSavingSettings, setIsSavingSettings] = useState(false)
+
+  // Load current settings when vehicle loads or dialog opens
+  useEffect(() => {
+    if (vehicle) {
+      setAdvanceNotice(vehicle.advanceNotice || "1-day")
+      setMinTripDuration(vehicle.minTripDuration || "1-day")
+      setMaxTripDuration(vehicle.maxTripDuration || "3-weeks")
+      setRequireWeekendMin(vehicle.requireWeekendMin || false)
+    }
+  }, [vehicle, editSettingsDialogOpen])
 
   // Helper function to parse YYYY-MM-DD string to local Date (avoids timezone issues)
   const parseDateString = (dateString: string): Date => {
@@ -132,7 +198,7 @@ export default function HostVehicleAvailabilityPage() {
     )
   }
 
-  // Handle date selection - toggle blocked state
+  // Handle date selection - toggle blocked state or open dialog
   const handleDateSelect = async (date: Date | undefined) => {
     if (!(vehicle?._id && date)) return
 
@@ -141,9 +207,6 @@ export default function HostVehicleAvailabilityPage() {
     const year = date.getFullYear()
     const month = date.getMonth() + 1 // getMonth() returns 0-11, we need 1-12
     const day = date.getDate()
-
-    // Create date string directly from components to avoid any timezone issues
-    const dateString = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`
 
     // Create normalized date for comparisons
     const normalizedDate = new Date(year, date.getMonth(), day)
@@ -156,22 +219,62 @@ export default function HostVehicleAvailabilityPage() {
 
     const isBlocked = isDateBlocked(normalizedDate)
 
+    // If unblocking, do it immediately
+    if (isBlocked) {
+      const dateString = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+      try {
+        await unblockDate({
+          vehicleId: vehicle._id,
+          date: dateString,
+        })
+        toast.success("Date unblocked")
+      } catch (error) {
+        toast.error("An error occurred")
+      }
+    } else {
+      // If blocking, open dialog to allow reason and price override
+      setSelectedDateForBlock(date)
+      setBlockReason("")
+      setPriceOverride("")
+      setBlockDialogOpen(true)
+    }
+  }
+
+  // Handle blocking date with reason and price override
+  const handleBlockDateWithDetails = async () => {
+    if (!(vehicle?._id && selectedDateForBlock)) return
+
+    const year = selectedDateForBlock.getFullYear()
+    const month = selectedDateForBlock.getMonth() + 1
+    const day = selectedDateForBlock.getDate()
+    const dateString = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+
+    const normalizedDate = new Date(year, selectedDateForBlock.getMonth(), day)
+    const isBlocked = isDateBlocked(normalizedDate)
+
     try {
       if (isBlocked) {
+        // Unblock the date
         await unblockDate({
           vehicleId: vehicle._id,
           date: dateString,
         })
         toast.success("Date unblocked")
       } else {
+        // Block the date
         await blockDate({
           vehicleId: vehicle._id,
           date: dateString,
+          reason: blockReason || undefined,
+          price: priceOverride ? Math.round(parseFloat(priceOverride) * 100) : undefined,
         })
         toast.success("Date blocked")
       }
+      setBlockDialogOpen(false)
+      setSelectedDateForBlock(null)
+      setBlockReason("")
+      setPriceOverride("")
     } catch (error) {
-      console.error(`Failed to ${isBlocked ? "unblock" : "block"} date:`, error)
       toast.error("An error occurred")
     }
   }
@@ -214,7 +317,7 @@ export default function HostVehicleAvailabilityPage() {
     }
 
     // Determine if we're blocking or unblocking
-    // If all dates in range are blocked, unblock them; otherwise block them
+    // If all dates in range are blocked, unblock them; otherwise open dialog to block
     let allBlocked = true
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
       const normalizedD = new Date(d.getFullYear(), d.getMonth(), d.getDate())
@@ -224,8 +327,49 @@ export default function HostVehicleAvailabilityPage() {
       }
     }
 
+    if (allBlocked) {
+      // Unblock immediately
+      try {
+        await unblockDateRange({
+          vehicleId: vehicle._id,
+          startDate,
+          endDate,
+        })
+        toast.success("Date range unblocked")
+        setSelectedRange(undefined)
+      } catch (error) {
+        toast.error("Failed to unblock date range")
+      }
+    } else {
+      // Open dialog to block with details
+      setRangeBlockReason("")
+      setRangePriceOverride("")
+      setRangeBlockDialogOpen(true)
+    }
+  }
+
+  // Handle blocking date range with reason and price override
+  const handleBlockRangeWithDetails = async () => {
+    if (!(vehicle?._id && selectedRange?.from)) return
+
+    const fromYear = selectedRange.from.getFullYear()
+    const fromMonth = selectedRange.from.getMonth() + 1
+    const fromDay = selectedRange.from.getDate()
+    const startDate = `${fromYear}-${String(fromMonth).padStart(2, "0")}-${String(fromDay).padStart(2, "0")}`
+
+    let endDate = startDate
+    if (selectedRange.to) {
+      const toYear = selectedRange.to.getFullYear()
+      const toMonth = selectedRange.to.getMonth() + 1
+      const toDay = selectedRange.to.getDate()
+      endDate = `${toYear}-${String(toMonth).padStart(2, "0")}-${String(toDay).padStart(2, "0")}`
+    }
+
+    const isFullyBlocked = isRangeFullyBlocked(selectedRange)
+
     try {
-      if (allBlocked) {
+      if (isFullyBlocked) {
+        // Unblock the range
         await unblockDateRange({
           vehicleId: vehicle._id,
           startDate,
@@ -233,20 +377,22 @@ export default function HostVehicleAvailabilityPage() {
         })
         toast.success("Date range unblocked")
       } else {
+        // Block the range
         await blockDateRange({
           vehicleId: vehicle._id,
           startDate,
           endDate,
+          reason: rangeBlockReason || undefined,
+          price: rangePriceOverride ? Math.round(parseFloat(rangePriceOverride) * 100) : undefined,
         })
         toast.success("Date range blocked")
       }
+      setRangeBlockDialogOpen(false)
       setSelectedRange(undefined)
+      setRangeBlockReason("")
+      setRangePriceOverride("")
     } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : `Failed to ${allBlocked ? "unblock" : "block"} date range`
-      )
+      toast.error("An error occurred")
     }
   }
 
@@ -272,6 +418,24 @@ export default function HostVehicleAvailabilityPage() {
     })
   }
 
+  // Check if a date range is fully blocked
+  const isRangeFullyBlocked = (range: DateRange | undefined): boolean => {
+    if (!range?.from) return false
+
+    const start = new Date(range.from.getFullYear(), range.from.getMonth(), range.from.getDate())
+    const end = range.to
+      ? new Date(range.to.getFullYear(), range.to.getMonth(), range.to.getDate())
+      : start
+
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const normalizedD = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+      if (!isDateBlocked(normalizedD)) {
+        return false
+      }
+    }
+    return true
+  }
+
   return (
     <div className="container mx-auto max-w-7xl px-4 py-8">
       <div className="mb-6">
@@ -291,6 +455,70 @@ export default function HostVehicleAvailabilityPage() {
           Click dates to block or unblock them. Use range mode to select multiple dates at once.
         </p>
       </div>
+
+      {/* Vehicle Availability Settings */}
+      <Card className="mb-6">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Settings className="size-5 text-muted-foreground" />
+              <CardTitle>Availability Settings</CardTitle>
+            </div>
+            <Button
+              onClick={() => setEditSettingsDialogOpen(true)}
+              size="sm"
+              variant="outline"
+            >
+              <Edit className="mr-2 size-4" />
+              Edit Settings
+            </Button>
+          </div>
+          <CardDescription>Your vehicle's default availability rules</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {vehicle.advanceNotice && (
+              <div className="rounded-lg border p-3">
+                <div className="text-muted-foreground text-xs">Advance Notice</div>
+                <div className="mt-1 font-semibold text-sm capitalize">
+                  {vehicle.advanceNotice.replace("-", " ")}
+                </div>
+              </div>
+            )}
+            {vehicle.minTripDuration && (
+              <div className="rounded-lg border p-3">
+                <div className="text-muted-foreground text-xs">Minimum Trip</div>
+                <div className="mt-1 font-semibold text-sm capitalize">
+                  {vehicle.minTripDuration.replace("-", " ")}
+                </div>
+              </div>
+            )}
+            {vehicle.maxTripDuration && (
+              <div className="rounded-lg border p-3">
+                <div className="text-muted-foreground text-xs">Maximum Trip</div>
+                <div className="mt-1 font-semibold text-sm capitalize">
+                  {vehicle.maxTripDuration === "unlimited"
+                    ? "Unlimited"
+                    : vehicle.maxTripDuration.replace("-", " ")}
+                </div>
+              </div>
+            )}
+            {vehicle.requireWeekendMin && (
+              <div className="rounded-lg border p-3">
+                <div className="text-muted-foreground text-xs">Weekend Minimum</div>
+                <div className="mt-1 font-semibold text-sm">2-day minimum</div>
+              </div>
+            )}
+          </div>
+          <div className="mt-4 flex items-start gap-2 rounded-lg bg-muted/50 p-3">
+            <Info className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+            <p className="text-muted-foreground text-xs">
+              These settings apply to all bookings. You can override pricing for specific dates
+              when blocking them.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -379,7 +607,7 @@ export default function HostVehicleAvailabilityPage() {
                             }}
                             size="sm"
                           >
-                            Apply Range
+                            {isRangeFullyBlocked(selectedRange) ? "Unblock Range" : "Block Range"}
                           </Button>
                         )}
                       </div>
@@ -456,6 +684,262 @@ export default function HostVehicleAvailabilityPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Block Date Dialog */}
+      <Dialog onOpenChange={setBlockDialogOpen} open={blockDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {selectedDateForBlock && isDateBlocked(selectedDateForBlock)
+                ? "Unblock Date"
+                : "Block Date"}
+            </DialogTitle>
+            <DialogDescription>
+              {selectedDateForBlock &&
+                (isDateBlocked(selectedDateForBlock)
+                  ? `Unblock ${format(selectedDateForBlock, "EEEE, MMMM d, yyyy")} to make it available for bookings.`
+                  : `Block ${format(selectedDateForBlock, "EEEE, MMMM d, yyyy")} from bookings.`)}
+            </DialogDescription>
+          </DialogHeader>
+          {selectedDateForBlock && !isDateBlocked(selectedDateForBlock) && (
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="priceOverride">Price Override (Optional)</Label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                    $
+                  </span>
+                  <Input
+                    id="priceOverride"
+                    inputMode="decimal"
+                    onChange={(e) => setPriceOverride(e.target.value)}
+                    placeholder={`Default: $${(vehicle.dailyRate / 100).toLocaleString()}/day`}
+                    type="number"
+                    value={priceOverride}
+                  />
+                </div>
+                <p className="text-muted-foreground text-xs">
+                  Set a custom daily rate for this date. Leave empty to use your default rate.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="blockReason">Reason (Optional)</Label>
+                <Textarea
+                  id="blockReason"
+                  onChange={(e) => setBlockReason(e.target.value)}
+                  placeholder="e.g., Personal use, Maintenance, Track day..."
+                  value={blockReason}
+                />
+                <p className="text-muted-foreground text-xs">
+                  Add a note to help you remember why this date is blocked.
+                </p>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button onClick={() => setBlockDialogOpen(false)} variant="outline">
+              Cancel
+            </Button>
+            <Button onClick={handleBlockDateWithDetails}>
+              {selectedDateForBlock && isDateBlocked(selectedDateForBlock)
+                ? "Unblock Date"
+                : "Block Date"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Block Range Dialog */}
+      <Dialog onOpenChange={setRangeBlockDialogOpen} open={rangeBlockDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {selectedRange && isRangeFullyBlocked(selectedRange)
+                ? "Unblock Date Range"
+                : "Block Date Range"}
+            </DialogTitle>
+            <DialogDescription>
+              {selectedRange?.from &&
+                selectedRange?.to &&
+                (isRangeFullyBlocked(selectedRange)
+                  ? `Unblock ${format(selectedRange.from, "MMM d")} - ${format(selectedRange.to, "MMM d, yyyy")} to make it available for bookings.`
+                  : `Block ${format(selectedRange.from, "MMM d")} - ${format(selectedRange.to, "MMM d, yyyy")} from bookings.`)}
+            </DialogDescription>
+          </DialogHeader>
+          {selectedRange && !isRangeFullyBlocked(selectedRange) && (
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="rangePriceOverride">Price Override (Optional)</Label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                    $
+                  </span>
+                  <Input
+                    id="rangePriceOverride"
+                    inputMode="decimal"
+                    onChange={(e) => setRangePriceOverride(e.target.value)}
+                    placeholder={`Default: $${(vehicle.dailyRate / 100).toLocaleString()}/day`}
+                    type="number"
+                    value={rangePriceOverride}
+                  />
+                </div>
+                <p className="text-muted-foreground text-xs">
+                  Set a custom daily rate for all dates in this range. Leave empty to use your
+                  default rate.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="rangeBlockReason">Reason (Optional)</Label>
+                <Textarea
+                  id="rangeBlockReason"
+                  onChange={(e) => setRangeBlockReason(e.target.value)}
+                  placeholder="e.g., Personal use, Maintenance, Track day..."
+                  value={rangeBlockReason}
+                />
+                <p className="text-muted-foreground text-xs">
+                  Add a note to help you remember why this range is blocked.
+                </p>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button onClick={() => setRangeBlockDialogOpen(false)} variant="outline">
+              Cancel
+            </Button>
+            <Button onClick={handleBlockRangeWithDetails}>
+              {selectedRange && isRangeFullyBlocked(selectedRange)
+                ? "Unblock Range"
+                : "Block Range"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Availability Settings Dialog */}
+      <Dialog onOpenChange={setEditSettingsDialogOpen} open={editSettingsDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit Availability Settings</DialogTitle>
+            <DialogDescription>
+              Update your vehicle's default availability rules. These settings apply to all future
+              bookings.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-6 py-4">
+            {/* Advance Notice */}
+            <div className="space-y-2">
+              <Label htmlFor="editAdvanceNotice">Advance Notice</Label>
+              <p className="text-muted-foreground text-xs">
+                How much advance notice do you need before a trip starts?
+              </p>
+              <Select onValueChange={setAdvanceNotice} value={advanceNotice}>
+                <SelectTrigger id="editAdvanceNotice">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ADVANCE_NOTICE_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Trip Duration */}
+            <div className="space-y-4">
+              <div>
+                <h3 className="mb-1 font-semibold text-sm">Trip Duration</h3>
+                <p className="text-muted-foreground text-xs">
+                  What's the shortest and longest possible trip you'll accept?
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="editMinTripDuration">Minimum Trip Duration</Label>
+                  <Select onValueChange={setMinTripDuration} value={minTripDuration}>
+                    <SelectTrigger id="editMinTripDuration">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TRIP_DURATION_OPTIONS.filter((opt) => opt.value !== "unlimited").map(
+                        (option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        )
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex items-start gap-3 rounded-lg border bg-muted/30 p-3">
+                  <Checkbox
+                    checked={requireWeekendMin}
+                    id="editRequireWeekendMin"
+                    onCheckedChange={(checked) => setRequireWeekendMin(checked === true)}
+                  />
+                  <Label
+                    className="cursor-pointer font-normal leading-tight"
+                    htmlFor="editRequireWeekendMin"
+                  >
+                    Require a 2-day minimum for trips that start Friday, Saturday, or Sunday
+                  </Label>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="editMaxTripDuration">Maximum Trip Duration</Label>
+                  <Select onValueChange={setMaxTripDuration} value={maxTripDuration}>
+                    <SelectTrigger id="editMaxTripDuration">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TRIP_DURATION_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={() => setEditSettingsDialogOpen(false)}
+              variant="outline"
+            >
+              Cancel
+            </Button>
+            <Button
+              disabled={isSavingSettings}
+              onClick={async () => {
+                if (!vehicle?._id) return
+                setIsSavingSettings(true)
+                try {
+                  await updateVehicle({
+                    id: vehicle._id,
+                    advanceNotice,
+                    minTripDuration,
+                    maxTripDuration,
+                    requireWeekendMin,
+                  })
+                  toast.success("Availability settings updated")
+                  setEditSettingsDialogOpen(false)
+                } catch (error) {
+                  toast.error("Failed to update settings")
+                } finally {
+                  setIsSavingSettings(false)
+                }
+              }}
+            >
+              {isSavingSettings ? "Saving..." : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
