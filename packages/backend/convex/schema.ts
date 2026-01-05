@@ -139,6 +139,20 @@ export default defineSchema({
         isRequired: v.optional(v.boolean()),
       })
     ),
+    // Pickup location address
+    address: v.optional(
+      v.object({
+        street: v.string(),
+        city: v.string(),
+        state: v.string(),
+        zipCode: v.string(),
+      })
+    ),
+    // Availability settings
+    advanceNotice: v.optional(v.string()),
+    minTripDuration: v.optional(v.string()),
+    maxTripDuration: v.optional(v.string()),
+    requireWeekendMin: v.optional(v.boolean()),
     isActive: v.boolean(),
     isApproved: v.optional(v.boolean()),
     viewCount: v.optional(v.number()), // Total views
