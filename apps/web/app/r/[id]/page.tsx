@@ -9,6 +9,7 @@ import { useParams } from "next/navigation"
 import { useMemo, useState } from "react"
 import { VehicleCard } from "@/components/vehicle-card"
 import { api } from "@/lib/convex"
+import type { Id } from "@/lib/convex"
 
 export default function UserProfilePage() {
   const params = useParams()
@@ -23,7 +24,7 @@ export default function UserProfilePage() {
   // Fetch vehicle stats for user's vehicles
   const userVehicleIds = useMemo(() => {
     if (!vehicles) return []
-    return vehicles.map((v) => v._id) as any[]
+    return vehicles.map((v) => v._id as Id<"vehicles">)
   }, [vehicles])
 
   const userVehicleStats = useQuery(

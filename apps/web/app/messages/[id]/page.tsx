@@ -174,7 +174,10 @@ export default function ChatPage() {
       markAsRead({
         conversationId: conversationId as Id<"conversations">,
         userId: user.id,
-      }).catch(console.error)
+      }).catch((error) => {
+        console.error("Failed to mark conversation as read:", error)
+        // Silently fail - marking as read shouldn't break the page
+      })
     }
   }, [conversation, user?.id, conversationId, messages, markAsRead])
 

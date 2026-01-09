@@ -15,6 +15,7 @@ import { useParams, useRouter } from "next/navigation"
 import { useRef, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/lib/convex"
+import type { Id } from "@/lib/convex"
 import { getImageKitUrl } from "@/lib/imagekit"
 
 export default function ReturnReviewPage() {
@@ -38,7 +39,7 @@ export default function ReturnReviewPage() {
   // Fetch completion data
   const completion = useQuery(
     api.rentalCompletions.getByReservation,
-    reservationId ? { reservationId: reservationId as any } : "skip"
+    reservationId ? { reservationId: reservationId as Id<"reservations"> } : "skip"
   )
 
   const submitReturnReview = useMutation(api.rentalCompletions.submitOwnerReturnReview)

@@ -47,6 +47,7 @@ import type { DateRange } from "react-day-picker"
 import { VehicleCard } from "@/components/vehicle-card"
 import { useDebounce } from "@/hooks/useDebounce"
 import { api } from "@/lib/convex"
+import type { Id } from "@/lib/convex"
 
 export default function VehiclesPage() {
   const router = useRouter()
@@ -200,7 +201,7 @@ export default function VehiclesPage() {
   const vehicleStats = useQuery(
     api.reviews.getVehicleStatsBatch,
     vehiclesData && vehiclesData.length > 0
-      ? { vehicleIds: vehiclesData.map((v) => v._id) as any[] }
+      ? { vehicleIds: vehiclesData.map((v) => v._id as Id<"vehicles">) }
       : "skip"
   )
 
@@ -225,7 +226,7 @@ export default function VehiclesPage() {
         horsepower: vehicle.horsepower,
         transmission: vehicle.transmission || "",
         drivetrain: vehicle.drivetrain || "",
-        raceCarClass: (vehicle as any).raceCarClass || "", // TODO: Add to schema
+        raceCarClass: "", // Removed: not in schema
       }
     })
     return mapped
