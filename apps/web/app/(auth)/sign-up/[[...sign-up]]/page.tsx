@@ -51,13 +51,6 @@ export default function SignUpPage() {
         password,
       })
 
-      console.log("Sign-up result status:", result.status)
-      console.log("Sign-up object:", {
-        status: signUp.status,
-        emailAddress: signUp.emailAddress,
-        unverifiedFields: signUp.unverifiedFields,
-      })
-
       // Check if email verification is needed
       if (result.status === "missing_requirements") {
         // Check if email verification is actually needed
@@ -68,17 +61,14 @@ export default function SignUpPage() {
         if (needsEmailVerification) {
           // Send email verification
           try {
-            console.log("Preparing email verification...")
-            const verifyResult = await signUp.prepareEmailAddressVerification({
+            await signUp.prepareEmailAddressVerification({
               strategy: "email_code",
             })
-            console.log("Email verification prepared:", verifyResult)
             // Redirect to verification page
             router.push("/verify-email")
           } catch (verifyErr: unknown) {
             const verifyError = verifyErr as ClerkError
             console.error("Email verification error:", verifyError)
-            console.error("Full error details:", JSON.stringify(verifyError, null, 2))
             setError(
               verifyError?.errors?.[0]?.message ||
                 "Account created but failed to send verification email. Please try resending from the verification page."
@@ -99,13 +89,11 @@ export default function SignUpPage() {
         router.push("/")
       } else {
         // Unknown status, redirect to verification page as fallback
-        console.warn("Unknown sign-up status:", result.status)
         router.push("/verify-email")
       }
     } catch (err: unknown) {
       const clerkError = err as ClerkError
       console.error("Sign-up error:", clerkError)
-      console.error("Full error details:", JSON.stringify(clerkError, null, 2))
       setError(clerkError?.errors?.[0]?.message || "Failed to create account")
       setIsLoading(false)
     }

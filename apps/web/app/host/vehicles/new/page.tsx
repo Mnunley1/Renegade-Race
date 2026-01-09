@@ -283,25 +283,15 @@ export default function CreateVehiclePage() {
       for (let index = 0; index < images.length; index++) {
         const img = images[index]
         try {
-          console.log(
-            `Uploading image ${index + 1}/${images.length}: ${img.file.name} (${(img.file.size / 1024 / 1024).toFixed(2)} MB)`
-          )
-
           // Add a small delay between uploads to avoid rate limiting
           if (index > 0) {
             await new Promise((resolve) => setTimeout(resolve, 500))
           }
 
           const key = await uploadFile(img.file)
-          console.log(`Successfully uploaded image ${index + 1}: ${key}`)
           imageKeys.push(key)
         } catch (error) {
           console.error(`Failed to upload image ${index + 1} (${img.file.name}):`, error)
-          console.error("Error details:", {
-            name: error instanceof Error ? error.name : "Unknown",
-            message: error instanceof Error ? error.message : String(error),
-            stack: error instanceof Error ? error.stack : undefined,
-          })
           // Re-throw with generic error
           throw new Error("Failed to upload image")
         }
