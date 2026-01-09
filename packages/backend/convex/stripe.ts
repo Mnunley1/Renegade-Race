@@ -1,9 +1,9 @@
 import { StripeSubscriptions } from "@convex-dev/stripe"
 import { v } from "convex/values"
 import Stripe from "stripe"
-import { api, components } from "./_generated/api"
+import { api, components, internal } from "./_generated/api"
 import type { Id } from "./_generated/dataModel"
-import { action, mutation, query } from "./_generated/server"
+import { action, internalAction, mutation, query } from "./_generated/server"
 import {
   getPaymentFailedEmailTemplate,
   getPaymentSucceededEmailTemplate,
@@ -814,6 +814,57 @@ export const createCustomerPortalSession = action({
 // ============================================================================
 // Refunds (with Connect support)
 // ============================================================================
+
+// Internal action to process refund on cancellation (called via scheduler)
+export const processRefundOnCancellation = internalAction({
+  args: {
+    paymentId: v.id("payments"),
+    reservationId: v.id("reservations"),
+    reason: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const payment = await ctx.runQuery(api.stripe.getPaymentById, {
+      paymentId: args.paymentId,
+    })
+    
+    if (!(payment && payment.stripeChargeId)) {
+      throw new Error("Payment not found or charge ID missing")
+    }
+
+    // Only refund if payment is succeeded
+    if (payment.status !== "succeeded") {
+      return { skipped: true, reason: `Payment status is ${payment.status}, cannot refund` }
+    }
+
+    const stripe = getStripe()
+
+    // Refund with Connect - automatically reverses transfer
+    const refundParams: Stripe.RefundCreateParams = {
+      charge: payment.stripeChargeId,
+      reverse_transfer: true, // Automatically reverse the transfer to owner
+      refund_application_fee: true, // Refund your platform fee too
+      reason: "requested_by_customer" as Stripe.RefundCreateParams.Reason,
+    }
+
+    const refund = await stripe.refunds.create(refundParams)
+
+    await ctx.runMutation(api.stripe.updateRefundStatus, {
+      paymentId: args.paymentId,
+      status: "refunded",
+      refundAmount: refund.amount,
+      refundReason: args.reason,
+    })
+
+    // Update reservation payment status
+    await ctx.runMutation(api.stripe.updateReservationStatus, {
+      reservationId: args.reservationId,
+      status: "cancelled",
+      paymentStatus: "refunded",
+    })
+
+    return { success: true, refundId: refund.id }
+  },
+})
 
 export const processRefund = action({
   args: {

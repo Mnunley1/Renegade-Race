@@ -403,14 +403,16 @@ export default function HostDashboardPage() {
                         reservation.vehicle?.images?.find((img) => img.isPrimary) ||
                         reservation.vehicle?.images?.[0]
 
+                      const hasImage = primaryImage?.cardUrl
+
                       return (
                         <Link
                           key={reservation._id}
                           href={`/host/reservations/${reservation._id}`}
                         >
                           <div className="flex items-center gap-4 rounded-lg border bg-background p-4 transition-colors hover:bg-muted/50">
-                            {primaryImage?.cardUrl && (
-                              <div className="relative size-16 shrink-0 overflow-hidden rounded-lg">
+                            <div className="relative flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted">
+                              {hasImage ? (
                                 <Image
                                   alt={vehicleName}
                                   className="object-cover"
@@ -418,8 +420,10 @@ export default function HostDashboardPage() {
                                   sizes="64px"
                                   src={primaryImage.cardUrl}
                                 />
-                              </div>
-                            )}
+                              ) : (
+                                <Car className="size-6 text-muted-foreground/40" />
+                              )}
+                            </div>
                             <div className="flex-1 min-w-0">
                               <p className="font-semibold text-sm">{vehicleName}</p>
                               <p className="text-muted-foreground text-xs">
@@ -477,21 +481,34 @@ export default function HostDashboardPage() {
                         <Card className="group overflow-hidden transition-all hover:shadow-lg">
                           <div className="flex flex-col sm:flex-row">
                             {/* Vehicle Image - Larger and more prominent */}
-                            {vehicle.image && (
-                              <div className="relative h-48 w-full shrink-0 overflow-hidden bg-muted sm:h-auto sm:w-48">
-                                <Image
-                                  alt={vehicle.name}
-                                  className="object-cover transition-transform duration-300 group-hover:scale-105"
-                                  fill
-                                  sizes="(max-width: 640px) 100vw, 192px"
-                                  src={vehicle.image}
-                                />
-                                {/* Status badge overlay */}
-                                <div className="absolute top-3 left-3">
-                                  {getStatusBadge(vehicle.status)}
-                                </div>
-                              </div>
-                            )}
+                            <div className="relative flex h-48 w-full shrink-0 items-center justify-center overflow-hidden bg-muted sm:h-auto sm:w-48">
+                              {vehicle.image && vehicle.image.trim() !== "" ? (
+                                <>
+                                  <Image
+                                    alt={vehicle.name}
+                                    className="object-cover transition-transform duration-300 group-hover:scale-105"
+                                    fill
+                                    sizes="(max-width: 640px) 100vw, 192px"
+                                    src={vehicle.image}
+                                  />
+                                  {/* Status badge overlay */}
+                                  <div className="absolute top-3 left-3">
+                                    {getStatusBadge(vehicle.status)}
+                                  </div>
+                                </>
+                              ) : (
+                                <>
+                                  <div className="flex flex-col items-center gap-2 text-center">
+                                    <Car className="size-12 text-muted-foreground/40" />
+                                    <p className="text-muted-foreground text-xs">No image</p>
+                                  </div>
+                                  {/* Status badge overlay */}
+                                  <div className="absolute top-3 left-3">
+                                    {getStatusBadge(vehicle.status)}
+                                  </div>
+                                </>
+                              )}
+                            </div>
 
                             {/* Vehicle Details */}
                             <div className="flex flex-1 flex-col p-6">
@@ -521,12 +538,6 @@ export default function HostDashboardPage() {
                                     </div>
                                   </div>
                                 </div>
-
-                                {/* Action Button */}
-                                <Button size="sm" variant="outline" className="shrink-0">
-                                  Manage
-                                  <ArrowRight className="ml-2 size-4" />
-                                </Button>
                               </div>
                             </div>
                           </div>
