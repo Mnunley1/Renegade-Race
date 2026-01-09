@@ -19,12 +19,14 @@ import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import { Separator } from "@workspace/ui/components/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
-import { useAction, useQuery } from "convex/react"
-import { ArrowLeft, CreditCard, Download, Loader2, Moon, Sun, Trash2 } from "lucide-react"
+import { useAction, useMutation, useQuery } from "convex/react"
+import { ArrowLeft, Bell, CreditCard, Download, Loader2, Mail, Moon, Star, Sun, Trash2 } from "lucide-react"
 import Link from "next/link"
 import { useTheme } from "next-themes"
 import { useEffect, useState } from "react"
+import { toast } from "sonner"
 import { api } from "@/lib/convex"
+import { Checkbox } from "@workspace/ui/components/checkbox"
 
 export default function SettingsPage() {
   const { theme, setTheme } = useTheme()
@@ -33,6 +35,26 @@ export default function SettingsPage() {
     api.users.getByExternalId,
     clerkUser?.id ? { externalId: clerkUser.id } : "skip"
   )
+
+  // Notification preferences
+  const notificationPreferences = useQuery(api.users.getNotificationPreferences, clerkUser?.id ? {} : "skip")
+  const updateNotificationPreferences = useMutation(api.users.updateNotificationPreferences)
+  
+  const [notificationSettings, setNotificationSettings] = useState({
+    reservationUpdates: true,
+    messages: true,
+    reviewsAndRatings: true,
+    paymentUpdates: true,
+    marketing: false,
+  })
+  const [isSavingNotifications, setIsSavingNotifications] = useState(false)
+
+  // Load preferences when they're available
+  useEffect(() => {
+    if (notificationPreferences) {
+      setNotificationSettings(notificationPreferences)
+    }
+  }, [notificationPreferences])
 
   const [paymentMethods, setPaymentMethods] = useState<any[]>([])
   const [invoices, setInvoices] = useState<any[]>([])
@@ -81,6 +103,21 @@ export default function SettingsPage() {
       month: "short",
       day: "numeric",
     })
+
+  const handleSaveNotificationPreferences = async () => {
+    setIsSavingNotifications(true)
+    try {
+      await updateNotificationPreferences({
+        preferences: notificationSettings,
+      })
+      toast.success("Notification preferences saved successfully")
+    } catch (error) {
+      console.error("Failed to save notification preferences:", error)
+      toast.error("Failed to save notification preferences. Please try again.")
+    } finally {
+      setIsSavingNotifications(false)
+    }
+  }
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="mb-6 flex items-center gap-4">
@@ -289,10 +326,147 @@ export default function SettingsPage() {
           <Card>
             <CardHeader>
               <CardTitle>Notification Preferences</CardTitle>
-              <CardDescription>Choose what notifications you want to receive</CardDescription>
+              <CardDescription>Choose what email notifications you want to receive</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <p className="text-muted-foreground">Notification settings coming soon...</p>
+            <CardContent className="space-y-6">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between rounded-lg border p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex size-10 items-center justify-center rounded-md bg-primary/10">
+                      <Mail className="size-5 text-primary" />
+                    </div>
+                    <div>
+                      <Label className="text-base font-semibold">Reservation Updates</Label>
+                      <p className="text-muted-foreground text-sm">
+                        Get notified about reservation confirmations, cancellations, and changes
+                      </p>
+                    </div>
+                  </div>
+                  <Checkbox
+                    checked={notificationSettings.reservationUpdates}
+                    onCheckedChange={(checked) =>
+                      setNotificationSettings((prev) => ({
+                        ...prev,
+                        reservationUpdates: checked === true,
+                      }))
+                    }
+                  />
+                </div>
+
+                <div className="flex items-center justify-between rounded-lg border p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex size-10 items-center justify-center rounded-md bg-primary/10">
+                      <Bell className="size-5 text-primary" />
+                    </div>
+                    <div>
+                      <Label className="text-base font-semibold">Messages</Label>
+                      <p className="text-muted-foreground text-sm">
+                        Receive email notifications when you receive new messages
+                      </p>
+                    </div>
+                  </div>
+                  <Checkbox
+                    checked={notificationSettings.messages}
+                    onCheckedChange={(checked) =>
+                      setNotificationSettings((prev) => ({
+                        ...prev,
+                        messages: checked === true,
+                      }))
+                    }
+                  />
+                </div>
+
+                <div className="flex items-center justify-between rounded-lg border p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex size-10 items-center justify-center rounded-md bg-primary/10">
+                      <Star className="size-5 text-primary" />
+                    </div>
+                    <div>
+                      <Label className="text-base font-semibold">Reviews & Ratings</Label>
+                      <p className="text-muted-foreground text-sm">
+                        Get notified when you receive new reviews or ratings
+                      </p>
+                    </div>
+                  </div>
+                  <Checkbox
+                    checked={notificationSettings.reviewsAndRatings}
+                    onCheckedChange={(checked) =>
+                      setNotificationSettings((prev) => ({
+                        ...prev,
+                        reviewsAndRatings: checked === true,
+                      }))
+                    }
+                  />
+                </div>
+
+                <div className="flex items-center justify-between rounded-lg border p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex size-10 items-center justify-center rounded-md bg-primary/10">
+                      <CreditCard className="size-5 text-primary" />
+                    </div>
+                    <div>
+                      <Label className="text-base font-semibold">Payment Updates</Label>
+                      <p className="text-muted-foreground text-sm">
+                        Receive notifications about payment confirmations and refunds
+                      </p>
+                    </div>
+                  </div>
+                  <Checkbox
+                    checked={notificationSettings.paymentUpdates}
+                    onCheckedChange={(checked) =>
+                      setNotificationSettings((prev) => ({
+                        ...prev,
+                        paymentUpdates: checked === true,
+                      }))
+                    }
+                  />
+                </div>
+
+                <div className="flex items-center justify-between rounded-lg border p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex size-10 items-center justify-center rounded-md bg-primary/10">
+                      <Bell className="size-5 text-primary" />
+                    </div>
+                    <div>
+                      <Label className="text-base font-semibold">Marketing & Promotions</Label>
+                      <p className="text-muted-foreground text-sm">
+                        Receive updates about new features, special offers, and platform news
+                      </p>
+                    </div>
+                  </div>
+                  <Checkbox
+                    checked={notificationSettings.marketing}
+                    onCheckedChange={(checked) =>
+                      setNotificationSettings((prev) => ({
+                        ...prev,
+                        marketing: checked === true,
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+
+              <Separator />
+
+              <div className="flex justify-end">
+                <Button disabled={isSavingNotifications} onClick={handleSaveNotificationPreferences}>
+                  {isSavingNotifications ? (
+                    <>
+                      <Loader2 className="mr-2 size-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    "Save Preferences"
+                  )}
+                </Button>
+              </div>
+
+              <div className="rounded-lg border border-blue-500/50 bg-blue-500/10 p-4">
+                <p className="text-blue-900 dark:text-blue-100 text-sm">
+                  <strong>Note:</strong> Critical notifications (like reservation confirmations and
+                  payment receipts) cannot be disabled for security and legal reasons.
+                </p>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
