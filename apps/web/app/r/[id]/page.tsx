@@ -20,11 +20,23 @@ export default function UserProfilePage() {
   const vehicles = useQuery(api.vehicles.getByOwner, userId ? { ownerId: userId } : "skip")
   const reviewStats = useQuery(api.reviews.getUserStats, userId ? { userId } : "skip")
 
+  // Fetch vehicle stats for user's vehicles
+  const userVehicleIds = useMemo(() => {
+    if (!vehicles) return []
+    return vehicles.map((v) => v._id) as any[]
+  }, [vehicles])
+
+  const userVehicleStats = useQuery(
+    api.reviews.getVehicleStatsBatch,
+    userVehicleIds.length > 0 ? { vehicleIds: userVehicleIds } : "skip"
+  )
+
   // Map vehicles to the format expected by VehicleCard
   const mappedVehicles = useMemo(() => {
     if (!vehicles) return []
     return vehicles.map((vehicle) => {
       const primaryImage = vehicle.images?.find((img) => img.isPrimary) || vehicle.images?.[0]
+      const stats = userVehicleStats?.[vehicle._id]
       return {
         id: vehicle._id,
         image: primaryImage?.cardUrl ?? "",
@@ -35,13 +47,13 @@ export default function UserProfilePage() {
         pricePerDay: vehicle.dailyRate,
         location: vehicle.track?.location || "",
         track: vehicle.track?.name || "",
-        rating: 0, // TODO: Calculate from reviews
-        reviews: 0, // TODO: Get from reviews
+        rating: stats?.averageRating || 0,
+        reviews: stats?.totalReviews || 0,
         horsepower: vehicle.horsepower,
         transmission: vehicle.transmission || "",
       }
     })
-  }, [vehicles])
+  }, [vehicles, userVehicleStats])
 
   // Get rating from review stats or user rating
   const userRating = reviewStats?.averageRating || user?.rating || 0

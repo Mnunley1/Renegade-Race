@@ -4,7 +4,7 @@ import { Image } from "@imagekit/next"
 import { Button } from "@workspace/ui/components/button"
 import { Dialog, DialogContent } from "@workspace/ui/components/dialog"
 import { cn } from "@workspace/ui/lib/utils"
-import { ChevronLeft, ChevronRight, X } from "lucide-react"
+import { Car, ChevronLeft, ChevronRight, X } from "lucide-react"
 import { useEffect, useState } from "react"
 
 interface VehicleGalleryProps {
@@ -110,7 +110,22 @@ export function VehicleGallery({ images, vehicleName }: VehicleGalleryProps) {
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [isOpen, currentIndex, validImages.length, isTransitioning])
 
-  if (validImages.length === 0) return null
+  // Show placeholder when no images are available
+  if (validImages.length === 0) {
+    return (
+      <div className="relative mx-auto mb-8 w-full max-w-5xl">
+        <div className="relative flex aspect-[16/10] w-full items-center justify-center overflow-hidden rounded-lg bg-muted">
+          <div className="flex flex-col items-center gap-4 text-center">
+            <Car className="size-16 text-muted-foreground/40" />
+            <div className="space-y-1">
+              <p className="font-medium text-lg text-muted-foreground">No images available</p>
+              <p className="text-muted-foreground text-sm">{vehicleName}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <>

@@ -15,7 +15,6 @@ import {
   Eye,
   Loader2,
   Plus,
-  Settings,
   XCircle,
 } from "lucide-react"
 import Link from "next/link"
@@ -127,21 +126,34 @@ export default function HostVehiclesListPage() {
       ) : (
         <div className="space-y-4">
           {vehicles.map((vehicle) => {
+            // Check if vehicle has any valid images
+            const hasImages =
+              vehicle.images &&
+              vehicle.images.length > 0 &&
+              vehicle.images.some((img) => img.cardUrl || img.heroUrl || img.detailUrl)
+
             const primaryImage =
               vehicle.images?.find((img) => img.isPrimary)?.cardUrl ||
               vehicle.images?.[0]?.cardUrl ||
-              "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=400"
+              null
 
             return (
               <Card className="overflow-hidden" key={vehicle._id}>
                 <div className="flex flex-col md:flex-row">
                   {/* Vehicle Image */}
-                  <div className="relative h-48 w-full shrink-0 overflow-hidden md:h-auto md:w-64">
-                    <img
-                      alt={`${vehicle.year} ${vehicle.make} ${vehicle.model}`}
-                      className="size-full object-cover"
-                      src={primaryImage}
-                    />
+                  <div className="relative flex h-48 w-full shrink-0 items-center justify-center overflow-hidden bg-muted md:h-auto md:w-64">
+                    {hasImages && primaryImage ? (
+                      <img
+                        alt={`${vehicle.year} ${vehicle.make} ${vehicle.model}`}
+                        className="size-full object-cover"
+                        src={primaryImage}
+                      />
+                    ) : (
+                      <div className="flex flex-col items-center gap-2 text-center">
+                        <Car className="size-12 text-muted-foreground/40" />
+                        <p className="text-muted-foreground text-xs">No image</p>
+                      </div>
+                    )}
                   </div>
 
                   {/* Vehicle Details */}
@@ -179,12 +191,6 @@ export default function HostVehiclesListPage() {
                         <Button size="sm" variant="outline">
                           <Eye className="mr-2 size-4" />
                           View Listing
-                        </Button>
-                      </Link>
-                      <Link href={`/host/vehicles/${vehicle._id}`}>
-                        <Button size="sm" variant="outline">
-                          <Settings className="mr-2 size-4" />
-                          Manage
                         </Button>
                       </Link>
                       <Link href={`/host/vehicles/${vehicle._id}/edit`}>
