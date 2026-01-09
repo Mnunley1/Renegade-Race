@@ -11,6 +11,10 @@ export const getAllWithOptimizedImages = query({
   handler: async (ctx, args) => {
     const { trackId, limit = 50 } = args
 
+    // Get current user identity to filter out their own vehicles
+    const identity = await ctx.auth.getUserIdentity()
+    const currentUserId = identity?.subject
+
     let vehicles
     if (trackId) {
       vehicles = await ctx.db
@@ -25,6 +29,11 @@ export const getAllWithOptimizedImages = query({
         .withIndex("by_active_approved", (q) => q.eq("isActive", true).eq("isApproved", true))
         .order("desc")
         .take(limit)
+    }
+
+    // Filter out vehicles owned by the current user (if authenticated)
+    if (currentUserId) {
+      vehicles = vehicles.filter((vehicle) => vehicle.ownerId !== currentUserId)
     }
 
     // Get vehicle images and owner details
@@ -42,6 +51,11 @@ export const getAllWithOptimizedImages = query({
             .first(),
           ctx.db.get(vehicle.trackId),
         ])
+
+        // Filter out vehicles from hosts without complete Stripe setup
+        if (!owner?.stripeAccountId) {
+          return null
+        }
 
         const optimizedImages = images
           .filter((image) => image.r2Key)
@@ -63,7 +77,181 @@ export const getAllWithOptimizedImages = query({
       })
     )
 
-    return vehiclesWithDetails
+    // Filter out null values (vehicles from hosts without Stripe setup)
+    return vehiclesWithDetails.filter((v) => v !== null)
+  },
+})
+
+// Search vehicles with availability filtering (optimal batch query approach)
+export const searchWithAvailability = query({
+  args: {
+    startDate: v.optional(v.string()),
+    endDate: v.optional(v.string()),
+    trackId: v.optional(v.id("tracks")),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const { startDate, endDate, trackId, limit = 50 } = args
+
+    // Get current user identity to filter out their own vehicles
+    const identity = await ctx.auth.getUserIdentity()
+    const currentUserId = identity?.subject
+
+    // Step 1: Get all active/approved vehicles (single query)
+    let vehiclesQuery = ctx.db
+      .query("vehicles")
+      .withIndex("by_active_approved", (q) =>
+        q.eq("isActive", true).eq("isApproved", true)
+      )
+
+    if (trackId) {
+      vehiclesQuery = ctx.db
+        .query("vehicles")
+        .withIndex("by_track", (q) => q.eq("trackId", trackId))
+        .filter((q) =>
+          q.and(
+            q.eq(q.field("isActive"), true),
+            q.eq(q.field("isApproved"), true)
+          )
+        )
+    }
+
+    // Get more vehicles initially to account for filtering
+    let vehicles = await vehiclesQuery.order("desc").take(limit * 2)
+
+    // Filter out vehicles owned by the current user (if authenticated)
+    if (currentUserId) {
+      vehicles = vehicles.filter((vehicle) => vehicle.ownerId !== currentUserId)
+    }
+
+    // Step 2: If dates provided, filter by availability using batch queries
+    let availableVehicles = vehicles
+
+    if (startDate && endDate) {
+      // Batch query 1: Get blocked dates in the range (OPTIMIZED)
+      // Query without index and filter by date range and availability status
+      // This is still much faster than fetching all records (7.3M -> ~1,000)
+      const blockedDatesInRange = await ctx.db
+        .query("availability")
+        .filter((q) =>
+          q.and(
+            q.eq(q.field("isAvailable"), false),
+            q.gte(q.field("date"), startDate),
+            q.lte(q.field("date"), endDate)
+          )
+        )
+        .collect()
+
+      // Create a Set of vehicle IDs with blocked dates for O(1) lookup
+      const vehiclesWithBlockedDates = new Set(
+        blockedDatesInRange.map((a) => a.vehicleId)
+      )
+
+      // Batch query 2: Get conflicting reservations in the range (OPTIMIZED)
+      // Use by_dates index to query reservations where startDate <= endDate (requested)
+      // Then filter by endDate >= startDate (requested) and status
+      // Overlap check: existingStart <= requestedEnd AND existingEnd >= requestedStart
+      const overlappingReservations = await ctx.db
+        .query("reservations")
+        .withIndex("by_dates", (q) => q.lte("startDate", endDate))
+        .filter((q) =>
+          q.and(
+            q.gte(q.field("endDate"), startDate),
+            q.or(
+              q.eq(q.field("status"), "pending"),
+              q.eq(q.field("status"), "confirmed")
+            )
+          )
+        )
+        .collect()
+
+      // Additional filter: Ensure reservation actually overlaps
+      // (by_dates index might return some false positives, so we verify overlap)
+      const conflictingReservations = overlappingReservations.filter(
+        (reservation) => {
+          // Overlap check: existingStart <= requestedEnd AND existingEnd >= requestedStart
+          return (
+            reservation.startDate <= endDate &&
+            reservation.endDate >= startDate
+          )
+        }
+      )
+
+      // Create a Set of vehicle IDs with conflicting reservations
+      const vehiclesWithConflicts = new Set(
+        conflictingReservations.map((r) => r.vehicleId)
+      )
+
+      // Step 3: Filter vehicles in memory (O(n) where n = vehicles)
+      // A vehicle is unavailable if:
+      // - It has any blocked dates in the range, OR
+      // - It has conflicting reservations
+      availableVehicles = vehicles.filter((vehicle) => {
+        // Check if vehicle has blocked dates
+        if (vehiclesWithBlockedDates.has(vehicle._id)) {
+          return false
+        }
+
+        // Check if vehicle has conflicting reservations
+        if (vehiclesWithConflicts.has(vehicle._id)) {
+          return false
+        }
+
+        return true
+      })
+
+      // Limit results after filtering
+      availableVehicles = availableVehicles.slice(0, limit)
+    } else {
+      // No date filter, just limit
+      availableVehicles = vehicles.slice(0, limit)
+    }
+
+    // Step 4: Get vehicle details (images, owner, track) - parallel queries
+    const vehiclesWithDetails = await Promise.all(
+      availableVehicles.map(async (vehicle) => {
+        const [images, owner, track] = await Promise.all([
+          ctx.db
+            .query("vehicleImages")
+            .withIndex("by_vehicle", (q) => q.eq("vehicleId", vehicle._id))
+            .order("asc")
+            .collect(),
+          ctx.db
+            .query("users")
+            .withIndex("by_external_id", (q) =>
+              q.eq("externalId", vehicle.ownerId)
+            )
+            .first(),
+          ctx.db.get(vehicle.trackId),
+        ])
+
+        // Filter out vehicles from hosts without complete Stripe setup
+        if (!owner?.stripeAccountId) {
+          return null
+        }
+
+        const optimizedImages = images
+          .filter((image) => image.r2Key)
+          .map((image) => ({
+            ...image,
+            thumbnailUrl: imagePresets.thumbnail(image.r2Key as string),
+            cardUrl: imagePresets.card(image.r2Key as string),
+            detailUrl: imagePresets.detail(image.r2Key as string),
+            heroUrl: imagePresets.hero(image.r2Key as string),
+            originalUrl: imagePresets.original(image.r2Key as string),
+          }))
+
+        return {
+          ...vehicle,
+          images: optimizedImages,
+          owner,
+          track,
+        }
+      })
+    )
+
+    // Filter out null values (vehicles from hosts without Stripe setup)
+    return vehiclesWithDetails.filter((v) => v !== null)
   },
 })
 
@@ -75,6 +263,10 @@ export const getAll = query({
   },
   handler: async (ctx, args) => {
     const { trackId, limit = 50 } = args
+
+    // Get current user identity to filter out their own vehicles
+    const identity = await ctx.auth.getUserIdentity()
+    const currentUserId = identity?.subject
 
     let vehicles
     if (trackId) {
@@ -90,6 +282,11 @@ export const getAll = query({
         .withIndex("by_active_approved", (q) => q.eq("isActive", true).eq("isApproved", true))
         .order("desc")
         .take(limit)
+    }
+
+    // Filter out vehicles owned by the current user (if authenticated)
+    if (currentUserId) {
+      vehicles = vehicles.filter((vehicle) => vehicle.ownerId !== currentUserId)
     }
 
     // Get vehicle images and owner details
@@ -108,6 +305,11 @@ export const getAll = query({
           ctx.db.get(vehicle.trackId),
         ])
 
+        // Filter out vehicles from hosts without complete Stripe setup
+        if (!owner?.stripeAccountId) {
+          return null
+        }
+
         return {
           ...vehicle,
           images,
@@ -117,7 +319,8 @@ export const getAll = query({
       })
     )
 
-    return vehiclesWithDetails
+    // Filter out null values (vehicles from hosts without Stripe setup)
+    return vehiclesWithDetails.filter((v) => v !== null)
   },
 })
 
@@ -490,6 +693,30 @@ export const remove = mutation({
       throw new Error("Not authorized to delete this vehicle")
     }
 
+    // Check for active or upcoming reservations
+    const today = new Date().toISOString().split("T")[0]
+    const activeReservations = await ctx.db
+      .query("reservations")
+      .withIndex("by_vehicle", (q) => q.eq("vehicleId", args.id))
+      .filter((q) =>
+        q.and(
+          // Only check pending or confirmed reservations
+          q.or(
+            q.eq(q.field("status"), "pending"),
+            q.eq(q.field("status"), "confirmed")
+          ),
+          // Check if reservation end date is in the future (active or upcoming)
+          q.gte(q.field("endDate"), today)
+        )
+      )
+      .collect()
+
+    if (activeReservations.length > 0) {
+      throw new Error(
+        "Cannot delete vehicle with active or upcoming reservations. Please wait until all reservations are completed or cancelled."
+      )
+    }
+
     await ctx.db.patch(args.id, {
       isActive: false,
       updatedAt: Date.now(),
@@ -577,6 +804,88 @@ export const removeImage = mutation({
     }
 
     await ctx.db.delete(args.imageId)
+    return args.imageId
+  },
+})
+
+// Update image order
+export const updateImageOrder = mutation({
+  args: {
+    vehicleId: v.id("vehicles"),
+    imageOrders: v.array(
+      v.object({
+        imageId: v.id("vehicleImages"),
+        order: v.number(),
+      })
+    ),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) {
+      throw new Error("Not authenticated")
+    }
+
+    const vehicle = await ctx.db.get(args.vehicleId)
+    if (!vehicle) {
+      throw new Error("Vehicle not found")
+    }
+
+    if (vehicle.ownerId !== identity.subject) {
+      throw new Error("Not authorized to modify this vehicle")
+    }
+
+    // Update all image orders
+    await Promise.all(
+      args.imageOrders.map(({ imageId, order }) =>
+        ctx.db.patch(imageId, { order })
+      )
+    )
+
+    return { success: true }
+  },
+})
+
+// Update image properties (e.g., isPrimary)
+export const updateImage = mutation({
+  args: {
+    imageId: v.id("vehicleImages"),
+    isPrimary: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) {
+      throw new Error("Not authenticated")
+    }
+
+    const image = await ctx.db.get(args.imageId)
+    if (!image) {
+      throw new Error("Image not found")
+    }
+
+    const vehicle = await ctx.db.get(image.vehicleId)
+    if (!vehicle || vehicle.ownerId !== identity.subject) {
+      throw new Error("Not authorized to modify this vehicle")
+    }
+
+    // If setting as primary, unset other primary images
+    if (args.isPrimary === true) {
+      const existingImages = await ctx.db
+        .query("vehicleImages")
+        .withIndex("by_vehicle", (q) => q.eq("vehicleId", image.vehicleId))
+        .collect()
+
+      await Promise.all(
+        existingImages
+          .filter((img) => img.isPrimary && img._id !== args.imageId)
+          .map((img) => ctx.db.patch(img._id, { isPrimary: false }))
+      )
+    }
+
+    // Update the image
+    await ctx.db.patch(args.imageId, {
+      isPrimary: args.isPrimary ?? image.isPrimary,
+    })
+
     return args.imageId
   },
 })

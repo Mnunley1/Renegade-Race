@@ -26,11 +26,24 @@ import { ArrowLeft, CheckCircle2, Loader2, Plus, Upload, X } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
+import { toast } from "sonner"
 import { api } from "@/lib/convex"
 
-const TRANSMISSION_OPTIONS = ["Manual", "Automatic", "PDK", "DCT", "CVT"]
-const DRIVETRAIN_OPTIONS = ["RWD", "AWD", "FWD"]
-const ENGINE_TYPE_OPTIONS = ["V6", "V8", "V10", "V12", "Flat-6", "Inline-4", "Inline-6", "Electric"]
+// Transmission options matching onboarding flow
+const TRANSMISSION_OPTIONS = [
+  { value: "manual", label: "Manual" },
+  { value: "automatic", label: "Automatic" },
+  { value: "sequential", label: "Sequential" },
+  { value: "paddle-shift", label: "Paddle Shift" },
+]
+
+// Drivetrain options matching onboarding flow
+const DRIVETRAIN_OPTIONS = [
+  { value: "rwd", label: "RWD (Rear-Wheel Drive)" },
+  { value: "fwd", label: "FWD (Front-Wheel Drive)" },
+  { value: "awd", label: "AWD (All-Wheel Drive)" },
+  { value: "4wd", label: "4WD (Four-Wheel Drive)" },
+]
 
 const COMMON_AMENITIES = [
   "GPS Navigation",
@@ -82,8 +95,11 @@ export default function CreateVehiclePage() {
     horsepower: "",
     transmission: "",
     drivetrain: "",
-    engineType: "",
-    mileage: "",
+    // Location fields
+    street: "",
+    city: "",
+    state: "",
+    zipCode: "",
     amenities: [] as string[],
     addOns: [] as Array<{ name: string; price: number; description: string; isRequired: boolean }>,
   })
@@ -95,6 +111,7 @@ export default function CreateVehiclePage() {
     description: "",
     isRequired: false,
   })
+  const [validationAttempted, setValidationAttempted] = useState(false)
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
@@ -103,7 +120,7 @@ export default function CreateVehiclePage() {
     setFormData({
       ...formData,
       [name]:
-        name === "year" || name === "dailyRate" || name === "horsepower" || name === "mileage"
+        name === "year" || name === "dailyRate" || name === "horsepower"
           ? value === ""
             ? ""
             : Number(value)
@@ -171,35 +188,66 @@ export default function CreateVehiclePage() {
     })
   }
 
-  const validateStep = (step: number): boolean => {
+  const getStepValidationErrors = (step: number): string[] => {
+    const errors: string[] = []
     switch (step) {
       case 1:
-        return !!(
-          formData.trackId &&
-          formData.make &&
-          formData.model &&
-          formData.year &&
-          formData.dailyRate &&
-          formData.description
-        )
+        if (!formData.make) errors.push("Make")
+        if (!formData.model) errors.push("Model")
+        if (!formData.year) errors.push("Year")
+        if (!formData.dailyRate) errors.push("Daily Rate")
+        if (!formData.description) errors.push("Description")
+        if (!formData.street) errors.push("Street Address")
+        if (!formData.city) errors.push("City")
+        if (!formData.state) errors.push("State")
+        if (!formData.zipCode) errors.push("ZIP Code")
+        break
       case 2:
-        return true // Specs are optional
+        if (images.length === 0) errors.push("At least one photo")
+        break
       case 3:
-        return images.length > 0 // At least one image required
+        // Amenities are optional, no validation needed
+        break
       default:
-        return true
+        break
     }
+    return errors
+  }
+
+  const validateStep = (step: number): boolean => {
+    return getStepValidationErrors(step).length === 0
   }
 
   const nextStep = () => {
-    if (validateStep(currentStep)) {
-      setCurrentStep((prev) => Math.min(prev + 1, 4))
+    setValidationAttempted(true)
+    const errors = getStepValidationErrors(currentStep)
+    if (errors.length === 0) {
+      setValidationAttempted(false)
+      setCurrentStep((prev) => Math.min(prev + 1, 3))
+    } else {
+      const errorMessage =
+        errors.length === 1
+          ? `Please complete the following field: ${errors[0]}`
+          : `Please complete the following fields: ${errors.join(", ")}`
+      toast.error(errorMessage)
     }
   }
 
+  const getFieldError = (fieldName: string): boolean => {
+    if (!validationAttempted) return false
+    const errors = getStepValidationErrors(currentStep)
+    return errors.includes(fieldName)
+  }
+
   const prevStep = () => {
+    setValidationAttempted(false)
     setCurrentStep((prev) => Math.max(prev - 1, 1))
   }
+
+  // Reset validation when step changes
+  useEffect(() => {
+    setValidationAttempted(false)
+  }, [currentStep])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -208,21 +256,24 @@ export default function CreateVehiclePage() {
     try {
       if (
         !(
-          formData.trackId &&
           formData.make &&
           formData.model &&
           formData.year &&
           formData.dailyRate &&
-          formData.description
+          formData.description &&
+          formData.street &&
+          formData.city &&
+          formData.state &&
+          formData.zipCode
         )
       ) {
-        alert("Please fill in all required fields")
+        toast.error("Please fill in all required fields")
         setIsSubmitting(false)
         return
       }
 
       if (images.length === 0) {
-        alert("Please upload at least one image")
+        toast.error("Please upload at least one image")
         setIsSubmitting(false)
         return
       }
@@ -258,7 +309,7 @@ export default function CreateVehiclePage() {
 
       // Create vehicle with R2 image keys
       const vehicleId = await createVehicleWithImages({
-        trackId: formData.trackId as any,
+        trackId: formData.trackId ? (formData.trackId as any) : undefined,
         make: formData.make,
         model: formData.model,
         year: Number(formData.year),
@@ -267,10 +318,14 @@ export default function CreateVehiclePage() {
         horsepower: formData.horsepower ? Number(formData.horsepower) : undefined,
         transmission: formData.transmission || undefined,
         drivetrain: formData.drivetrain || undefined,
-        engineType: formData.engineType || undefined,
-        mileage: formData.mileage ? Number(formData.mileage) : undefined,
         amenities: formData.amenities,
         addOns: formData.addOns,
+        address: {
+          street: formData.street.trim(),
+          city: formData.city.trim(),
+          state: formData.state.trim(),
+          zipCode: formData.zipCode.trim(),
+        },
         images: imageKeys.map((r2Key, index) => ({
           r2Key,
           isPrimary: index === 0,
@@ -278,7 +333,7 @@ export default function CreateVehiclePage() {
         })),
       })
 
-      // Normal flow - redirect to vehicle list (onboarding users use /host/onboarding/new-vehicle)
+      toast.success("Vehicle listed successfully!")
       router.push("/host/vehicles/list")
     } catch (error) {
       console.error("Error creating vehicle:", error)
@@ -286,7 +341,7 @@ export default function CreateVehiclePage() {
         error instanceof Error
           ? error.message
           : "An unknown error occurred. Please check the console for details."
-      alert(`Failed to create vehicle: ${errorMessage}`)
+      toast.error(`Failed to create vehicle: ${errorMessage}`)
     } finally {
       setIsSubmitting(false)
     }
@@ -321,10 +376,9 @@ export default function CreateVehiclePage() {
   }
 
   const steps = [
-    { number: 1, title: "Basic Information", description: "Track, vehicle details, and pricing" },
-    { number: 2, title: "Specifications", description: "Performance specs and features" },
-    { number: 3, title: "Photos", description: "Upload vehicle images" },
-    { number: 4, title: "Amenities & Add-ons", description: "Additional features and options" },
+    { number: 1, title: "Vehicle & Location", description: "Vehicle details and pickup location" },
+    { number: 2, title: "Photos", description: "Upload vehicle images" },
+    { number: 3, title: "Amenities & Add-ons", description: "Additional features and options" },
   ]
 
   return (
@@ -343,10 +397,10 @@ export default function CreateVehiclePage() {
       </div>
 
       {/* Progress Steps */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between">
+      <div className="mb-8 flex justify-center">
+        <div className="flex items-center">
           {steps.map((step, index) => (
-            <div className="flex flex-1 items-center" key={step.number}>
+            <div className="flex items-center" key={step.number}>
               <div className="flex flex-col items-center">
                 <div
                   className={`flex size-10 items-center justify-center rounded-full border-2 font-semibold ${
@@ -371,7 +425,7 @@ export default function CreateVehiclePage() {
               </div>
               {index < steps.length - 1 && (
                 <div
-                  className={`mx-2 h-0.5 flex-1 ${
+                  className={`mx-4 h-0.5 w-16 ${
                     currentStep > step.number ? "bg-primary" : "bg-muted"
                   }`}
                 />
@@ -390,17 +444,17 @@ export default function CreateVehiclePage() {
             <CardDescription>{steps[currentStep - 1].description}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            {/* Step 1: Basic Information */}
+            {/* Step 1: Vehicle & Location */}
             {currentStep === 1 && (
               <>
                 <div className="space-y-2">
-                  <Label htmlFor="trackId">Track Location *</Label>
+                  <Label htmlFor="trackId">Track Location (Optional)</Label>
                   <Select
                     onValueChange={(value) => handleSelectChange("trackId", value)}
                     value={formData.trackId}
                   >
                     <SelectTrigger id="trackId">
-                      <SelectValue placeholder="Select a track" />
+                      <SelectValue placeholder="Select a track (optional)" />
                     </SelectTrigger>
                     <SelectContent>
                       {tracks.map((track) => (
@@ -416,6 +470,7 @@ export default function CreateVehiclePage() {
                   <div className="space-y-2">
                     <Label htmlFor="make">Make *</Label>
                     <Input
+                      className={getFieldError("Make") ? "border-destructive" : ""}
                       id="make"
                       name="make"
                       onChange={handleChange}
@@ -423,10 +478,14 @@ export default function CreateVehiclePage() {
                       required
                       value={formData.make}
                     />
+                    {getFieldError("Make") && (
+                      <p className="text-destructive text-xs">Make is required</p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="model">Model *</Label>
                     <Input
+                      className={getFieldError("Model") ? "border-destructive" : ""}
                       id="model"
                       name="model"
                       onChange={handleChange}
@@ -434,6 +493,9 @@ export default function CreateVehiclePage() {
                       required
                       value={formData.model}
                     />
+                    {getFieldError("Model") && (
+                      <p className="text-destructive text-xs">Model is required</p>
+                    )}
                   </div>
                 </div>
 
@@ -441,6 +503,7 @@ export default function CreateVehiclePage() {
                   <div className="space-y-2">
                     <Label htmlFor="year">Year *</Label>
                     <Input
+                      className={getFieldError("Year") ? "border-destructive" : ""}
                       id="year"
                       name="year"
                       onChange={handleChange}
@@ -449,10 +512,14 @@ export default function CreateVehiclePage() {
                       type="number"
                       value={formData.year}
                     />
+                    {getFieldError("Year") && (
+                      <p className="text-destructive text-xs">Year is required</p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="dailyRate">Daily Rate ($) *</Label>
                     <Input
+                      className={getFieldError("Daily Rate") ? "border-destructive" : ""}
                       id="dailyRate"
                       name="dailyRate"
                       onChange={handleChange}
@@ -461,13 +528,66 @@ export default function CreateVehiclePage() {
                       type="number"
                       value={formData.dailyRate}
                     />
+                    {getFieldError("Daily Rate") && (
+                      <p className="text-destructive text-xs">Daily Rate is required</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid gap-6 md:grid-cols-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="horsepower">Horsepower (Optional)</Label>
+                    <Input
+                      id="horsepower"
+                      name="horsepower"
+                      onChange={handleChange}
+                      placeholder="500"
+                      type="number"
+                      value={formData.horsepower}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="transmission">Transmission (Optional)</Label>
+                    <Select
+                      onValueChange={(value) => handleSelectChange("transmission", value)}
+                      value={formData.transmission}
+                    >
+                      <SelectTrigger id="transmission">
+                        <SelectValue placeholder="Select transmission" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {TRANSMISSION_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="drivetrain">Drivetrain (Optional)</Label>
+                    <Select
+                      onValueChange={(value) => handleSelectChange("drivetrain", value)}
+                      value={formData.drivetrain}
+                    >
+                      <SelectTrigger id="drivetrain">
+                        <SelectValue placeholder="Select drivetrain" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {DRIVETRAIN_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="description">Description *</Label>
                   <Textarea
-                    className="min-h-32"
+                    className={`min-h-32 ${getFieldError("Description") ? "border-destructive" : ""}`}
                     id="description"
                     name="description"
                     onChange={handleChange}
@@ -475,115 +595,106 @@ export default function CreateVehiclePage() {
                     required
                     value={formData.description}
                   />
-                  <p className="text-muted-foreground text-xs">
-                    Provide a detailed description to attract renters
-                  </p>
+                  {getFieldError("Description") ? (
+                    <p className="text-destructive text-xs">Description is required</p>
+                  ) : (
+                    <p className="text-muted-foreground text-xs">
+                      Provide a detailed description to attract renters
+                    </p>
+                  )}
+                </div>
+
+                {/* Location Section */}
+                <div className="border-t pt-6">
+                  <h3 className="mb-4 font-semibold">Pickup Location</h3>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="street">Street Address *</Label>
+                      <Input
+                        className={getFieldError("Street Address") ? "border-destructive" : ""}
+                        id="street"
+                        name="street"
+                        onChange={handleChange}
+                        placeholder="123 Main Street"
+                        required
+                        value={formData.street}
+                      />
+                      {getFieldError("Street Address") && (
+                        <p className="text-destructive text-xs">Street Address is required</p>
+                      )}
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="city">City *</Label>
+                        <Input
+                          className={getFieldError("City") ? "border-destructive" : ""}
+                          id="city"
+                          name="city"
+                          onChange={handleChange}
+                          placeholder="Los Angeles"
+                          required
+                          value={formData.city}
+                        />
+                        {getFieldError("City") && (
+                          <p className="text-destructive text-xs">City is required</p>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="state">State *</Label>
+                        <Input
+                          className={getFieldError("State") ? "border-destructive" : ""}
+                          id="state"
+                          maxLength={2}
+                          name="state"
+                          onChange={handleChange}
+                          placeholder="CA"
+                          required
+                          value={formData.state}
+                        />
+                        {getFieldError("State") && (
+                          <p className="text-destructive text-xs">State is required</p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="zipCode">ZIP Code *</Label>
+                      <Input
+                        className={getFieldError("ZIP Code") ? "border-destructive" : ""}
+                        id="zipCode"
+                        maxLength={10}
+                        name="zipCode"
+                        onChange={handleChange}
+                        placeholder="90001"
+                        required
+                        value={formData.zipCode}
+                      />
+                      {getFieldError("ZIP Code") && (
+                        <p className="text-destructive text-xs">ZIP Code is required</p>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </>
             )}
 
-            {/* Step 2: Specifications */}
+            {/* Step 2: Photos */}
             {currentStep === 2 && (
-              <>
-                <div className="grid gap-6 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="horsepower">Horsepower</Label>
-                    <Input
-                      id="horsepower"
-                      name="horsepower"
-                      onChange={handleChange}
-                      placeholder="502"
-                      type="number"
-                      value={formData.horsepower}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="mileage">Mileage</Label>
-                    <Input
-                      id="mileage"
-                      name="mileage"
-                      onChange={handleChange}
-                      placeholder="15000"
-                      type="number"
-                      value={formData.mileage}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid gap-6 md:grid-cols-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="transmission">Transmission</Label>
-                    <Select
-                      onValueChange={(value) => handleSelectChange("transmission", value)}
-                      value={formData.transmission}
-                    >
-                      <SelectTrigger id="transmission">
-                        <SelectValue placeholder="Select" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {TRANSMISSION_OPTIONS.map((option) => (
-                          <SelectItem key={option} value={option}>
-                            {option}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="drivetrain">Drivetrain</Label>
-                    <Select
-                      onValueChange={(value) => handleSelectChange("drivetrain", value)}
-                      value={formData.drivetrain}
-                    >
-                      <SelectTrigger id="drivetrain">
-                        <SelectValue placeholder="Select" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {DRIVETRAIN_OPTIONS.map((option) => (
-                          <SelectItem key={option} value={option}>
-                            {option}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="engineType">Engine Type</Label>
-                    <Select
-                      onValueChange={(value) => handleSelectChange("engineType", value)}
-                      value={formData.engineType}
-                    >
-                      <SelectTrigger id="engineType">
-                        <SelectValue placeholder="Select" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {ENGINE_TYPE_OPTIONS.map((option) => (
-                          <SelectItem key={option} value={option}>
-                            {option}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="rounded-lg border bg-muted/30 p-4">
-                  <p className="text-muted-foreground text-sm">
-                    All specification fields are optional. You can add or update them later.
-                  </p>
-                </div>
-              </>
-            )}
-
-            {/* Step 3: Photos */}
-            {currentStep === 3 && (
               <>
                 <div className="space-y-4">
                   <div>
                     <Label>Vehicle Photos *</Label>
-                    <p className="text-muted-foreground text-xs">
-                      Upload at least one photo. The first image will be used as the main image.
-                    </p>
+                    {getFieldError("At least one photo") ? (
+                      <p className="text-destructive text-xs">
+                        Please upload at least one photo. The first image will be used as the main
+                        image.
+                      </p>
+                    ) : (
+                      <p className="text-muted-foreground text-xs">
+                        Upload at least one photo. The first image will be used as the main image.
+                      </p>
+                    )}
                   </div>
 
                   <div className="flex flex-wrap gap-4">
@@ -613,10 +724,30 @@ export default function CreateVehiclePage() {
                       </div>
                     ))}
 
-                    <label className="flex size-32 cursor-pointer items-center justify-center rounded-lg border-2 border-muted-foreground/25 border-dashed transition-colors hover:border-primary">
+                    <label
+                      className={`flex size-32 cursor-pointer items-center justify-center rounded-lg border-2 border-dashed transition-colors ${
+                        getFieldError("At least one photo")
+                          ? "border-destructive"
+                          : "border-muted-foreground/25 hover:border-primary"
+                      }`}
+                    >
                       <div className="text-center">
-                        <Upload className="mx-auto mb-2 size-6 text-muted-foreground" />
-                        <span className="text-muted-foreground text-xs">Add Photo</span>
+                        <Upload
+                          className={`mx-auto mb-2 size-6 ${
+                            getFieldError("At least one photo")
+                              ? "text-destructive"
+                              : "text-muted-foreground"
+                          }`}
+                        />
+                        <span
+                          className={`text-xs ${
+                            getFieldError("At least one photo")
+                              ? "text-destructive"
+                              : "text-muted-foreground"
+                          }`}
+                        >
+                          Add Photo
+                        </span>
                       </div>
                       <input
                         accept="image/*"
@@ -631,8 +762,8 @@ export default function CreateVehiclePage() {
               </>
             )}
 
-            {/* Step 4: Amenities & Add-ons */}
-            {currentStep === 4 && (
+            {/* Step 3: Amenities & Add-ons */}
+            {currentStep === 3 && (
               <>
                 <div className="space-y-4">
                   <div>
@@ -749,8 +880,12 @@ export default function CreateVehiclePage() {
               >
                 Previous
               </Button>
-              {currentStep < 4 ? (
-                <Button onClick={nextStep} type="button">
+              {currentStep < 3 ? (
+                <Button
+                  onClick={nextStep}
+                  type="button"
+                  variant={validationAttempted && !validateStep(currentStep) ? "destructive" : "default"}
+                >
                   Next Step
                 </Button>
               ) : (
@@ -765,3 +900,4 @@ export default function CreateVehiclePage() {
     </div>
   )
 }
+

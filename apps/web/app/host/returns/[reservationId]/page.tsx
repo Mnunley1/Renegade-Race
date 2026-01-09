@@ -7,13 +7,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/componen
 import { Checkbox } from "@workspace/ui/components/checkbox"
 import { Label } from "@workspace/ui/components/label"
 import { Textarea } from "@workspace/ui/components/textarea"
+import { useUploadFile } from "@convex-dev/r2/react"
 import { useMutation, useQuery } from "convex/react"
-import { ArrowLeft, CheckCircle2, Loader2, Upload } from "lucide-react"
+import { ArrowLeft, CheckCircle2, Loader2, Upload, X } from "lucide-react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/lib/convex"
+import { getImageKitUrl } from "@/lib/imagekit"
 
 export default function ReturnReviewPage() {
   const { user } = useUser()
@@ -29,6 +31,9 @@ export default function ReturnReviewPage() {
   const [notes, setNotes] = useState("")
   const [photos, setPhotos] = useState<string[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isUploading, setIsUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const uploadFile = useUploadFile(api.r2)
 
   // Fetch completion data
   const completion = useQuery(
@@ -67,10 +72,61 @@ export default function ReturnReviewPage() {
     }
   }
 
-  // Handle photo upload (placeholder)
-  const handlePhotoUpload = () => {
-    // TODO: Implement photo upload to storage
-    toast.info("Photo upload functionality coming soon")
+  // Handle photo upload
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+
+    setIsUploading(true)
+    try {
+      const fileArray = Array.from(files)
+      const uploadedKeys: string[] = []
+
+      for (let index = 0; index < fileArray.length; index++) {
+        const file = fileArray[index]
+        if (!file.type.startsWith("image/")) {
+          toast.error(`${file.name} is not an image file`)
+          continue
+        }
+
+        // Check file size (max 10MB)
+        if (file.size > 10 * 1024 * 1024) {
+          toast.error(`${file.name} is too large. Maximum size is 10MB.`)
+          continue
+        }
+
+        try {
+          // Add a small delay between uploads to avoid rate limiting
+          if (index > 0) {
+            await new Promise((resolve) => setTimeout(resolve, 500))
+          }
+
+          const r2Key = await uploadFile(file)
+          uploadedKeys.push(r2Key)
+        } catch (error) {
+          console.error(`Failed to upload ${file.name}:`, error)
+          toast.error(`Failed to upload ${file.name}`)
+        }
+      }
+
+      if (uploadedKeys.length > 0) {
+        setPhotos((prev) => [...prev, ...uploadedKeys])
+        toast.success(`${uploadedKeys.length} photo(s) uploaded successfully`)
+      }
+    } catch (error) {
+      console.error("Error uploading photos:", error)
+      toast.error("Failed to upload photos")
+    } finally {
+      setIsUploading(false)
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ""
+      }
+    }
+  }
+
+  const handleRemovePhoto = (index: number) => {
+    setPhotos((prev) => prev.filter((_, i) => i !== index))
   }
 
   if (!completion) {
@@ -308,26 +364,43 @@ export default function ReturnReviewPage() {
             <div>
               <Label>Photos (Optional)</Label>
               <div className="mt-2 flex flex-wrap gap-2">
-                {photos.map((photo, index) => (
-                  <div className="relative" key={index}>
+                {photos.map((photoKey, index) => (
+                  <div className="group relative" key={index}>
                     <img
                       alt={`Review photo ${index + 1}`}
                       className="h-24 w-24 rounded-lg object-cover"
-                      src={photo}
+                      src={getImageKitUrl(photoKey, { width: 96, height: 96, quality: 80 })}
                     />
+                    <button
+                      className="absolute right-1 top-1 rounded-full bg-destructive p-1 opacity-0 transition-opacity group-hover:opacity-100"
+                      onClick={() => handleRemovePhoto(index)}
+                      type="button"
+                    >
+                      <X className="size-3 text-destructive-foreground" />
+                    </button>
                   </div>
                 ))}
-                <Button
-                  className="h-24 w-24"
-                  onClick={handlePhotoUpload}
-                  type="button"
-                  variant="outline"
-                >
-                  <Upload className="size-4" />
-                </Button>
+                <label className="cursor-pointer">
+                  <input
+                    accept="image/*"
+                    className="hidden"
+                    disabled={isUploading}
+                    multiple
+                    onChange={handlePhotoUpload}
+                    ref={fileInputRef}
+                    type="file"
+                  />
+                  <div className="flex h-24 w-24 items-center justify-center rounded-lg border-2 border-dashed transition-colors hover:border-primary">
+                    {isUploading ? (
+                      <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                    ) : (
+                      <Upload className="size-4 text-muted-foreground" />
+                    )}
+                  </div>
+                </label>
               </div>
               <p className="mt-2 text-muted-foreground text-xs">
-                Upload photos if there are discrepancies or damage
+                Upload photos if there are discrepancies or damage (max 10MB per photo)
               </p>
             </div>
           </CardContent>

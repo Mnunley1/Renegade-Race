@@ -28,6 +28,16 @@ export default defineSchema({
     stripeCustomerId: v.optional(v.string()),
     // User interests/preferences
     interests: v.optional(v.array(v.string())), // e.g., ['Track Racing', 'GT3 Cars', 'Formula Racing', 'Endurance']
+    // Notification preferences
+    notificationPreferences: v.optional(
+      v.object({
+        reservationUpdates: v.boolean(),
+        messages: v.boolean(),
+        reviewsAndRatings: v.boolean(),
+        paymentUpdates: v.boolean(),
+        marketing: v.boolean(),
+      })
+    ),
     // User profile fields
     bio: v.optional(v.string()),
     location: v.optional(v.string()),

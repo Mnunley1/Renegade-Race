@@ -1,4 +1,5 @@
 import { v } from 'convex/values';
+import { api } from './_generated/api';
 import { mutation, query } from './_generated/server';
 import {
   getNewReviewEmailTemplate,
@@ -401,10 +402,10 @@ export const submitReview = mutation({
       // Don't fail the mutation if email fails
     }
 
-    // TODO: Update the reviewed user's rating via scheduler
-    // await ctx.scheduler.runAfter(0, api.reviews.updateUserRating, {
-    //   userId: reviewedId,
-    // });
+    // Update the reviewed user's rating via scheduler
+    await ctx.scheduler.runAfter(0, api.reviews.updateUserRating, {
+      userId: reviewedId,
+    });
 
     return reviewId
   },
