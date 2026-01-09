@@ -1,5 +1,6 @@
 import { v } from 'convex/values';
 import type { Id } from './_generated/dataModel';
+import { api } from './_generated/api';
 import { mutation, query } from './_generated/server';
 import {
   getReservationPendingOwnerEmailTemplate,
@@ -476,6 +477,25 @@ export const cancel = mutation({
       cancellationReason: args.cancellationReason,
       updatedAt: Date.now(),
     });
+
+    // Process automatic refund if payment exists and is paid
+    if (reservation.paymentId) {
+      try {
+        const payment = await ctx.db.get(reservation.paymentId);
+        if (payment && payment.status === 'succeeded' && payment.stripeChargeId) {
+          // Schedule refund processing (use scheduler to call internal action)
+          await ctx.scheduler.runAfter(0, api.stripe.processRefundOnCancellation, {
+            paymentId: reservation.paymentId,
+            reservationId: args.reservationId,
+            reason: args.cancellationReason || 'Reservation cancelled',
+          });
+        }
+      } catch (error) {
+        console.error('Failed to initiate refund on cancellation:', error);
+        // Don't fail the cancellation if refund initiation fails
+        // The refund can be processed manually later
+      }
+    }
 
     // Send emails to both parties about cancelled reservation
     try {

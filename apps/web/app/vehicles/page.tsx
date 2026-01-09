@@ -8,9 +8,15 @@ import {
 } from "@workspace/ui/components/accordion"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
+import { Calendar as CalendarComponent } from "@workspace/ui/components/calendar"
 import { Card, CardContent } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@workspace/ui/components/popover"
 import {
   Select,
   SelectContent,
@@ -19,51 +25,191 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select"
 import { Separator } from "@workspace/ui/components/separator"
+import { Skeleton } from "@workspace/ui/components/skeleton"
+import { Slider } from "@workspace/ui/components/slider"
 import { cn } from "@workspace/ui/lib/utils"
 import { useQuery } from "convex/react"
-import { Calendar, ChevronRight, Filter, Grid3x3, List, MapPin, Search, X } from "lucide-react"
+import { format } from "date-fns"
+import {
+  Calendar,
+  ChevronDown,
+  ChevronRight,
+  Filter,
+  Grid3x3,
+  List,
+  MapPin,
+  Search,
+  X,
+} from "lucide-react"
 import { Suspense, useEffect, useMemo, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
+import type { DateRange } from "react-day-picker"
 import { VehicleCard } from "@/components/vehicle-card"
 import { useDebounce } from "@/hooks/useDebounce"
 import { api } from "@/lib/convex"
 
 export default function VehiclesPage() {
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  
+  // Initialize state from URL params
+  const getInitialState = () => {
+    return {
+      viewMode: (searchParams.get("view") as "grid" | "list") || "grid",
+      searchQuery: searchParams.get("q") || "",
+      selectedLocation: searchParams.get("location") || "",
+      selectedTrack: searchParams.get("track") || "all",
+      selectedMake: searchParams.get("make") || "all",
+      selectedModel: searchParams.get("model") || "all",
+      selectedRaceCarClass: searchParams.get("class") || "all",
+      selectedDriveType: searchParams.get("drive") || "all",
+      selectedPriceRange: searchParams.get("price") || "any",
+      minHorsepower: searchParams.get("minHp") || "",
+      maxHorsepower: searchParams.get("maxHp") || "",
+      selectedTransmission: searchParams.get("transmission") || "all",
+      minYear: searchParams.get("minYear") || "",
+      maxYear: searchParams.get("maxYear") || "",
+      minRating: searchParams.get("rating") || "",
+      sortBy: searchParams.get("sort") || "popularity",
+      startDate: searchParams.get("startDate") || "",
+      endDate: searchParams.get("endDate") || "",
+    }
+  }
+
+  const initialState = getInitialState()
+  
+  const [viewMode, setViewMode] = useState<"grid" | "list">(initialState.viewMode)
   const [showFilters, setShowFilters] = useState(true)
-  const [searchQuery, setSearchQuery] = useState("")
-  const [selectedLocation, setSelectedLocation] = useState("")
-  const [selectedTrack, setSelectedTrack] = useState("all")
-  const [selectedMake, setSelectedMake] = useState("all")
-  const [selectedModel, setSelectedModel] = useState("all")
-  const [selectedRaceCarClass, setSelectedRaceCarClass] = useState("all")
-  const [selectedDriveType, setSelectedDriveType] = useState("all")
-  const [selectedPriceRange, setSelectedPriceRange] = useState("any")
-  const [minHorsepower, setMinHorsepower] = useState("")
-  const [maxHorsepower, setMaxHorsepower] = useState("")
-  const [selectedTransmission, setSelectedTransmission] = useState("all")
-  const [minYear, setMinYear] = useState("")
-  const [maxYear, setMaxYear] = useState("")
-  const [minRating, setMinRating] = useState("")
-  const [sortBy, setSortBy] = useState("popularity")
+  const [searchQuery, setSearchQuery] = useState(initialState.searchQuery)
+  const [selectedLocation, setSelectedLocation] = useState(initialState.selectedLocation)
+  const [selectedTrack, setSelectedTrack] = useState(initialState.selectedTrack)
+  const [selectedMake, setSelectedMake] = useState(initialState.selectedMake)
+  const [selectedModel, setSelectedModel] = useState(initialState.selectedModel)
+  const [selectedRaceCarClass, setSelectedRaceCarClass] = useState(initialState.selectedRaceCarClass)
+  const [selectedDriveType, setSelectedDriveType] = useState(initialState.selectedDriveType)
+  const [selectedPriceRange, setSelectedPriceRange] = useState(initialState.selectedPriceRange)
+  // Price slider state (in dollars per day)
+  const [priceRange, setPriceRange] = useState<[number, number]>([0, 5000])
+  const [customPriceRange, setCustomPriceRange] = useState<[number, number] | null>(null)
+  const [minHorsepower, setMinHorsepower] = useState(initialState.minHorsepower)
+  const [maxHorsepower, setMaxHorsepower] = useState(initialState.maxHorsepower)
+  const [selectedTransmission, setSelectedTransmission] = useState(initialState.selectedTransmission)
+  const [minYear, setMinYear] = useState(initialState.minYear)
+  const [maxYear, setMaxYear] = useState(initialState.maxYear)
+  const [minRating, setMinRating] = useState(initialState.minRating)
+  const [sortBy, setSortBy] = useState(initialState.sortBy)
   const [selectedDates, setSelectedDates] = useState({
-    start: "",
-    end: "",
+    start: initialState.startDate,
+    end: initialState.endDate,
   })
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(
+    initialState.startDate && initialState.endDate
+      ? {
+          from: new Date(initialState.startDate),
+          to: new Date(initialState.endDate),
+        }
+      : undefined
+  )
+  const [datePickerOpen, setDatePickerOpen] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
+  const [showSuggestions, setShowSuggestions] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 12
+
+  // Detect mobile screen size
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768)
+    }
+    checkMobile()
+    window.addEventListener("resize", checkMobile)
+    return () => window.removeEventListener("resize", checkMobile)
+  }, [])
 
   // Debounce search query
   const debouncedSearchQuery = useDebounce(searchQuery, 300)
 
-  // Fetch vehicles and tracks from Convex
-  const vehiclesData = useQuery(api.vehicles.getAllWithOptimizedImages, {})
+  // Sync state to URL params
+  useEffect(() => {
+    const params = new URLSearchParams()
+    
+    if (viewMode !== "grid") params.set("view", viewMode)
+    if (debouncedSearchQuery) params.set("q", debouncedSearchQuery)
+    if (selectedLocation) params.set("location", selectedLocation)
+    if (selectedTrack !== "all") params.set("track", selectedTrack)
+    if (selectedMake !== "all") params.set("make", selectedMake)
+    if (selectedModel !== "all") params.set("model", selectedModel)
+    if (selectedRaceCarClass !== "all") params.set("class", selectedRaceCarClass)
+    if (selectedDriveType !== "all") params.set("drive", selectedDriveType)
+    if (selectedPriceRange !== "any") params.set("price", selectedPriceRange)
+    if (minHorsepower) params.set("minHp", minHorsepower)
+    if (maxHorsepower) params.set("maxHp", maxHorsepower)
+    if (selectedTransmission !== "all") params.set("transmission", selectedTransmission)
+    if (minYear) params.set("minYear", minYear)
+    if (maxYear) params.set("maxYear", maxYear)
+    if (minRating) params.set("rating", minRating)
+    if (sortBy !== "popularity") params.set("sort", sortBy)
+    if (selectedDates.start) params.set("startDate", selectedDates.start)
+    if (selectedDates.end) params.set("endDate", selectedDates.end)
+
+    const newUrl = params.toString() ? `?${params.toString()}` : window.location.pathname
+    router.replace(newUrl, { scroll: false })
+  }, [
+    viewMode,
+    debouncedSearchQuery,
+    selectedLocation,
+    selectedTrack,
+    selectedMake,
+    selectedModel,
+    selectedRaceCarClass,
+    selectedDriveType,
+    selectedPriceRange,
+    minHorsepower,
+    maxHorsepower,
+    selectedTransmission,
+    minYear,
+    maxYear,
+    minRating,
+    sortBy,
+    selectedDates,
+    router,
+  ])
+
+  // Fetch tracks first (needed for track ID lookup)
   const tracksData = useQuery(api.tracks.getAll, {})
+
+  // Fetch vehicles and tracks from Convex with availability filtering
+  const vehiclesData = useQuery(
+    api.vehicles.searchWithAvailability,
+    tracksData
+      ? {
+          startDate: selectedDates.start || undefined,
+          endDate: selectedDates.end || undefined,
+          trackId:
+            selectedTrack !== "all"
+              ? (tracksData.find((t) => t.name === selectedTrack)?._id as
+                  | string
+                  | undefined)
+              : undefined,
+          limit: 200, // Get more for client-side filtering
+        }
+      : "skip"
+  )
+
+  // Fetch vehicle stats for all vehicles
+  const vehicleStats = useQuery(
+    api.reviews.getVehicleStatsBatch,
+    vehiclesData && vehiclesData.length > 0
+      ? { vehicleIds: vehiclesData.map((v) => v._id) as any[] }
+      : "skip"
+  )
 
   // Map vehicles to the format expected by VehicleCard
   const vehicles = useMemo(() => {
     if (!vehiclesData) return []
     const mapped = vehiclesData.map((vehicle) => {
       const primaryImage = vehicle.images?.find((img) => img.isPrimary) || vehicle.images?.[0]
+      const stats = vehicleStats?.[vehicle._id]
       return {
         id: vehicle._id,
         image: primaryImage?.cardUrl ?? "",
@@ -74,8 +220,8 @@ export default function VehiclesPage() {
         pricePerDay: vehicle.dailyRate,
         location: vehicle.track?.location || "",
         track: vehicle.track?.name || "",
-        rating: 0, // TODO: Calculate from reviews
-        reviews: 0, // TODO: Get from reviews
+        rating: stats?.averageRating || 0,
+        reviews: stats?.totalReviews || 0,
         horsepower: vehicle.horsepower,
         transmission: vehicle.transmission || "",
         drivetrain: vehicle.drivetrain || "",
@@ -83,7 +229,7 @@ export default function VehiclesPage() {
       }
     })
     return mapped
-  }, [vehiclesData])
+  }, [vehiclesData, vehicleStats])
 
   const tracks = useMemo(() => {
     if (!tracksData) return []
@@ -122,6 +268,35 @@ export default function VehiclesPage() {
       "Endurance",
     ]
   }, [])
+
+  // Search suggestions based on vehicles
+  const searchSuggestions = useMemo(() => {
+    if (!debouncedSearchQuery || debouncedSearchQuery.length < 2) return []
+    
+    const query = debouncedSearchQuery.toLowerCase()
+    const suggestions: string[] = []
+    
+    // Get unique makes, models, tracks, locations
+    const makes = Array.from(new Set(vehicles.map((v) => v.make))).filter((make) =>
+      make.toLowerCase().includes(query)
+    )
+    const models = Array.from(new Set(vehicles.map((v) => v.model))).filter((model) =>
+      model.toLowerCase().includes(query)
+    )
+    const tracks = Array.from(new Set(vehicles.map((v) => v.track).filter(Boolean))).filter(
+      (track) => track && track.toLowerCase().includes(query)
+    ) as string[]
+    const locations = Array.from(new Set(vehicles.map((v) => v.location).filter(Boolean))).filter(
+      (location) => location && location.toLowerCase().includes(query)
+    ) as string[]
+    
+    suggestions.push(...makes.slice(0, 3))
+    suggestions.push(...models.slice(0, 3))
+    suggestions.push(...tracks.slice(0, 2))
+    suggestions.push(...locations.slice(0, 2))
+    
+    return Array.from(new Set(suggestions)).slice(0, 5)
+  }, [debouncedSearchQuery, vehicles])
 
   // Filter vehicles with enhanced search and filters
   const filteredVehicles = useMemo(() => {
@@ -184,8 +359,13 @@ export default function VehiclesPage() {
         return false
       }
 
-      // Price range filter
-      if (selectedPriceRange !== "any") {
+      // Price range filter (supports both slider and dropdown)
+      if (customPriceRange) {
+        const [minPrice, maxPrice] = customPriceRange
+        if (vehicle.pricePerDay < minPrice || vehicle.pricePerDay > maxPrice) {
+          return false
+        }
+      } else if (selectedPriceRange !== "any") {
         if (selectedPriceRange.endsWith("+")) {
           const minPrice = Number.parseInt(selectedPriceRange.replace(/\D/g, ""), 10)
           if (vehicle.pricePerDay < minPrice) {
@@ -294,6 +474,28 @@ export default function VehiclesPage() {
     setSelectedModel("all")
   }, [selectedMake])
 
+  // Sync dateRange with selectedDates
+  useEffect(() => {
+    if (dateRange?.from && dateRange?.to) {
+      setSelectedDates({
+        start: format(dateRange.from, "yyyy-MM-dd"),
+        end: format(dateRange.to, "yyyy-MM-dd"),
+      })
+    } else if (!dateRange?.from && !dateRange?.to) {
+      setSelectedDates({ start: "", end: "" })
+    }
+  }, [dateRange])
+
+  // Initialize dateRange from selectedDates on mount
+  useEffect(() => {
+    if (selectedDates.start && selectedDates.end) {
+      setDateRange({
+        from: new Date(selectedDates.start),
+        to: new Date(selectedDates.end),
+      })
+    }
+  }, []) // Only on mount
+
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1)
@@ -313,6 +515,7 @@ export default function VehiclesPage() {
     maxYear,
     minRating,
     sortBy,
+    selectedDates,
   ])
 
   // Get active filter count
@@ -359,6 +562,7 @@ export default function VehiclesPage() {
     setSelectedRaceCarClass("all")
     setSelectedDriveType("all")
     setSelectedPriceRange("any")
+    setCustomPriceRange(null)
     setMinHorsepower("")
     setMaxHorsepower("")
     setSelectedTransmission("all")
@@ -366,7 +570,57 @@ export default function VehiclesPage() {
     setMaxYear("")
     setMinRating("")
     setSelectedDates({ start: "", end: "" })
+    setDateRange(undefined)
     setCurrentPage(1)
+  }
+
+  // Quick filter presets
+  const applyQuickFilter = (preset: "thisWeekend" | "nextWeek" | "thisMonth" | "nextMonth") => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    
+    let startDate: Date
+    let endDate: Date
+    
+    switch (preset) {
+      case "thisWeekend": {
+        // This Saturday
+        const saturday = new Date(today)
+        const dayOfWeek = today.getDay()
+        const daysUntilSaturday = dayOfWeek === 0 ? 6 : 6 - dayOfWeek
+        saturday.setDate(today.getDate() + daysUntilSaturday)
+        startDate = saturday
+        // This Sunday
+        endDate = new Date(saturday)
+        endDate.setDate(saturday.getDate() + 1)
+        break
+      }
+      case "nextWeek": {
+        // Next Monday
+        const nextMonday = new Date(today)
+        const dayOfWeek = today.getDay()
+        const daysUntilMonday = dayOfWeek === 0 ? 1 : 8 - dayOfWeek
+        nextMonday.setDate(today.getDate() + daysUntilMonday)
+        startDate = nextMonday
+        // Next Sunday
+        endDate = new Date(nextMonday)
+        endDate.setDate(nextMonday.getDate() + 6)
+        break
+      }
+      case "thisMonth": {
+        startDate = new Date(today.getFullYear(), today.getMonth(), 1)
+        endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0)
+        break
+      }
+      case "nextMonth": {
+        startDate = new Date(today.getFullYear(), today.getMonth() + 1, 1)
+        endDate = new Date(today.getFullYear(), today.getMonth() + 2, 0)
+        break
+      }
+    }
+    
+    setDateRange({ from: startDate, to: endDate })
+    setDatePickerOpen(false)
   }
 
   const loadMore = () => {
@@ -378,33 +632,88 @@ export default function VehiclesPage() {
   return (
     <div className="min-h-screen bg-background">
       {/* Hero Section */}
-      <div className="relative overflow-hidden border-border border-b">
-        <div className="container relative z-10 mx-auto px-4 py-12 sm:px-6 md:py-16">
-          <div className="mb-8 text-center">
-            <h1 className="mb-3 font-semibold text-4xl tracking-tight md:text-5xl">
+      <div className="relative overflow-hidden border-border border-b bg-gradient-to-b from-background to-muted/20">
+        <div className="container relative z-10 mx-auto px-4 py-8 sm:px-6 md:py-12">
+          <div className="mb-6 text-center md:mb-8">
+            <h1 className="mb-3 font-bold text-3xl tracking-tight md:text-4xl lg:text-5xl">
               Find Your Perfect Track Vehicle
             </h1>
-            <p className="mx-auto max-w-2xl text-lg text-muted-foreground">
+            <p className="mx-auto max-w-2xl text-base text-muted-foreground md:text-lg">
               Discover high-performance race cars ready for your next track day
             </p>
           </div>
 
           {/* Enhanced Search Bar */}
-          <Card className="shadow-sm">
+          <Card className="shadow-lg">
             <CardContent className="p-4 md:p-6">
               <div className="space-y-4">
-                {/* Search Input */}
+                {/* Enhanced Search Input with Autocomplete */}
                 <div className="relative">
-                  <Search className="-translate-y-1/2 absolute top-1/2 left-3 size-5 text-muted-foreground" />
+                  <Search className="-translate-y-1/2 absolute top-1/2 left-4 size-5 text-muted-foreground" />
                   <Input
-                    className="h-12 pl-10 text-base"
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="h-14 pl-12 pr-4 text-base shadow-sm"
+                    onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                    onFocus={() => searchSuggestions.length > 0 && setShowSuggestions(true)}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value)
+                      setShowSuggestions(e.target.value.length >= 2)
+                    }}
                     placeholder="Search by make, model, track, or location..."
                     value={searchQuery}
                   />
+                  {showSuggestions && searchSuggestions.length > 0 && (
+                    <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-lg">
+                      {searchSuggestions.map((suggestion, index) => (
+                        <button
+                          key={index}
+                          className="w-full px-4 py-2 text-left text-sm hover:bg-accent"
+                          onClick={() => {
+                            setSearchQuery(suggestion)
+                            setShowSuggestions(false)
+                          }}
+                          type="button"
+                        >
+                          <Search className="mr-2 inline size-4" />
+                          {suggestion}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+                {/* Quick Filter Chips */}
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    onClick={() => applyQuickFilter("thisWeekend")}
+                    size="sm"
+                    variant="outline"
+                  >
+                    This Weekend
+                  </Button>
+                  <Button
+                    onClick={() => applyQuickFilter("nextWeek")}
+                    size="sm"
+                    variant="outline"
+                  >
+                    Next Week
+                  </Button>
+                  <Button
+                    onClick={() => applyQuickFilter("thisMonth")}
+                    size="sm"
+                    variant="outline"
+                  >
+                    This Month
+                  </Button>
+                  <Button
+                    onClick={() => applyQuickFilter("nextMonth")}
+                    size="sm"
+                    variant="outline"
+                  >
+                    Next Month
+                  </Button>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                   <div>
                     <Label className="mb-2 flex items-center gap-2" htmlFor="track">
                       <MapPin className="size-4" />
@@ -438,41 +747,79 @@ export default function VehiclesPage() {
                     />
                   </div>
 
-                  <div>
-                    <Label className="mb-2 flex items-center gap-2" htmlFor="start-date">
+                  <div className="md:col-span-2">
+                    <Label className="mb-2 flex items-center gap-2">
                       <Calendar className="size-4" />
-                      Start Date
+                      Dates
                     </Label>
-                    <Input
-                      id="start-date"
-                      min={new Date().toISOString().split("T")[0]}
-                      onChange={(e) =>
-                        setSelectedDates({ ...selectedDates, start: e.target.value })
-                      }
-                      type="date"
-                      value={selectedDates.start}
-                    />
-                  </div>
-
-                  <div>
-                    <Label className="mb-2 flex items-center gap-2" htmlFor="end-date">
-                      <Calendar className="size-4" />
-                      End Date
-                    </Label>
-                    <Input
-                      id="end-date"
-                      min={selectedDates.start || new Date().toISOString().split("T")[0]}
-                      onChange={(e) => setSelectedDates({ ...selectedDates, end: e.target.value })}
-                      type="date"
-                      value={selectedDates.end}
-                    />
-                  </div>
-
-                  <div className="flex items-end">
-                    <Button className="w-full" size="lg">
-                      <Search className="mr-2 size-4" />
-                      Search
-                    </Button>
+                    <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          className={cn(
+                            "h-12 w-full justify-start text-left font-normal shadow-sm",
+                            !dateRange && "text-muted-foreground"
+                          )}
+                          id="date-range"
+                          variant="outline"
+                        >
+                          <Calendar className="mr-2 size-4" />
+                          {dateRange?.from ? (
+                            dateRange.to ? (
+                              <>
+                                {format(dateRange.from, "LLL dd, y")} -{" "}
+                                {format(dateRange.to, "LLL dd, y")}
+                              </>
+                            ) : (
+                              format(dateRange.from, "LLL dd, y")
+                            )
+                          ) : (
+                            <span>Select dates</span>
+                          )}
+                          <ChevronDown className="ml-auto size-4 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent
+                        align="start"
+                        className="w-auto p-0"
+                        sideOffset={4}
+                      >
+                        <div className="p-3">
+                          <CalendarComponent
+                            disabled={(date) => {
+                              const today = new Date()
+                              today.setHours(0, 0, 0, 0)
+                              return date < today
+                            }}
+                            initialFocus
+                            mode="range"
+                            numberOfMonths={isMobile ? 1 : 2}
+                            onSelect={(range) => {
+                              setDateRange(range)
+                              if (range?.from && range?.to) {
+                                setDatePickerOpen(false)
+                              }
+                            }}
+                            selected={dateRange}
+                          />
+                          {dateRange?.from && (
+                            <div className="border-t p-3">
+                              <Button
+                                className="w-full"
+                                onClick={() => {
+                                  setDateRange(undefined)
+                                  setSelectedDates({ start: "", end: "" })
+                                }}
+                                size="sm"
+                                variant="outline"
+                              >
+                                <X className="mr-2 size-4" />
+                                Clear dates
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
                   </div>
                 </div>
 
@@ -590,10 +937,18 @@ export default function VehiclesPage() {
                     )}
                     {(selectedDates.start || selectedDates.end) && (
                       <Badge className="gap-1" variant="secondary">
-                        Dates: {selectedDates.start || "..."} - {selectedDates.end || "..."}
+                        Dates:{" "}
+                        {selectedDates.start && selectedDates.end
+                          ? `${format(new Date(selectedDates.start), "MMM dd")} - ${format(new Date(selectedDates.end), "MMM dd")}`
+                          : selectedDates.start
+                            ? format(new Date(selectedDates.start), "MMM dd")
+                            : "..."}
                         <X
                           className="size-3 cursor-pointer"
-                          onClick={() => setSelectedDates({ start: "", end: "" })}
+                          onClick={() => {
+                            setSelectedDates({ start: "", end: "" })
+                            setDateRange(undefined)
+                          }}
                         />
                       </Badge>
                     )}
@@ -612,16 +967,25 @@ export default function VehiclesPage() {
           </Card>
 
           {/* Results Summary */}
-          <div className="mt-6 flex items-center justify-between">
-            <p className="text-muted-foreground">
-              <span className="font-semibold text-foreground">{filteredVehicles.length}</span>{" "}
-              vehicles available
-              {filteredVehicles.length > paginatedVehicles.length && (
-                <span className="ml-2 text-sm">
-                  (showing {paginatedVehicles.length} of {filteredVehicles.length})
-                </span>
+          <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-muted-foreground">
+                <span className="font-bold text-foreground text-lg">
+                  {filteredVehicles.length}
+                </span>{" "}
+                {filteredVehicles.length === 1 ? "vehicle" : "vehicles"} available
+                {filteredVehicles.length > paginatedVehicles.length && (
+                  <span className="ml-2 text-sm text-muted-foreground">
+                    (showing {paginatedVehicles.length} of {filteredVehicles.length})
+                  </span>
+                )}
+              </p>
+              {activeFiltersCount > 0 && (
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {activeFiltersCount} {activeFiltersCount === 1 ? "filter" : "filters"} active
+                </p>
               )}
-            </p>
+            </div>
             <div className="flex items-center gap-2">
               <Button
                 onClick={() => setViewMode("grid")}
@@ -629,6 +993,7 @@ export default function VehiclesPage() {
                 variant={viewMode === "grid" ? "default" : "outline"}
               >
                 <Grid3x3 className="size-4" />
+                <span className="ml-2 hidden sm:inline">Grid</span>
               </Button>
               <Button
                 onClick={() => setViewMode("list")}
@@ -636,6 +1001,7 @@ export default function VehiclesPage() {
                 variant={viewMode === "list" ? "default" : "outline"}
               >
                 <List className="size-4" />
+                <span className="ml-2 hidden sm:inline">List</span>
               </Button>
             </div>
           </div>
@@ -802,19 +1168,81 @@ export default function VehiclesPage() {
                       <AccordionTrigger className="font-medium text-sm">
                         Price Range
                       </AccordionTrigger>
-                      <AccordionContent>
-                        <Select onValueChange={setSelectedPriceRange} value={selectedPriceRange}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Any price" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="any">Any price</SelectItem>
-                            <SelectItem value="0-500">$0 - $500/day</SelectItem>
-                            <SelectItem value="500-1000">$500 - $1,000/day</SelectItem>
-                            <SelectItem value="1000-1500">$1,000 - $1,500/day</SelectItem>
-                            <SelectItem value="1500+">$1,500+/day</SelectItem>
-                          </SelectContent>
-                        </Select>
+                      <AccordionContent className="space-y-4">
+                        {/* Calculate price range from vehicles */}
+                        {(() => {
+                          const prices = vehicles.map((v) => v.pricePerDay).filter(Boolean)
+                          const minPrice = prices.length > 0 ? Math.min(...prices) : 0
+                          const maxPrice = prices.length > 0 ? Math.max(...prices) : 5000
+                          const currentMin = customPriceRange?.[0] ?? minPrice
+                          const currentMax = customPriceRange?.[1] ?? maxPrice
+
+                          return (
+                            <>
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between text-sm">
+                                  <span className="text-muted-foreground">Min Price</span>
+                                  <span className="font-medium">${currentMin}/day</span>
+                                </div>
+                                <div className="flex items-center justify-between text-sm">
+                                  <span className="text-muted-foreground">Max Price</span>
+                                  <span className="font-medium">${currentMax}/day</span>
+                                </div>
+                                <Slider
+                                  className="w-full"
+                                  max={maxPrice}
+                                  min={minPrice}
+                                  onValueChange={(value) => {
+                                    const [min, max] = value as [number, number]
+                                    setCustomPriceRange([min, max])
+                                    // Convert to selectedPriceRange format for compatibility
+                                    if (min === minPrice && max === maxPrice) {
+                                      setSelectedPriceRange("any")
+                                    } else if (max === maxPrice) {
+                                      setSelectedPriceRange(`${min}+`)
+                                    } else {
+                                      setSelectedPriceRange(`${min}-${max}`)
+                                    }
+                                  }}
+                                  step={50}
+                                  value={[currentMin, currentMax]}
+                                />
+                              </div>
+                              <div className="flex gap-2">
+                                <Button
+                                  onClick={() => {
+                                    setCustomPriceRange(null)
+                                    setSelectedPriceRange("any")
+                                  }}
+                                  size="sm"
+                                  variant="outline"
+                                >
+                                  Reset
+                                </Button>
+                                <Button
+                                  onClick={() => {
+                                    setCustomPriceRange([0, 500])
+                                    setSelectedPriceRange("0-500")
+                                  }}
+                                  size="sm"
+                                  variant="outline"
+                                >
+                                  Under $500
+                                </Button>
+                                <Button
+                                  onClick={() => {
+                                    setCustomPriceRange([500, 1000])
+                                    setSelectedPriceRange("500-1000")
+                                  }}
+                                  size="sm"
+                                  variant="outline"
+                                >
+                                  $500-$1K
+                                </Button>
+                              </div>
+                            </>
+                          )
+                        })()}
                       </AccordionContent>
                     </AccordionItem>
 
@@ -968,9 +1396,19 @@ export default function VehiclesPage() {
           {/* Mobile Filter Toggle */}
           {!showFilters && (
             <div className="mb-4 lg:hidden">
-              <Button className="w-full" onClick={() => setShowFilters(true)} variant="outline">
+              <Button
+                className="w-full shadow-sm"
+                onClick={() => setShowFilters(true)}
+                size="lg"
+                variant="outline"
+              >
                 <Filter className="mr-2 size-4" />
-                Show Filters {activeFiltersCount > 0 && `(${activeFiltersCount})`}
+                Show Filters
+                {activeFiltersCount > 0 && (
+                  <Badge className="ml-2" variant="secondary">
+                    {activeFiltersCount}
+                  </Badge>
+                )}
               </Button>
             </div>
           )}
@@ -978,34 +1416,66 @@ export default function VehiclesPage() {
           {/* Vehicle Grid */}
           <div className="lg:col-span-3">
             {vehiclesData === undefined || tracksData === undefined ? (
-              <Card className="border-dashed">
-                <CardContent className="flex flex-col items-center justify-center py-16">
-                  <div className="mb-4 size-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-                  <h3 className="mb-2 font-semibold text-lg">Loading vehicles...</h3>
-                </CardContent>
-              </Card>
+              <div
+                className={cn(
+                  "grid gap-6",
+                  viewMode === "grid"
+                    ? "auto-rows-fr md:grid-cols-2 xl:grid-cols-3"
+                    : "grid-cols-1"
+                )}
+              >
+                {Array.from({ length: itemsPerPage }).map((_, index) => (
+                  <Card key={index} className="overflow-hidden">
+                    <Skeleton className="h-64 w-full" />
+                    <CardContent className="p-6">
+                      <Skeleton className="mb-3 h-6 w-3/4" />
+                      <Skeleton className="mb-4 h-4 w-1/2" />
+                      <div className="mt-4 border-t pt-4">
+                        <Skeleton className="h-8 w-24" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
             ) : vehicles.length === 0 ? (
               <Card className="border-dashed">
                 <CardContent className="flex flex-col items-center justify-center py-16">
-                  <Search className="mb-4 size-12 text-muted-foreground" />
-                  <h3 className="mb-2 font-semibold text-lg">No vehicles in database</h3>
-                  <p className="mb-4 text-center text-muted-foreground">
+                  <div className="mb-4 flex size-16 items-center justify-center rounded-full bg-muted">
+                    <Search className="size-8 text-muted-foreground" />
+                  </div>
+                  <h3 className="mb-2 font-semibold text-xl">No vehicles available</h3>
+                  <p className="mb-4 max-w-md text-center text-muted-foreground">
                     No active and approved vehicles found. Vehicles need to be both active and
-                    approved to appear.
+                    approved to appear in search results.
                   </p>
                 </CardContent>
               </Card>
             ) : filteredVehicles.length === 0 ? (
               <Card className="border-dashed">
                 <CardContent className="flex flex-col items-center justify-center py-16">
-                  <Search className="mb-4 size-12 text-muted-foreground" />
-                  <h3 className="mb-2 font-semibold text-lg">No vehicles found</h3>
-                  <p className="mb-4 text-center text-muted-foreground">
-                    Try adjusting your filters to see more results
+                  <div className="mb-4 flex size-16 items-center justify-center rounded-full bg-muted">
+                    <Search className="size-8 text-muted-foreground" />
+                  </div>
+                  <h3 className="mb-2 font-semibold text-xl">No vehicles found</h3>
+                  <p className="mb-6 max-w-md text-center text-muted-foreground">
+                    We couldn't find any vehicles matching your search criteria. Try adjusting your
+                    filters or search terms to see more results.
                   </p>
-                  <Button onClick={clearFilters} variant="outline">
-                    Clear Filters
-                  </Button>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Button onClick={clearFilters} variant="default">
+                      Clear All Filters
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        setSearchQuery("")
+                        setSelectedDates({ start: "", end: "" })
+                        setDateRange(undefined)
+                      }}
+                      variant="outline"
+                    >
+                      Clear Search & Dates
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             ) : (
@@ -1033,11 +1503,14 @@ export default function VehiclesPage() {
 
                 {/* Pagination / Load More */}
                 {hasMore && (
-                  <div className="mt-8 flex justify-center">
-                    <Button onClick={loadMore} size="lg" variant="outline">
+                  <div className="mt-8 flex flex-col items-center gap-4">
+                    <Button onClick={loadMore} size="lg" variant="outline" className="shadow-sm">
                       Load More Vehicles
                       <ChevronRight className="ml-2 size-4" />
                     </Button>
+                    <p className="text-sm text-muted-foreground">
+                      Showing {paginatedVehicles.length} of {filteredVehicles.length} vehicles
+                    </p>
                   </div>
                 )}
               </>

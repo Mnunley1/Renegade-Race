@@ -55,6 +55,40 @@ export const deleteFromClerk = internalMutation({
     const user = await userByExternalId(ctx, clerkUserId)
 
     if (user !== null) {
+      // Check if this user is a host with active or upcoming rentals
+      const today = new Date().toISOString().split("T")[0]
+      
+      // Get all vehicles owned by this user
+      const ownedVehicles = await ctx.db
+        .query("vehicles")
+        .withIndex("by_owner", (q) => q.eq("ownerId", clerkUserId))
+        .collect()
+
+      // Check for active or upcoming reservations on any of their vehicles
+      for (const vehicle of ownedVehicles) {
+        const activeReservations = await ctx.db
+          .query("reservations")
+          .withIndex("by_vehicle", (q) => q.eq("vehicleId", vehicle._id))
+          .filter((q) =>
+            q.and(
+              // Only check pending or confirmed reservations
+              q.or(
+                q.eq(q.field("status"), "pending"),
+                q.eq(q.field("status"), "confirmed")
+              ),
+              // Check if reservation end date is in the future (active or upcoming)
+              q.gte(q.field("endDate"), today)
+            )
+          )
+          .collect()
+
+        if (activeReservations.length > 0) {
+          throw new Error(
+            `Cannot delete host account with active or upcoming rentals. User has ${activeReservations.length} active reservation(s) on vehicle ${vehicle.make} ${vehicle.model}.`
+          )
+        }
+      }
+
       await ctx.db.delete(user._id)
     } else {
       console.warn(`Can't delete user, there is none for Clerk user ID: ${clerkUserId}`)
@@ -168,6 +202,61 @@ export const updateProfile = mutation({
     })
 
     return user._id
+  },
+})
+
+// Update notification preferences
+export const updateNotificationPreferences = mutation({
+  args: {
+    preferences: v.object({
+      reservationUpdates: v.boolean(),
+      messages: v.boolean(),
+      reviewsAndRatings: v.boolean(),
+      paymentUpdates: v.boolean(),
+      marketing: v.boolean(),
+    }),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) {
+      throw new Error("Not authenticated")
+    }
+
+    const user = await userByExternalId(ctx, identity.subject)
+    if (!user) {
+      throw new Error("User not found")
+    }
+
+    await ctx.db.patch(user._id, {
+      notificationPreferences: args.preferences,
+    })
+
+    return user._id
+  },
+})
+
+// Get notification preferences for current user
+export const getNotificationPreferences = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) {
+      return null
+    }
+
+    const user = await userByExternalId(ctx, identity.subject)
+    if (!user) {
+      return null
+    }
+
+    // Return default preferences if none set
+    return user.notificationPreferences || {
+      reservationUpdates: true,
+      messages: true,
+      reviewsAndRatings: true,
+      paymentUpdates: true,
+      marketing: false,
+    }
   },
 })
 

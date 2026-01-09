@@ -19,6 +19,19 @@ export default function FavoritesPage() {
   // Fetch user's favorites from Convex
   const favoritesData = useQuery(api.favorites.getUserFavorites, isSignedIn ? {} : "skip")
 
+  // Fetch vehicle stats for favorited vehicles
+  const favoriteVehicleIds = useMemo(() => {
+    if (!favoritesData) return []
+    return favoritesData
+      .map((fav) => fav.vehicle?._id)
+      .filter(Boolean) as any[]
+  }, [favoritesData])
+
+  const favoriteVehicleStats = useQuery(
+    api.reviews.getVehicleStatsBatch,
+    favoriteVehicleIds.length > 0 ? { vehicleIds: favoriteVehicleIds } : "skip"
+  )
+
   // Map favorites to the format expected by VehicleCard
   const favorites = useMemo(() => {
     if (!(favoritesData && favoritesData.length)) return []
@@ -27,6 +40,7 @@ export default function FavoritesPage() {
         const vehicle = fav.vehicle
         if (!vehicle) return null
         const primaryImage = vehicle.images?.find((img) => img.isPrimary) || vehicle.images?.[0]
+        const stats = favoriteVehicleStats?.[vehicle._id]
         return {
           id: vehicle._id,
           image: primaryImage?.cardUrl ?? "",
@@ -37,8 +51,8 @@ export default function FavoritesPage() {
           pricePerDay: vehicle.dailyRate,
           location: vehicle.track?.location || "",
           track: vehicle.track?.name || "",
-          rating: 0, // TODO: Calculate from reviews
-          reviews: 0, // TODO: Get from reviews
+          rating: stats?.averageRating || 0,
+          reviews: stats?.totalReviews || 0,
           horsepower: vehicle.horsepower,
           transmission: vehicle.transmission || "",
         }
