@@ -80,7 +80,6 @@ export default function HostVehicleDetailPage() {
       return {
         totalBookings: 0,
         totalEarnings: 0,
-        averageRating: 0,
         completedTrips: 0,
         pendingCount: 0,
         upcomingCount: 0,
@@ -93,13 +92,9 @@ export default function HostVehicleDetailPage() {
     const pendingCount = pendingReservations.length
     const upcomingCount = upcomingReservations.length
 
-    // TODO: Calculate average rating from reviews if needed
-    const averageRating = 0
-
     return {
       totalBookings,
       totalEarnings: Math.round(totalEarnings / 100), // Convert cents to dollars
-      averageRating,
       completedTrips,
       pendingCount,
       upcomingCount,

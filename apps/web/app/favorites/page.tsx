@@ -10,6 +10,7 @@ import { usePathname, useRouter } from "next/navigation"
 import { useMemo } from "react"
 import { VehicleCard } from "@/components/vehicle-card"
 import { api } from "@/lib/convex"
+import type { Id } from "@/lib/convex"
 
 export default function FavoritesPage() {
   const { user, isSignedIn, isLoaded: userLoaded } = useUser()
@@ -23,8 +24,8 @@ export default function FavoritesPage() {
   const favoriteVehicleIds = useMemo(() => {
     if (!favoritesData) return []
     return favoritesData
-      .map((fav) => fav.vehicle?._id)
-      .filter(Boolean) as any[]
+      .map((fav) => fav.vehicle?._id as Id<"vehicles"> | undefined)
+      .filter((id): id is Id<"vehicles"> => Boolean(id))
   }, [favoritesData])
 
   const favoriteVehicleStats = useQuery(

@@ -3,11 +3,11 @@
 import { CheckCircle2 } from "lucide-react"
 
 const SIMPLE_STEPS = [
-  { id: "vehicle", label: "Vehicle & Location", shortLabel: "Vehicle" },
-  { id: "photos", label: "Photos", shortLabel: "Photos" },
-  { id: "amenities", label: "Amenities & Extras", shortLabel: "Extras" },
-  { id: "availability", label: "Availability", shortLabel: "Availability" },
-  { id: "safety", label: "Safety & Terms", shortLabel: "Safety" },
+  { id: "vehicle", label: "Vehicle & Location" },
+  { id: "photos", label: "Photos" },
+  { id: "amenities", label: "Amenities & Extras" },
+  { id: "availability", label: "Availability" },
+  { id: "safety", label: "Safety & Terms" },
 ]
 
 type SimpleOnboardingProgressProps = {

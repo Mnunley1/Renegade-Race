@@ -20,6 +20,7 @@ import { useParams, useRouter } from "next/navigation"
 import { useRef, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/lib/convex"
+import type { Id } from "@/lib/convex"
 import { getImageKitUrl } from "@/lib/imagekit"
 
 export default function DisputeCreationPage() {
@@ -40,17 +41,17 @@ export default function DisputeCreationPage() {
   // Fetch reservation and completion data
   const reservation = useQuery(
     api.reservations.getById,
-    reservationId ? { id: reservationId as any } : "skip"
+    reservationId ? { id: reservationId as Id<"reservations"> } : "skip"
   )
 
   const completion = useQuery(
     api.rentalCompletions.getByReservation,
-    reservationId ? { reservationId: reservationId as any } : "skip"
+    reservationId ? { reservationId: reservationId as Id<"reservations"> } : "skip"
   )
 
   const existingDispute = useQuery(
     api.disputes.getByReservation,
-    reservationId ? { reservationId: reservationId as any } : "skip"
+    reservationId ? { reservationId: reservationId as Id<"reservations"> } : "skip"
   )
 
   const createDispute = useMutation(api.disputes.create)

@@ -9,6 +9,7 @@ import Link from "next/link"
 import { useMemo, useState } from "react"
 import { VehicleCard } from "@/components/vehicle-card"
 import { api } from "@/lib/convex"
+import type { Id } from "@/lib/convex"
 
 export default function HomePage() {
   // Track video load error for hero section
@@ -23,7 +24,7 @@ export default function HomePage() {
   // Fetch vehicle stats for featured vehicles
   const featuredVehicleIds = useMemo(() => {
     if (!vehiclesData) return []
-    return vehiclesData.slice(0, 6).map((v) => v._id) as any[]
+    return vehiclesData.slice(0, 6).map((v) => v._id as Id<"vehicles">)
   }, [vehiclesData])
 
   const featuredVehicleStats = useQuery(
