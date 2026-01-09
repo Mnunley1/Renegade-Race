@@ -21,6 +21,7 @@ import { useParams, useRouter } from "next/navigation"
 import { useRef, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/lib/convex"
+import type { Id } from "@/lib/convex"
 import { getImageKitUrl } from "@/lib/imagekit"
 
 export default function ReturnSubmissionPage() {
@@ -45,12 +46,12 @@ export default function ReturnSubmissionPage() {
   // Fetch reservation and completion data
   const reservation = useQuery(
     api.reservations.getById,
-    reservationId ? { id: reservationId as any } : "skip"
+    reservationId ? { id: reservationId as Id<"reservations"> } : "skip"
   )
 
   const completion = useQuery(
     api.rentalCompletions.getByReservation,
-    reservationId ? { reservationId: reservationId as any } : "skip"
+    reservationId ? { reservationId: reservationId as Id<"reservations"> } : "skip"
   )
 
   const submitReturnForm = useMutation(api.rentalCompletions.submitRenterReturnForm)
@@ -61,7 +62,7 @@ export default function ReturnSubmissionPage() {
     if (!(reservationId && reservation)) return
 
     try {
-      await createCompletion({ reservationId: reservationId as any })
+      await createCompletion({ reservationId: reservationId as Id<"reservations"> })
       toast.success("Return process started")
     } catch (error) {
       console.error("Error initializing completion:", error)
