@@ -30,6 +30,7 @@ import { useParams, useRouter } from "next/navigation"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { VehicleGallery } from "@/components/vehicle-gallery"
 import { api } from "@/lib/convex"
+import type { Id } from "@/lib/convex"
 
 export default function VehicleDetailsPage() {
   const params = useParams()
@@ -40,14 +41,14 @@ export default function VehicleDetailsPage() {
   const [isCreatingConversation, setIsCreatingConversation] = useState(false)
   const hasTrackedView = useRef(false)
 
-  const vehicle = useQuery(api.vehicles.getById, { id: id as any })
-  const reviews = useQuery(api.reviews.getByVehicle, id ? { vehicleId: id as any } : "skip")
-  const reviewStats = useQuery(api.reviews.getVehicleStats, id ? { vehicleId: id as any } : "skip")
+  const vehicle = useQuery(api.vehicles.getById, { id: id as Id<"vehicles"> })
+  const reviews = useQuery(api.reviews.getByVehicle, id ? { vehicleId: id as Id<"vehicles"> } : "skip")
+  const reviewStats = useQuery(api.reviews.getVehicleStats, id ? { vehicleId: id as Id<"vehicles"> } : "skip")
 
   // Check if user has a completed reservation for this vehicle (to show "Write Review" button)
   const completedReservation = useQuery(
     api.reservations.getCompletedReservationForVehicle,
-    isSignedIn && user?.id && id ? { userId: user.id, vehicleId: id as any } : "skip"
+    isSignedIn && user?.id && id ? { userId: user.id, vehicleId: id as Id<"vehicles"> } : "skip"
   )
 
   // Check if user has already written a review for this vehicle
@@ -59,7 +60,7 @@ export default function VehicleDetailsPage() {
   // Check if vehicle is favorited
   const isFavorite = useQuery(
     api.favorites.isVehicleFavorited,
-    isSignedIn && id ? { vehicleId: id as any } : "skip"
+    isSignedIn && id ? { vehicleId: id as Id<"vehicles"> } : "skip"
   )
 
   // Toggle favorite mutation
@@ -157,7 +158,10 @@ export default function VehicleDetailsPage() {
     // Only track if we haven't tracked yet, vehicle is loaded and active, and we have an ID
     if (!hasTrackedView.current && vehicle && vehicle.isActive && id) {
       hasTrackedView.current = true
-      trackView({ vehicleId: id as any }).catch(console.error)
+      trackView({ vehicleId: id as Id<"vehicles"> }).catch((error) => {
+        console.error("Failed to track view:", error)
+        // Silently fail - analytics tracking shouldn't break the page
+      })
     }
   }, [vehicle, id, trackView])
 

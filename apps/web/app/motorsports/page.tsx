@@ -13,7 +13,7 @@ import {
 } from "@workspace/ui/components/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
 import { useQuery } from "convex/react"
-import { Filter, Flag, MapPin, Plus, RefreshCw, Search, Settings, User, Users, Zap, X } from "lucide-react"
+import { Flag, MapPin, Plus, RefreshCw, Search, Settings, User, Users, Zap, X } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
@@ -33,18 +33,13 @@ export default function MotorsportsPage() {
   const [locationFilter, setLocationFilter] = useState<string>("")
   const [experienceFilter, setExperienceFilter] = useState<string>("all")
   const [minSeatsFilter, setMinSeatsFilter] = useState<string>("all")
-  const [showFilters, setShowFilters] = useState<boolean>(false)
 
   const debouncedSearchQuery = useDebounce(searchQuery, 300)
 
   // Initialize from URL params after mount to avoid hydration mismatch
   useEffect(() => {
     setIsMounted(true)
-    const tabParam = searchParams.get("tab")
-    if (tabParam === "drivers" || tabParam === "teams") {
-      setActiveTab(tabParam)
-    }
-  }, []) // Only run on mount
+  }, [])
 
   // Update tab when URL param changes (after mount)
   useEffect(() => {
@@ -389,21 +384,6 @@ export default function MotorsportsPage() {
 
         {/* Filter Controls */}
         <div className="flex flex-wrap items-center gap-3">
-          <Button
-            className="gap-2"
-            onClick={() => setShowFilters(!showFilters)}
-            size="sm"
-            variant={showFilters ? "default" : "outline"}
-          >
-            <Filter className="size-4" />
-            Filters
-            {hasActiveFilters && (
-              <Badge className="ml-1" variant="secondary">
-                Active
-              </Badge>
-            )}
-          </Button>
-
           {hasActiveFilters && (
             <Button onClick={resetFilters} size="sm" variant="ghost">
               <X className="mr-1 size-3" />

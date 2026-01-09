@@ -69,13 +69,6 @@ export const imagePresets = {
     }),
   thumbnail: (key: string) =>
     getImageKitUrl(key, { width: 240, height: 160, quality: 70, format: "auto" }),
-  card: (key: string) =>
-    getImageKitUrl(key, { width: 600, height: 400, quality: 80, format: "auto" }),
-  detail: (key: string) =>
-    getImageKitUrl(key, { width: 1600, height: 900, quality: 80, format: "auto" }),
-  hero: (key: string) =>
-    getImageKitUrl(key, { width: 1920, height: 1080, quality: 75, format: "auto" }),
-  original: (key: string) => getImageKitUrl(key, { quality: 90, format: "auto" }),
 }
 
 
