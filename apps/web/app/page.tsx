@@ -20,10 +20,22 @@ export default function HomePage() {
   const vehiclesData = useQuery(api.vehicles.getAllWithOptimizedImages, { limit: 6 })
 
   // Map vehicles to the format expected by VehicleCard
+  // Fetch vehicle stats for featured vehicles
+  const featuredVehicleIds = useMemo(() => {
+    if (!vehiclesData) return []
+    return vehiclesData.slice(0, 6).map((v) => v._id) as any[]
+  }, [vehiclesData])
+
+  const featuredVehicleStats = useQuery(
+    api.reviews.getVehicleStatsBatch,
+    featuredVehicleIds.length > 0 ? { vehicleIds: featuredVehicleIds } : "skip"
+  )
+
   const featuredVehicles = useMemo(() => {
     if (!vehiclesData) return []
     return vehiclesData.slice(0, 6).map((vehicle) => {
       const primaryImage = vehicle.images?.find((img) => img.isPrimary) || vehicle.images?.[0]
+      const stats = featuredVehicleStats?.[vehicle._id]
       return {
         id: vehicle._id,
         image: primaryImage?.cardUrl ?? "",
@@ -33,13 +45,13 @@ export default function HomePage() {
         model: vehicle.model,
         pricePerDay: vehicle.dailyRate,
         location: vehicle.track?.location || "",
-        rating: 0, // TODO: Calculate from reviews
-        reviews: 0, // TODO: Get from reviews
+        rating: stats?.averageRating || 0,
+        reviews: stats?.totalReviews || 0,
         horsepower: vehicle.horsepower,
         transmission: vehicle.transmission,
       }
     })
-  }, [vehiclesData])
+  }, [vehiclesData, featuredVehicleStats])
 
   const benefits = [
     "Instant booking confirmation",
