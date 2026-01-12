@@ -20,6 +20,7 @@ import {
 } from "@workspace/ui/components/dropdown-menu"
 import { Input } from "@workspace/ui/components/input"
 import { cn } from "@workspace/ui/lib/utils"
+import { handleError, handleErrorWithContext } from "@/lib/error-handler"
 import { useMutation, useQuery } from "convex/react"
 import {
   Archive,
@@ -37,6 +38,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/lib/convex"
+import { handleErrorWithContext } from "@/lib/error-handler"
 
 export default function ChatPage() {
   const { user, isSignedIn } = useUser()
@@ -175,7 +177,10 @@ export default function ChatPage() {
         conversationId: conversationId as Id<"conversations">,
         userId: user.id,
       }).catch((error) => {
-        console.error("Failed to mark conversation as read:", error)
+        handleErrorWithContext(error, {
+          action: "mark conversation as read",
+          showToast: false,
+        })
         // Silently fail - marking as read shouldn't break the page
       })
     }
@@ -310,13 +315,18 @@ export default function ChatPage() {
           router.replace(`/messages/${result.conversationId}`)
         }
       } else {
-        console.error("No conversation selected and no pending conversation")
+        // No conversation selected and no pending conversation
         return
       }
       setNewMessage("")
       setReplyingToMessage(undefined)
     } catch (error) {
-      console.error("Error sending message:", error)
+      handleErrorWithContext(error, {
+        action: "send message",
+        customMessages: {
+          generic: "Failed to send message. Please try again.",
+        },
+      })
     }
   }
 
@@ -334,9 +344,15 @@ export default function ChatPage() {
       await deleteMessageMutation({ messageId: messageToDelete as Id<"messages"> })
       setShowDeleteMessageDialog(false)
       setMessageToDelete(null)
+      toast.success("Message deleted")
     } catch (error) {
-      console.error("Failed to delete message:", error)
-      setDeleteError("An error occurred")
+      handleErrorWithContext(error, {
+        action: "delete message",
+        customMessages: {
+          generic: "Failed to delete message. Please try again.",
+        },
+      })
+      setDeleteError("Failed to delete message. Please try again.")
     } finally {
       setIsDeletingMessage(false)
     }
@@ -349,7 +365,8 @@ export default function ChatPage() {
         description: "Message copied to clipboard",
       })
     } catch (error) {
-      console.error("Failed to copy message:", error)
+      // Log error but don't show duplicate toast (toast.error already called below)
+      void handleError(error, { showToast: false })
       toast.error("Failed to copy", {
         description: "Could not copy message to clipboard",
       })
@@ -372,8 +389,14 @@ export default function ChatPage() {
       })
       setEditingMessage(null)
       setEditMessageContent("")
+      toast.success("Message updated")
     } catch (error) {
-      console.error("Failed to edit message:", error)
+      handleErrorWithContext(error, {
+        action: "update message",
+        customMessages: {
+          generic: "Failed to update message. Please try again.",
+        },
+      })
     } finally {
       setIsEditingMessage(false)
     }
@@ -420,9 +443,11 @@ export default function ChatPage() {
     } catch (error) {
       // If deletion fails, reset the navigation flag
       setIsNavigatingAway(false)
-      console.error("Failed to delete conversation:", error)
-      setDeleteError("An error occurred")
-      console.error("Failed to delete conversation:", error)
+      handleErrorWithContext(error, {
+        action: "delete conversation",
+        showToast: false,
+      })
+      setDeleteError("Failed to delete conversation. Please try again.")
     } finally {
       setIsDeletingConversation(false)
     }
@@ -442,8 +467,14 @@ export default function ChatPage() {
       })
       setShowArchiveConversationDialog(false)
       router.replace("/messages")
+      toast.success("Conversation archived")
     } catch (error) {
-      console.error("Failed to archive conversation:", error)
+      handleErrorWithContext(error, {
+        action: "archive conversation",
+        customMessages: {
+          generic: "Failed to archive conversation. Please try again.",
+        },
+      })
     } finally {
       setIsArchivingConversation(false)
     }

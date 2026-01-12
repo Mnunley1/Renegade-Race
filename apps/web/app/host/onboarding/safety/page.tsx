@@ -17,6 +17,7 @@ import { useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/lib/convex"
 import type { Id } from "@/lib/convex"
+import { handleErrorWithContext } from "@/lib/error-handler"
 
 export default function SafetyPage() {
   const router = useRouter()
@@ -107,8 +108,12 @@ export default function SafetyPage() {
       toast.success("Vehicle listing submitted successfully!")
       router.push("/host/onboarding/complete")
     } catch (error) {
-      console.error("Failed to submit listing:", error)
-      toast.error("An error occurred")
+      handleErrorWithContext(error, {
+        action: "submit listing",
+        customMessages: {
+          generic: "Failed to submit listing. Please try again.",
+        },
+      })
     } finally {
       setIsSubmitting(false)
     }

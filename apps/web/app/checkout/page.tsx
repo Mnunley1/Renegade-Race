@@ -164,7 +164,7 @@ function CheckoutPageContent() {
   const [openDropoffDate, setOpenDropoffDate] = useState(false)
   const [selectedAddOns, setSelectedAddOns] = useState<AddOn[]>(() => {
     // Auto-select required add-ons if vehicle is loaded
-    return vehicle?.addOns?.filter((addOn) => addOn.isRequired) || []
+    return vehicle?.addOns?.filter((addOn: AddOn) => addOn.isRequired) || []
   })
   const [isCreatingReservation, setIsCreatingReservation] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -172,7 +172,7 @@ function CheckoutPageContent() {
   // Update selected add-ons when vehicle loads
   useEffect(() => {
     if (vehicle?.addOns) {
-      const requiredAddOns = vehicle.addOns.filter((addOn) => addOn.isRequired)
+      const requiredAddOns = vehicle.addOns.filter((addOn: AddOn) => addOn.isRequired)
       if (requiredAddOns.length > 0) {
         setSelectedAddOns(requiredAddOns)
       }
@@ -195,6 +195,7 @@ function CheckoutPageContent() {
 
   const formatTimeForDisplay = (time24: string) => {
     const [hours, minutes] = time24.split(":")
+    if (!hours || !minutes) return time24
     const hour = Number.parseInt(hours, 10)
     const hour12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour
     const ampm = hour < 12 ? "AM" : "PM"
@@ -210,15 +211,15 @@ function CheckoutPageContent() {
   // Get blocked dates from availability (where isAvailable is false)
   const blockedDates =
     availability
-      ?.filter((item) => !item.isAvailable)
-      .map((item) => {
+      ?.filter((item: { isAvailable: boolean; date: string }) => !item.isAvailable)
+      .map((item: { date: string }) => {
         const date = new Date(item.date)
         date.setHours(0, 0, 0, 0)
         return date
       }) || []
 
   // Combine blocked dates (availability already accounts for reservations)
-  const unavailableDates = new Set(blockedDates.map((d) => d.toISOString().split("T")[0]))
+  const unavailableDates = new Set(blockedDates.map((d: Date) => d.toISOString().split("T")[0]))
 
   // Function to check if a date is unavailable
   const isDateUnavailable = (date: Date): boolean => {
@@ -349,7 +350,7 @@ function CheckoutPageContent() {
   if (reservation && clientSecret) {
     const vehicle = reservation.vehicle
     const primaryImage =
-      vehicle?.images?.find((img) => img.isPrimary)?.cardUrl || vehicle?.images?.[0]?.cardUrl || ""
+      vehicle?.images?.find((img: { isPrimary: boolean; cardUrl?: string }) => img.isPrimary)?.cardUrl || vehicle?.images?.[0]?.cardUrl || ""
 
     const options: StripeElementsOptions = {
       clientSecret,
@@ -438,7 +439,7 @@ function CheckoutPageContent() {
                   </div>
                   {reservation.addOns && reservation.addOns.length > 0 && (
                     <>
-                      {reservation.addOns.map((addOn) => (
+                      {reservation.addOns.map((addOn: AddOn) => (
                         <div className="flex justify-between text-sm" key={addOn.name}>
                           <span className="text-muted-foreground">{addOn.name}</span>
                           <span>+${addOn.price.toLocaleString()}</span>
@@ -518,7 +519,7 @@ function CheckoutPageContent() {
   if (!vehicle) return null
 
   const primaryImage =
-    vehicle.images?.find((img) => img.isPrimary)?.cardUrl || vehicle.images?.[0]?.cardUrl || ""
+    vehicle.images?.find((img: { isPrimary: boolean; cardUrl?: string }) => img.isPrimary)?.cardUrl || vehicle.images?.[0]?.cardUrl || ""
   // Check if form is valid and dates don't contain blocked dates
   const isValid =
     pickupDate &&
