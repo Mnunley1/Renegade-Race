@@ -284,6 +284,42 @@ export const setStripeAccountId = mutation({
   },
 })
 
+// Find user by Stripe account ID
+export const getByStripeAccountId = query({
+  args: { stripeAccountId: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("users")
+      .filter((q) => q.eq(q.field("stripeAccountId"), args.stripeAccountId))
+      .first()
+  },
+})
+
+// Update Stripe account status (called from webhook)
+export const updateStripeAccountStatus = internalMutation({
+  args: {
+    stripeAccountId: v.string(),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("active"),
+      v.literal("restricted"),
+      v.literal("disabled")
+    ),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db
+      .query("users")
+      .filter((q) => q.eq(q.field("stripeAccountId"), args.stripeAccountId))
+      .first()
+
+    if (user) {
+      await ctx.db.patch(user._id, {
+        stripeAccountStatus: args.status,
+      })
+    }
+  },
+})
+
 export const setStripeCustomerId = mutation({
   args: {
     userId: v.string(),

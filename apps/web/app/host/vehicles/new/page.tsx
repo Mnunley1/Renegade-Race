@@ -28,6 +28,8 @@ import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/lib/convex"
+import { COMMON_AMENITIES } from "@/lib/constants"
+import { handleErrorWithContext } from "@/lib/error-handler"
 
 // Transmission options matching onboarding flow
 const TRANSMISSION_OPTIONS = [
@@ -43,24 +45,6 @@ const DRIVETRAIN_OPTIONS = [
   { value: "fwd", label: "FWD (Front-Wheel Drive)" },
   { value: "awd", label: "AWD (All-Wheel Drive)" },
   { value: "4wd", label: "4WD (Four-Wheel Drive)" },
-]
-
-const COMMON_AMENITIES = [
-  "GPS Navigation",
-  "Bluetooth",
-  "Apple CarPlay",
-  "Android Auto",
-  "Premium Sound System",
-  "Racing Seats",
-  "Roll Cage",
-  "Fire Suppression System",
-  "Data Logger",
-  "Telemetry System",
-  "Track Tires",
-  "Racing Wheels",
-  "Aerodynamic Package",
-  "Racing Suspension",
-  "Performance Exhaust",
 ]
 
 export default function CreateVehiclePage() {
@@ -291,7 +275,13 @@ export default function CreateVehiclePage() {
           const key = await uploadFile(img.file)
           imageKeys.push(key)
         } catch (error) {
-          console.error(`Failed to upload image ${index + 1} (${img.file.name}):`, error)
+          handleErrorWithContext(error, {
+            action: `upload image ${index + 1}`,
+            customMessages: {
+              file_upload: `Failed to upload ${img.file.name}. Please try again.`,
+              generic: `Failed to upload ${img.file.name}. Please try again.`,
+            },
+          })
           // Re-throw with generic error
           throw new Error("Failed to upload image")
         }
@@ -326,12 +316,14 @@ export default function CreateVehiclePage() {
       toast.success("Vehicle listed successfully!")
       router.push("/host/vehicles/list")
     } catch (error) {
-      console.error("Error creating vehicle:", error)
-      const errorMessage =
-        error instanceof Error
-          ? error.message
-          : "An unknown error occurred. Please check the console for details."
-      toast.error(`Failed to create vehicle: ${errorMessage}`)
+      handleErrorWithContext(error, {
+        action: "create vehicle",
+        entity: "vehicle",
+        customMessages: {
+          file_upload: "Failed to upload vehicle images. Please try again.",
+          generic: "Failed to create vehicle. Please try again.",
+        },
+      })
     } finally {
       setIsSubmitting(false)
     }

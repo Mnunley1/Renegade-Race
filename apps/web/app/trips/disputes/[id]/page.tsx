@@ -13,6 +13,7 @@ import { useParams, useRouter } from "next/navigation"
 import { useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/lib/convex"
+import { handleErrorWithContext } from "@/lib/error-handler"
 
 export default function DisputeDetailPage() {
   const { user } = useUser()
@@ -41,8 +42,12 @@ export default function DisputeDetailPage() {
       setMessage("")
       toast.success("Message added successfully")
     } catch (error) {
-      console.error("Error adding message:", error)
-      toast.error("Failed to add message")
+      handleErrorWithContext(error, {
+        action: "add message",
+        customMessages: {
+          generic: "Failed to add message. Please try again.",
+        },
+      })
     } finally {
       setIsSubmitting(false)
     }

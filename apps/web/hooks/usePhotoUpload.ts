@@ -3,6 +3,7 @@ import { useRef, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/lib/convex"
 import { MAX_FILE_SIZE_BYTES, UPLOAD_DELAY_MS } from "@/lib/constants"
+import { handleErrorWithContext } from "@/lib/error-handler"
 
 type UsePhotoUploadOptions = {
   onUploadComplete?: (uploadedKeys: string[]) => void
@@ -54,8 +55,13 @@ export function usePhotoUpload(options: UsePhotoUploadOptions = {}) {
           const r2Key = await uploadFile(file)
           uploadedKeys.push(r2Key)
         } catch (error) {
-          console.error(`Failed to upload ${file.name}:`, error)
-          toast.error(`Failed to upload ${file.name}`)
+          handleErrorWithContext(error, {
+            action: `upload ${file.name}`,
+            customMessages: {
+              file_upload: `Failed to upload ${file.name}. Please try again.`,
+              generic: `Failed to upload ${file.name}. Please try again.`,
+            },
+          })
         }
       }
 
@@ -66,8 +72,13 @@ export function usePhotoUpload(options: UsePhotoUploadOptions = {}) {
         onUploadComplete?.(uploadedKeys)
       }
     } catch (error) {
-      console.error("Error uploading photos:", error)
-      toast.error("Failed to upload photos")
+      handleErrorWithContext(error, {
+        action: "upload photos",
+        customMessages: {
+          file_upload: "Failed to upload photos. Please try again.",
+          generic: "Failed to upload photos. Please try again.",
+        },
+      })
     } finally {
       setIsUploading(false)
       // Reset file input
