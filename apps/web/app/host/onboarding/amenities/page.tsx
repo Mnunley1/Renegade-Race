@@ -17,24 +17,8 @@ import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/lib/convex"
-
-const COMMON_AMENITIES = [
-  "GPS Navigation",
-  "Bluetooth",
-  "Apple CarPlay",
-  "Android Auto",
-  "Premium Sound System",
-  "Racing Seats",
-  "Roll Cage",
-  "Fire Suppression System",
-  "Data Logger",
-  "Telemetry System",
-  "Track Tires",
-  "Racing Wheels",
-  "Aerodynamic Package",
-  "Racing Suspension",
-  "Performance Exhaust",
-]
+import { COMMON_AMENITIES } from "@/lib/constants"
+import { handleErrorWithContext } from "@/lib/error-handler"
 
 export default function AmenitiesPage() {
   const router = useRouter()
@@ -100,8 +84,12 @@ export default function AmenitiesPage() {
 
       router.push("/host/onboarding/availability")
     } catch (error) {
-      console.error("Failed to save amenities:", error)
-      toast.error("An error occurred")
+      handleErrorWithContext(error, {
+        action: "save amenities",
+        customMessages: {
+          generic: "Failed to save amenities. Please try again.",
+        },
+      })
     } finally {
       setIsSubmitting(false)
     }

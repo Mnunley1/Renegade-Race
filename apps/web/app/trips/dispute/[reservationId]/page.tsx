@@ -12,16 +12,17 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select"
 import { Textarea } from "@workspace/ui/components/textarea"
-import { useUploadFile } from "@convex-dev/r2/react"
 import { useMutation, useQuery } from "convex/react"
 import { AlertTriangle, ArrowLeft, Loader2, Upload, X } from "lucide-react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
-import { useRef, useState } from "react"
+import { useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/lib/convex"
 import type { Id } from "@/lib/convex"
 import { getImageKitUrl } from "@/lib/imagekit"
+import { handleErrorWithContext } from "@/lib/error-handler"
+import { usePhotoUpload } from "@/hooks/usePhotoUpload"
 
 export default function DisputeCreationPage() {
   const { user } = useUser()
@@ -32,11 +33,16 @@ export default function DisputeCreationPage() {
   const [reason, setReason] = useState("")
   const [description, setDescription] = useState("")
   const [requestedResolution, setRequestedResolution] = useState("")
-  const [photos, setPhotos] = useState<string[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [isUploading, setIsUploading] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const uploadFile = useUploadFile(api.r2)
+
+  const {
+    photos,
+    setPhotos,
+    isUploading,
+    fileInputRef,
+    handlePhotoUpload,
+    handleRemovePhoto,
+  } = usePhotoUpload()
 
   // Fetch reservation and completion data
   const reservation = useQuery(
@@ -80,69 +86,19 @@ export default function DisputeCreationPage() {
       toast.success("Dispute created successfully")
       router.push("/trips/disputes")
     } catch (error) {
-      console.error("Error creating dispute:", error)
-      toast.error("Failed to create dispute")
+      handleErrorWithContext(error, {
+        action: "create dispute",
+        entity: "dispute",
+        customMessages: {
+          duplicate: "A dispute already exists for this reservation",
+          generic: "Failed to create dispute. Please try again or contact support.",
+        },
+      })
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  // Handle photo upload
-  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files
-    if (!files || files.length === 0) return
-
-    setIsUploading(true)
-    try {
-      const fileArray = Array.from(files)
-      const uploadedKeys: string[] = []
-
-      for (let index = 0; index < fileArray.length; index++) {
-        const file = fileArray[index]
-        if (!file.type.startsWith("image/")) {
-          toast.error(`${file.name} is not an image file`)
-          continue
-        }
-
-        // Check file size (max 10MB)
-        if (file.size > 10 * 1024 * 1024) {
-          toast.error(`${file.name} is too large. Maximum size is 10MB.`)
-          continue
-        }
-
-        try {
-          // Add a small delay between uploads to avoid rate limiting
-          if (index > 0) {
-            await new Promise((resolve) => setTimeout(resolve, 500))
-          }
-
-          const r2Key = await uploadFile(file)
-          uploadedKeys.push(r2Key)
-        } catch (error) {
-          console.error(`Failed to upload ${file.name}:`, error)
-          toast.error(`Failed to upload ${file.name}`)
-        }
-      }
-
-      if (uploadedKeys.length > 0) {
-        setPhotos((prev) => [...prev, ...uploadedKeys])
-        toast.success(`${uploadedKeys.length} photo(s) uploaded successfully`)
-      }
-    } catch (error) {
-      console.error("Error uploading photos:", error)
-      toast.error("Failed to upload photos")
-    } finally {
-      setIsUploading(false)
-      // Reset file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = ""
-      }
-    }
-  }
-
-  const handleRemovePhoto = (index: number) => {
-    setPhotos((prev) => prev.filter((_, i) => i !== index))
-  }
 
   if (!reservation) {
     return (

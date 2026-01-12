@@ -31,6 +31,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { VehicleGallery } from "@/components/vehicle-gallery"
 import { api } from "@/lib/convex"
 import type { Id } from "@/lib/convex"
+import { handleErrorWithContext } from "@/lib/error-handler"
 
 export default function VehicleDetailsPage() {
   const params = useParams()
@@ -94,14 +95,17 @@ export default function VehicleDetailsPage() {
     try {
       await toggleFavorite({ vehicleId: id as any })
     } catch (error: unknown) {
-      console.error("Error toggling favorite:", error)
-
       // If authentication error, show login dialog
       const errorMessage = error instanceof Error ? error.message : ""
       if (errorMessage.includes("Not authenticated") || errorMessage.includes("authentication")) {
         setShowLoginDialog(true)
       } else {
-        toast.error("An error occurred")
+        handleErrorWithContext(error, {
+          action: "update favorites",
+          customMessages: {
+            generic: "Failed to update favorites. Please try again.",
+          },
+        })
       }
     }
   }
@@ -139,14 +143,17 @@ export default function VehicleDetailsPage() {
       // Navigate to the messages page
       router.push(`/messages/${conversationId as string}`)
     } catch (error: unknown) {
-      console.error("Failed to start conversation:", error)
-
       // If authentication error, show login dialog
       const errorMessage = error instanceof Error ? error.message : ""
       if (errorMessage.includes("Not authenticated") || errorMessage.includes("authentication")) {
         setShowLoginDialog(true)
       } else {
-        toast.error("An error occurred")
+        handleErrorWithContext(error, {
+          action: "start conversation",
+          customMessages: {
+            generic: "Failed to start conversation. Please try again.",
+          },
+        })
       }
     } finally {
       setIsCreatingConversation(false)
@@ -159,7 +166,10 @@ export default function VehicleDetailsPage() {
     if (!hasTrackedView.current && vehicle && vehicle.isActive && id) {
       hasTrackedView.current = true
       trackView({ vehicleId: id as Id<"vehicles"> }).catch((error) => {
-        console.error("Failed to track view:", error)
+        handleErrorWithContext(error, {
+          action: "track view",
+          showToast: false,
+        })
         // Silently fail - analytics tracking shouldn't break the page
       })
     }
@@ -205,7 +215,10 @@ export default function VehicleDetailsPage() {
         platform,
       })
     } catch (error) {
-      console.error("Error sharing:", error)
+      handleErrorWithContext(error, {
+        action: "share vehicle",
+        showToast: false,
+      })
     }
   }
 

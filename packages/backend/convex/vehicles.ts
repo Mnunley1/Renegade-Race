@@ -53,7 +53,7 @@ export const getAllWithOptimizedImages = query({
         ])
 
         // Filter out vehicles from hosts without complete Stripe setup
-        if (!owner?.stripeAccountId) {
+        if (!owner?.stripeAccountId || owner.stripeAccountStatus !== "active") {
           return null
         }
 
@@ -226,7 +226,7 @@ export const searchWithAvailability = query({
         ])
 
         // Filter out vehicles from hosts without complete Stripe setup
-        if (!owner?.stripeAccountId) {
+        if (!owner?.stripeAccountId || owner.stripeAccountStatus !== "active") {
           return null
         }
 
@@ -306,7 +306,7 @@ export const getAll = query({
         ])
 
         // Filter out vehicles from hosts without complete Stripe setup
-        if (!owner?.stripeAccountId) {
+        if (!owner?.stripeAccountId || owner.stripeAccountStatus !== "active") {
           return null
         }
 

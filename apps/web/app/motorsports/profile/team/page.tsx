@@ -26,45 +26,19 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { api } from "@/lib/convex"
+import { handleErrorWithContext } from "@/lib/error-handler"
+import {
+  REAL_WORLD_CATEGORIES,
+  SIM_RACING_CATEGORIES,
+  SIM_RACING_PLATFORMS,
+  RACING_TYPES,
+} from "@/lib/constants"
 
+// Combine real-world and sim-racing categories for team specialties
 const COMMON_SPECIALTIES = [
-  "GT3",
-  "GT4",
-  "Formula",
-  "Open Wheel",
-  "Endurance",
-  "Time Attack",
-  "Drifting",
-  "Club Racing",
-  "Vintage Racing",
+  ...REAL_WORLD_CATEGORIES,
   "Cup Series",
-  "Track Days",
-  // Sim Racing Categories
-  "iRacing",
-  "Assetto Corsa Competizione",
-  "Gran Turismo",
-  "F1 Esports",
-  "Sim Racing - GT",
-  "Sim Racing - Formula",
-  "Sim Racing - Endurance",
-  "Sim Racing - Oval",
-]
-
-const SIM_RACING_PLATFORMS = [
-  "iRacing",
-  "Assetto Corsa Competizione",
-  "Gran Turismo 7",
-  "F1 24",
-  "rFactor 2",
-  "RaceRoom",
-  "Automobilista 2",
-  "Other",
-]
-
-const RACING_TYPES = [
-  { value: "real-world", label: "Real-World Racing" },
-  { value: "sim-racing", label: "Sim Racing" },
-  { value: "both", label: "Both" },
+  ...SIM_RACING_CATEGORIES,
 ]
 
 export default function CreateTeamProfilePage() {
@@ -142,8 +116,13 @@ export default function CreateTeamProfilePage() {
       // Redirect to motorsports page after successful creation
       router.push("/motorsports/teams")
     } catch (error) {
-      console.error("Error creating team profile:", error)
-      alert("Failed to create team profile. Please try again.")
+      handleErrorWithContext(error, {
+        action: "create team profile",
+        entity: "team profile",
+        customMessages: {
+          generic: "Failed to create team profile. Please try again.",
+        },
+      })
     } finally {
       setIsSubmitting(false)
     }

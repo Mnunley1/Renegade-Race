@@ -13,6 +13,7 @@ import { useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { api } from "@/lib/convex"
+import { handleErrorWithContext } from "@/lib/error-handler"
 import { cn } from "@workspace/ui/lib/utils"
 
 function MessagesPageContent() {
@@ -124,7 +125,12 @@ function MessagesPageContent() {
       setSelectedConversations([])
       setIsBulkMode(false)
     } catch (error) {
-      console.error("Failed to archive conversations:", error)
+      handleErrorWithContext(error, {
+        action: "archive conversations",
+        customMessages: {
+          generic: "Failed to archive conversations. Please try again.",
+        },
+      })
     } finally {
       setIsPerformingBulkAction(false)
     }
@@ -143,7 +149,12 @@ function MessagesPageContent() {
       setSelectedConversations([])
       setIsBulkMode(false)
     } catch (error) {
-      console.error("Failed to delete conversations:", error)
+      handleErrorWithContext(error, {
+        action: "delete conversations",
+        customMessages: {
+          generic: "Failed to delete conversations. Please try again.",
+        },
+      })
     } finally {
       setIsPerformingBulkAction(false)
     }
@@ -162,7 +173,12 @@ function MessagesPageContent() {
       setSelectedConversations([])
       setIsBulkMode(false)
     } catch (error) {
-      console.error("Failed to mark conversations as read:", error)
+      handleErrorWithContext(error, {
+        action: "mark conversations as read",
+        customMessages: {
+          generic: "Failed to mark conversations as read. Please try again.",
+        },
+      })
     } finally {
       setIsPerformingBulkAction(false)
     }

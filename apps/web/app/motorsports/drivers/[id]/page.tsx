@@ -49,6 +49,7 @@ import { useRouter } from "next/navigation"
 import { use, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/lib/convex"
+import { handleErrorWithContext } from "@/lib/error-handler"
 import type { Id } from "../../../../packages/backend/convex/_generated/dataModel"
 
 type DriverDetailPageProps = {
@@ -202,8 +203,12 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
         driverProfile.isActive ? "Profile hidden successfully" : "Profile made visible successfully"
       )
     } catch (error) {
-      console.error("Failed to update profile visibility:", error)
-      toast.error("An error occurred")
+      handleErrorWithContext(error, {
+        action: "update profile visibility",
+        customMessages: {
+          generic: "Failed to update profile visibility. Please try again.",
+        },
+      })
     } finally {
       setIsToggling(false)
     }
@@ -216,8 +221,12 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
       toast.success("Profile deleted successfully")
       router.push("/motorsports/drivers")
     } catch (error) {
-      console.error("Failed to delete profile:", error)
-      toast.error("An error occurred")
+      handleErrorWithContext(error, {
+        action: "delete profile",
+        customMessages: {
+          generic: "Failed to delete profile. Please try again.",
+        },
+      })
     } finally {
       setIsDeleting(false)
       setShowDeleteDialog(false)
@@ -677,8 +686,12 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
                   setConnectionMessage("")
                   setSelectedTeamId(null)
                 } catch (error) {
-                  console.error("Failed to send connection request:", error)
-                  toast.error("An error occurred")
+                  handleErrorWithContext(error, {
+                    action: "send connection request",
+                    customMessages: {
+                      generic: "Failed to send connection request. Please try again.",
+                    },
+                  })
                 } finally {
                   setIsRequestingConnection(false)
                 }

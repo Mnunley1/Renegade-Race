@@ -36,18 +36,6 @@ export default clerkMiddleware(async (auth, req) => {
     (sessionMetadata.orgRole as string | undefined) ||
     ((sessionMetadata.metadata as Record<string, unknown>)?.role as string | undefined)
 
-  // Debug logging (remove in production)
-  if (process.env.NODE_ENV === "development") {
-    // biome-ignore lint: Development debugging only
-    console.log("Admin check:", {
-      userId,
-      orgId,
-      role,
-      publicMetadata,
-      sessionClaimsKeys: sessionClaims ? Object.keys(sessionClaims) : null,
-    })
-  }
-
   if (role !== "admin") {
     // Redirect non-admin users to sign-in with error message
     const url = new URL("/sign-in", req.url)

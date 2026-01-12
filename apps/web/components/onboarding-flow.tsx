@@ -28,24 +28,8 @@ import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/lib/convex"
 import type { Id } from "@/lib/convex"
-
-const COMMON_AMENITIES = [
-  "GPS Navigation",
-  "Bluetooth",
-  "Apple CarPlay",
-  "Android Auto",
-  "Premium Sound System",
-  "Racing Seats",
-  "Roll Cage",
-  "Fire Suppression System",
-  "Data Logger",
-  "Telemetry System",
-  "Track Tires",
-  "Racing Wheels",
-  "Aerodynamic Package",
-  "Racing Suspension",
-  "Performance Exhaust",
-]
+import { COMMON_AMENITIES } from "@/lib/constants"
+import { handleErrorWithContext } from "@/lib/error-handler"
 
 const ADVANCE_NOTICE_OPTIONS = [
   { value: "same-day", label: "Same day" },
@@ -238,8 +222,12 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
       })
       setCurrentStep(2)
     } catch (error) {
-      console.error("Failed to save vehicle data:", error)
-      toast.error("An error occurred")
+      handleErrorWithContext(error, {
+        action: "save vehicle data",
+        customMessages: {
+          generic: "Failed to save vehicle data. Please try again.",
+        },
+      })
     } finally {
       setIsSubmittingVehicle(false)
     }
@@ -283,7 +271,13 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
           const key = await uploadFile(img.file)
           imageKeys.push(key)
         } catch (error) {
-          console.error(`Failed to upload image "${img.file.name}":`, error)
+          handleErrorWithContext(error, {
+            action: `upload image "${img.file.name}"`,
+            customMessages: {
+              file_upload: `Failed to upload ${img.file.name}. Please try again.`,
+              generic: `Failed to upload ${img.file.name}. Please try again.`,
+            },
+          })
           throw new Error("Failed to upload image")
         }
       }
@@ -306,8 +300,13 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
       toast.success("Photos uploaded successfully!")
       setCurrentStep(3)
     } catch (error) {
-      console.error("Failed to upload photos:", error)
-      toast.error("An error occurred")
+      handleErrorWithContext(error, {
+        action: "upload photos",
+        customMessages: {
+          file_upload: "Failed to upload photos. Please try again.",
+          generic: "Failed to upload photos. Please try again.",
+        },
+      })
     } finally {
       setIsSubmittingPhotos(false)
     }
@@ -357,8 +356,12 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
       })
       setCurrentStep(4)
     } catch (error) {
-      console.error("Failed to save amenities:", error)
-      toast.error("An error occurred")
+      handleErrorWithContext(error, {
+        action: "save amenities",
+        customMessages: {
+          generic: "Failed to save amenities. Please try again.",
+        },
+      })
     } finally {
       setIsSubmittingAmenities(false)
     }
@@ -385,8 +388,12 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
       })
       setCurrentStep(5)
     } catch (error) {
-      console.error("Failed to save availability:", error)
-      toast.error("An error occurred")
+      handleErrorWithContext(error, {
+        action: "save availability",
+        customMessages: {
+          generic: "Failed to save availability. Please try again.",
+        },
+      })
     } finally {
       setIsSubmittingAvailability(false)
     }
@@ -467,8 +474,12 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
       toast.success("Vehicle listing submitted successfully!")
       router.push("/host/onboarding/complete")
     } catch (error) {
-      console.error("Failed to submit listing:", error)
-      toast.error("An error occurred")
+      handleErrorWithContext(error, {
+        action: "submit vehicle listing",
+        customMessages: {
+          generic: "Failed to submit vehicle listing. Please try again.",
+        },
+      })
     } finally {
       setIsSubmittingSafety(false)
     }
