@@ -17,6 +17,7 @@
     "@convex-dev/r2": "^0.8.1",
     "@imagekit/next": "^2.1.3",
     "@renegade/backend": "workspace:*",
+    "@sentry/nextjs": "^8.45.0",
     "@stripe/react-stripe-js": "^3.8.0",
     "@stripe/stripe-js": "^4.9.0",
     "@workspace/ui": "workspace:*",

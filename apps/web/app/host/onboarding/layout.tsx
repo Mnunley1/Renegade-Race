@@ -17,6 +17,7 @@ import { toast } from "sonner"
 import { useOnboardingProtection } from "@/hooks/useOnboardingProtection"
 import { SimpleOnboardingProgress } from "@/components/simple-onboarding-progress"
 import { api } from "@/lib/convex"
+import { handleErrorWithContext } from "@/lib/error-handler"
 
 export default function OnboardingLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
@@ -39,8 +40,12 @@ export default function OnboardingLayout({ children }: { children: React.ReactNo
       setShowStartOverDialog(false)
       router.push("/host/onboarding")
     } catch (error) {
-      console.error("Failed to reset onboarding:", error)
-      toast.error("An error occurred")
+      handleErrorWithContext(error, {
+        action: "reset onboarding",
+        customMessages: {
+          generic: "Failed to reset onboarding. Please try again.",
+        },
+      })
     } finally {
       setIsResetting(false)
     }

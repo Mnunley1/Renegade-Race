@@ -29,62 +29,15 @@ import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/lib/convex"
 import { imagePresets } from "@/lib/imagekit"
-
-const EXPERIENCE_LEVELS = [
-  { value: "beginner", label: "Beginner" },
-  { value: "intermediate", label: "Intermediate" },
-  { value: "advanced", label: "Advanced" },
-  { value: "professional", label: "Professional" },
-]
-
-const COMMON_LICENSES = ["FIA", "NASA", "SCCA", "IMSA", "HPDE", "Other"]
-
-const REAL_WORLD_CATEGORIES = [
-  "GT3",
-  "GT4",
-  "Formula",
-  "Open Wheel",
-  "Endurance",
-  "Time Attack",
-  "Drifting",
-  "Club Racing",
-  "Vintage Racing",
-  "Track Days",
-]
-
-const SIM_RACING_CATEGORIES = [
-  "iRacing",
-  "Assetto Corsa Competizione",
-  "Gran Turismo",
-  "F1 Esports",
-  "Sim Racing - GT",
-  "Sim Racing - Formula",
-  "Sim Racing - Endurance",
-  "Sim Racing - Oval",
-]
-
-const SIM_RACING_PLATFORMS = [
-  "iRacing",
-  "Assetto Corsa Competizione",
-  "Gran Turismo 7",
-  "F1 24",
-  "rFactor 2",
-  "RaceRoom",
-  "Automobilista 2",
-  "Other",
-]
-
-const RACING_TYPES = [
-  { value: "real-world", label: "Real-World Racing" },
-  { value: "sim-racing", label: "Sim Racing" },
-  { value: "both", label: "Both" },
-]
-
-const AVAILABILITY_OPTIONS = [
-  { value: "single-race", label: "Single Race" },
-  { value: "multi-race", label: "Multi-Race" },
-  { value: "season-commitment", label: "Season Commitment" },
-]
+import {
+  COMMON_LICENSES,
+  EXPERIENCE_LEVELS,
+  REAL_WORLD_CATEGORIES,
+  SIM_RACING_CATEGORIES,
+  SIM_RACING_PLATFORMS,
+  RACING_TYPES,
+  AVAILABILITY_OPTIONS,
+} from "@/lib/constants"
 
 export default function CreateDriverProfilePage() {
   const router = useRouter()

@@ -69,7 +69,6 @@ registerRoutes(http, components.stripe, {
         });
 
         if (payment) {
-          console.log('Dispute created for payment:', payment._id);
           // You can add dispute handling logic here
         }
       }
@@ -88,9 +87,61 @@ registerRoutes(http, components.stripe, {
         if (payment) {
           // Payment success is already handled by payment_intent.succeeded
           // But we can add additional logic here if needed
-          console.log('Checkout session completed for payment:', payment._id);
         }
       }
+    },
+
+    // Handle account.updated - updates Stripe Connect account status
+    'account.updated': async (ctx, event: Stripe.AccountUpdatedEvent) => {
+      const account = event.data.object;
+      
+      // Only process Connect accounts (Express accounts)
+      if (account.type !== 'express') {
+        return;
+      }
+
+      // Find user by Stripe account ID
+      const user = await ctx.runQuery(api.users.getByStripeAccountId, {
+        stripeAccountId: account.id,
+      });
+
+      if (!user) {
+        console.log(`No user found for Stripe account ${account.id}`);
+        return;
+      }
+
+      // Determine account status based on Stripe account state
+      let status: "pending" | "active" | "restricted" | "disabled";
+
+      // Check if account is disabled
+      if (account.details_submitted === false || !account.charges_enabled) {
+        status = "pending";
+      } else if (account.payouts_enabled === false) {
+        // Account can accept charges but not payouts yet
+        status = "pending";
+      } else if (account.charges_enabled && account.payouts_enabled && account.details_submitted) {
+        // Check for restrictions or holds
+        const hasRestrictions = 
+          (account.requirements?.currently_due && account.requirements.currently_due.length > 0) ||
+          (account.requirements?.past_due && account.requirements.past_due.length > 0) ||
+          (account.requirements?.eventually_due && account.requirements.eventually_due.length > 0) ||
+          (account.requirements?.disabled_reason !== null && account.requirements?.disabled_reason !== undefined);
+
+        if (hasRestrictions) {
+          status = "restricted";
+        } else {
+          // Account is fully active with no holds or restrictions
+          status = "active";
+        }
+      } else {
+        status = "pending";
+      }
+
+      // Update the status in Convex
+      await ctx.runMutation(internal.users.updateStripeAccountStatus, {
+        stripeAccountId: account.id,
+        status,
+      });
     },
   },
 });
@@ -118,7 +169,8 @@ http.route({
         break;
       }
       default:
-        console.log('Ignored Clerk webhook event', event.type);
+        // Ignored Clerk webhook event
+        break;
     }
 
     return new Response(null, { status: 200 });

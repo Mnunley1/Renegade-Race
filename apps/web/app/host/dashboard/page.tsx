@@ -30,6 +30,7 @@ import { useRouter } from "next/navigation"
 import { useEffect, useMemo, useState } from "react"
 import { HostOnboardingChecklist } from "@/components/host-onboarding-checklist"
 import { api } from "@/lib/convex"
+import { handleError, handleErrorWithContext } from "@/lib/error-handler"
 
 export default function HostDashboardPage() {
   const { user } = useUser()
@@ -84,8 +85,9 @@ export default function HostDashboardPage() {
         const status = await fetchConnectStatus({ ownerId: user.id })
         setConnectStatus(status)
       } catch (error) {
-        console.error("Failed to load payout status:", error)
-        setConnectError("An error occurred")
+        handleError(error, { showToast: false })
+        const errorMessage = "Failed to load payout status"
+        setConnectError(errorMessage)
       } finally {
         setIsLoadingConnect(false)
       }
@@ -102,15 +104,15 @@ export default function HostDashboardPage() {
 
     // Calculate total earnings from confirmed reservations (in cents, convert to dollars)
     const totalEarnings =
-      confirmedReservations?.reduce((sum, res) => sum + (res.totalAmount || 0), 0) || 0
+      confirmedReservations?.reduce((sum: number, res: { totalAmount?: number }) => sum + (res.totalAmount || 0), 0) || 0
 
     // Get average rating from review stats
     const averageRating = reviewStats?.averageRating || 0
 
     // Calculate analytics totals
-    const totalViews = vehicleAnalytics?.reduce((sum, v) => sum + v.totalViews, 0) || 0
-    const totalShares = vehicleAnalytics?.reduce((sum, v) => sum + v.totalShares, 0) || 0
-    const totalFavorites = vehicleAnalytics?.reduce((sum, v) => sum + v.favoriteCount, 0) || 0
+    const totalViews = vehicleAnalytics?.reduce((sum: number, v: { totalViews: number }) => sum + v.totalViews, 0) || 0
+    const totalShares = vehicleAnalytics?.reduce((sum: number, v: { totalShares: number }) => sum + v.totalShares, 0) || 0
+    const totalFavorites = vehicleAnalytics?.reduce((sum: number, v: { favoriteCount: number }) => sum + v.favoriteCount, 0) || 0
 
     return {
       totalVehicles,
@@ -129,8 +131,8 @@ export default function HostDashboardPage() {
   const recentVehicles = useMemo(() => {
     if (!vehicles || vehicles.length === 0) return []
 
-    return vehicles.slice(0, 3).map((vehicle) => {
-      const primaryImage = vehicle.images?.find((img) => img.isPrimary) || vehicle.images?.[0]
+    return vehicles.slice(0, 3).map((vehicle: { _id: string; images?: Array<{ isPrimary: boolean; cardUrl?: string }>; make: string; model: string; year: number; isApproved?: boolean; isActive?: boolean; dailyRate?: number }) => {
+      const primaryImage = vehicle.images?.find((img: { isPrimary: boolean }) => img.isPrimary) || vehicle.images?.[0]
 
       // Calculate bookings and earnings from reservations
       const vehicleReservations = [
@@ -224,8 +226,9 @@ export default function HostDashboardPage() {
       const status = await fetchConnectStatus({ ownerId: user.id })
       setConnectStatus(status)
     } catch (error) {
-      console.error("Failed to start Stripe onboarding:", error)
-      setConnectError("An error occurred")
+      handleError(error, { showToast: false })
+      const errorMessage = "Failed to start Stripe onboarding. Please try again."
+      setConnectError(errorMessage)
     } finally {
       setIsLoadingConnect(false)
     }
@@ -241,8 +244,9 @@ export default function HostDashboardPage() {
         window.location.href = link.url
       }
     } catch (error) {
-      console.error("Failed to open Stripe dashboard:", error)
-      setConnectError("An error occurred")
+      handleError(error, { showToast: false })
+      const errorMessage = "Failed to open Stripe dashboard. Please try again."
+      setConnectError(errorMessage)
     } finally {
       setIsLoadingConnect(false)
     }
@@ -333,7 +337,7 @@ export default function HostDashboardPage() {
               <CardContent>
                 <div className="font-bold text-3xl">{stats.totalVehicles}</div>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {vehicles?.filter((v) => v.isApproved && v.isActive).length || 0} approved
+                  {vehicles?.filter((v: { isApproved?: boolean; isActive?: boolean }) => v.isApproved && v.isActive).length || 0} approved
                 </p>
               </CardContent>
             </Card>
@@ -394,13 +398,13 @@ export default function HostDashboardPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3">
-                    {pendingReservations?.slice(0, 3).map((reservation) => {
+                    {pendingReservations?.slice(0, 3).map((reservation: { _id: string; createdAt: number; totalAmount?: number; vehicle?: { year: number; make: string; model: string; images?: Array<{ isPrimary: boolean; cardUrl?: string }> }; renter?: { name?: string } }) => {
                       const vehicleName = reservation.vehicle
                         ? `${reservation.vehicle.year} ${reservation.vehicle.make} ${reservation.vehicle.model}`
                         : "Vehicle"
                       const renterName = reservation.renter?.name || "Guest"
                       const primaryImage =
-                        reservation.vehicle?.images?.find((img) => img.isPrimary) ||
+                        reservation.vehicle?.images?.find((img: { isPrimary: boolean }) => img.isPrimary) ||
                         reservation.vehicle?.images?.[0]
 
                       const hasImage = primaryImage?.cardUrl
@@ -412,7 +416,7 @@ export default function HostDashboardPage() {
                         >
                           <div className="flex items-center gap-4 rounded-lg border bg-background p-4 transition-colors hover:bg-muted/50">
                             <div className="relative flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted">
-                              {hasImage ? (
+                              {hasImage && primaryImage?.cardUrl ? (
                                 <Image
                                   alt={vehicleName}
                                   className="object-cover"
@@ -476,7 +480,7 @@ export default function HostDashboardPage() {
                   </div>
                 ) : (
                   <div className="grid gap-4 sm:grid-cols-1">
-                    {recentVehicles.map((vehicle) => (
+                    {recentVehicles.map((vehicle: { id: string; name: string; image?: string; status?: string; year: number; make: string; model: string; dailyRate?: number; bookings: number; earnings: number }) => (
                       <Link key={vehicle.id} href={`/host/vehicles/${vehicle.id}`}>
                         <Card className="group overflow-hidden transition-all hover:shadow-lg">
                           <div className="flex flex-col sm:flex-row">
@@ -489,11 +493,11 @@ export default function HostDashboardPage() {
                                     className="object-cover transition-transform duration-300 group-hover:scale-105"
                                     fill
                                     sizes="(max-width: 640px) 100vw, 192px"
-                                    src={vehicle.image}
+                                    src={vehicle.image || ""}
                                   />
                                   {/* Status badge overlay */}
                                   <div className="absolute top-3 left-3">
-                                    {getStatusBadge(vehicle.status)}
+                                    {getStatusBadge(vehicle.status || "")}
                                   </div>
                                 </>
                               ) : (
@@ -504,7 +508,7 @@ export default function HostDashboardPage() {
                                   </div>
                                   {/* Status badge overlay */}
                                   <div className="absolute top-3 left-3">
-                                    {getStatusBadge(vehicle.status)}
+                                    {getStatusBadge(vehicle.status || "")}
                                   </div>
                                 </>
                               )}

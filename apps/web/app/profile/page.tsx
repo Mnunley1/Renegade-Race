@@ -21,6 +21,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/lib/convex"
 import { imagePresets } from "@/lib/imagekit"
+import { handleErrorWithContext } from "@/lib/error-handler"
 
 const DEFAULT_MEMBER_YEAR = 2024
 const MAX_IMAGE_SIZE_MB = 5
@@ -152,8 +153,13 @@ export default function ProfilePage() {
       await updateProfileImage({ r2Key: key })
       toast.success("Profile picture updated successfully")
     } catch (error) {
-      console.error("Failed to upload profile picture:", error)
-      toast.error("An error occurred")
+      handleErrorWithContext(error, {
+        action: "upload profile picture",
+        customMessages: {
+          file_upload: "Image is too large. Please use an image smaller than 10MB.",
+          generic: "Failed to upload profile picture. Please try again.",
+        },
+      })
     } finally {
       setIsUploadingImage(false)
       // Reset file input

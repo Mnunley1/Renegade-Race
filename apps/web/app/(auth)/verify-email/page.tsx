@@ -82,13 +82,14 @@ export default function VerifyEmailPage() {
       const clerkError = err as ClerkError
       console.error("Resend verification code error:", clerkError)
       const errorMessage = clerkError?.errors?.[0]?.message || "Failed to resend code"
-      setError(errorMessage)
-
+      
       // Show helpful message if it's a rate limit or email issue
-      if (errorMessage.includes("limit") || errorMessage.includes("email")) {
+      if (process.env.NODE_ENV === "development" && (errorMessage.includes("limit") || errorMessage.includes("email"))) {
         setError(
           `${errorMessage}. In development mode, Clerk has a limit of 100 emails per month. Try using a test email with +clerk_test (e.g., yourname+clerk_test@example.com) or check your spam folder.`
         )
+      } else {
+        setError(errorMessage)
       }
     } finally {
       setIsResending(false)
@@ -156,7 +157,7 @@ export default function VerifyEmailPage() {
               <p className="text-muted-foreground text-xs">
                 Enter the 6-digit code sent to your email
               </p>
-              {signUp.emailAddress?.includes("+clerk_test") && (
+              {process.env.NODE_ENV === "development" && signUp.emailAddress?.includes("+clerk_test") && (
                 <p className="font-medium text-primary text-xs">
                   Using test email? Use code: <span className="font-mono">424242</span>
                 </p>
