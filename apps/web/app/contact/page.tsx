@@ -17,6 +17,7 @@ import { useState } from "react"
 import { useMutation } from "convex/react"
 import { api } from "@/lib/convex"
 import { toast } from "sonner"
+import { handleErrorWithContext } from "@/lib/error-handler"
 
 export default function ContactPage() {
   const [formData, setFormData] = useState({
@@ -43,8 +44,13 @@ export default function ContactPage() {
       toast.success("Message sent successfully! We'll get back to you soon.")
       setFormData({ name: "", email: "", subject: "", message: "" })
     } catch (error) {
-      console.error("Failed to send message:", error)
-      toast.error("An error occurred")
+      handleErrorWithContext(error, {
+        action: "send message",
+        customMessages: {
+          network: "Failed to send your message. Please check your connection and try again, or email us directly at support@renegade.com",
+          generic: "Failed to send your message. Please try again or email us directly at support@renegade.com",
+        },
+      })
     } finally {
       setIsSubmitting(false)
     }

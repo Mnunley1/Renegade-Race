@@ -16,6 +16,7 @@ import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/lib/convex"
+import { handleErrorWithContext } from "@/lib/error-handler"
 
 export default function PhotosPage() {
   const router = useRouter()
@@ -68,7 +69,13 @@ export default function PhotosPage() {
           const key = await uploadFile(img.file)
           imageKeys.push(key)
         } catch (error) {
-          console.error(`Failed to upload image "${img.file.name}" (${index + 1} of ${images.length}):`, error)
+          handleErrorWithContext(error, {
+            action: `upload image "${img.file.name}"`,
+            customMessages: {
+              file_upload: `Failed to upload ${img.file.name}. Please try again.`,
+              generic: `Failed to upload ${img.file.name}. Please try again.`,
+            },
+          })
           throw new Error("Failed to upload image")
         }
       }
@@ -93,8 +100,13 @@ export default function PhotosPage() {
       toast.success("Photos uploaded successfully!")
       router.push("/host/onboarding/amenities")
     } catch (error) {
-      console.error("Failed to upload photos:", error)
-      toast.error("An error occurred")
+      handleErrorWithContext(error, {
+        action: "upload photos",
+        customMessages: {
+          file_upload: "Failed to upload photos. Please try again.",
+          generic: "Failed to upload photos. Please try again.",
+        },
+      })
     } finally {
       setIsSubmitting(false)
     }

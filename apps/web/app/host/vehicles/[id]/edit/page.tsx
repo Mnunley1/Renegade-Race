@@ -31,6 +31,7 @@ import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/lib/convex"
 import { imagePresets } from "@/lib/imagekit"
+import { handleErrorWithContext } from "@/lib/error-handler"
 
 const TRANSMISSION_OPTIONS = ["Manual", "Automatic", "PDK", "DCT", "CVT"]
 const DRIVETRAIN_OPTIONS = ["RWD", "AWD", "FWD"]
@@ -283,8 +284,13 @@ export default function EditVehiclePage() {
 
           toast.success(`Image ${file.name} uploaded successfully`)
         } catch (error) {
-          console.error("Error uploading image:", error)
-          toast.error(`Failed to upload ${file.name}`)
+          handleErrorWithContext(error, {
+            action: `upload ${file.name}`,
+            customMessages: {
+              file_upload: `Failed to upload ${file.name}. Please try again.`,
+              generic: `Failed to upload ${file.name}. Please try again.`,
+            },
+          })
         }
       }
     } finally {
@@ -301,8 +307,12 @@ export default function EditVehiclePage() {
       await removeImage({ imageId: imageId as any })
       toast.success("Image deleted successfully")
     } catch (error) {
-      console.error("Error deleting image:", error)
-      toast.error("Failed to delete image")
+      handleErrorWithContext(error, {
+        action: "delete image",
+        customMessages: {
+          generic: "Failed to delete image. Please try again.",
+        },
+      })
     }
   }
 
@@ -311,8 +321,12 @@ export default function EditVehiclePage() {
       await updateImage({ imageId: imageId as any, isPrimary: true })
       toast.success("Primary image updated")
     } catch (error) {
-      console.error("Error setting primary image:", error)
-      toast.error("Failed to set primary image")
+      handleErrorWithContext(error, {
+        action: "set primary image",
+        customMessages: {
+          generic: "Failed to set primary image. Please try again.",
+        },
+      })
     }
   }
 
@@ -352,8 +366,12 @@ export default function EditVehiclePage() {
 
       toast.success("Image order updated")
     } catch (error) {
-      console.error("Error updating image order:", error)
-      toast.error("Failed to update image order")
+      handleErrorWithContext(error, {
+        action: "update image order",
+        customMessages: {
+          generic: "Failed to update image order. Please try again.",
+        },
+      })
       // Reload images to revert UI changes
       if (vehicle) {
         const sortedImages = [...(vehicle.images || [])].sort((a, b) => a.order - b.order)
@@ -393,8 +411,13 @@ export default function EditVehiclePage() {
       // Redirect to vehicle detail page after successful update
       router.push(`/host/vehicles/${vehicleId}`)
     } catch (error) {
-      console.error("Error updating vehicle:", error)
-      alert("Failed to update vehicle. Please try again.")
+      handleErrorWithContext(error, {
+        action: "update vehicle",
+        entity: "vehicle",
+        customMessages: {
+          generic: "Failed to update vehicle. Please try again.",
+        },
+      })
     } finally {
       setIsSubmitting(false)
     }

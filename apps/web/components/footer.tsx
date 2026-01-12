@@ -56,9 +56,26 @@ export function Footer() {
         </div>
 
         <div className="mt-8 border-border border-t pt-8">
-          <p className="text-center text-muted-foreground text-sm">
-            © {new Date().getFullYear()} Renegade. All rights reserved.
-          </p>
+          <div className="flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
+            <p className="text-center text-muted-foreground text-sm">
+              © {new Date().getFullYear()} Renegade. All rights reserved.
+            </p>
+            <div className="flex items-center gap-4 text-muted-foreground text-sm">
+              <Link
+                className="transition-colors hover:text-foreground"
+                href="/privacy"
+              >
+                Privacy Policy
+              </Link>
+              <span>•</span>
+              <Link
+                className="transition-colors hover:text-foreground"
+                href="/terms"
+              >
+                Terms of Service
+              </Link>
+            </div>
+          </div>
         </div>
       </div>
     </footer>

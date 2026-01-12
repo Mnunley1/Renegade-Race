@@ -50,7 +50,7 @@ function CheckoutSuccessContent() {
 
   const vehicle = reservation.vehicle
   const primaryImage =
-    vehicle?.images?.find((img) => img.isPrimary)?.cardUrl || vehicle?.images?.[0]?.cardUrl || ""
+    vehicle?.images?.find((img: { isPrimary: boolean; cardUrl?: string }) => img.isPrimary)?.cardUrl || vehicle?.images?.[0]?.cardUrl || ""
 
   return (
     <div className="container mx-auto max-w-4xl px-4 py-8">

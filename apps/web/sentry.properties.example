@@ -1,0 +1,10 @@
+# Sentry Configuration for Source Maps
+# Copy this file to sentry.properties and fill in your auth token
+# DO NOT commit sentry.properties to git (it contains your auth token)
+
+defaults.org=renegade-i0
+defaults.project=javascript-nextjs
+auth.token=your-auth-token-here
+
+# Optional: Set release version
+# defaults.url=https://sentry.io/

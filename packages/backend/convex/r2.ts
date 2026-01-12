@@ -94,7 +94,6 @@ export const { generateUploadUrl, syncMetadata } = r2.clientApi({
   onUpload: async (ctx, bucket, key) => {
     // Optional: Log upload or perform additional actions
     // This runs after the file is uploaded to R2 and metadata is synced
-    console.log(`File uploaded to R2: ${key}`)
   },
 })
 

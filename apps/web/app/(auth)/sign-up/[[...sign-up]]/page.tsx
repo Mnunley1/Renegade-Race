@@ -13,6 +13,7 @@ import {
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import { Separator } from "@workspace/ui/components/separator"
+import { handleError } from "@/lib/error-handler"
 import { ArrowRight, Eye, EyeOff, Lock, Mail, User } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -68,7 +69,7 @@ export default function SignUpPage() {
             router.push("/verify-email")
           } catch (verifyErr: unknown) {
             const verifyError = verifyErr as ClerkError
-            console.error("Email verification error:", verifyError)
+            handleError(verifyError, { showToast: false })
             setError(
               verifyError?.errors?.[0]?.message ||
                 "Account created but failed to send verification email. Please try resending from the verification page."
@@ -93,7 +94,7 @@ export default function SignUpPage() {
       }
     } catch (err: unknown) {
       const clerkError = err as ClerkError
-      console.error("Sign-up error:", clerkError)
+      handleError(clerkError, { showToast: false })
       setError(clerkError?.errors?.[0]?.message || "Failed to create account")
       setIsLoading(false)
     }
