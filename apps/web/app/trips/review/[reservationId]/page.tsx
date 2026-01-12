@@ -6,16 +6,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/componen
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import { Textarea } from "@workspace/ui/components/textarea"
-import { useUploadFile } from "@convex-dev/r2/react"
 import { useMutation, useQuery } from "convex/react"
 import { ArrowLeft, Loader2, Star, Upload, X } from "lucide-react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/lib/convex"
 import type { Id } from "@/lib/convex"
 import { getImageKitUrl } from "@/lib/imagekit"
+import { handleErrorWithContext } from "@/lib/error-handler"
+import { usePhotoUpload } from "@/hooks/usePhotoUpload"
 
 export default function ReviewSubmissionPage() {
   const { user } = useUser()
@@ -30,11 +31,16 @@ export default function ReviewSubmissionPage() {
   const [overallExperience, setOverallExperience] = useState(0)
   const [title, setTitle] = useState("")
   const [review, setReview] = useState("")
-  const [photos, setPhotos] = useState<string[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [isUploading, setIsUploading] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const uploadFile = useUploadFile(api.r2)
+
+  const {
+    photos,
+    setPhotos,
+    isUploading,
+    fileInputRef,
+    handlePhotoUpload,
+    handleRemovePhoto,
+  } = usePhotoUpload()
 
   // Fetch reservation and completion data
   const reservation = useQuery(
@@ -119,69 +125,19 @@ export default function ReviewSubmissionPage() {
       }
       router.push("/trips")
     } catch (error) {
-      console.error("Error submitting review:", error)
-      toast.error(existingReview ? "Failed to update review" : "Failed to submit review")
+      handleErrorWithContext(error, {
+        action: existingReview ? "update review" : "submit review",
+        entity: "review",
+        customMessages: {
+          duplicate: "You have already submitted a review for this rental",
+          generic: existingReview ? "Failed to update review. Please try again." : "Failed to submit review. Please try again.",
+        },
+      })
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  // Handle photo upload
-  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files
-    if (!files || files.length === 0) return
-
-    setIsUploading(true)
-    try {
-      const fileArray = Array.from(files)
-      const uploadedKeys: string[] = []
-
-      for (let index = 0; index < fileArray.length; index++) {
-        const file = fileArray[index]
-        if (!file.type.startsWith("image/")) {
-          toast.error(`${file.name} is not an image file`)
-          continue
-        }
-
-        // Check file size (max 10MB)
-        if (file.size > 10 * 1024 * 1024) {
-          toast.error(`${file.name} is too large. Maximum size is 10MB.`)
-          continue
-        }
-
-        try {
-          // Add a small delay between uploads to avoid rate limiting
-          if (index > 0) {
-            await new Promise((resolve) => setTimeout(resolve, 500))
-          }
-
-          const r2Key = await uploadFile(file)
-          uploadedKeys.push(r2Key)
-        } catch (error) {
-          console.error(`Failed to upload ${file.name}:`, error)
-          toast.error(`Failed to upload ${file.name}`)
-        }
-      }
-
-      if (uploadedKeys.length > 0) {
-        setPhotos((prev) => [...prev, ...uploadedKeys])
-        toast.success(`${uploadedKeys.length} photo(s) uploaded successfully`)
-      }
-    } catch (error) {
-      console.error("Error uploading photos:", error)
-      toast.error("Failed to upload photos")
-    } finally {
-      setIsUploading(false)
-      // Reset file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = ""
-      }
-    }
-  }
-
-  const handleRemovePhoto = (index: number) => {
-    setPhotos((prev) => prev.filter((_, i) => i !== index))
-  }
 
   const StarRating = ({
     value,

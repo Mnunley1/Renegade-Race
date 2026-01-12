@@ -26,6 +26,7 @@ import { useTheme } from "next-themes"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/lib/convex"
+import { handleErrorWithContext } from "@/lib/error-handler"
 import { Checkbox } from "@workspace/ui/components/checkbox"
 
 export default function SettingsPage() {
@@ -79,7 +80,10 @@ export default function SettingsPage() {
         setPaymentMethods(methods)
         setInvoices(invoiceData)
       } catch (error) {
-        console.error("Failed to load billing data:", error)
+        handleErrorWithContext(error, {
+          action: "load billing data",
+          showToast: false,
+        })
       } finally {
         setIsLoadingPaymentMethods(false)
         setIsLoadingInvoices(false)
@@ -112,8 +116,12 @@ export default function SettingsPage() {
       })
       toast.success("Notification preferences saved successfully")
     } catch (error) {
-      console.error("Failed to save notification preferences:", error)
-      toast.error("Failed to save notification preferences. Please try again.")
+      handleErrorWithContext(error, {
+        action: "save notification preferences",
+        customMessages: {
+          generic: "Failed to save notification preferences. Please try again.",
+        },
+      })
     } finally {
       setIsSavingNotifications(false)
     }

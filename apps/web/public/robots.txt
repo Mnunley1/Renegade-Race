@@ -1,0 +1,15 @@
+# https://www.robotstxt.org/robotstxt.html
+User-agent: *
+Allow: /
+
+# Disallow admin and private routes
+Disallow: /admin/
+Disallow: /api/
+Disallow: /profile/
+Disallow: /host/
+Disallow: /messages/
+Disallow: /checkout/
+Disallow: /trips/
+
+# Sitemap
+Sitemap: https://renegaderentals.com/sitemap.xml

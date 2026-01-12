@@ -9,6 +9,10 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  // Enable Sentry instrumentation
+  experimental: {
+    instrumentationHook: true,
+  },
   transpilePackages: ["@workspace/ui", "@renegade/backend"],
   images: {
     remotePatterns: [

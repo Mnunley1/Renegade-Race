@@ -14,6 +14,7 @@ import type { ComponentProps } from "react"
 import { useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/lib/convex"
+import { handleErrorWithContext } from "@/lib/error-handler"
 
 interface VehicleCardProps extends ComponentProps<"div"> {
   id: string
@@ -88,13 +89,17 @@ export function VehicleCard({
     try {
       await toggleFavorite({ vehicleId: id as any })
     } catch (error: unknown) {
-      console.error("Error toggling favorite:", error)
-      toast.error("An error occurred")
-
       // If authentication error, show login dialog
       const errorMessage = error instanceof Error ? error.message : String(error)
       if (errorMessage.includes("Not authenticated") || errorMessage.includes("authentication")) {
         setShowLoginDialog(true)
+      } else {
+        handleErrorWithContext(error, {
+          action: "update favorites",
+          customMessages: {
+            generic: "Failed to update favorites. Please try again.",
+          },
+        })
       }
     }
   }

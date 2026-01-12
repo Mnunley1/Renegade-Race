@@ -20,6 +20,7 @@ import {
 import Link from "next/link"
 import { useMemo, useState } from "react"
 import { api } from "@/lib/convex"
+import { handleErrorWithContext } from "@/lib/error-handler"
 
 export default function HostReservationsPage() {
   const { user } = useUser()
@@ -166,8 +167,12 @@ export default function HostReservationsPage() {
         reservationId: reservationId as any,
       })
     } catch (error) {
-      console.error("Error approving reservation:", error)
-      alert("Failed to approve reservation. Please try again.")
+      handleErrorWithContext(error, {
+        action: "approve reservation",
+        customMessages: {
+          generic: "Failed to approve reservation. Please try again.",
+        },
+      })
     }
   }
 
@@ -177,8 +182,12 @@ export default function HostReservationsPage() {
         reservationId: reservationId as any,
       })
     } catch (error) {
-      console.error("Error declining reservation:", error)
-      alert("Failed to decline reservation. Please try again.")
+      handleErrorWithContext(error, {
+        action: "decline reservation",
+        customMessages: {
+          generic: "Failed to decline reservation. Please try again.",
+        },
+      })
     }
   }
 
