@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "next build --webpack",
+    "build": "next build",
     "start": "next start",
     "lint": "biome lint .",
     "lint:fix": "biome lint --write .",
@@ -17,10 +17,12 @@
     "@renegade/backend": "workspace:*",
     "@workspace/ui": "workspace:*",
     "convex": "^1.27.0",
+    "date-fns": "^4.1.0",
     "lucide-react": "^0.475.0",
     "next": "^16.1.1",
     "next-themes": "^0.4.6",
     "react": "^19.1.1",
+    "react-day-picker": "^9.4.4",
     "react-dom": "^19.1.1",
     "sonner": "^2.0.7"
   },
