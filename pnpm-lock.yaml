@@ -38,6 +38,9 @@ importers:
       convex:
         specifier: ^1.27.0
         version: 1.28.0(@clerk/clerk-react@5.59.2(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react@19.1.1)
+      date-fns:
+        specifier: ^4.1.0
+        version: 4.1.0
       lucide-react:
         specifier: ^0.475.0
         version: 0.475.0(react@19.1.1)
@@ -50,6 +53,9 @@ importers:
       react:
         specifier: ^19.1.1
         version: 19.1.1
+      react-day-picker:
+        specifier: ^9.4.4
+        version: 9.13.0(react@19.1.1)
       react-dom:
         specifier: ^19.1.1
         version: 19.1.1(react@19.1.1)
@@ -153,7 +159,7 @@ importers:
         version: 0.2.1(convex-helpers@0.1.106(convex@1.28.0(@clerk/clerk-react@5.59.2(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react@19.1.1))(react@19.1.1)(typescript@5.9.2)(zod@4.1.12))(convex@1.28.0(@clerk/clerk-react@5.59.2(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react@19.1.1))(react@19.1.1)
       '@convex-dev/stripe':
         specifier: ^0.1.0
-        version: 0.1.1(@types/node@20.19.9)(convex@1.28.0(@clerk/clerk-react@5.59.2(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react@19.1.1))(next@16.1.1(@opentelemetry/api@1.9.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(svelte@5.45.8)
+        version: 0.1.1(@types/node@20.19.28)(convex@1.28.0(@clerk/clerk-react@5.59.2(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react@19.1.1))(next@16.1.1(@opentelemetry/api@1.9.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(svelte@5.45.8)
       convex:
         specifier: ^1.27.0
         version: 1.28.0(@clerk/clerk-react@5.59.2(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react@19.1.1)
@@ -162,7 +168,7 @@ importers:
         version: 4.8.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       stripe:
         specifier: ^18.5.0
-        version: 18.5.0(@types/node@20.19.9)
+        version: 18.5.0(@types/node@20.19.28)
       svix:
         specifier: ^1.77.0
         version: 1.81.0
@@ -2306,6 +2312,9 @@ packages:
   '@types/mysql@2.15.26':
     resolution: {integrity: sha512-DSLCOXhkvfS5WNNPbfn2KdICAmk8lLc+/PNvnPnF7gOdMZCxopXduqv0OQ13y/yA/zXTSikZZqVgybUxOEg6YQ==}
 
+  '@types/node@20.19.28':
+    resolution: {integrity: sha512-VyKBr25BuFDzBFCK5sUM6ZXiWfqgCTwTAOK8qzGV/m9FCirXYDlmczJ+d5dXBAQALGCdRRdbteKYfJ84NGEusw==}
+
   '@types/node@20.19.9':
     resolution: {integrity: sha512-cuVNgarYWZqxRJDQHEB58GEONhOK79QVR/qYx4S7kcUObQvUwvFnYxJuuHUKm2aieN9X3yZB4LZsuYNU1Qphsw==}
 
@@ -2678,6 +2687,10 @@ packages:
 
   enhanced-resolve@5.18.2:
     resolution: {integrity: sha512-6Jw4sE1maoRJo3q8MsSIn2onJFbLTOjY9hlx4DZXmOKvLRd1Ok2kXmAGXaafL2+ijsJZ1ClYbl/pmqr9+k4iUQ==}
+    engines: {node: '>=10.13.0'}
+
+  enhanced-resolve@5.18.4:
+    resolution: {integrity: sha512-LgQMM4WXU3QI+SYgEc2liRgznaD5ojbmY3sb8LxyguVkIg5FxdpTkvk72te2R38/TGKxH634oLxXRGY6d7AP+Q==}
     engines: {node: '>=10.13.0'}
 
   entities@4.5.0:
@@ -3247,6 +3260,12 @@ packages:
 
   react-day-picker@9.11.1:
     resolution: {integrity: sha512-l3ub6o8NlchqIjPKrRFUCkTUEq6KwemQlfv3XZzzwpUeGwmDJ+0u0Upmt38hJyd7D/vn2dQoOoLV/qAp0o3uUw==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      react: '>=16.8.0'
+
+  react-day-picker@9.13.0:
+    resolution: {integrity: sha512-euzj5Hlq+lOHqI53NiuNhCP8HWgsPf/bBAVijR50hNaY1XwjKjShAnIe8jm8RD2W9IJUvihDIZ+KrmqfFzNhFQ==}
     engines: {node: '>=18'}
     peerDependencies:
       react: '>=16.8.0'
@@ -4627,13 +4646,13 @@ snapshots:
     transitivePeerDependencies:
       - react
 
-  '@convex-dev/stripe@0.1.1(@types/node@20.19.9)(convex@1.28.0(@clerk/clerk-react@5.59.2(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react@19.1.1))(next@16.1.1(@opentelemetry/api@1.9.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(svelte@5.45.8)':
+  '@convex-dev/stripe@0.1.1(@types/node@20.19.28)(convex@1.28.0(@clerk/clerk-react@5.59.2(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react@19.1.1))(next@16.1.1(@opentelemetry/api@1.9.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(svelte@5.45.8)':
     dependencies:
       '@clerk/clerk-react': 5.58.1(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       '@vercel/analytics': 1.6.1(next@16.1.1(@opentelemetry/api@1.9.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react@19.1.1)(svelte@5.45.8)
       convex: 1.28.0(@clerk/clerk-react@5.59.2(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react@19.1.1)
       react: 19.1.1
-      stripe: 20.0.0(@types/node@20.19.9)
+      stripe: 20.0.0(@types/node@20.19.28)
     transitivePeerDependencies:
       - '@remix-run/react'
       - '@sveltejs/kit'
@@ -6353,6 +6372,10 @@ snapshots:
     dependencies:
       '@types/node': 20.19.9
 
+  '@types/node@20.19.28':
+    dependencies:
+      undici-types: 6.21.0
+
   '@types/node@20.19.9':
     dependencies:
       undici-types: 6.21.0
@@ -6691,6 +6714,11 @@ snapshots:
       graceful-fs: 4.2.11
       tapable: 2.2.2
 
+  enhanced-resolve@5.18.4:
+    dependencies:
+      graceful-fs: 4.2.11
+      tapable: 2.3.0
+
   entities@4.5.0: {}
 
   es-define-property@1.0.1: {}
@@ -6917,7 +6945,7 @@ snapshots:
 
   jest-worker@27.5.1:
     dependencies:
-      '@types/node': 20.19.9
+      '@types/node': 20.19.28
       merge-stream: 2.0.0
       supports-color: 8.1.1
 
@@ -7210,6 +7238,13 @@ snapshots:
       date-fns-jalali: 4.1.0-0
       react: 19.1.1
 
+  react-day-picker@9.13.0(react@19.1.1):
+    dependencies:
+      '@date-fns/tz': 1.4.1
+      date-fns: 4.1.0
+      date-fns-jalali: 4.1.0-0
+      react: 19.1.1
+
   react-dom@19.1.1(react@19.1.1):
     dependencies:
       react: 19.1.1
@@ -7410,17 +7445,17 @@ snapshots:
 
   std-env@3.10.0: {}
 
-  stripe@18.5.0(@types/node@20.19.9):
+  stripe@18.5.0(@types/node@20.19.28):
     dependencies:
       qs: 6.14.0
     optionalDependencies:
-      '@types/node': 20.19.9
+      '@types/node': 20.19.28
 
-  stripe@20.0.0(@types/node@20.19.9):
+  stripe@20.0.0(@types/node@20.19.28):
     dependencies:
       qs: 6.14.0
     optionalDependencies:
-      '@types/node': 20.19.9
+      '@types/node': 20.19.28
 
   strnum@1.1.2: {}
 
@@ -7653,7 +7688,7 @@ snapshots:
       acorn-import-phases: 1.0.4(acorn@8.15.0)
       browserslist: 4.28.1
       chrome-trace-event: 1.0.4
-      enhanced-resolve: 5.18.2
+      enhanced-resolve: 5.18.4
       es-module-lexer: 2.0.0
       eslint-scope: 5.1.1
       events: 3.3.0
