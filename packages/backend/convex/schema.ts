@@ -61,6 +61,8 @@ export default defineSchema({
         city: v.string(),
         state: v.string(),
         zipCode: v.string(),
+        latitude: v.optional(v.number()),
+        longitude: v.optional(v.number()),
       })
     ),
     // Temporary storage for onboarding draft data (allows users to save progress)
@@ -72,6 +74,8 @@ export default defineSchema({
             city: v.string(),
             state: v.string(),
             zipCode: v.string(),
+            latitude: v.optional(v.number()),
+            longitude: v.optional(v.number()),
           })
         ),
         vehicleData: v.optional(
@@ -156,6 +160,8 @@ export default defineSchema({
         city: v.string(),
         state: v.string(),
         zipCode: v.string(),
+        latitude: v.optional(v.number()),
+        longitude: v.optional(v.number()),
       })
     ),
     // Availability settings

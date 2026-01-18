@@ -32,6 +32,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import { Pagination } from "@/components/pagination"
+import { handleErrorWithContext } from "@/lib/error-handler"
 import type { Id } from "@/lib/convex"
 
 export default function VehiclesPage() {
@@ -73,8 +74,7 @@ export default function VehiclesPage() {
       toast.success(`Vehicle ${!currentStatus ? "activated" : "suspended"} successfully`)
       setSelectedIds(new Set())
     } catch (error) {
-      console.error("Failed to suspend vehicle:", error)
-      toast.error("An error occurred")
+      handleErrorWithContext(error, { action: "suspend vehicle", entity: "vehicle" })
     } finally {
       setProcessingId(null)
     }
@@ -94,8 +94,7 @@ export default function VehiclesPage() {
       )
       setSelectedIds(new Set())
     } catch (error) {
-      console.error("Failed to bulk suspend vehicles:", error)
-      toast.error("An error occurred")
+      handleErrorWithContext(error, { action: "bulk suspend vehicles", entity: "vehicles" })
     } finally {
       setIsBulkProcessing(false)
     }

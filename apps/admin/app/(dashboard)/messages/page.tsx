@@ -16,6 +16,7 @@ import { Label } from "@workspace/ui/components/label"
 import { Textarea } from "@workspace/ui/components/textarea"
 import { MessageSquare, Send, Search, Loader2, User } from "lucide-react"
 import { toast } from "sonner"
+import { handleErrorWithContext } from "@/lib/error-handler"
 
 export default function MessagesPage() {
   const [selectedUserId, setSelectedUserId] = useState("")
@@ -56,8 +57,7 @@ export default function MessagesPage() {
       setMessageContent("")
       setVehicleId("")
     } catch (error) {
-      console.error("Failed to send message:", error)
-      toast.error("An error occurred")
+      handleErrorWithContext(error, { action: "send message", entity: "message" })
     } finally {
       setIsSending(false)
     }

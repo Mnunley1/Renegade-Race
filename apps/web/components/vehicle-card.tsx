@@ -9,10 +9,9 @@ import { cn } from "@workspace/ui/lib/utils"
 import { useMutation, useQuery } from "convex/react"
 import { Car, Heart, LogIn, MapPin, UserPlus } from "lucide-react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import type { ComponentProps } from "react"
 import { useState } from "react"
-import { toast } from "sonner"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 
@@ -54,7 +53,17 @@ export function VehicleCard({
 }: VehicleCardProps) {
   const { isSignedIn, user } = useUser()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [showLoginDialog, setShowLoginDialog] = useState(false)
+
+  // Get date range from URL params
+  const startDate = searchParams.get("startDate")
+  const endDate = searchParams.get("endDate")
+  
+  // Build URL with date params if they exist
+  const vehicleUrl = startDate && endDate
+    ? `/vehicles/${id}?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`
+    : `/vehicles/${id}`
 
   // Check if vehicle is favorited
   const isFavorite = useQuery(
@@ -110,7 +119,7 @@ export function VehicleCard({
   }
 
   return (
-    <Link className="block h-full" href={`/vehicles/${id}`}>
+    <Link className="block h-full" href={vehicleUrl}>
       <Card
         className={cn(
           "group relative flex h-full cursor-pointer flex-col overflow-hidden border-2 transition-all duration-300 hover:shadow-xl",
@@ -118,7 +127,7 @@ export function VehicleCard({
         )}
         {...props}
       >
-        <div className="relative h-64 w-full shrink-0 overflow-hidden bg-muted">
+        <div className="relative h-48 w-full shrink-0 overflow-hidden bg-muted sm:h-64">
           {image ? (
             <Image
               alt={name}
@@ -152,23 +161,23 @@ export function VehicleCard({
           </Button>
         </div>
 
-        <CardContent className="flex flex-1 flex-col p-6">
+        <CardContent className="flex flex-1 flex-col p-4 sm:p-6">
           <div className="flex flex-1 flex-col">
-            <h3 className="mb-3 min-h-[3rem] font-bold text-xl leading-tight">
+            <h3 className="mb-2 min-h-[2.5rem] font-bold text-lg leading-tight sm:mb-3 sm:min-h-[3rem] sm:text-xl">
               {year} {make} {model}
             </h3>
-            <div className="mb-auto flex items-center gap-1.5 text-muted-foreground text-sm">
-              <MapPin className="size-3.5 shrink-0" />
-              <span>{location}</span>
+            <div className="mb-auto flex items-center gap-1.5 text-muted-foreground text-xs sm:text-sm">
+              <MapPin className="size-3 shrink-0 sm:size-3.5" />
+              <span className="truncate">{location}</span>
             </div>
           </div>
 
-          <div className="mt-4 border-t pt-4">
+          <div className="mt-3 border-t pt-3 sm:mt-4 sm:pt-4">
             <div className="flex items-baseline gap-1">
-              <span className="bg-gradient-to-r from-primary to-primary/70 bg-clip-text font-bold text-3xl text-transparent">
+              <span className="bg-gradient-to-r from-primary to-primary/70 bg-clip-text font-bold text-2xl text-transparent sm:text-3xl">
                 ${pricePerDay}
               </span>
-              <span className="text-muted-foreground text-sm">/day</span>
+              <span className="text-muted-foreground text-xs sm:text-sm">/day</span>
             </div>
           </div>
         </CardContent>

@@ -5,7 +5,7 @@ import Link from "next/link"
 export function Footer() {
   return (
     <footer className="border-border border-t bg-background">
-      <div className="container mx-auto px-4 py-12 sm:px-6">
+      <div className="mx-auto w-full max-w-7xl px-2 py-12 sm:px-4 lg:px-6">
         <div className="flex flex-col items-center gap-8 md:flex-row md:justify-between">
           <div className="flex items-center gap-2.5">
             <Image alt="Renegade" className="rounded-full" height={24} src="/logo.png" width={24} />

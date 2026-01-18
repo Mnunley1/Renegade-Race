@@ -28,6 +28,7 @@ import {
   User,
 } from "lucide-react"
 import { toast } from "sonner"
+import { handleErrorWithContext } from "@/lib/error-handler"
 import type { Id } from "@/lib/convex"
 
 export default function VehicleDetailPage() {
@@ -49,8 +50,7 @@ export default function VehicleDetailPage() {
       await suspendVehicle({ vehicleId, isActive: !isActive })
       toast.success(`Vehicle ${!isActive ? "activated" : "suspended"} successfully`)
     } catch (error) {
-      console.error("Failed to suspend vehicle:", error)
-      toast.error("An error occurred")
+      handleErrorWithContext(error, { action: "suspend vehicle", entity: "vehicle" })
     } finally {
       setIsProcessing(false)
     }

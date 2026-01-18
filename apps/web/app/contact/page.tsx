@@ -47,8 +47,8 @@ export default function ContactPage() {
       handleErrorWithContext(error, {
         action: "send message",
         customMessages: {
-          network: "Failed to send your message. Please check your connection and try again, or email us directly at support@renegade.com",
-          generic: "Failed to send your message. Please try again or email us directly at support@renegade.com",
+          network: "Failed to send your message. Please check your connection and try again, or email us directly at support@renegaderace.com",
+          generic: "Failed to send your message. Please try again or email us directly at support@renegaderace.com",
         },
       })
     } finally {
@@ -67,8 +67,8 @@ export default function ContactPage() {
     {
       icon: Mail,
       title: "Email Us",
-      description: "support@renegade.com",
-      action: "mailto:support@renegade.com",
+      description: "support@renegaderace.com",
+      action: "mailto:support@renegaderace.com",
     },
   ]
 
