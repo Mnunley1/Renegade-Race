@@ -1,5 +1,6 @@
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
+import { generateDateRange } from './dateUtils';
 
 // Get availability for a vehicle
 export const getByVehicle = query({
@@ -160,14 +161,8 @@ export const blockDateRange = mutation({
       throw new Error('Not authorized to modify this vehicle');
     }
 
-    const start = new Date(args.startDate);
-    const end = new Date(args.endDate);
-    const dates: string[] = [];
-
-    // Generate all dates in the range
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      dates.push(d.toISOString().split('T')[0]);
-    }
+    // Generate all dates in the range using date utility to avoid timezone issues
+    const dates = generateDateRange(args.startDate, args.endDate);
 
     // Block each date
     const results = await Promise.all(
@@ -286,14 +281,8 @@ export const setDefaultAvailability = mutation({
       throw new Error('Not authorized to modify this vehicle');
     }
 
-    const start = new Date(args.startDate);
-    const end = new Date(args.endDate);
-    const dates: string[] = [];
-
-    // Generate all dates in the range
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      dates.push(d.toISOString().split('T')[0]);
-    }
+    // Generate all dates in the range using date utility to avoid timezone issues
+    const dates = generateDateRange(args.startDate, args.endDate);
 
     // Set availability for each date
     const results = await Promise.all(

@@ -17,6 +17,7 @@ import { Input } from "@workspace/ui/components/input"
 import { Search, Ban, UserCheck, Loader2, Users } from "lucide-react"
 import { toast } from "sonner"
 import { Pagination } from "@/components/pagination"
+import { handleErrorWithContext } from "@/lib/error-handler"
 import type { Id } from "@/lib/convex"
 
 export default function UsersPage() {
@@ -60,8 +61,7 @@ export default function UsersPage() {
       await banUser({ userId })
       toast.success("User banned successfully")
     } catch (error) {
-      console.error("Failed to ban user:", error)
-      toast.error("An error occurred")
+      handleErrorWithContext(error, { action: "ban user", entity: "user" })
     } finally {
       setProcessingId(null)
     }
@@ -73,8 +73,7 @@ export default function UsersPage() {
       await unbanUser({ userId })
       toast.success("User unbanned successfully")
     } catch (error) {
-      console.error("Failed to unban user:", error)
-      toast.error("An error occurred")
+      handleErrorWithContext(error, { action: "unban user", entity: "user" })
     } finally {
       setProcessingId(null)
     }

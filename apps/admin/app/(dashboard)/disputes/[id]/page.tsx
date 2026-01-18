@@ -25,6 +25,7 @@ import {
 import { ArrowLeft, CheckCircle, XCircle, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import Link from "next/link"
+import { handleErrorWithContext } from "@/lib/error-handler"
 import type { Id } from "@/lib/convex"
 
 export default function DisputeDetailPage() {
@@ -59,8 +60,7 @@ export default function DisputeDetailPage() {
       toast.success("Dispute resolved successfully")
       router.push("/disputes")
     } catch (error) {
-      console.error("Failed to resolve dispute:", error)
-      toast.error("An error occurred")
+      handleErrorWithContext(error, { action: "resolve dispute", entity: "dispute" })
     } finally {
       setIsResolving(false)
     }
@@ -81,8 +81,7 @@ export default function DisputeDetailPage() {
       toast.success("Message added")
       setAdminMessage("")
     } catch (error) {
-      console.error("Failed to add message:", error)
-      toast.error("An error occurred")
+      handleErrorWithContext(error, { action: "add message", entity: "dispute" })
     } finally {
       setIsAddingMessage(false)
     }

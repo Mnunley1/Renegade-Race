@@ -35,6 +35,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import type { Id } from "@/lib/convex"
+import { handleErrorWithContext } from "@/lib/error-handler"
 
 export default function TracksPage() {
   const tracks = useQuery(api.tracks.getAllForAdmin)
@@ -85,8 +86,7 @@ export default function TracksPage() {
       setIsCreateOpen(false)
       resetForm()
     } catch (error) {
-      console.error("Failed to create track:", error)
-      toast.error("An error occurred")
+      handleErrorWithContext(error, { action: "create track", entity: "track" })
     } finally {
       setIsProcessing(false)
     }
@@ -113,8 +113,7 @@ export default function TracksPage() {
       setEditingTrack(null)
       resetForm()
     } catch (error) {
-      console.error("Failed to update track:", error)
-      toast.error("An error occurred")
+      handleErrorWithContext(error, { action: "update track", entity: "track" })
     } finally {
       setIsProcessing(false)
     }
@@ -130,8 +129,7 @@ export default function TracksPage() {
       await deleteTrack({ id: trackId })
       toast.success("Track deleted successfully")
     } catch (error) {
-      console.error("Failed to delete track:", error)
-      toast.error("An error occurred")
+      handleErrorWithContext(error, { action: "delete track", entity: "track" })
     } finally {
       setIsDeleting(null)
     }

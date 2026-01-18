@@ -398,7 +398,9 @@ export const submitReview = mutation({
         await sendTransactionalEmail(ctx, reviewed.email, template)
       }
     } catch (error) {
-      console.error('Failed to send new review email:', error)
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { logError } = require("./logger")
+      logError(error, "Failed to send new review email")
       // Don't fail the mutation if email fails
     }
 

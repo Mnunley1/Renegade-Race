@@ -2,10 +2,10 @@
 
 import { Button } from "@workspace/ui/components/button"
 import { cn } from "@workspace/ui/lib/utils"
+import { Menu, X } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Menu, X } from "lucide-react"
 import { useState } from "react"
 import { UserMenu } from "@/components/user-menu"
 
@@ -15,8 +15,8 @@ export function Navigation() {
 
   return (
     <>
-      <nav className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-md supports-[backdrop-filter]:bg-background/80">
-        <div className="container mx-auto px-2 sm:px-6">
+      <nav className="sticky top-0 z-50 border-border border-b bg-background/80 backdrop-blur-md supports-[backdrop-filter]:bg-background/80">
+        <div className="mx-auto w-full max-w-7xl px-2 sm:px-4 lg:px-6">
           <div className="flex h-20 items-center justify-between">
             <div className="flex items-center gap-4">
               {/* Mobile menu button - visible on small screens */}
@@ -29,7 +29,10 @@ export function Navigation() {
                 <Menu className="size-5" />
                 <span className="sr-only">Open menu</span>
               </Button>
-              <Link className="flex items-center gap-2.5 transition-opacity hover:opacity-80" href="/">
+              <Link
+                className="flex items-center gap-2.5 transition-opacity hover:opacity-80"
+                href="/"
+              >
                 <Image
                   alt="Renegade"
                   className="rounded-full"
@@ -37,12 +40,17 @@ export function Navigation() {
                   src="/logo.png"
                   width={32}
                 />
-                <span className="font-semibold text-foreground text-lg tracking-tight" style={{ fontFamily: 'var(--font-header), sans-serif' }}>Renegade</span>
+                <span
+                  className="font-semibold text-foreground text-lg tracking-tight"
+                  style={{ fontFamily: "var(--font-header), sans-serif" }}
+                >
+                  Renegade
+                </span>
               </Link>
               <div className="hidden items-center gap-8 md:flex">
                 <Link
                   className={cn(
-                    "text-sm font-medium transition-colors hover:text-foreground",
+                    "font-medium text-sm transition-colors hover:text-foreground",
                     pathname === "/vehicles" ? "text-foreground" : "text-muted-foreground"
                   )}
                   href="/vehicles"
@@ -51,8 +59,8 @@ export function Navigation() {
                 </Link>
                 <Link
                   className={cn(
-                    "text-sm font-medium transition-colors hover:text-foreground",
-                    (pathname === "/motorsports" || pathname?.startsWith("/motorsports"))
+                    "font-medium text-sm transition-colors hover:text-foreground",
+                    pathname === "/motorsports" || pathname?.startsWith("/motorsports")
                       ? "text-foreground"
                       : "text-muted-foreground"
                   )}
@@ -79,9 +87,13 @@ export function Navigation() {
             onClick={() => setIsSidebarOpen(false)}
           />
           {/* Sidebar */}
-          <div className="fixed inset-y-0 left-0 z-50 w-64 border-r border-border bg-background p-6 md:hidden">
-            <div className="flex items-center justify-between mb-8">
-              <Link className="flex items-center gap-2.5" href="/" onClick={() => setIsSidebarOpen(false)}>
+          <div className="fixed inset-y-0 left-0 z-50 w-64 border-border border-r bg-background p-6 md:hidden">
+            <div className="mb-8 flex items-center justify-between">
+              <Link
+                className="flex items-center gap-2.5"
+                href="/"
+                onClick={() => setIsSidebarOpen(false)}
+              >
                 <Image
                   alt="Renegade"
                   className="rounded-full"
@@ -89,13 +101,14 @@ export function Navigation() {
                   src="/logo.png"
                   width={32}
                 />
-                <span className="font-semibold text-foreground text-lg tracking-tight" style={{ fontFamily: 'var(--font-header), sans-serif' }}>Renegade</span>
+                <span
+                  className="font-semibold text-foreground text-lg tracking-tight"
+                  style={{ fontFamily: "var(--font-header), sans-serif" }}
+                >
+                  Renegade
+                </span>
               </Link>
-              <Button
-                onClick={() => setIsSidebarOpen(false)}
-                size="icon"
-                variant="ghost"
-              >
+              <Button onClick={() => setIsSidebarOpen(false)} size="icon" variant="ghost">
                 <X className="size-5" />
                 <span className="sr-only">Close menu</span>
               </Button>
@@ -103,7 +116,7 @@ export function Navigation() {
             <nav className="flex flex-col gap-4">
               <Link
                 className={cn(
-                  "text-base font-medium transition-colors hover:text-foreground py-2",
+                  "py-2 font-medium text-base transition-colors hover:text-foreground",
                   pathname === "/vehicles" ? "text-foreground" : "text-muted-foreground"
                 )}
                 href="/vehicles"
@@ -113,8 +126,8 @@ export function Navigation() {
               </Link>
               <Link
                 className={cn(
-                  "text-base font-medium transition-colors hover:text-foreground py-2",
-                  (pathname === "/motorsports" || pathname?.startsWith("/motorsports"))
+                  "py-2 font-medium text-base transition-colors hover:text-foreground",
+                  pathname === "/motorsports" || pathname?.startsWith("/motorsports")
                     ? "text-foreground"
                     : "text-muted-foreground"
                 )}

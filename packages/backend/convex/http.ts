@@ -188,8 +188,10 @@ async function validateRequest(req: Request): Promise<WebhookEvent | null> {
   try {
     return wh.verify(payloadString, svixHeaders) as unknown as WebhookEvent;
   } catch (error) {
-    console.error('Error verifying webhook event', error);
-    return null;
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { logError } = require("./logger")
+    logError(error, "Error verifying webhook event")
+    return null
   }
 }
 

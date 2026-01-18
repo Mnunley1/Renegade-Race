@@ -38,7 +38,6 @@ import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/lib/convex"
-import { handleErrorWithContext } from "@/lib/error-handler"
 
 export default function ChatPage() {
   const { user, isSignedIn } = useUser()
