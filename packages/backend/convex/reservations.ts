@@ -10,6 +10,7 @@ import {
   getReservationCompletedEmailTemplate,
   sendTransactionalEmail,
 } from './emails';
+import { calculateDaysBetween } from './dateUtils';
 
 // Get reservations for a user (as renter or owner)
 export const getByUser = query({
@@ -183,11 +184,8 @@ export const create = mutation({
     }
 
     // Calculate total days and amount
-    const start = new Date(args.startDate);
-    const end = new Date(args.endDate);
-    const totalDays = Math.ceil(
-      (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)
-    );
+    // Use date utility to avoid timezone issues
+    const totalDays = calculateDaysBetween(args.startDate, args.endDate);
 
     if (totalDays <= 0) {
       throw new Error('Invalid date range');
@@ -298,7 +296,9 @@ export const create = mutation({
         await sendTransactionalEmail(ctx, ownerEmail, template)
       }
     } catch (error) {
-      console.error('Failed to send reservation created email:', error)
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { logError } = require("./logger")
+      logError(error, "Failed to send reservation created email")
       // Don't fail the mutation if email fails
     }
 
@@ -368,7 +368,9 @@ export const approve = mutation({
         }
       }
     } catch (error) {
-      console.error('Failed to send reservation confirmed email:', error)
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { logError } = require("./logger")
+      logError(error, "Failed to send reservation confirmed email")
       // Don't fail the mutation if email fails
     }
 
@@ -433,7 +435,9 @@ export const decline = mutation({
         }
       }
     } catch (error) {
-      console.error('Failed to send reservation declined email:', error)
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { logError } = require("./logger")
+      logError(error, "Failed to send reservation declined email")
       // Don't fail the mutation if email fails
     }
 
@@ -491,7 +495,9 @@ export const cancel = mutation({
           });
         }
       } catch (error) {
-        console.error('Failed to initiate refund on cancellation:', error);
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { logError } = require("./logger")
+        logError(error, "Failed to initiate refund on cancellation")
         // Don't fail the cancellation if refund initiation fails
         // The refund can be processed manually later
       }
@@ -542,7 +548,9 @@ export const cancel = mutation({
         }
       }
     } catch (error) {
-      console.error('Failed to send reservation cancelled emails:', error)
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { logError } = require("./logger")
+      logError(error, "Failed to send reservation cancelled emails")
       // Don't fail the mutation if email fails
     }
 
@@ -624,7 +632,9 @@ export const complete = mutation({
         }
       }
     } catch (error) {
-      console.error('Failed to send reservation completed emails:', error)
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { logError } = require("./logger")
+      logError(error, "Failed to send reservation completed emails")
       // Don't fail the mutation if email fails
     }
 

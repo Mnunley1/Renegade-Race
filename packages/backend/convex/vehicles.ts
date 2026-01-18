@@ -1,5 +1,7 @@
 import { v } from "convex/values"
-import { mutation, query } from "./_generated/server"
+import { action, internalMutation, mutation, query } from "./_generated/server"
+import { internal } from "./_generated/api"
+import { calculateDistance } from "./geocoding"
 import { imagePresets, r2 } from "./r2"
 
 // Get all active and approved vehicles with optimized images
@@ -89,9 +91,22 @@ export const searchWithAvailability = query({
     endDate: v.optional(v.string()),
     trackId: v.optional(v.id("tracks")),
     limit: v.optional(v.number()),
+    // Distance-based filtering (optional)
+    userLatitude: v.optional(v.number()),
+    userLongitude: v.optional(v.number()),
+    maxDistanceMiles: v.optional(v.number()), // Maximum distance in miles
   },
   handler: async (ctx, args) => {
-    const { startDate, endDate, trackId, limit = 50 } = args
+    // Normalize empty strings, null, or undefined to undefined for date filtering
+    const startDate = 
+      typeof args.startDate === "string" && args.startDate.trim() !== ""
+        ? args.startDate.trim()
+        : undefined
+    const endDate =
+      typeof args.endDate === "string" && args.endDate.trim() !== ""
+        ? args.endDate.trim()
+        : undefined
+    const { trackId, limit = 50 } = args
 
     // Get current user identity to filter out their own vehicles
     const identity = await ctx.auth.getUserIdentity()
@@ -100,20 +115,13 @@ export const searchWithAvailability = query({
     // Step 1: Get all active/approved vehicles (single query)
     let vehiclesQuery = ctx.db
       .query("vehicles")
-      .withIndex("by_active_approved", (q) =>
-        q.eq("isActive", true).eq("isApproved", true)
-      )
+      .withIndex("by_active_approved", (q) => q.eq("isActive", true).eq("isApproved", true))
 
     if (trackId) {
       vehiclesQuery = ctx.db
         .query("vehicles")
         .withIndex("by_track", (q) => q.eq("trackId", trackId))
-        .filter((q) =>
-          q.and(
-            q.eq(q.field("isActive"), true),
-            q.eq(q.field("isApproved"), true)
-          )
-        )
+        .filter((q) => q.and(q.eq(q.field("isActive"), true), q.eq(q.field("isApproved"), true)))
     }
 
     // Get more vehicles initially to account for filtering
@@ -127,6 +135,7 @@ export const searchWithAvailability = query({
     // Step 2: If dates provided, filter by availability using batch queries
     let availableVehicles = vehicles
 
+    // Only filter by dates if both are provided and non-empty
     if (startDate && endDate) {
       // Batch query 1: Get blocked dates in the range (OPTIMIZED)
       // Query without index and filter by date range and availability status
@@ -143,9 +152,7 @@ export const searchWithAvailability = query({
         .collect()
 
       // Create a Set of vehicle IDs with blocked dates for O(1) lookup
-      const vehiclesWithBlockedDates = new Set(
-        blockedDatesInRange.map((a) => a.vehicleId)
-      )
+      const vehiclesWithBlockedDates = new Set(blockedDatesInRange.map((a) => a.vehicleId))
 
       // Batch query 2: Get conflicting reservations in the range (OPTIMIZED)
       // Use by_dates index to query reservations where startDate <= endDate (requested)
@@ -157,30 +164,20 @@ export const searchWithAvailability = query({
         .filter((q) =>
           q.and(
             q.gte(q.field("endDate"), startDate),
-            q.or(
-              q.eq(q.field("status"), "pending"),
-              q.eq(q.field("status"), "confirmed")
-            )
+            q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "confirmed"))
           )
         )
         .collect()
 
       // Additional filter: Ensure reservation actually overlaps
       // (by_dates index might return some false positives, so we verify overlap)
-      const conflictingReservations = overlappingReservations.filter(
-        (reservation) => {
-          // Overlap check: existingStart <= requestedEnd AND existingEnd >= requestedStart
-          return (
-            reservation.startDate <= endDate &&
-            reservation.endDate >= startDate
-          )
-        }
-      )
+      const conflictingReservations = overlappingReservations.filter((reservation) => {
+        // Overlap check: existingStart <= requestedEnd AND existingEnd >= requestedStart
+        return reservation.startDate <= endDate && reservation.endDate >= startDate
+      })
 
       // Create a Set of vehicle IDs with conflicting reservations
-      const vehiclesWithConflicts = new Set(
-        conflictingReservations.map((r) => r.vehicleId)
-      )
+      const vehiclesWithConflicts = new Set(conflictingReservations.map((r) => r.vehicleId))
 
       // Step 3: Filter vehicles in memory (O(n) where n = vehicles)
       // A vehicle is unavailable if:
@@ -218,14 +215,15 @@ export const searchWithAvailability = query({
             .collect(),
           ctx.db
             .query("users")
-            .withIndex("by_external_id", (q) =>
-              q.eq("externalId", vehicle.ownerId)
-            )
+            .withIndex("by_external_id", (q) => q.eq("externalId", vehicle.ownerId))
             .first(),
           ctx.db.get(vehicle.trackId),
         ])
 
-        // Filter out vehicles from hosts without complete Stripe setup
+        // Filter out vehicles from hosts without fully active, connected Stripe accounts
+        // Only show vehicles where the owner has:
+        // 1. A Stripe account ID (connected account)
+        // 2. An active Stripe account status
         if (!owner?.stripeAccountId || owner.stripeAccountStatus !== "active") {
           return null
         }
@@ -251,7 +249,56 @@ export const searchWithAvailability = query({
     )
 
     // Filter out null values (vehicles from hosts without Stripe setup)
-    return vehiclesWithDetails.filter((v) => v !== null)
+    let finalVehicles = vehiclesWithDetails.filter((v) => v !== null)
+
+    // Step 5: Apply distance-based filtering if coordinates provided
+    if (
+      args.userLatitude &&
+      args.userLongitude &&
+      args.maxDistanceMiles &&
+      args.maxDistanceMiles > 0
+    ) {
+      finalVehicles = finalVehicles.filter((vehicle) => {
+        // Skip vehicles without coordinates
+        if (!(vehicle.address?.latitude && vehicle.address?.longitude)) {
+          return false
+        }
+
+        // Calculate distance
+        const distance = calculateDistance(
+          args.userLatitude!,
+          args.userLongitude!,
+          vehicle.address.latitude,
+          vehicle.address.longitude
+        )
+
+        // Filter by maximum distance
+        return distance <= args.maxDistanceMiles!
+      })
+
+      // Sort by distance (closest first)
+      finalVehicles.sort((a, b) => {
+        if (!(a.address?.latitude && a.address?.longitude)) return 1
+        if (!(b.address?.latitude && b.address?.longitude)) return -1
+
+        const distanceA = calculateDistance(
+          args.userLatitude!,
+          args.userLongitude!,
+          a.address.latitude,
+          a.address.longitude
+        )
+        const distanceB = calculateDistance(
+          args.userLatitude!,
+          args.userLongitude!,
+          b.address.latitude,
+          b.address.longitude
+        )
+
+      return distanceA - distanceB
+    })
+    }
+
+    return finalVehicles
   },
 })
 
@@ -467,6 +514,8 @@ export const createVehicleWithImages = mutation({
         city: v.string(),
         state: v.string(),
         zipCode: v.string(),
+        latitude: v.optional(v.number()),
+        longitude: v.optional(v.number()),
       })
     ),
     advanceNotice: v.optional(v.string()),
@@ -516,7 +565,7 @@ export const createVehicleWithImages = mutation({
       args.trackId = defaultTrack._id
     }
 
-    // Create the vehicle
+    // Create the vehicle (geocoding happens async after creation)
     const vehicleId = await ctx.db.insert("vehicles", {
       ownerId: userId,
       trackId: args.trackId,
@@ -542,6 +591,14 @@ export const createVehicleWithImages = mutation({
       createdAt: now,
       updatedAt: now,
     })
+
+    // Schedule geocoding action if address provided
+    if (args.address) {
+      await ctx.scheduler.runAfter(0, internal.vehicles.geocodeVehicleAddress, {
+        vehicleId,
+        address: args.address,
+      })
+    }
 
     // Create vehicle images (R2 only)
     await Promise.all(
@@ -648,6 +705,16 @@ export const update = mutation({
     minTripDuration: v.optional(v.string()),
     maxTripDuration: v.optional(v.string()),
     requireWeekendMin: v.optional(v.boolean()),
+    address: v.optional(
+      v.object({
+        street: v.string(),
+        city: v.string(),
+        state: v.string(),
+        zipCode: v.string(),
+        latitude: v.optional(v.number()),
+        longitude: v.optional(v.number()),
+      })
+    ),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()
@@ -664,14 +731,84 @@ export const update = mutation({
       throw new Error("Not authorized to update this vehicle")
     }
 
+    // Check if address changed and needs geocoding
+    const addressChanged = args.address && (
+      !vehicle.address ||
+      vehicle.address.street !== args.address.street ||
+      vehicle.address.city !== args.address.city ||
+      vehicle.address.state !== args.address.state ||
+      vehicle.address.zipCode !== args.address.zipCode
+    )
+
     const { id, ...updateData } = args
     void id // Exclude id from updateData
+
+    // Save the address without coordinates first (geocoding happens async)
     await ctx.db.patch(args.id, {
       ...updateData,
       updatedAt: Date.now(),
     })
 
+    // Schedule geocoding action if address changed
+    if (addressChanged && args.address) {
+      await ctx.scheduler.runAfter(0, internal.vehicles.geocodeVehicleAddress, {
+        vehicleId: args.id,
+        address: args.address,
+      })
+    }
+
     return args.id
+  },
+})
+
+// Internal mutation to update vehicle coordinates after geocoding
+export const updateVehicleCoordinates = internalMutation({
+  args: {
+    vehicleId: v.id("vehicles"),
+    latitude: v.number(),
+    longitude: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const vehicle = await ctx.db.get(args.vehicleId)
+    if (!vehicle || !vehicle.address) {
+      return
+    }
+
+    await ctx.db.patch(args.vehicleId, {
+      address: {
+        ...vehicle.address,
+        latitude: args.latitude,
+        longitude: args.longitude,
+      },
+      updatedAt: Date.now(),
+    })
+  },
+})
+
+// Action to geocode a vehicle's address (can make network calls)
+export const geocodeVehicleAddress = action({
+  args: {
+    vehicleId: v.id("vehicles"),
+    address: v.object({
+      street: v.string(),
+      city: v.string(),
+      state: v.string(),
+      zipCode: v.string(),
+    }),
+  },
+  handler: async (ctx, args) => {
+    const { geocodeAddress } = await import("./geocoding")
+    
+    const result = await geocodeAddress(args.address)
+    
+    if (result) {
+      // Update the vehicle with coordinates
+      await ctx.runMutation(internal.vehicles.updateVehicleCoordinates, {
+        vehicleId: args.vehicleId,
+        latitude: result.latitude,
+        longitude: result.longitude,
+      })
+    }
   },
 })
 
@@ -701,10 +838,7 @@ export const remove = mutation({
       .filter((q) =>
         q.and(
           // Only check pending or confirmed reservations
-          q.or(
-            q.eq(q.field("status"), "pending"),
-            q.eq(q.field("status"), "confirmed")
-          ),
+          q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "confirmed")),
           // Check if reservation end date is in the future (active or upcoming)
           q.gte(q.field("endDate"), today)
         )
@@ -798,7 +932,9 @@ export const removeImage = mutation({
       try {
         await r2.deleteObject(ctx, image.r2Key)
       } catch (error) {
-        console.error(`Failed to delete R2 object ${image.r2Key}:`, error)
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { logError } = require("./logger")
+        logError(error, `Failed to delete R2 object ${image.r2Key}`)
         // Continue with database deletion even if R2 deletion fails
       }
     }
@@ -836,9 +972,7 @@ export const updateImageOrder = mutation({
 
     // Update all image orders
     await Promise.all(
-      args.imageOrders.map(({ imageId, order }) =>
-        ctx.db.patch(imageId, { order })
-      )
+      args.imageOrders.map(({ imageId, order }) => ctx.db.patch(imageId, { order }))
     )
 
     return { success: true }

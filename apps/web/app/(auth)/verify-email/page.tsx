@@ -16,6 +16,7 @@ import { ArrowRight, Loader2, Mail } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
+import { handleError } from "@/lib/error-handler"
 
 type ClerkError = {
   errors?: Array<{ message: string }>
@@ -80,8 +81,8 @@ export default function VerifyEmailPage() {
       setTimeout(() => setResendSuccess(false), 5000)
     } catch (err: unknown) {
       const clerkError = err as ClerkError
-      console.error("Resend verification code error:", clerkError)
       const errorMessage = clerkError?.errors?.[0]?.message || "Failed to resend code"
+      handleError(err, { showToast: false, logError: true })
       
       // Show helpful message if it's a rate limit or email issue
       if (process.env.NODE_ENV === "development" && (errorMessage.includes("limit") || errorMessage.includes("email"))) {

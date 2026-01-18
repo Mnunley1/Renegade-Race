@@ -274,21 +274,54 @@ export default function HostDashboardPage() {
     <>
       <HostOnboardingChecklist onOpenChange={setShowChecklist} open={showChecklist} />
       <div className="container mx-auto max-w-7xl px-4 py-6 sm:py-8">
+        {/* Stripe Account Setup Banner */}
+        {connectStatus && !connectStatus.isComplete && (
+          <Card className="mb-6 border-amber-200 bg-amber-50/80 dark:border-amber-900/50 dark:bg-amber-950/30">
+            <CardHeader>
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="mt-0.5 size-5 shrink-0 text-amber-600 dark:text-amber-400" />
+                  <div>
+                    <CardTitle className="text-amber-900 dark:text-amber-100">
+                      Complete Your Stripe Account Setup
+                    </CardTitle>
+                    <CardDescription className="mt-1.5 text-amber-800 dark:text-amber-200">
+                      {connectStatus.hasAccount
+                        ? "Your Stripe account is not fully set up. Your vehicles will not be displayed to renters until you complete the onboarding process. Complete setup to display your vehicles and start receiving payouts."
+                        : "Your vehicles will not be displayed to renters until you complete Stripe account setup. Set up your account to display your vehicles and receive payouts from your rentals. This only takes a few minutes."}
+                    </CardDescription>
+                  </div>
+                </div>
+                <Button
+                  disabled={isLoadingConnect || !user?.id}
+                  onClick={handleOnboarding}
+                  size="lg"
+                  className="shrink-0 bg-amber-600 text-white hover:bg-amber-700 dark:bg-amber-500 dark:hover:bg-amber-600"
+                >
+                  {isLoadingConnect ? (
+                    <>
+                      <Loader2 className="mr-2 size-4 animate-spin" />
+                      Working...
+                    </>
+                  ) : (
+                    <>
+                      {connectStatus.hasAccount ? "Continue Setup" : "Set Up Payouts"}
+                      <ArrowRight className="ml-2 size-4" />
+                    </>
+                  )}
+                </Button>
+              </div>
+            </CardHeader>
+          </Card>
+        )}
+
         {/* Header Section */}
         <div className="mb-8">
-          <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h1 className="font-bold text-3xl sm:text-4xl">Dashboard</h1>
-              <p className="mt-2 text-muted-foreground">
-                Welcome back, {user?.firstName || "Host"}. Here's what's happening with your listings.
-              </p>
-            </div>
-            <Link href="/host/vehicles/new">
-              <Button size="lg">
-                <Plus className="mr-2 size-4" />
-                List New Vehicle
-              </Button>
-            </Link>
+          <div className="mb-6">
+            <h1 className="font-bold text-3xl sm:text-4xl">Dashboard</h1>
+            <p className="mt-2 text-muted-foreground">
+              Welcome back, {user?.firstName || "Host"}. Here's what's happening with your listings.
+            </p>
           </div>
 
           {/* Key Metrics - Hero Stats */}
@@ -324,6 +357,11 @@ export default function HostDashboardPage() {
               <CardContent>
                 <div className="font-bold text-3xl">${stats.totalEarnings.toLocaleString()}</div>
                 <p className="mt-1 text-xs text-muted-foreground">All-time revenue</p>
+                {connectStatus && !connectStatus.isComplete && (
+                  <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+                    Complete Stripe setup to receive payouts
+                  </p>
+                )}
               </CardContent>
             </Card>
 
@@ -594,39 +632,46 @@ export default function HostDashboardPage() {
 
           {/* Right Sidebar */}
           <div className="space-y-6">
-            {/* Quick Actions */}
-            <Card>
+            {/* Host Hub - Prominent Actions */}
+            <Card className="border-primary/20 bg-primary/5">
               <CardHeader>
-                <CardTitle>Quick Actions</CardTitle>
+                <CardTitle className="text-lg">Host Hub</CardTitle>
+                <CardDescription className="mt-1">Quick access to manage your business</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-2">
+              <CardContent className="space-y-3">
                 <Link className="block" href="/host/reservations">
-                  <Button className="w-full justify-start" size="sm" variant="outline">
-                    <Calendar className="mr-2 size-4" />
-                    All Reservations
-                    {stats.pendingBookings > 0 && (
-                      <Badge className="ml-auto" variant="destructive">
-                        {stats.pendingBookings}
-                      </Badge>
-                    )}
+                  <Button className="w-full justify-start" size="lg" variant="default">
+                    <Calendar className="mr-3 size-5" />
+                    <span className="font-semibold">All Reservations</span>
+                    <div className="ml-auto flex items-center gap-2">
+                      {stats.pendingBookings > 0 && (
+                        <Badge variant="destructive">
+                          {stats.pendingBookings}
+                        </Badge>
+                      )}
+                      <ArrowRight className="size-4" />
+                    </div>
                   </Button>
                 </Link>
                 <Link className="block" href="/host/vehicles/list">
-                  <Button className="w-full justify-start" size="sm" variant="outline">
-                    <Car className="mr-2 size-4" />
-                    Manage Vehicles
+                  <Button className="w-full justify-start" size="lg" variant="default">
+                    <Car className="mr-3 size-5" />
+                    <span className="font-semibold">Manage Vehicles</span>
+                    <ArrowRight className="ml-auto size-4" />
                   </Button>
                 </Link>
                 <Link className="block" href="/messages">
-                  <Button className="w-full justify-start" size="sm" variant="outline">
-                    <MessageSquare className="mr-2 size-4" />
-                    Messages
+                  <Button className="w-full justify-start" size="lg" variant="default">
+                    <MessageSquare className="mr-3 size-5" />
+                    <span className="font-semibold">Messages</span>
+                    <ArrowRight className="ml-auto size-4" />
                   </Button>
                 </Link>
                 <Link className="block" href="/host/vehicles/new">
-                  <Button className="w-full justify-start" size="sm">
-                    <Plus className="mr-2 size-4" />
-                    List New Vehicle
+                  <Button className="w-full justify-start bg-primary text-primary-foreground hover:bg-primary/90" size="lg">
+                    <Plus className="mr-3 size-5" />
+                    <span className="font-semibold">List New Vehicle</span>
+                    <ArrowRight className="ml-auto size-4" />
                   </Button>
                 </Link>
               </CardContent>
@@ -644,28 +689,45 @@ export default function HostDashboardPage() {
                     {connectError}
                   </p>
                 )}
-                <div className="space-y-2 text-sm">
+                <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Status</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-sm">Account Status</span>
+                    </div>
                     {connectStatus?.isComplete ? (
-                      <Badge className="bg-green-500/10 text-green-700 dark:text-green-400">
+                      <Badge className="gap-1.5 bg-green-500/10 text-green-700 dark:text-green-400">
+                        <CheckCircle2 className="size-3" />
                         Connected
                       </Badge>
                     ) : (
-                      <Badge variant="secondary">Not Set Up</Badge>
+                      <Badge className="gap-1.5 bg-red-500/10 text-red-700 dark:text-red-400" variant="secondary">
+                        <XCircle className="size-3" />
+                        Not Set Up
+                      </Badge>
                     )}
                   </div>
                   {connectStatus?.isComplete && (
                     <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground">Payouts</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-sm">Payouts</span>
+                      </div>
                       {connectStatus?.payoutsEnabled ? (
-                        <Badge className="bg-green-500/10 text-green-700 dark:text-green-400">
+                        <Badge className="gap-1.5 bg-green-500/10 text-green-700 dark:text-green-400">
+                          <CheckCircle2 className="size-3" />
                           Enabled
                         </Badge>
                       ) : (
-                        <Badge variant="secondary">Pending</Badge>
+                        <Badge className="gap-1.5" variant="secondary">
+                          <Clock className="size-3" />
+                          Pending
+                        </Badge>
                       )}
                     </div>
+                  )}
+                  {connectStatus && !connectStatus.isComplete && (
+                    <p className="text-muted-foreground text-xs">
+                      Complete setup to receive payouts from your rentals
+                    </p>
                   )}
                 </div>
                 <Separator />
@@ -673,8 +735,12 @@ export default function HostDashboardPage() {
                   <Button
                     disabled={isLoadingConnect || !user?.id}
                     onClick={handleOnboarding}
-                    variant="default"
                     size="sm"
+                    className={
+                      connectStatus && !connectStatus.isComplete
+                        ? "bg-red-600 text-white hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600"
+                        : ""
+                    }
                   >
                     {isLoadingConnect
                       ? "Working..."

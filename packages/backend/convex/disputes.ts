@@ -127,7 +127,9 @@ export const create = mutation({
         }
       }
     } catch (error) {
-      console.error('Failed to send dispute created emails:', error)
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { logError } = require("./logger")
+      logError(error, "Failed to send dispute created emails")
       // Don't fail the mutation if email fails
     }
 
@@ -441,7 +443,9 @@ export const resolve = mutation({
         }
       }
     } catch (error) {
-      console.error('Failed to send dispute resolved emails:', error)
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { logError } = require("./logger")
+      logError(error, "Failed to send dispute resolved emails")
       // Don't fail the mutation if email fails
     }
 
