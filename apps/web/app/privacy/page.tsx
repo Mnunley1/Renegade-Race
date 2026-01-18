@@ -116,8 +116,8 @@ export default function PrivacyPolicyPage() {
             </p>
             <p className="mt-2 font-medium">
               Email:{" "}
-              <a className="text-primary underline" href="mailto:support@renegade.com">
-                support@renegade.com
+              <a className="text-primary underline" href="mailto:support@renegaderace.com">
+                support@renegaderace.com
               </a>
             </p>
           </section>

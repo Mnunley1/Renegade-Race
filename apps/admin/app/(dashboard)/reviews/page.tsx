@@ -32,6 +32,7 @@ import {
   Loader2,
 } from "lucide-react"
 import { toast } from "sonner"
+import { handleErrorWithContext } from "@/lib/error-handler"
 import { Pagination } from "@/components/pagination"
 import type { Id } from "@/lib/convex"
 
@@ -83,8 +84,7 @@ export default function ReviewsPage() {
       toast.success("Review deleted successfully")
       setSelectedIds(new Set())
     } catch (error) {
-      console.error("Failed to delete review:", error)
-      toast.error("An error occurred")
+      handleErrorWithContext(error, { action: "delete review", entity: "review" })
     } finally {
       setProcessingId(null)
     }
@@ -96,8 +96,7 @@ export default function ReviewsPage() {
       await toggleVisibility({ reviewId, isPublic: !currentVisibility })
       toast.success(`Review ${!currentVisibility ? "published" : "hidden"} successfully`)
     } catch (error) {
-      console.error("Failed to toggle visibility:", error)
-      toast.error("An error occurred")
+      handleErrorWithContext(error, { action: "toggle visibility", entity: "review" })
     } finally {
       setProcessingId(null)
     }
@@ -109,8 +108,7 @@ export default function ReviewsPage() {
       await markModerated({ reviewId })
       toast.success("Review marked as moderated")
     } catch (error) {
-      console.error("Failed to mark as moderated:", error)
-      toast.error("An error occurred")
+      handleErrorWithContext(error, { action: "mark as moderated", entity: "review" })
     } finally {
       setProcessingId(null)
     }
@@ -132,8 +130,7 @@ export default function ReviewsPage() {
       toast.success(`${selectedIds.size} review(s) deleted successfully`)
       setSelectedIds(new Set())
     } catch (error) {
-      console.error("Failed to delete reviews:", error)
-      toast.error("An error occurred")
+      handleErrorWithContext(error, { action: "delete reviews", entity: "reviews" })
     } finally {
       setIsBulkProcessing(false)
     }
@@ -153,8 +150,7 @@ export default function ReviewsPage() {
       )
       setSelectedIds(new Set())
     } catch (error) {
-      console.error("Failed to toggle visibility:", error)
-      toast.error("An error occurred")
+      handleErrorWithContext(error, { action: "toggle visibility", entity: "reviews" })
     } finally {
       setIsBulkProcessing(false)
     }
@@ -169,8 +165,7 @@ export default function ReviewsPage() {
       toast.success(`${selectedIds.size} review(s) marked as moderated`)
       setSelectedIds(new Set())
     } catch (error) {
-      console.error("Failed to mark as moderated:", error)
-      toast.error("An error occurred")
+      handleErrorWithContext(error, { action: "mark as moderated", entity: "reviews" })
     } finally {
       setIsBulkProcessing(false)
     }

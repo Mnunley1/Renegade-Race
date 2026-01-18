@@ -9,7 +9,6 @@ import { Dialog, DialogContent } from "@workspace/ui/components/dialog"
 import { cn } from "@workspace/ui/lib/utils"
 import { useMutation, useQuery } from "convex/react"
 import {
-  ArrowLeft,
   Car,
   Check,
   Edit,
@@ -26,7 +25,7 @@ import {
   Zap,
 } from "lucide-react"
 import Link from "next/link"
-import { useParams, useRouter } from "next/navigation"
+import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { VehicleGallery } from "@/components/vehicle-gallery"
 import { api } from "@/lib/convex"
@@ -36,11 +35,16 @@ import { handleErrorWithContext } from "@/lib/error-handler"
 export default function VehicleDetailsPage() {
   const params = useParams()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { isSignedIn, user } = useUser()
   const id = params.id as string
   const [showLoginDialog, setShowLoginDialog] = useState(false)
   const [isCreatingConversation, setIsCreatingConversation] = useState(false)
   const hasTrackedView = useRef(false)
+
+  // Get date range from URL params
+  const startDate = searchParams.get("startDate")
+  const endDate = searchParams.get("endDate")
 
   const vehicle = useQuery(api.vehicles.getById, { id: id as Id<"vehicles"> })
   const reviews = useQuery(api.reviews.getByVehicle, id ? { vehicleId: id as Id<"vehicles"> } : "skip")
@@ -253,13 +257,7 @@ export default function VehicleDetailsPage() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="mb-8">
-        <Button className="mb-6" onClick={() => router.back()} variant="outline">
-          <ArrowLeft className="mr-2 size-4" />
-          Back
-        </Button>
-
-        {/* Header Section */}
+      {/* Header Section */}
         <div className="mb-6">
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div className="flex-1">
@@ -310,7 +308,6 @@ export default function VehicleDetailsPage() {
             </div>
           </div>
         </div>
-      </div>
 
       <VehicleGallery
         images={images}
@@ -620,7 +617,12 @@ export default function VehicleDetailsPage() {
                   </p>
                   <Button
                     className="w-full"
-                    onClick={() => router.push(`/checkout?vehicleId=${vehicle._id}`)}
+                    onClick={() => {
+                      const checkoutUrl = startDate && endDate
+                        ? `/checkout?vehicleId=${vehicle._id}&startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`
+                        : `/checkout?vehicleId=${vehicle._id}`
+                      router.push(checkoutUrl)
+                    }}
                     size="lg"
                   >
                     Reserve Now

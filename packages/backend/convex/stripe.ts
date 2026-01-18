@@ -725,7 +725,9 @@ export const handlePaymentSuccess = mutation({
         await sendTransactionalEmail(ctx, renter.email, template)
       }
     } catch (error) {
-      console.error("Failed to send payment success email:", error)
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { logError } = require("./logger")
+      logError(error, "Failed to send payment success email")
     }
   },
 })
@@ -773,7 +775,9 @@ export const handlePaymentFailure = mutation({
         await sendTransactionalEmail(ctx, renter.email, template)
       }
     } catch (error) {
-      console.error("Failed to send payment failure email:", error)
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { logError } = require("./logger")
+      logError(error, "Failed to send payment failure email")
     }
   },
 })

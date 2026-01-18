@@ -10,6 +10,7 @@ import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { Suspense } from "react"
 import { api } from "@/lib/convex"
+import { formatDateForDisplay } from "@/lib/date-utils"
 
 function CheckoutSuccessContent() {
   const searchParams = useSearchParams()
@@ -101,8 +102,8 @@ function CheckoutSuccessContent() {
                   </div>
                   <div className="text-right">
                     <p className="font-medium">
-                      {new Date(reservation.startDate).toLocaleDateString()} -{" "}
-                      {new Date(reservation.endDate).toLocaleDateString()}
+                      {formatDateForDisplay(reservation.startDate)} -{" "}
+                      {formatDateForDisplay(reservation.endDate)}
                     </p>
                     <p className="text-muted-foreground text-sm">
                       {reservation.totalDays} {reservation.totalDays === 1 ? "day" : "days"}
