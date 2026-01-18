@@ -8,6 +8,7 @@ import { Calendar, Car, ChevronRight, Clock, MapPin } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import type { ComponentProps } from "react"
+import { formatDateForDisplay } from "@/lib/date-utils"
 
 interface TripCardProps extends ComponentProps<"div"> {
   reservationId: string
@@ -50,12 +51,7 @@ const statusConfig = {
 }
 
 function formatDate(dateString: string): string {
-  const date = new Date(dateString + "T00:00:00")
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  })
+  return formatDateForDisplay(dateString)
 }
 
 function formatTime(timeString?: string): string {

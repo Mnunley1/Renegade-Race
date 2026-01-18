@@ -137,10 +137,35 @@ FACEBOOK_APP_ID=...
 TWITTER_API_KEY=...
 ```
 
+### Google Maps Geocoding API
+```env
+# Backend (Convex) - for geocoding vehicle addresses
+GOOGLE_MAPS_API_KEY=your-google-maps-api-key
+
+# Frontend (Next.js) - for location-based search (ZIP code geocoding)
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=your-google-maps-api-key
+```
+
+**Action Items:**
+- [ ] Set up Google Cloud Platform account (if not already done)
+- [ ] Enable Geocoding API in Google Cloud Console
+- [ ] Create API key and restrict it to Geocoding API only
+- [ ] Set up API key restrictions:
+  - For backend key: IP address restrictions (Convex servers)
+  - For frontend key: HTTP referrer restrictions (your domain)
+- [ ] Add backend API key to Convex: `npx convex env set GOOGLE_MAPS_API_KEY your-key`
+- [ ] Add frontend API key to Vercel environment variables: `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`
+- [ ] Test geocoding with a sample address
+- [ ] Monitor API usage and set up billing alerts
+
+**Note:** Geocoding is optional - if the API keys are not set:
+- Backend: Addresses will be stored without coordinates
+- Frontend: ZIP code search will not work, but "Use my location" will still work
+
 ### Additional Services
 ```env
 # If using additional services
-MAPS_API_KEY=...  # For location features
+MAPS_API_KEY=...  # For location features (if adding map displays)
 ```
 
 ## Pre-Launch Verification Checklist

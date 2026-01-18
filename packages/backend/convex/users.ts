@@ -1,6 +1,7 @@
 import type { UserJSON } from "@clerk/backend"
 import { type Validator, v } from "convex/values"
-import { internalMutation, mutation, type QueryCtx, query } from "./_generated/server"
+import { action, internalMutation, mutation, type QueryCtx, query } from "./_generated/server"
+import { internal } from "./_generated/api"
 import { getWelcomeEmailTemplate, sendTransactionalEmail } from "./emails"
 import { imagePresets, r2 } from "./r2"
 
@@ -36,7 +37,9 @@ export const upsertFromClerk = internalMutation({
           const template = getWelcomeEmailTemplate(userName)
           await sendTransactionalEmail(ctx, userEmail, template)
         } catch (error) {
-          console.error("Failed to send welcome email:", error)
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const { logError } = require("./logger")
+          logError(error, "Failed to send welcome email")
           // Don't fail the mutation if email fails
         }
       }
@@ -507,12 +510,68 @@ export const saveOnboardingVehicleAddress = mutation({
       throw new Error("User not found")
     }
 
+    // Save address without coordinates first (geocoding happens async)
     await ctx.db.patch(user._id, {
       onboardingVehicleAddress: args.address,
       hostOnboardingStatus: user.hostOnboardingStatus === "not_started" ? "in_progress" : user.hostOnboardingStatus || "in_progress",
     })
 
+    // Schedule geocoding action
+    await ctx.scheduler.runAfter(0, internal.users.geocodeOnboardingAddress, {
+      userId: user._id,
+      address: args.address,
+    })
+
     return { success: true }
+  },
+})
+
+// Internal mutation to update onboarding address coordinates after geocoding
+export const updateOnboardingAddressCoordinates = internalMutation({
+  args: {
+    userId: v.id("users"),
+    latitude: v.number(),
+    longitude: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId)
+    if (!user || !user.onboardingVehicleAddress) {
+      return
+    }
+
+    await ctx.db.patch(args.userId, {
+      onboardingVehicleAddress: {
+        ...user.onboardingVehicleAddress,
+        latitude: args.latitude,
+        longitude: args.longitude,
+      },
+    })
+  },
+})
+
+// Action to geocode onboarding address (can make network calls)
+export const geocodeOnboardingAddress = action({
+  args: {
+    userId: v.id("users"),
+    address: v.object({
+      street: v.string(),
+      city: v.string(),
+      state: v.string(),
+      zipCode: v.string(),
+    }),
+  },
+  handler: async (ctx, args) => {
+    const { geocodeAddress } = await import("./geocoding")
+    
+    const result = await geocodeAddress(args.address)
+    
+    if (result) {
+      await ctx.runMutation(internal.users.updateOnboardingAddressCoordinates, {
+        userId: args.userId,
+        latitude: result.latitude,
+        longitude: result.longitude,
+      })
+    }
   },
 })
 
@@ -772,7 +831,9 @@ export const clearOnboardingDraft = mutation({
           try {
             await r2.deleteObject(ctx, image.r2Key)
           } catch (error) {
-            console.error(`Failed to delete orphaned R2 image ${image.r2Key}:`, error)
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const { logError } = require("./logger")
+            logError(error, `Failed to delete orphaned R2 image ${image.r2Key}`)
             // Continue with cleanup even if R2 deletion fails
           }
         }
@@ -809,7 +870,9 @@ export const startOverOnboarding = mutation({
           try {
             await r2.deleteObject(ctx, image.r2Key)
           } catch (error) {
-            console.error(`Failed to delete orphaned R2 image ${image.r2Key}:`, error)
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const { logError } = require("./logger")
+            logError(error, `Failed to delete orphaned R2 image ${image.r2Key}`)
             // Continue with cleanup even if R2 deletion fails
           }
         }

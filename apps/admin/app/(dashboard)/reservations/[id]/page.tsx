@@ -17,6 +17,7 @@ import { Badge } from "@workspace/ui/components/badge"
 import { ArrowLeft, XCircle, Loader2, Calendar, User, Car, DollarSign } from "lucide-react"
 import { toast } from "sonner"
 import type { Id } from "@/lib/convex"
+import { handleErrorWithContext } from "@/lib/error-handler"
 
 export default function ReservationDetailPage() {
   const params = useParams()
@@ -41,8 +42,7 @@ export default function ReservationDetailPage() {
       toast.success("Reservation cancelled successfully")
       router.push("/reservations")
     } catch (error) {
-      console.error("Failed to cancel reservation:", error)
-      toast.error("An error occurred")
+      handleErrorWithContext(error, { action: "cancel reservation", entity: "reservation" })
     } finally {
       setIsCancelling(false)
     }

@@ -110,9 +110,11 @@ export const getByDriver = query({
         .withIndex('by_driver', q => q.eq('driverId', user.externalId))
         .collect();
     } catch (error) {
-      console.error('Error getting team applications by driver:', error);
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { logError } = require("./logger")
+      logError(error, "Error getting team applications by driver")
       // Return empty array if no authenticated user
-      return [];
+      return []
     }
   },
 });

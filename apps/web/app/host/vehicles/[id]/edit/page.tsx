@@ -24,14 +24,24 @@ import { Separator } from "@workspace/ui/components/separator"
 import { Textarea } from "@workspace/ui/components/textarea"
 import { cn } from "@workspace/ui/lib/utils"
 import { useMutation, useQuery } from "convex/react"
-import { ArrowLeft, Edit, GripVertical, Loader2, Plus, Star, Trash2, Upload, X } from "lucide-react"
+import {
+  ArrowLeft,
+  Edit,
+  GripVertical,
+  Loader2,
+  MapPin,
+  Plus,
+  Star,
+  Trash2,
+  Upload,
+} from "lucide-react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/lib/convex"
-import { imagePresets } from "@/lib/imagekit"
 import { handleErrorWithContext } from "@/lib/error-handler"
+import { imagePresets } from "@/lib/imagekit"
 
 const TRANSMISSION_OPTIONS = ["Manual", "Automatic", "PDK", "DCT", "CVT"]
 const DRIVETRAIN_OPTIONS = ["RWD", "AWD", "FWD"]
@@ -95,6 +105,11 @@ export default function EditVehiclePage() {
       description?: string
       isRequired?: boolean
     }>,
+    // Pickup location fields
+    street: "",
+    city: "",
+    state: "",
+    zipCode: "",
   })
 
   // Populate form data when vehicle loads
@@ -113,6 +128,11 @@ export default function EditVehiclePage() {
         engineType: vehicle.engineType || "",
         mileage: vehicle.mileage || 0,
         addOns: vehicle.addOns || [],
+        // Pickup location
+        street: vehicle.address?.street || "",
+        city: vehicle.address?.city || "",
+        state: vehicle.address?.state || "",
+        zipCode: vehicle.address?.zipCode || "",
       })
 
       // Sort images by order
@@ -217,7 +237,7 @@ export default function EditVehiclePage() {
       name: addOn.name,
       price: addOn.price.toString(),
       description: addOn.description || "",
-      isRequired: addOn.isRequired || false,
+      isRequired: addOn.isRequired,
     })
     setEditingAddOnIndex(index)
   }
@@ -273,7 +293,7 @@ export default function EditVehiclePage() {
 
           // Upload to R2
           const r2Key = await uploadFile(file)
-          
+
           // Add image to database
           const isPrimary = images.length === 0
           await addImage({
@@ -392,6 +412,17 @@ export default function EditVehiclePage() {
     setIsSubmitting(true)
 
     try {
+      // Build address object if any address fields are filled
+      const hasAddress = formData.street || formData.city || formData.state || formData.zipCode
+      const address = hasAddress
+        ? {
+            street: formData.street.trim(),
+            city: formData.city.trim(),
+            state: formData.state.trim(),
+            zipCode: formData.zipCode.trim(),
+          }
+        : undefined
+
       await updateVehicle({
         id: vehicleId as any,
         trackId: formData.trackId ? (formData.trackId as any) : undefined,
@@ -406,6 +437,7 @@ export default function EditVehiclePage() {
         engineType: formData.engineType || undefined,
         mileage: formData.mileage || undefined,
         addOns: formData.addOns.length > 0 ? formData.addOns : undefined,
+        address,
       })
 
       // Redirect to vehicle detail page after successful update
@@ -457,18 +489,10 @@ export default function EditVehiclePage() {
                   type="file"
                 />
                 <Label
-                  className={cn(
-                    "cursor-pointer",
-                    isUploading && "opacity-50 cursor-not-allowed"
-                  )}
+                  className={cn("cursor-pointer", isUploading && "cursor-not-allowed opacity-50")}
                   htmlFor="image-upload"
                 >
-                  <Button
-                    disabled={isUploading}
-                    size="sm"
-                    type="button"
-                    variant="outline"
-                  >
+                  <Button disabled={isUploading} size="sm" type="button" variant="outline">
                     <Upload className="mr-2 size-4" />
                     {isUploading ? "Uploading..." : "Add Images"}
                   </Button>
@@ -479,10 +503,8 @@ export default function EditVehiclePage() {
             {images.length === 0 ? (
               <div className="flex min-h-32 items-center justify-center rounded-lg border border-dashed">
                 <div className="text-center">
-                  <p className="text-muted-foreground text-sm">
-                    No images uploaded yet
-                  </p>
-                  <p className="text-muted-foreground mt-1 text-xs">
+                  <p className="text-muted-foreground text-sm">No images uploaded yet</p>
+                  <p className="mt-1 text-muted-foreground text-xs">
                     Drag and drop to reorder images
                   </p>
                 </div>
@@ -547,16 +569,16 @@ export default function EditVehiclePage() {
                     </div>
 
                     {/* Drag handle */}
-                    <div className="absolute left-2 top-2 cursor-grab active:cursor-grabbing">
+                    <div className="absolute top-2 left-2 cursor-grab active:cursor-grabbing">
                       <GripVertical className="size-5 text-white drop-shadow-lg" />
                     </div>
 
                     {/* Primary badge */}
                     {image.isPrimary && (
-                      <div className="absolute right-2 top-2">
+                      <div className="absolute top-2 right-2">
                         <div className="flex items-center gap-1 rounded-full bg-primary px-2 py-1">
                           <Star className="size-3 fill-white text-white" />
-                          <span className="text-white text-xs font-medium">Primary</span>
+                          <span className="font-medium text-white text-xs">Primary</span>
                         </div>
                       </div>
                     )}
@@ -564,7 +586,7 @@ export default function EditVehiclePage() {
                     {/* Order indicator */}
                     <div className="absolute bottom-2 left-2">
                       <div className="rounded-full bg-black/70 px-2 py-1">
-                        <span className="text-white text-xs font-medium">
+                        <span className="font-medium text-white text-xs">
                           {index + 1} / {images.length}
                         </span>
                       </div>
@@ -762,6 +784,69 @@ export default function EditVehiclePage() {
             <Separator />
 
             <div className="space-y-4">
+              <div>
+                <h3 className="flex items-center gap-2 font-semibold text-lg">
+                  <MapPin className="size-5" />
+                  Pickup Location
+                </h3>
+                <p className="text-muted-foreground text-sm">
+                  Where renters will pick up and return the vehicle
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="street">Street Address</Label>
+                <Input
+                  id="street"
+                  name="street"
+                  onChange={handleChange}
+                  placeholder="123 Main Street"
+                  value={formData.street}
+                />
+              </div>
+
+              <div className="grid gap-6 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="city">City</Label>
+                  <Input
+                    id="city"
+                    name="city"
+                    onChange={handleChange}
+                    placeholder="Los Angeles"
+                    value={formData.city}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="state">State</Label>
+                  <Input
+                    id="state"
+                    maxLength={2}
+                    name="state"
+                    onChange={handleChange}
+                    placeholder="CA"
+                    value={formData.state}
+                  />
+                </div>
+              </div>
+
+              <div className="md:w-1/2">
+                <div className="space-y-2">
+                  <Label htmlFor="zipCode">ZIP Code</Label>
+                  <Input
+                    id="zipCode"
+                    maxLength={10}
+                    name="zipCode"
+                    onChange={handleChange}
+                    placeholder="90001"
+                    value={formData.zipCode}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <Separator />
+
+            <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="font-semibold text-lg">Add-ons</h3>
@@ -782,7 +867,7 @@ export default function EditVehiclePage() {
                         <div className="flex items-center gap-2">
                           <p className="font-medium">{addOn.name}</p>
                           {addOn.isRequired && (
-                            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-primary text-xs font-medium">
+                            <span className="rounded-full bg-primary/10 px-2 py-0.5 font-medium text-primary text-xs">
                               Required
                             </span>
                           )}
@@ -857,10 +942,7 @@ export default function EditVehiclePage() {
                       setNewAddOn({ ...newAddOn, isRequired: checked === true })
                     }
                   />
-                  <Label
-                    className="cursor-pointer text-sm font-normal"
-                    htmlFor="addOnRequired"
-                  >
+                  <Label className="cursor-pointer font-normal text-sm" htmlFor="addOnRequired">
                     Required add-on (renters must purchase this)
                   </Label>
                 </div>
