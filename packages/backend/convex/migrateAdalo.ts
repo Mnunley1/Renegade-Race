@@ -127,7 +127,9 @@ async function migrateImageToR2(
 
     return r2Key
   } catch (error) {
-    console.error(`Failed to migrate image ${imageUrl}:`, error)
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { logError } = require("./logger")
+    logError(error, `Failed to migrate image ${imageUrl}`)
     throw error
   }
 }
@@ -195,7 +197,9 @@ export const migrateUser = internalMutation({
       try {
         profileImageR2Key = await migrateImageToR2(ctx, adaloUser.profileImageUrl, "profiles")
       } catch (error) {
-        console.error(`Failed to migrate profile image for user ${adaloUser.id}:`, error)
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { logError } = require("./logger")
+        logError(error, `Failed to migrate profile image for user ${adaloUser.id}`)
         // Continue without profile image
       }
     }
@@ -302,7 +306,9 @@ export const migrateVehicle = internalMutation({
               order: image.order ?? index,
             })
           } catch (error) {
-            console.error(`Failed to migrate image ${image.url} for vehicle ${vehicleId}:`, error)
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const { logError } = require("./logger")
+            logError(error, `Failed to migrate image ${image.url} for vehicle ${vehicleId}`)
             // Continue with other images
           }
         })
@@ -462,7 +468,9 @@ export const migrateUsersBatch = internalMutation({
         results.push({ userId, clerkExternalId, success: true })
       } catch (error) {
         errors.push({ clerkExternalId, error: String(error) })
-        console.error(`Failed to migrate user ${clerkExternalId}:`, error)
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { logError } = require("./logger")
+        logError(error, `Failed to migrate user ${clerkExternalId}`)
       }
     }
 

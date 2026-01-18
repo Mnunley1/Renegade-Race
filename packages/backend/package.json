@@ -5,6 +5,7 @@
   "types": "index.ts",
   "private": true,
   "scripts": {
+    "dev": "convex dev",
     "convex:dev": "convex dev",
     "convex:deploy": "convex deploy",
     "convex:mcp": "convex mcp start",

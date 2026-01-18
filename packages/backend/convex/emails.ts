@@ -79,7 +79,7 @@ function getFromEmail(): string {
     // Use delivered@resend.dev which simulates successful delivery
     return "delivered@resend.dev"
   }
-  return process.env.RESEND_FROM_EMAIL || "Renegade Rentals <support@renegaderentals.com>"
+  return process.env.RESEND_FROM_EMAIL || "Renegade Rentals <support@renegaderace.com>"
 }
 
 // Helper function to get support email
@@ -91,7 +91,7 @@ export function getSupportEmail(): string {
     // Configure Resend to forward this to your custom domain if needed
     return "delivered@resend.dev"
   }
-  return process.env.SUPPORT_EMAIL || "support@yiakri.resend.app"
+  return process.env.SUPPORT_EMAIL || "support@renegaderace.com"
 }
 
 // Helper function to format currency
@@ -800,7 +800,9 @@ export async function sendTransactionalEmail(
     })
     return emailId
   } catch (error) {
-    console.error("Failed to send transactional email:", error)
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { logError } = require("./logger")
+    logError(error, "Failed to send transactional email")
     // Don't throw - email failures shouldn't break the main flow
     return null
   }

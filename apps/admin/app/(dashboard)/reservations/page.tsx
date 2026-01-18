@@ -34,6 +34,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import { Pagination } from "@/components/pagination"
+import { handleErrorWithContext } from "@/lib/error-handler"
 import { DateRangeFilter } from "@/components/date-range-filter"
 import type { Id } from "@/lib/convex"
 
@@ -88,8 +89,7 @@ export default function ReservationsPage() {
       toast.success("Reservation cancelled successfully")
       setSelectedIds(new Set())
     } catch (error) {
-      console.error("Failed to cancel reservation:", error)
-      toast.error("An error occurred")
+      handleErrorWithContext(error, { action: "cancel reservation" })
     } finally {
       setProcessingId(null)
     }
@@ -241,8 +241,7 @@ export default function ReservationsPage() {
                       toast.success(`${selectedIds.size} reservation(s) cancelled`)
                       setSelectedIds(new Set())
                     } catch (error) {
-                      console.error("Failed to cancel reservations:", error)
-                      toast.error("An error occurred")
+                      handleErrorWithContext(error, { action: "cancel reservations" })
                     }
                   }}
                 >

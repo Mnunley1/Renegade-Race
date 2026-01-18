@@ -19,7 +19,6 @@ import { Separator } from "@workspace/ui/components/separator"
 import { cn } from "@workspace/ui/lib/utils"
 import { useAction, useMutation, useQuery } from "convex/react"
 import {
-  ArrowLeft,
   Calendar as CalendarIcon,
   Check,
   ChevronDown,
@@ -31,6 +30,7 @@ import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Suspense, useEffect, useState } from "react"
 import { api } from "@/lib/convex"
+import { formatDateToISO, parseLocalDate } from "@/lib/date-utils"
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "")
 
@@ -133,6 +133,7 @@ function PaymentForm({
   )
 }
 
+
 function CheckoutPageContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -140,6 +141,8 @@ function CheckoutPageContent() {
   const vehicleId = searchParams.get("vehicleId")
   const reservationId = searchParams.get("reservationId")
   const clientSecret = searchParams.get("clientSecret")
+  const startDateParam = searchParams.get("startDate")
+  const endDateParam = searchParams.get("endDate")
 
   const vehicle = useQuery(api.vehicles.getById, vehicleId ? { id: vehicleId as any } : "skip")
   const reservation = useQuery(
@@ -178,6 +181,29 @@ function CheckoutPageContent() {
       }
     }
   }, [vehicle?.addOns])
+
+  // Initialize dates from URL params if provided
+  useEffect(() => {
+    if (startDateParam && endDateParam && !pickupDate && !dropoffDate) {
+      const startDate = parseLocalDate(startDateParam)
+      const endDate = parseLocalDate(endDateParam)
+      
+      if (startDate && endDate) {
+        // Set to midnight local time
+        startDate.setHours(0, 0, 0, 0)
+        endDate.setHours(0, 0, 0, 0)
+        
+        // Only set if dates are valid and in the future
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        
+        if (startDate >= today && endDate >= startDate) {
+          setPickupDate(startDate)
+          setDropoffDate(endDate)
+        }
+      }
+    }
+  }, [startDateParam, endDateParam, pickupDate, dropoffDate])
 
   // Generate time options (every 30 minutes from 6 AM to 10 PM)
   const generateTimeOptions = () => {
@@ -311,9 +337,10 @@ function CheckoutPageContent() {
             }))
           : undefined
 
-      // Convert Date objects to ISO date strings (YYYY-MM-DD)
-      const startDateString = pickupDate.toISOString().split("T")[0]
-      const endDateString = dropoffDate.toISOString().split("T")[0]
+      // Convert Date objects to ISO date strings (YYYY-MM-DD) using local date formatting
+      // This prevents timezone shifts when converting dates
+      const startDateString = formatDateToISO(pickupDate)
+      const endDateString = formatDateToISO(dropoffDate)
 
       // Create reservation
       const newReservationId = await createReservation({
@@ -361,11 +388,6 @@ function CheckoutPageContent() {
 
     return (
       <div className="container mx-auto max-w-6xl px-4 py-8">
-        <Button className="mb-6" onClick={() => router.back()} variant="outline">
-          <ArrowLeft className="mr-2 size-4" />
-          Back
-        </Button>
-
         <h1 className="mb-8 font-bold text-4xl">Complete Your Reservation</h1>
 
         <div className="grid gap-8 lg:grid-cols-5">
@@ -531,11 +553,6 @@ function CheckoutPageContent() {
 
   return (
     <div className="container mx-auto max-w-6xl px-4 py-8">
-      <Button className="mb-6" onClick={() => router.back()} variant="ghost">
-        <ArrowLeft className="mr-2 size-4" />
-        Back
-      </Button>
-
       <h1 className="mb-8 font-bold text-4xl">Complete Your Reservation</h1>
 
       <div className="grid gap-8 lg:grid-cols-5">

@@ -32,6 +32,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import type { Id } from "@/lib/convex"
+import { handleErrorWithContext } from "@/lib/error-handler"
 
 export default function UserDetailPage() {
   const params = useParams()
@@ -70,8 +71,7 @@ export default function UserDetailPage() {
       await banUser({ userId })
       toast.success("User banned successfully")
     } catch (error) {
-      console.error("Failed to ban user:", error)
-      toast.error("An error occurred")
+      handleErrorWithContext(error, { action: "ban user", entity: "user" })
     } finally {
       setIsProcessing(false)
     }
@@ -83,8 +83,7 @@ export default function UserDetailPage() {
       await unbanUser({ userId })
       toast.success("User unbanned successfully")
     } catch (error) {
-      console.error("Failed to unban user:", error)
-      toast.error("An error occurred")
+      handleErrorWithContext(error, { action: "unban user", entity: "user" })
     } finally {
       setIsProcessing(false)
     }
