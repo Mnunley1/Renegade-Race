@@ -1,6 +1,8 @@
 import { v } from 'convex/values';
 import type { Id } from './_generated/dataModel';
 import { mutation, query } from './_generated/server';
+// TODO: Uncomment after installing @convex-dev/rate-limiter
+// import { rateLimiter } from './rateLimiter';
 
 // Get messages for a conversation
 export const getByConversation = query({
@@ -110,6 +112,13 @@ export const send = mutation({
     if (!identity) {
       throw new Error('Not authenticated');
     }
+
+    // Rate limit: 20 messages per minute per user
+    // TODO: Uncomment after installing @convex-dev/rate-limiter
+    // await rateLimiter.limit(ctx, "sendMessage", {
+    //   key: identity.subject,
+    //   throws: true,
+    // });
 
     const senderId = identity.subject;
     const now = Date.now();

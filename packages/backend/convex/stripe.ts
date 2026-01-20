@@ -9,6 +9,8 @@ import {
   getPaymentSucceededEmailTemplate,
   sendTransactionalEmail,
 } from "./emails"
+// TODO: Uncomment after installing @convex-dev/rate-limiter
+// import { rateLimiter } from "./rateLimiter"
 
 // Initialize Stripe client from component
 const stripeClient = new StripeSubscriptions(components.stripe, {})
@@ -476,6 +478,14 @@ export const createPaymentIntent = action({
     if (!identity) {
       throw new Error("Not authenticated")
     }
+
+    // Rate limit: 20 payment operations per hour per user
+    // TODO: Uncomment after installing @convex-dev/rate-limiter
+    // await ctx.runMutation(internal.rateLimitHelpers.checkRateLimit, {
+    //   name: "processPayment",
+    //   key: identity.subject,
+    //   throws: true,
+    // })
 
     const reservation = await ctx.runQuery(api.reservations.getById, {
       id: args.reservationId,

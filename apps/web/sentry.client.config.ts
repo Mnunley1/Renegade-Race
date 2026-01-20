@@ -4,36 +4,59 @@
 
 import * as Sentry from "@sentry/nextjs"
 
-Sentry.init({
-  dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
+let isInitialized = false
 
-  // Adjust this value in production, or use tracesSampler for greater control
-  tracesSampleRate: process.env.NODE_ENV === "production" ? 0.1 : 1.0,
+/**
+ * Initialize Sentry with the configured settings
+ * This function should be called conditionally based on user cookie consent
+ * It will only initialize once, even if called multiple times
+ */
+export function initSentry() {
+  // Prevent double initialization
+  if (isInitialized) {
+    return
+  }
 
-  // Setting this option to true will print useful information to the console while you're setting up Sentry.
-  debug: false,
+  // Only initialize if DSN is provided
+  if (!process.env.NEXT_PUBLIC_SENTRY_DSN) {
+    return
+  }
 
-  replaysOnErrorSampleRate: 1.0,
+  Sentry.init({
+    dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
 
-  // This sets the sample rate to be 10%. You may want this to be 100% while
-  // in development and sample at a lower rate in production
-  replaysSessionSampleRate: process.env.NODE_ENV === "production" ? 0.1 : 0.1,
+    // Adjust this value in production, or use tracesSampler for greater control
+    tracesSampleRate: process.env.NODE_ENV === "production" ? 0.1 : 1.0,
 
-  // You can remove this option if you're not planning to use the Sentry Session Replay feature:
-  integrations: [
-    Sentry.replayIntegration({
-      // Additional Replay configuration goes in here, for example:
-      maskAllText: true,
-      blockAllMedia: true,
-    }),
-  ],
+    // Setting this option to true will print useful information to the console while you're setting up Sentry.
+    debug: process.env.NEXT_PUBLIC_SENTRY_DEBUG === "true",
 
-  // Filter out sensitive data
-  beforeSend(event, hint) {
-    // Don't send events in development unless explicitly testing
-    if (process.env.NODE_ENV === "development" && !process.env.SENTRY_DEBUG) {
-      return null
-    }
-    return event
-  },
-})
+    replaysOnErrorSampleRate: 1.0,
+
+    // This sets the sample rate to be 10%. You may want this to be 100% while
+    // in development and sample at a lower rate in production
+    replaysSessionSampleRate: process.env.NODE_ENV === "production" ? 0.1 : 0.1,
+
+    // You can remove this option if you're not planning to use the Sentry Session Replay feature:
+    integrations: [
+      Sentry.replayIntegration({
+        // Additional Replay configuration goes in here, for example:
+        maskAllText: true,
+        blockAllMedia: true,
+      }),
+    ],
+
+    // Filter out sensitive data
+    beforeSend(event, hint) {
+      // Don't send events in development unless explicitly testing
+      // Note: In client-side code, only NEXT_PUBLIC_* env vars are available
+      const isDebugMode = process.env.NEXT_PUBLIC_SENTRY_DEBUG === "true"
+      if (process.env.NODE_ENV === "development" && !isDebugMode) {
+        return null
+      }
+      return event
+    },
+  })
+
+  isInitialized = true
+}
