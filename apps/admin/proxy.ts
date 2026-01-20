@@ -1,9 +1,8 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server"
 import { NextResponse } from "next/server"
 
-// All routes except sign-in and debug require authentication and admin role
+// All routes except sign-in require authentication and admin role
 const isPublicRoute = createRouteMatcher(["/sign-in(.*)"])
-const isDebugRoute = createRouteMatcher(["/debug(.*)"])
 
 export default clerkMiddleware(async (auth, req) => {
   const { userId, sessionClaims, orgId } = await auth()
@@ -19,11 +18,6 @@ export default clerkMiddleware(async (auth, req) => {
     const redirectPath = req.nextUrl.pathname + req.nextUrl.search
     url.searchParams.set("redirect_url", redirectPath)
     return NextResponse.redirect(url)
-  }
-
-  // Allow authenticated users to access debug page (even if not admin)
-  if (isDebugRoute(req)) {
-    return NextResponse.next()
   }
 
   // Check if user has admin role

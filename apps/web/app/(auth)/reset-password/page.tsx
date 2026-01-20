@@ -13,34 +13,34 @@ import Link from "next/link"
 
 export default function ResetPasswordPage() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-3 sm:space-y-4">
       <div className="text-center">
-        <h1 className="mb-2 font-bold text-3xl">Reset Password</h1>
-        <p className="text-muted-foreground text-sm">
+        <h1 className="mb-1 font-bold text-2xl sm:mb-2 sm:text-3xl">Reset Password</h1>
+        <p className="text-muted-foreground text-xs sm:text-sm">
           Enter your email address and we'll send you a link to reset your password
         </p>
       </div>
 
       <Card className="border-2 shadow-xl bg-card">
-        <CardHeader>
+        <CardHeader className="pb-4 sm:pb-6">
           <div className="mb-4">
             <Link
-              className="inline-flex items-center text-muted-foreground text-sm transition-colors hover:text-primary"
+              className="inline-flex items-center text-muted-foreground text-xs transition-colors hover:text-primary sm:text-sm"
               href="/sign-in"
             >
               <ArrowLeft className="mr-2 size-4" />
               Back to sign in
             </Link>
           </div>
-          <CardTitle className="text-xl">Forgot your password?</CardTitle>
-          <CardDescription>
+          <CardTitle className="text-lg sm:text-xl">Forgot your password?</CardTitle>
+          <CardDescription className="text-xs sm:text-sm">
             No worries! Enter your email below and we'll send you instructions to reset it.
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <form className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email address</Label>
+        <CardContent className="pb-4 sm:pb-6">
+          <form className="space-y-4 sm:space-y-6">
+            <div className="space-y-1.5 sm:space-y-2">
+              <Label htmlFor="email" className="text-sm">Email address</Label>
               <div className="relative">
                 <Mail className="-translate-y-1/2 absolute top-1/2 left-3 size-4 text-muted-foreground" />
                 <Input
@@ -51,7 +51,7 @@ export default function ResetPasswordPage() {
                   type="email"
                 />
               </div>
-              <p className="text-muted-foreground text-sm">
+              <p className="text-muted-foreground text-xs sm:text-sm">
                 We'll send you a reset link within a few minutes
               </p>
             </div>
@@ -61,7 +61,7 @@ export default function ResetPasswordPage() {
           </form>
 
           <div className="mt-6 text-center">
-            <p className="text-muted-foreground text-sm">
+            <p className="text-muted-foreground text-xs sm:text-sm">
               Remember your password?{" "}
               <Link
                 className="font-medium text-primary transition-colors hover:text-primary/80"
