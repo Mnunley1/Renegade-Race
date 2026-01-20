@@ -187,7 +187,6 @@ export const migrateUser = internalMutation({
       .first()
 
     if (existing) {
-      console.log(`User ${args.clerkExternalId} already exists, skipping`)
       return existing._id
     }
 

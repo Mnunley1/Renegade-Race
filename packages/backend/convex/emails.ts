@@ -3,6 +3,8 @@ import { v } from "convex/values"
 import { Resend } from "resend"
 import { components } from "./_generated/api"
 import { type MutationCtx, mutation, query } from "./_generated/server"
+// TODO: Uncomment after installing @convex-dev/rate-limiter
+// import { rateLimiter } from "./rateLimiter"
 
 // Helper function to check if user is admin
 async function checkAdmin(ctx: any) {
@@ -924,6 +926,13 @@ export const sendContactFormEmail = mutation({
     message: v.string(),
   },
   handler: async (ctx, args) => {
+    // Rate limit: 5 emails per hour per email address (prevents spam)
+    // TODO: Uncomment after installing @convex-dev/rate-limiter
+    // await rateLimiter.limit(ctx, "sendEmail", {
+    //   key: args.email.toLowerCase(),
+    //   throws: true,
+    // })
+
     // Use getSupportEmail() which handles test mode automatically
     const supportEmail = getSupportEmail()
     const fromEmail = getFromEmail()
