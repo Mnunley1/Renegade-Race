@@ -109,38 +109,38 @@ export default function VerifyEmailPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3 sm:space-y-4">
       <div className="text-center">
-        <h1 className="mb-2 font-bold text-3xl">Verify Your Email</h1>
-        <p className="text-muted-foreground text-sm">
+        <h1 className="mb-1 font-bold text-2xl sm:mb-2 sm:text-3xl">Verify Your Email</h1>
+        <p className="text-muted-foreground text-xs sm:text-sm">
           We sent a verification code to <br />
           <span className="font-medium text-foreground">{signUp.emailAddress || "your email"}</span>
         </p>
       </div>
 
-      <Card className="border-2 shadow-xl">
-        <CardHeader>
-          <CardTitle>Enter verification code</CardTitle>
-          <CardDescription>
+      <Card className="border-2 shadow-xl bg-card">
+        <CardHeader className="pb-4 sm:pb-6">
+          <CardTitle className="text-lg sm:text-xl">Enter verification code</CardTitle>
+          <CardDescription className="text-xs sm:text-sm">
             Check your email for the 6-digit code and enter it below
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <form className="space-y-6" onSubmit={handleSubmit}>
+        <CardContent className="pb-4 sm:pb-6">
+          <form className="space-y-4 sm:space-y-6" onSubmit={handleSubmit}>
             {error && (
-              <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-destructive text-sm">
+              <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-2 text-destructive text-xs sm:p-3 sm:text-sm">
                 {error}
               </div>
             )}
 
             {resendSuccess && (
-              <div className="rounded-lg border border-green-500/50 bg-green-500/10 p-3 text-green-700 text-sm dark:text-green-400">
+              <div className="rounded-lg border border-green-500/50 bg-green-500/10 p-2 text-green-700 text-xs dark:text-green-400 sm:p-3 sm:text-sm">
                 Verification code sent! Please check your email.
               </div>
             )}
 
-            <div className="space-y-2">
-              <Label htmlFor="code">Verification Code</Label>
+            <div className="space-y-1.5 sm:space-y-2">
+              <Label htmlFor="code" className="text-sm">Verification Code</Label>
               <div className="relative">
                 <Mail className="-translate-y-1/2 absolute top-1/2 left-3 size-4 text-muted-foreground" />
                 <Input
@@ -186,8 +186,8 @@ export default function VerifyEmailPage() {
           </form>
         </CardContent>
 
-        <CardFooter className="flex flex-col space-y-4">
-          <div className="text-center text-sm">
+        <CardFooter className="flex flex-col space-y-3 sm:space-y-4">
+          <div className="text-center text-xs sm:text-sm">
             <p className="mb-2 text-muted-foreground">Didn't receive the code?</p>
             <Button
               className="w-full"
@@ -207,7 +207,7 @@ export default function VerifyEmailPage() {
             </Button>
           </div>
 
-          <div className="text-center text-sm">
+          <div className="text-center text-xs sm:text-sm">
             <span className="text-muted-foreground">Wrong email? </span>
             <Link
               className="font-medium text-primary transition-colors hover:text-primary/80"

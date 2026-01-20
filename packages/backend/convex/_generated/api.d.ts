@@ -23,6 +23,8 @@ import type * as logger from "../logger.js";
 import type * as messages from "../messages.js";
 import type * as migrateAdalo from "../migrateAdalo.js";
 import type * as r2 from "../r2.js";
+import type * as rateLimitHelpers from "../rateLimitHelpers.js";
+import type * as rateLimiter from "../rateLimiter.js";
 import type * as rentalCompletions from "../rentalCompletions.js";
 import type * as reservations from "../reservations.js";
 import type * as reviews from "../reviews.js";
@@ -66,6 +68,8 @@ declare const fullApi: ApiFromModules<{
   messages: typeof messages;
   migrateAdalo: typeof migrateAdalo;
   r2: typeof r2;
+  rateLimitHelpers: typeof rateLimitHelpers;
+  rateLimiter: typeof rateLimiter;
   rentalCompletions: typeof rentalCompletions;
   reservations: typeof reservations;
   reviews: typeof reviews;

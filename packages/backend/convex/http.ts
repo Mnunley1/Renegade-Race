@@ -6,6 +6,8 @@ import { api, internal, components } from './_generated/api';
 import { httpAction } from './_generated/server';
 import { resendComponent } from './emails';
 import { registerRoutes } from '@convex-dev/stripe';
+// TODO: Uncomment after installing @convex-dev/rate-limiter
+// import { rateLimiter } from './rateLimiter';
 
 // Helper function to get Stripe instance
 function getStripe(): Stripe {
@@ -106,7 +108,6 @@ registerRoutes(http, components.stripe, {
       });
 
       if (!user) {
-        console.log(`No user found for Stripe account ${account.id}`);
         return;
       }
 
@@ -151,6 +152,25 @@ http.route({
   path: '/clerk-users-webhook',
   method: 'POST',
   handler: httpAction(async (ctx, request) => {
+    // Rate limit webhook endpoints: 100 requests per minute per IP
+    // TODO: Uncomment after installing @convex-dev/rate-limiter
+    // const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+    //            request.headers.get('x-real-ip') ||
+    //            'unknown';
+    // 
+    // const rateLimitStatus = await rateLimiter.limit(ctx, "webhookEndpoint", {
+    //   key: ip,
+    // });
+    // 
+    // if (!rateLimitStatus.ok) {
+    //   return new Response('Too many requests', { 
+    //     status: 429,
+    //     headers: {
+    //       'Retry-After': Math.ceil((rateLimitStatus.retryAfter - Date.now()) / 1000).toString(),
+    //     },
+    //   });
+    // }
+
     const event = await validateRequest(request);
     if (!event) {
       return new Response('Error occured', { status: 400 });
@@ -200,6 +220,25 @@ http.route({
   path: '/resend-webhook',
   method: 'POST',
   handler: httpAction(async (ctx, req) => {
+    // Rate limit webhook endpoints: 100 requests per minute per IP
+    // TODO: Uncomment after installing @convex-dev/rate-limiter
+    // const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+    //            req.headers.get('x-real-ip') ||
+    //            'unknown';
+    // 
+    // const rateLimitStatus = await rateLimiter.limit(ctx, "webhookEndpoint", {
+    //   key: ip,
+    // });
+    // 
+    // if (!rateLimitStatus.ok) {
+    //   return new Response('Too many requests', { 
+    //     status: 429,
+    //     headers: {
+    //       'Retry-After': Math.ceil((rateLimitStatus.retryAfter - Date.now()) / 1000).toString(),
+    //     },
+    //   });
+    // }
+
     return await resendComponent.handleResendEventWebhook(ctx, req);
   }),
 });

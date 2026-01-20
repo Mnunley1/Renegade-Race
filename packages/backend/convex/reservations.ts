@@ -11,6 +11,8 @@ import {
   sendTransactionalEmail,
 } from './emails';
 import { calculateDaysBetween } from './dateUtils';
+// TODO: Uncomment after installing @convex-dev/rate-limiter
+// import { rateLimiter } from './rateLimiter';
 
 // Get reservations for a user (as renter or owner)
 export const getByUser = query({
@@ -169,6 +171,13 @@ export const create = mutation({
     if (!identity) {
       throw new Error('Not authenticated');
     }
+
+    // Rate limit: 10 reservations per hour per user
+    // TODO: Uncomment after installing @convex-dev/rate-limiter
+    // const rateLimitStatus = await rateLimiter.limit(ctx, "createReservation", {
+    //   key: identity.subject,
+    //   throws: true,
+    // });
 
     const renterId = identity.subject;
     const now = Date.now();
