@@ -6,6 +6,8 @@ import {
   sendTransactionalEmail,
   getSupportEmail,
 } from './emails'
+// TODO: Uncomment after installing @convex-dev/rate-limiter
+// import { rateLimiter } from './rateLimiter'
 
 // Create a dispute for a rental completion
 export const create = mutation({
@@ -21,6 +23,13 @@ export const create = mutation({
     if (!identity) {
       throw new Error('Not authenticated')
     }
+
+    // Rate limit: 5 disputes per day per user
+    // TODO: Uncomment after installing @convex-dev/rate-limiter
+    // await rateLimiter.limit(ctx, "createDispute", {
+    //   key: identity.subject,
+    //   throws: true,
+    // });
 
     const completion = await ctx.db.get(args.completionId)
     if (!completion) {
