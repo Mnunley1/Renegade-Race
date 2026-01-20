@@ -117,7 +117,7 @@
 ### 11. Content & Copy Review
 - [ ] Review all user-facing text
 - [ ] Check for placeholder content
-- [ ] Verify contact email (`support@renegade.com` - line 64 in contact page)
+- [ ] Verify contact email (`support@renegaderace.com` - verified in contact page, privacy policy, and terms)
 - [ ] Review terms of service and privacy policy links
 - [ ] Check all help/documentation pages
 
