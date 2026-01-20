@@ -198,18 +198,46 @@ export default function SettingsPage() {
             <CardContent className="space-y-4">
               <div>
                 <Label htmlFor="name">Full Name</Label>
-                <Input defaultValue="John Doe" id="name" />
+                <Input
+                  defaultValue={clerkUser?.fullName || ""}
+                  id="name"
+                  readOnly
+                />
+                <p className="mt-1 text-muted-foreground text-xs">
+                  Name is managed through your authentication provider
+                </p>
               </div>
               <div>
                 <Label htmlFor="email">Email</Label>
-                <Input defaultValue="john@example.com" id="email" type="email" />
+                <Input
+                  defaultValue={clerkUser?.primaryEmailAddress?.emailAddress || ""}
+                  id="email"
+                  readOnly
+                  type="email"
+                />
+                <p className="mt-1 text-muted-foreground text-xs">
+                  Email is managed through your authentication provider
+                </p>
               </div>
               <div>
                 <Label htmlFor="phone">Phone Number</Label>
-                <Input defaultValue="+1 (555) 123-4567" id="phone" type="tel" />
+                <Input
+                  defaultValue={clerkUser?.primaryPhoneNumber?.phoneNumber || ""}
+                  id="phone"
+                  readOnly
+                  type="tel"
+                />
+                <p className="mt-1 text-muted-foreground text-xs">
+                  Phone number is managed through your authentication provider
+                </p>
               </div>
               <Separator />
-              <Button>Save Changes</Button>
+              <Button disabled>Save Changes</Button>
+              <p className="text-muted-foreground text-xs">
+                Account information is managed through your authentication provider. To update your
+                name, email, or phone number, please update your account settings with your
+                authentication provider.
+              </p>
             </CardContent>
           </Card>
 
