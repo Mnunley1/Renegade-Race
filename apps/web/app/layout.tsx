@@ -73,6 +73,18 @@ export const metadata: Metadata = {
     // google: "your-google-verification-code",
     // yandex: "your-yandex-verification-code",
   },
+  icons: {
+    icon: "/favicon.ico",
+    shortcut: "/favicon.ico",
+    apple: "/icon1.png",
+    other: [
+      {
+        rel: "icon",
+        type: "image/svg+xml",
+        url: "/icon0.svg",
+      },
+    ],
+  },
 }
 
 const fontHeader = Oxanium({
