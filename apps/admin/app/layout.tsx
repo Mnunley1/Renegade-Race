@@ -21,6 +21,18 @@ export const metadata: Metadata = {
     index: false,
     follow: false,
   },
+  icons: {
+    icon: "/favicon.ico",
+    shortcut: "/favicon.ico",
+    apple: "/icon1.png",
+    other: [
+      {
+        rel: "icon",
+        type: "image/svg+xml",
+        url: "/icon0.svg",
+      },
+    ],
+  },
 }
 
 export default function RootLayout({
