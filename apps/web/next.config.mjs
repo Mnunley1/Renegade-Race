@@ -9,6 +9,8 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  // Set workspace root to avoid lockfile detection warnings
+  outputFileTracingRoot: resolve(__dirname, "../.."),
   transpilePackages: ["@workspace/ui", "@renegade/backend"],
   images: {
     remotePatterns: [
@@ -27,6 +29,16 @@ const nextConfig = {
       {
         protocol: "https",
         hostname: "ik.imagekit.io",
+      },
+      {
+        // Cloudflare R2 public bucket URLs (pub-*.r2.dev)
+        protocol: "https",
+        hostname: "*.r2.dev",
+      },
+      {
+        // Cloudflare R2 custom domains
+        protocol: "https",
+        hostname: "*.cloudflarestorage.com",
       },
     ],
   },

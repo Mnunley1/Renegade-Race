@@ -7,12 +7,16 @@ import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import { Textarea } from "@workspace/ui/components/textarea"
 import { useMutation, useQuery } from "convex/react"
-import { ArrowLeft, Loader2, Star, Upload } from "lucide-react"
+import { ArrowLeft, Loader2, Star, Upload, X } from "lucide-react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/lib/convex"
+import type { Id } from "@/lib/convex"
+import { getImageKitUrl } from "@/lib/imagekit"
+import { handleErrorWithContext } from "@/lib/error-handler"
+import { usePhotoUpload } from "@/hooks/usePhotoUpload"
 
 export default function ReviewSubmissionPage() {
   const { user } = useUser()
@@ -27,23 +31,31 @@ export default function ReviewSubmissionPage() {
   const [overallExperience, setOverallExperience] = useState(0)
   const [title, setTitle] = useState("")
   const [review, setReview] = useState("")
-  const [photos, setPhotos] = useState<string[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const {
+    photos,
+    setPhotos,
+    isUploading,
+    fileInputRef,
+    handlePhotoUpload,
+    handleRemovePhoto,
+  } = usePhotoUpload()
 
   // Fetch reservation and completion data
   const reservation = useQuery(
     api.reservations.getById,
-    reservationId ? { id: reservationId as any } : "skip"
+    reservationId ? { id: reservationId as Id<"reservations"> } : "skip"
   )
 
   const completion = useQuery(
     api.rentalCompletions.getByReservation,
-    reservationId ? { reservationId: reservationId as any } : "skip"
+    reservationId ? { reservationId: reservationId as Id<"reservations"> } : "skip"
   )
 
   const existingReview = useQuery(
     api.reviews.getByCompletion,
-    completion?._id ? { completionId: completion._id as any } : "skip"
+    completion?._id ? { completionId: completion._id as Id<"rentalCompletions"> } : "skip"
   )
 
   const submitReview = useMutation(api.rentalCompletions.submitReview)
@@ -113,18 +125,19 @@ export default function ReviewSubmissionPage() {
       }
       router.push("/trips")
     } catch (error) {
-      console.error("Error submitting review:", error)
-      toast.error(existingReview ? "Failed to update review" : "Failed to submit review")
+      handleErrorWithContext(error, {
+        action: existingReview ? "update review" : "submit review",
+        entity: "review",
+        customMessages: {
+          duplicate: "You have already submitted a review for this rental",
+          generic: existingReview ? "Failed to update review. Please try again." : "Failed to submit review. Please try again.",
+        },
+      })
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  // Handle photo upload (placeholder)
-  const handlePhotoUpload = () => {
-    // TODO: Implement photo upload to storage
-    toast.info("Photo upload functionality coming soon")
-  }
 
   const StarRating = ({
     value,
@@ -290,26 +303,43 @@ export default function ReviewSubmissionPage() {
             <div>
               <Label>Photos (Optional)</Label>
               <div className="mt-2 flex flex-wrap gap-2">
-                {photos.map((photo, index) => (
-                  <div className="relative" key={index}>
+                {photos.map((photoKey, index) => (
+                  <div className="group relative" key={index}>
                     <img
                       alt={`Review photo ${index + 1}`}
                       className="h-24 w-24 rounded-lg object-cover"
-                      src={photo}
+                      src={getImageKitUrl(photoKey, { width: 96, height: 96, quality: 80 })}
                     />
+                    <button
+                      className="absolute right-1 top-1 rounded-full bg-destructive p-1 opacity-0 transition-opacity group-hover:opacity-100"
+                      onClick={() => handleRemovePhoto(index)}
+                      type="button"
+                    >
+                      <X className="size-3 text-destructive-foreground" />
+                    </button>
                   </div>
                 ))}
-                <Button
-                  className="h-24 w-24"
-                  onClick={handlePhotoUpload}
-                  type="button"
-                  variant="outline"
-                >
-                  <Upload className="size-4" />
-                </Button>
+                <label className="cursor-pointer">
+                  <input
+                    accept="image/*"
+                    className="hidden"
+                    disabled={isUploading}
+                    multiple
+                    onChange={handlePhotoUpload}
+                    ref={fileInputRef}
+                    type="file"
+                  />
+                  <div className="flex h-24 w-24 items-center justify-center rounded-lg border-2 border-dashed transition-colors hover:border-primary">
+                    {isUploading ? (
+                      <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                    ) : (
+                      <Upload className="size-4 text-muted-foreground" />
+                    )}
+                  </div>
+                </label>
               </div>
               <p className="mt-2 text-muted-foreground text-xs">
-                Upload photos from your rental experience
+                Upload photos from your rental experience (max 10MB per photo)
               </p>
             </div>
           </CardContent>

@@ -13,7 +13,7 @@ import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import { ArrowRight, Eye, EyeOff, Lock, Mail } from "lucide-react"
 import { useSearchParams, useRouter } from "next/navigation"
-import { useEffect, useState, useMemo } from "react"
+import { Suspense, useEffect, useState, useMemo } from "react"
 import Image from "next/image"
 
 type ClerkError = {
@@ -33,7 +33,7 @@ function getRedirectUrl(searchParams: URLSearchParams): string {
   return "/"
 }
 
-export default function AdminSignInPage() {
+function AdminSignInPageContent() {
   const { signIn, setActive, isLoaded } = useSignIn()
   const { isSignedIn, isLoaded: userLoaded } = useUser()
   const [email, setEmail] = useState("")
@@ -188,6 +188,40 @@ export default function AdminSignInPage() {
         </Card>
       </div>
     </div>
+  )
+}
+
+export default function AdminSignInPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center p-4">
+          <div className="w-full max-w-md space-y-6">
+            <div className="text-center">
+              <div className="mb-4 flex justify-center">
+                <Image
+                  src="/logo.png"
+                  alt="Renegade Rentals Logo"
+                  width={120}
+                  height={120}
+                  className="rounded-full"
+                  priority
+                />
+              </div>
+              <h1 className="mb-2 font-bold text-3xl">Admin Portal</h1>
+              <p className="text-muted-foreground text-sm">
+                Sign in to access the admin dashboard
+              </p>
+            </div>
+            <div className="text-center">
+              <p className="text-muted-foreground">Loading...</p>
+            </div>
+          </div>
+        </div>
+      }
+    >
+      <AdminSignInPageContent />
+    </Suspense>
   )
 }
 

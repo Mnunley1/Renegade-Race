@@ -9,6 +9,7 @@ import Link from "next/link"
 import { useMemo, useState } from "react"
 import { VehicleCard } from "@/components/vehicle-card"
 import { api } from "@/lib/convex"
+import type { Id } from "@/lib/convex"
 
 export default function HomePage() {
   // Track video load error for hero section
@@ -20,26 +21,50 @@ export default function HomePage() {
   const vehiclesData = useQuery(api.vehicles.getAllWithOptimizedImages, { limit: 6 })
 
   // Map vehicles to the format expected by VehicleCard
+  // Fetch vehicle stats for featured vehicles
+  const featuredVehicleIds = useMemo(() => {
+    if (!vehiclesData) return []
+    return vehiclesData.slice(0, 6).map((v) => v._id as Id<"vehicles">)
+  }, [vehiclesData])
+
+  const featuredVehicleStats = useQuery(
+    api.reviews.getVehicleStatsBatch,
+    featuredVehicleIds.length > 0 ? { vehicleIds: featuredVehicleIds } : "skip"
+  )
+
   const featuredVehicles = useMemo(() => {
     if (!vehiclesData) return []
     return vehiclesData.slice(0, 6).map((vehicle) => {
       const primaryImage = vehicle.images?.find((img) => img.isPrimary) || vehicle.images?.[0]
+      const stats = featuredVehicleStats?.[vehicle._id]
+      
+      // Build location string from vehicle address (city, state) or fall back to track location
+      const locationParts = []
+      if (vehicle.address?.city) locationParts.push(vehicle.address.city)
+      if (vehicle.address?.state) locationParts.push(vehicle.address.state)
+      const location = locationParts.length > 0 
+        ? locationParts.join(", ") 
+        : vehicle.track?.location || ""
+      
       return {
         id: vehicle._id,
         image: primaryImage?.cardUrl ?? "",
+        imageKey: primaryImage?.r2Key ?? undefined, // Pass r2Key for ImageKit
         name: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
         year: vehicle.year,
         make: vehicle.make,
         model: vehicle.model,
         pricePerDay: vehicle.dailyRate,
-        location: vehicle.track?.location || "",
-        rating: 0, // TODO: Calculate from reviews
-        reviews: 0, // TODO: Get from reviews
+        location,
+        track: vehicle.track?.name || "",
+        rating: stats?.averageRating || 0,
+        reviews: stats?.totalReviews || 0,
         horsepower: vehicle.horsepower,
         transmission: vehicle.transmission,
+        drivetrain: vehicle.drivetrain,
       }
     })
-  }, [vehiclesData])
+  }, [vehiclesData, featuredVehicleStats])
 
   const benefits = [
     "Instant booking confirmation",

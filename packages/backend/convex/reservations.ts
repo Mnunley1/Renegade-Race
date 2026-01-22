@@ -1,5 +1,6 @@
 import { v } from 'convex/values';
 import type { Id } from './_generated/dataModel';
+import { api } from './_generated/api';
 import { mutation, query } from './_generated/server';
 import {
   getReservationPendingOwnerEmailTemplate,
@@ -9,6 +10,9 @@ import {
   getReservationCompletedEmailTemplate,
   sendTransactionalEmail,
 } from './emails';
+import { calculateDaysBetween } from './dateUtils';
+// TODO: Uncomment after installing @convex-dev/rate-limiter
+// import { rateLimiter } from './rateLimiter';
 
 // Get reservations for a user (as renter or owner)
 export const getByUser = query({
@@ -158,6 +162,7 @@ export const create = mutation({
           name: v.string(),
           price: v.number(),
           description: v.optional(v.string()),
+          priceType: v.optional(v.union(v.literal("daily"), v.literal("one-time"))),
         })
       )
     ),
@@ -167,6 +172,13 @@ export const create = mutation({
     if (!identity) {
       throw new Error('Not authenticated');
     }
+
+    // Rate limit: 10 reservations per hour per user
+    // TODO: Uncomment after installing @convex-dev/rate-limiter
+    // const rateLimitStatus = await rateLimiter.limit(ctx, "createReservation", {
+    //   key: identity.subject,
+    //   throws: true,
+    // });
 
     const renterId = identity.subject;
     const now = Date.now();
@@ -182,11 +194,8 @@ export const create = mutation({
     }
 
     // Calculate total days and amount
-    const start = new Date(args.startDate);
-    const end = new Date(args.endDate);
-    const totalDays = Math.ceil(
-      (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)
-    );
+    // Use date utility to avoid timezone issues
+    const totalDays = calculateDaysBetween(args.startDate, args.endDate);
 
     if (totalDays <= 0) {
       throw new Error('Invalid date range');
@@ -221,28 +230,22 @@ export const create = mutation({
     }
 
     // Check for conflicting reservations
+    // Two date ranges overlap if: existingStart <= newEnd AND existingEnd >= newStart
     const conflictingReservations = await ctx.db
       .query('reservations')
       .withIndex('by_vehicle', q => q.eq('vehicleId', args.vehicleId))
       .filter(q =>
         q.and(
+          // Only check active reservations (pending or confirmed)
           q.or(
             q.eq(q.field('status'), 'pending'),
             q.eq(q.field('status'), 'confirmed')
           ),
-          q.or(
-            q.and(
-              q.lte(q.field('startDate'), args.startDate),
-              q.gte(q.field('endDate'), args.startDate)
-            ),
-            q.and(
-              q.lte(q.field('startDate'), args.endDate),
-              q.gte(q.field('endDate'), args.endDate)
-            ),
-            q.and(
-              q.gte(q.field('startDate'), args.startDate),
-              q.lte(q.field('endDate'), args.endDate)
-            )
+          // Check for date overlap: existing reservation overlaps if
+          // existingStart <= newEnd AND existingEnd >= newStart
+          q.and(
+            q.lte(q.field('startDate'), args.endDate),
+            q.gte(q.field('endDate'), args.startDate)
           )
         )
       )
@@ -303,7 +306,9 @@ export const create = mutation({
         await sendTransactionalEmail(ctx, ownerEmail, template)
       }
     } catch (error) {
-      console.error('Failed to send reservation created email:', error)
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { logError } = require("./logger")
+      logError(error, "Failed to send reservation created email")
       // Don't fail the mutation if email fails
     }
 
@@ -373,7 +378,9 @@ export const approve = mutation({
         }
       }
     } catch (error) {
-      console.error('Failed to send reservation confirmed email:', error)
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { logError } = require("./logger")
+      logError(error, "Failed to send reservation confirmed email")
       // Don't fail the mutation if email fails
     }
 
@@ -438,7 +445,9 @@ export const decline = mutation({
         }
       }
     } catch (error) {
-      console.error('Failed to send reservation declined email:', error)
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { logError } = require("./logger")
+      logError(error, "Failed to send reservation declined email")
       // Don't fail the mutation if email fails
     }
 
@@ -482,6 +491,27 @@ export const cancel = mutation({
       cancellationReason: args.cancellationReason,
       updatedAt: Date.now(),
     });
+
+    // Process automatic refund if payment exists and is paid
+    if (reservation.paymentId) {
+      try {
+        const payment = await ctx.db.get(reservation.paymentId);
+        if (payment && payment.status === 'succeeded' && payment.stripeChargeId) {
+          // Schedule refund processing (use scheduler to call internal action)
+          await ctx.scheduler.runAfter(0, api.stripe.processRefundOnCancellation, {
+            paymentId: reservation.paymentId,
+            reservationId: args.reservationId,
+            reason: args.cancellationReason || 'Reservation cancelled',
+          });
+        }
+      } catch (error) {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { logError } = require("./logger")
+        logError(error, "Failed to initiate refund on cancellation")
+        // Don't fail the cancellation if refund initiation fails
+        // The refund can be processed manually later
+      }
+    }
 
     // Send emails to both parties about cancelled reservation
     try {
@@ -528,7 +558,9 @@ export const cancel = mutation({
         }
       }
     } catch (error) {
-      console.error('Failed to send reservation cancelled emails:', error)
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { logError } = require("./logger")
+      logError(error, "Failed to send reservation cancelled emails")
       // Don't fail the mutation if email fails
     }
 
@@ -610,7 +642,9 @@ export const complete = mutation({
         }
       }
     } catch (error) {
-      console.error('Failed to send reservation completed emails:', error)
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { logError } = require("./logger")
+      logError(error, "Failed to send reservation completed emails")
       // Don't fail the mutation if email fails
     }
 

@@ -15,6 +15,7 @@ import { Badge } from "@workspace/ui/components/badge"
 import { CheckCircle, XCircle, Loader2, Car } from "lucide-react"
 import { toast } from "sonner"
 import type { Id } from "@/lib/convex"
+import { handleErrorWithContext } from "@/lib/error-handler"
 
 export default function VehicleApprovalsPage() {
   const pendingVehicles = useQuery(api.vehicles.getPendingVehicles, { limit: 100 })
@@ -28,8 +29,7 @@ export default function VehicleApprovalsPage() {
       await approveVehicle({ vehicleId })
       toast.success("Vehicle approved successfully")
     } catch (error) {
-      console.error("Failed to approve vehicle:", error)
-      toast.error("An error occurred")
+      handleErrorWithContext(error, { action: "approve vehicle", entity: "vehicle" })
     } finally {
       setProcessingId(null)
     }
@@ -41,8 +41,7 @@ export default function VehicleApprovalsPage() {
       await rejectVehicle({ vehicleId })
       toast.success("Vehicle rejected")
     } catch (error) {
-      console.error("Failed to reject vehicle:", error)
-      toast.error("An error occurred")
+      handleErrorWithContext(error, { action: "reject vehicle", entity: "vehicle" })
     } finally {
       setProcessingId(null)
     }
