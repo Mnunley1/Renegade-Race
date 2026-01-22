@@ -22,13 +22,18 @@ export const getAllWithOptimizedImages = query({
       vehicles = await ctx.db
         .query("vehicles")
         .withIndex("by_track", (q) => q.eq("trackId", trackId))
-        .filter((q) => q.and(q.eq(q.field("isActive"), true), q.eq(q.field("isApproved"), true)))
+        .filter((q) => q.and(
+          q.eq(q.field("isActive"), true),
+          q.eq(q.field("isApproved"), true),
+          q.eq(q.field("deletedAt"), undefined)
+        ))
         .order("desc")
         .take(limit)
     } else {
       vehicles = await ctx.db
         .query("vehicles")
         .withIndex("by_active_approved", (q) => q.eq("isActive", true).eq("isApproved", true))
+        .filter((q) => q.eq(q.field("deletedAt"), undefined))
         .order("desc")
         .take(limit)
     }
@@ -55,7 +60,7 @@ export const getAllWithOptimizedImages = query({
         ])
 
         // Filter out vehicles from hosts without complete Stripe setup
-        if (!owner?.stripeAccountId || owner.stripeAccountStatus !== "active") {
+        if (!owner?.stripeAccountId || owner.stripeAccountStatus !== "enabled") {
           return null
         }
 
@@ -112,16 +117,21 @@ export const searchWithAvailability = query({
     const identity = await ctx.auth.getUserIdentity()
     const currentUserId = identity?.subject
 
-    // Step 1: Get all active/approved vehicles (single query)
+    // Step 1: Get all active/approved vehicles (single query), excluding soft-deleted
     let vehiclesQuery = ctx.db
       .query("vehicles")
       .withIndex("by_active_approved", (q) => q.eq("isActive", true).eq("isApproved", true))
+      .filter((q) => q.eq(q.field("deletedAt"), undefined))
 
     if (trackId) {
       vehiclesQuery = ctx.db
         .query("vehicles")
         .withIndex("by_track", (q) => q.eq("trackId", trackId))
-        .filter((q) => q.and(q.eq(q.field("isActive"), true), q.eq(q.field("isApproved"), true)))
+        .filter((q) => q.and(
+          q.eq(q.field("isActive"), true),
+          q.eq(q.field("isApproved"), true),
+          q.eq(q.field("deletedAt"), undefined)
+        ))
     }
 
     // Get more vehicles initially to account for filtering
@@ -220,11 +230,11 @@ export const searchWithAvailability = query({
           ctx.db.get(vehicle.trackId),
         ])
 
-        // Filter out vehicles from hosts without fully active, connected Stripe accounts
+        // Filter out vehicles from hosts without fully enabled, connected Stripe accounts
         // Only show vehicles where the owner has:
         // 1. A Stripe account ID (connected account)
-        // 2. An active Stripe account status
-        if (!owner?.stripeAccountId || owner.stripeAccountStatus !== "active") {
+        // 2. An enabled Stripe account status
+        if (!owner?.stripeAccountId || owner.stripeAccountStatus !== "enabled") {
           return null
         }
 
@@ -320,13 +330,18 @@ export const getAll = query({
       vehicles = await ctx.db
         .query("vehicles")
         .withIndex("by_track", (q) => q.eq("trackId", trackId))
-        .filter((q) => q.and(q.eq(q.field("isActive"), true), q.eq(q.field("isApproved"), true)))
+        .filter((q) => q.and(
+          q.eq(q.field("isActive"), true),
+          q.eq(q.field("isApproved"), true),
+          q.eq(q.field("deletedAt"), undefined)
+        ))
         .order("desc")
         .take(limit)
     } else {
       vehicles = await ctx.db
         .query("vehicles")
         .withIndex("by_active_approved", (q) => q.eq("isActive", true).eq("isApproved", true))
+        .filter((q) => q.eq(q.field("deletedAt"), undefined))
         .order("desc")
         .take(limit)
     }
@@ -353,7 +368,7 @@ export const getAll = query({
         ])
 
         // Filter out vehicles from hosts without complete Stripe setup
-        if (!owner?.stripeAccountId || owner.stripeAccountStatus !== "active") {
+        if (!owner?.stripeAccountId || owner.stripeAccountStatus !== "enabled") {
           return null
         }
 
@@ -426,15 +441,23 @@ export const getVehicleImageById = query({
   },
 })
 
-// Get vehicles by owner
+// Get vehicles by owner (excludes soft-deleted vehicles)
 export const getByOwner = query({
-  args: { ownerId: v.string() },
+  args: {
+    ownerId: v.string(),
+    includeDeleted: v.optional(v.boolean()),
+  },
   handler: async (ctx, args) => {
-    const vehicles = await ctx.db
+    let vehicles = await ctx.db
       .query("vehicles")
       .withIndex("by_owner_active", (q) => q.eq("ownerId", args.ownerId).eq("isActive", true))
       .order("desc")
       .collect()
+
+    // Filter out soft-deleted vehicles unless explicitly requested
+    if (!args.includeDeleted) {
+      vehicles = vehicles.filter((v) => !v.deletedAt)
+    }
 
     const vehiclesWithDetails = await Promise.all(
       vehicles.map(async (vehicle) => {
@@ -505,6 +528,7 @@ export const createVehicleWithImages = mutation({
           price: v.number(),
           description: v.optional(v.string()),
           isRequired: v.optional(v.boolean()),
+          priceType: v.optional(v.union(v.literal("daily"), v.literal("one-time"))),
         })
       )
     ),
@@ -698,6 +722,7 @@ export const update = mutation({
           price: v.number(),
           description: v.optional(v.string()),
           isRequired: v.optional(v.boolean()),
+          priceType: v.optional(v.union(v.literal("daily"), v.literal("one-time"))),
         })
       )
     ),
@@ -812,6 +837,110 @@ export const geocodeVehicleAddress = action({
   },
 })
 
+// Check if vehicle can be deleted (has no pending actions)
+export const canDelete = query({
+  args: { id: v.id("vehicles") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) {
+      return { canDelete: false, reason: "Not authenticated" }
+    }
+
+    const vehicle = await ctx.db.get(args.id)
+    if (!vehicle) {
+      return { canDelete: false, reason: "Vehicle not found" }
+    }
+
+    if (vehicle.ownerId !== identity.subject) {
+      return { canDelete: false, reason: "Not authorized" }
+    }
+
+    if (vehicle.deletedAt) {
+      return { canDelete: false, reason: "Vehicle already deleted" }
+    }
+
+    const blockers: string[] = []
+
+    // Check for active or upcoming reservations (pending or confirmed)
+    const today = new Date().toISOString().split("T")[0]
+    const activeReservations = await ctx.db
+      .query("reservations")
+      .withIndex("by_vehicle", (q) => q.eq("vehicleId", args.id))
+      .filter((q) =>
+        q.and(
+          q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "confirmed")),
+          q.gte(q.field("endDate"), today)
+        )
+      )
+      .collect()
+
+    if (activeReservations.length > 0) {
+      const pendingCount = activeReservations.filter((r) => r.status === "pending").length
+      const confirmedCount = activeReservations.filter((r) => r.status === "confirmed").length
+      if (pendingCount > 0) {
+        blockers.push(`${pendingCount} pending reservation${pendingCount > 1 ? "s" : ""}`)
+      }
+      if (confirmedCount > 0) {
+        blockers.push(`${confirmedCount} confirmed/upcoming reservation${confirmedCount > 1 ? "s" : ""}`)
+      }
+    }
+
+    // Check for open disputes
+    const openDisputes = await ctx.db
+      .query("disputes")
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("vehicleId"), args.id),
+          q.eq(q.field("status"), "open")
+        )
+      )
+      .collect()
+
+    if (openDisputes.length > 0) {
+      blockers.push(`${openDisputes.length} open dispute${openDisputes.length > 1 ? "s" : ""}`)
+    }
+
+    // Check for pending payments (not succeeded, failed, cancelled, or refunded)
+    const vehicleReservationIds = await ctx.db
+      .query("reservations")
+      .withIndex("by_vehicle", (q) => q.eq("vehicleId", args.id))
+      .collect()
+
+    const reservationIds = vehicleReservationIds.map((r) => r._id)
+
+    if (reservationIds.length > 0) {
+      const pendingPayments = await ctx.db
+        .query("payments")
+        .filter((q) =>
+          q.or(
+            q.eq(q.field("status"), "pending"),
+            q.eq(q.field("status"), "processing")
+          )
+        )
+        .collect()
+
+      // Filter to only payments for this vehicle's reservations
+      const vehiclePendingPayments = pendingPayments.filter((p) =>
+        reservationIds.some((id) => id === p.reservationId)
+      )
+
+      if (vehiclePendingPayments.length > 0) {
+        blockers.push(`${vehiclePendingPayments.length} pending payment${vehiclePendingPayments.length > 1 ? "s" : ""}`)
+      }
+    }
+
+    if (blockers.length > 0) {
+      return {
+        canDelete: false,
+        reason: `Cannot delete vehicle with: ${blockers.join(", ")}`,
+        blockers,
+      }
+    }
+
+    return { canDelete: true, reason: null, blockers: [] }
+  },
+})
+
 // Delete vehicle (soft delete)
 export const remove = mutation({
   args: { id: v.id("vehicles") },
@@ -830,16 +959,18 @@ export const remove = mutation({
       throw new Error("Not authorized to delete this vehicle")
     }
 
-    // Check for active or upcoming reservations
+    if (vehicle.deletedAt) {
+      throw new Error("Vehicle already deleted")
+    }
+
+    // Check for active or upcoming reservations (pending or confirmed)
     const today = new Date().toISOString().split("T")[0]
     const activeReservations = await ctx.db
       .query("reservations")
       .withIndex("by_vehicle", (q) => q.eq("vehicleId", args.id))
       .filter((q) =>
         q.and(
-          // Only check pending or confirmed reservations
           q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "confirmed")),
-          // Check if reservation end date is in the future (active or upcoming)
           q.gte(q.field("endDate"), today)
         )
       )
@@ -851,7 +982,56 @@ export const remove = mutation({
       )
     }
 
+    // Check for open disputes
+    const openDisputes = await ctx.db
+      .query("disputes")
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("vehicleId"), args.id),
+          q.eq(q.field("status"), "open")
+        )
+      )
+      .collect()
+
+    if (openDisputes.length > 0) {
+      throw new Error(
+        "Cannot delete vehicle with open disputes. Please resolve all disputes first."
+      )
+    }
+
+    // Check for pending payments
+    const vehicleReservations = await ctx.db
+      .query("reservations")
+      .withIndex("by_vehicle", (q) => q.eq("vehicleId", args.id))
+      .collect()
+
+    const reservationIds = vehicleReservations.map((r) => r._id)
+
+    if (reservationIds.length > 0) {
+      const pendingPayments = await ctx.db
+        .query("payments")
+        .filter((q) =>
+          q.or(
+            q.eq(q.field("status"), "pending"),
+            q.eq(q.field("status"), "processing")
+          )
+        )
+        .collect()
+
+      const vehiclePendingPayments = pendingPayments.filter((p) =>
+        reservationIds.some((id) => id === p.reservationId)
+      )
+
+      if (vehiclePendingPayments.length > 0) {
+        throw new Error(
+          "Cannot delete vehicle with pending payments. Please wait for all payments to be processed."
+        )
+      }
+    }
+
+    // Soft delete: set deletedAt timestamp and deactivate
     await ctx.db.patch(args.id, {
+      deletedAt: Date.now(),
       isActive: false,
       updatedAt: Date.now(),
     })
