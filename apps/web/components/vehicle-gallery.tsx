@@ -1,11 +1,11 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import Image from "next/image"
-import { Dialog, DialogContent } from "@workspace/ui/components/dialog"
+import { Image } from "@imagekit/next"
 import { Button } from "@workspace/ui/components/button"
+import { Dialog, DialogContent } from "@workspace/ui/components/dialog"
 import { cn } from "@workspace/ui/lib/utils"
-import { ChevronLeft, ChevronRight, X } from "lucide-react"
+import { Car, ChevronLeft, ChevronRight, X } from "lucide-react"
+import { useEffect, useState } from "react"
 
 interface VehicleGalleryProps {
   images: string[]
@@ -35,27 +35,30 @@ export function VehicleGallery({ images, vehicleName }: VehicleGalleryProps) {
     setTimeout(() => setIsTransitioning(false), 300)
   }
 
+  // Filter out empty image strings
+  const validImages = images.filter((img) => img && img.trim() !== "")
+
   const goToPrevious = () => {
     if (isTransitioning) return
-    const newIndex = currentIndex > 0 ? currentIndex - 1 : images.length - 1
+    const newIndex = currentIndex > 0 ? currentIndex - 1 : validImages.length - 1
     goToSlide(newIndex)
   }
 
   const goToNext = () => {
     if (isTransitioning) return
-    const newIndex = currentIndex < images.length - 1 ? currentIndex + 1 : 0
+    const newIndex = currentIndex < validImages.length - 1 ? currentIndex + 1 : 0
     goToSlide(newIndex)
   }
 
   const goToPreviousModal = () => {
     if (selectedIndex === null) return
-    const newIndex = selectedIndex > 0 ? selectedIndex - 1 : images.length - 1
+    const newIndex = selectedIndex > 0 ? selectedIndex - 1 : validImages.length - 1
     setSelectedIndex(newIndex)
   }
 
   const goToNextModal = () => {
     if (selectedIndex === null) return
-    const newIndex = selectedIndex < images.length - 1 ? selectedIndex + 1 : 0
+    const newIndex = selectedIndex < validImages.length - 1 ? selectedIndex + 1 : 0
     setSelectedIndex(newIndex)
   }
 
@@ -69,18 +72,18 @@ export function VehicleGallery({ images, vehicleName }: VehicleGalleryProps) {
         setSelectedIndex(null)
       } else if (e.key === "ArrowLeft") {
         e.preventDefault()
-        const newIndex = selectedIndex > 0 ? selectedIndex - 1 : images.length - 1
+        const newIndex = selectedIndex > 0 ? selectedIndex - 1 : validImages.length - 1
         setSelectedIndex(newIndex)
       } else if (e.key === "ArrowRight") {
         e.preventDefault()
-        const newIndex = selectedIndex < images.length - 1 ? selectedIndex + 1 : 0
+        const newIndex = selectedIndex < validImages.length - 1 ? selectedIndex + 1 : 0
         setSelectedIndex(newIndex)
       }
     }
 
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [isOpen, selectedIndex, images.length])
+  }, [isOpen, selectedIndex, validImages.length])
 
   // Keyboard navigation for carousel (when modal is not open)
   useEffect(() => {
@@ -90,13 +93,13 @@ export function VehicleGallery({ images, vehicleName }: VehicleGalleryProps) {
       if (isTransitioning) return
       if (e.key === "ArrowLeft") {
         e.preventDefault()
-        const newIndex = currentIndex > 0 ? currentIndex - 1 : images.length - 1
+        const newIndex = currentIndex > 0 ? currentIndex - 1 : validImages.length - 1
         setIsTransitioning(true)
         setCurrentIndex(newIndex)
         setTimeout(() => setIsTransitioning(false), 300)
       } else if (e.key === "ArrowRight") {
         e.preventDefault()
-        const newIndex = currentIndex < images.length - 1 ? currentIndex + 1 : 0
+        const newIndex = currentIndex < validImages.length - 1 ? currentIndex + 1 : 0
         setIsTransitioning(true)
         setCurrentIndex(newIndex)
         setTimeout(() => setIsTransitioning(false), 300)
@@ -105,14 +108,29 @@ export function VehicleGallery({ images, vehicleName }: VehicleGalleryProps) {
 
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [isOpen, currentIndex, images.length, isTransitioning])
+  }, [isOpen, currentIndex, validImages.length, isTransitioning])
 
-  if (images.length === 0) return null
+  // Show placeholder when no images are available
+  if (validImages.length === 0) {
+    return (
+      <div className="relative mx-auto mb-8 w-full max-w-5xl">
+        <div className="relative flex aspect-[16/10] w-full items-center justify-center overflow-hidden rounded-lg bg-muted">
+          <div className="flex flex-col items-center gap-4 text-center">
+            <Car className="size-16 text-muted-foreground/40" />
+            <div className="space-y-1">
+              <p className="font-medium text-lg text-muted-foreground">No images available</p>
+              <p className="text-muted-foreground text-sm">{vehicleName}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <>
       {/* Carousel Container */}
-      <div className="relative mb-8 mx-auto w-full max-w-5xl">
+      <div className="relative mx-auto mb-8 w-full max-w-5xl">
         <div className="relative aspect-[16/10] w-full overflow-hidden rounded-lg bg-muted">
           {/* Carousel Images */}
           <div
@@ -121,25 +139,26 @@ export function VehicleGallery({ images, vehicleName }: VehicleGalleryProps) {
               transform: `translateX(-${currentIndex * 100}%)`,
             }}
           >
-            {images.map((image, index) => (
+            {validImages.map((image, index) => (
               <div
-                key={index}
-                className="relative min-w-full shrink-0"
                 aria-hidden={index !== currentIndex}
+                className="relative min-w-full shrink-0"
+                key={index}
               >
                 <button
-                  type="button"
-                  onClick={() => openImage(index)}
-                  className="relative size-full focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                   aria-label={`View ${vehicleName} image ${index + 1} in full screen`}
+                  className="relative size-full focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  onClick={() => openImage(index)}
+                  type="button"
                 >
                   <Image
                     alt={`${vehicleName} - Image ${index + 1}`}
                     className="size-full object-cover"
                     fill
+                    priority={index === 0}
                     sizes="100vw"
                     src={image}
-                    priority={index === 0}
+                    urlEndpoint="https://ik.imagekit.io/renegaderace"
                   />
                 </button>
               </div>
@@ -147,25 +166,25 @@ export function VehicleGallery({ images, vehicleName }: VehicleGalleryProps) {
           </div>
 
           {/* Navigation Buttons */}
-          {images.length > 1 && (
+          {validImages.length > 1 && (
             <>
               <Button
-                variant="ghost"
-                size="icon"
-                className="absolute left-4 top-1/2 z-10 -translate-y-1/2 bg-black/50 text-white backdrop-blur-sm hover:bg-black/70 focus:outline-none focus:ring-2 focus:ring-white disabled:opacity-50"
-                onClick={goToPrevious}
                 aria-label="Previous image"
+                className="-translate-y-1/2 absolute top-1/2 left-4 z-10 bg-black/50 text-white backdrop-blur-sm hover:bg-black/70 focus:outline-none focus:ring-2 focus:ring-white disabled:opacity-50"
                 disabled={isTransitioning}
+                onClick={goToPrevious}
+                size="icon"
+                variant="ghost"
               >
                 <ChevronLeft className="size-5" />
               </Button>
               <Button
-                variant="ghost"
-                size="icon"
-                className="absolute right-4 top-1/2 z-10 -translate-y-1/2 bg-black/50 text-white backdrop-blur-sm hover:bg-black/70 focus:outline-none focus:ring-2 focus:ring-white disabled:opacity-50"
-                onClick={goToNext}
                 aria-label="Next image"
+                className="-translate-y-1/2 absolute top-1/2 right-4 z-10 bg-black/50 text-white backdrop-blur-sm hover:bg-black/70 focus:outline-none focus:ring-2 focus:ring-white disabled:opacity-50"
                 disabled={isTransitioning}
+                onClick={goToNext}
+                size="icon"
+                variant="ghost"
               >
                 <ChevronRight className="size-5" />
               </Button>
@@ -173,31 +192,29 @@ export function VehicleGallery({ images, vehicleName }: VehicleGalleryProps) {
           )}
 
           {/* Dot Indicators */}
-          {images.length > 1 && (
-            <div className="absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 gap-2">
-              {images.map((_, index) => (
+          {validImages.length > 1 && (
+            <div className="-translate-x-1/2 absolute bottom-4 left-1/2 z-10 flex gap-2">
+              {validImages.map((_, index) => (
                 <button
-                  key={index}
-                  type="button"
-                  onClick={() => goToSlide(index)}
+                  aria-current={index === currentIndex ? "true" : "false"}
+                  aria-label={`Go to image ${index + 1}`}
                   className={cn(
                     "h-2 rounded-full transition-all duration-300",
-                    index === currentIndex
-                      ? "w-8 bg-white"
-                      : "w-2 bg-white/50 hover:bg-white/75"
+                    index === currentIndex ? "w-8 bg-white" : "w-2 bg-white/50 hover:bg-white/75"
                   )}
-                  aria-label={`Go to image ${index + 1}`}
-                  aria-current={index === currentIndex ? "true" : "false"}
+                  key={index}
+                  onClick={() => goToSlide(index)}
+                  type="button"
                 />
               ))}
             </div>
           )}
 
           {/* Image Counter */}
-          {images.length > 1 && (
-            <div className="absolute right-4 top-4 z-10 rounded-full bg-black/50 px-3 py-1.5 text-white backdrop-blur-sm">
-              <span className="text-sm font-medium">
-                {currentIndex + 1} / {images.length}
+          {validImages.length > 1 && (
+            <div className="absolute top-4 right-4 z-10 rounded-full bg-black/50 px-3 py-1.5 text-white backdrop-blur-sm">
+              <span className="font-medium text-sm">
+                {currentIndex + 1} / {validImages.length}
               </span>
             </div>
           )}
@@ -205,27 +222,25 @@ export function VehicleGallery({ images, vehicleName }: VehicleGalleryProps) {
       </div>
 
       {/* Full Screen Gallery Modal */}
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent
-          className="max-w-[100vw] h-[100vh] max-h-[100vh] border-none bg-black/95 p-0 shadow-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
-        >
+      <Dialog onOpenChange={setIsOpen} open={isOpen}>
+        <DialogContent className="data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 h-[100vh] max-h-[100vh] max-w-[100vw] border-none bg-black/95 p-0 shadow-none data-[state=closed]:animate-out data-[state=open]:animate-in">
           <div className="relative flex h-full flex-col">
             {/* Header with Close Button and Counter */}
-            <div className="absolute left-0 right-0 top-0 z-50 flex items-center justify-between p-4">
-              {images.length > 1 && selectedIndex !== null && (
+            <div className="absolute top-0 right-0 left-0 z-50 flex items-center justify-between p-4">
+              {validImages.length > 1 && selectedIndex !== null && (
                 <div className="rounded-full bg-black/50 px-4 py-2 text-white backdrop-blur-sm">
-                  <span className="text-sm font-medium">
-                    {selectedIndex + 1} / {images.length}
+                  <span className="font-medium text-sm">
+                    {selectedIndex + 1} / {validImages.length}
                   </span>
                 </div>
               )}
               <div className="ml-auto" />
               <Button
-                variant="ghost"
-                size="icon"
+                aria-label="Close gallery"
                 className="bg-black/50 text-white backdrop-blur-sm hover:bg-black/70 focus:outline-none focus:ring-2 focus:ring-white"
                 onClick={closeImage}
-                aria-label="Close gallery"
+                size="icon"
+                variant="ghost"
               >
                 <X className="size-5" />
               </Button>
@@ -233,40 +248,41 @@ export function VehicleGallery({ images, vehicleName }: VehicleGalleryProps) {
 
             {/* Main Image Area */}
             <div className="relative flex flex-1 items-center justify-center overflow-hidden p-4 pb-20">
-              {selectedIndex !== null && (
+              {selectedIndex !== null && validImages[selectedIndex] && (
                 <div className="relative size-full max-h-full">
                   <Image
                     alt={`${vehicleName} - Image ${selectedIndex + 1}`}
                     className="size-full object-contain"
                     fill
-                    sizes="100vw"
-                    src={images[selectedIndex]}
                     priority
+                    sizes="100vw"
+                    src={validImages[selectedIndex]}
+                    urlEndpoint="https://ik.imagekit.io/renegaderace"
                   />
                 </div>
               )}
 
               {/* Previous Button */}
-              {images.length > 1 && (
+              {validImages.length > 1 && (
                 <Button
-                  variant="ghost"
-                  size="icon"
-                  className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/50 text-white backdrop-blur-sm hover:bg-black/70 focus:outline-none focus:ring-2 focus:ring-white"
-                  onClick={goToPreviousModal}
                   aria-label="Previous image"
+                  className="-translate-y-1/2 absolute top-1/2 left-4 bg-black/50 text-white backdrop-blur-sm hover:bg-black/70 focus:outline-none focus:ring-2 focus:ring-white"
+                  onClick={goToPreviousModal}
+                  size="icon"
+                  variant="ghost"
                 >
                   <ChevronLeft className="size-6" />
                 </Button>
               )}
 
               {/* Next Button */}
-              {images.length > 1 && (
+              {validImages.length > 1 && (
                 <Button
-                  variant="ghost"
-                  size="icon"
-                  className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/50 text-white backdrop-blur-sm hover:bg-black/70 focus:outline-none focus:ring-2 focus:ring-white"
-                  onClick={goToNextModal}
                   aria-label="Next image"
+                  className="-translate-y-1/2 absolute top-1/2 right-4 bg-black/50 text-white backdrop-blur-sm hover:bg-black/70 focus:outline-none focus:ring-2 focus:ring-white"
+                  onClick={goToNextModal}
+                  size="icon"
+                  variant="ghost"
                 >
                   <ChevronRight className="size-6" />
                 </Button>
@@ -274,21 +290,21 @@ export function VehicleGallery({ images, vehicleName }: VehicleGalleryProps) {
             </div>
 
             {/* Thumbnail Strip - No background */}
-            {images.length > 1 && (
-              <div className="absolute bottom-0 left-0 right-0 z-50 pb-4 pt-2">
+            {validImages.length > 1 && (
+              <div className="absolute right-0 bottom-0 left-0 z-50 pt-2 pb-4">
                 <div className="mx-auto flex max-w-5xl justify-center gap-2 overflow-x-auto px-4">
-                  {images.map((image, index) => (
+                  {validImages.map((image, index) => (
                     <button
-                      key={index}
-                      type="button"
-                      onClick={() => setSelectedIndex(index)}
+                      aria-label={`Go to image ${index + 1}`}
                       className={cn(
                         "relative size-20 shrink-0 overflow-hidden rounded-md transition-all",
                         selectedIndex === index
                           ? "ring-2 ring-white ring-offset-2"
                           : "opacity-60 hover:opacity-100"
                       )}
-                      aria-label={`Go to image ${index + 1}`}
+                      key={index}
+                      onClick={() => setSelectedIndex(index)}
+                      type="button"
                     >
                       <Image
                         alt={`Thumbnail ${index + 1}`}
@@ -296,6 +312,7 @@ export function VehicleGallery({ images, vehicleName }: VehicleGalleryProps) {
                         fill
                         sizes="80px"
                         src={image}
+                        urlEndpoint="https://ik.imagekit.io/renegaderace"
                       />
                     </button>
                   ))}
@@ -308,4 +325,3 @@ export function VehicleGallery({ images, vehicleName }: VehicleGalleryProps) {
     </>
   )
 }
-

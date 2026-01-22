@@ -1,19 +1,22 @@
 "use client"
 
-import { useQuery, useMutation } from "convex/react"
 import { useUser } from "@clerk/nextjs"
-import { useParams, useRouter } from "next/navigation"
-import { useState, useEffect } from "react"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import { Textarea } from "@workspace/ui/components/textarea"
-import { Badge } from "@workspace/ui/components/badge"
-import { Loader2, ArrowLeft, Star, Upload } from "lucide-react"
+import { useMutation, useQuery } from "convex/react"
+import { ArrowLeft, Loader2, Star, Upload, X } from "lucide-react"
 import Link from "next/link"
-import { api } from "@/lib/convex"
+import { useParams, useRouter } from "next/navigation"
+import { useEffect, useState } from "react"
 import { toast } from "sonner"
+import { api } from "@/lib/convex"
+import type { Id } from "@/lib/convex"
+import { getImageKitUrl } from "@/lib/imagekit"
+import { handleErrorWithContext } from "@/lib/error-handler"
+import { usePhotoUpload } from "@/hooks/usePhotoUpload"
 
 export default function ReviewSubmissionPage() {
   const { user } = useUser()
@@ -28,23 +31,31 @@ export default function ReviewSubmissionPage() {
   const [overallExperience, setOverallExperience] = useState(0)
   const [title, setTitle] = useState("")
   const [review, setReview] = useState("")
-  const [photos, setPhotos] = useState<string[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const {
+    photos,
+    setPhotos,
+    isUploading,
+    fileInputRef,
+    handlePhotoUpload,
+    handleRemovePhoto,
+  } = usePhotoUpload()
 
   // Fetch reservation and completion data
   const reservation = useQuery(
     api.reservations.getById,
-    reservationId ? { id: reservationId as any } : "skip"
+    reservationId ? { id: reservationId as Id<"reservations"> } : "skip"
   )
 
   const completion = useQuery(
     api.rentalCompletions.getByReservation,
-    reservationId ? { reservationId: reservationId as any } : "skip"
+    reservationId ? { reservationId: reservationId as Id<"reservations"> } : "skip"
   )
 
   const existingReview = useQuery(
     api.reviews.getByCompletion,
-    completion?._id ? { completionId: completion._id as any } : "skip"
+    completion?._id ? { completionId: completion._id as Id<"rentalCompletions"> } : "skip"
   )
 
   const submitReview = useMutation(api.rentalCompletions.submitReview)
@@ -71,7 +82,7 @@ export default function ReviewSubmissionPage() {
       return
     }
 
-    if (!title || !review) {
+    if (!(title && review)) {
       toast.error("Please fill in all required fields")
       return
     }
@@ -114,18 +125,19 @@ export default function ReviewSubmissionPage() {
       }
       router.push("/trips")
     } catch (error) {
-      console.error("Error submitting review:", error)
-      toast.error(existingReview ? "Failed to update review" : "Failed to submit review")
+      handleErrorWithContext(error, {
+        action: existingReview ? "update review" : "submit review",
+        entity: "review",
+        customMessages: {
+          duplicate: "You have already submitted a review for this rental",
+          generic: existingReview ? "Failed to update review. Please try again." : "Failed to submit review. Please try again.",
+        },
+      })
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  // Handle photo upload (placeholder)
-  const handlePhotoUpload = () => {
-    // TODO: Implement photo upload to storage
-    toast.info("Photo upload functionality coming soon")
-  }
 
   const StarRating = ({
     value,
@@ -135,31 +147,27 @@ export default function ReviewSubmissionPage() {
     value: number
     onChange: (value: number) => void
     label: string
-  }) => {
-    return (
-      <div>
-        <Label className="mb-2 block">{label}</Label>
-        <div className="flex gap-1">
-          {[1, 2, 3, 4, 5].map((star) => (
-            <button
-              key={star}
-              type="button"
-              onClick={() => onChange(star)}
-              className="focus:outline-none transition-colors hover:opacity-80"
-            >
-              <Star
-                className={`size-6 ${
-                  star <= value
-                    ? "fill-primary text-primary"
-                    : "text-muted-foreground"
-                }`}
-              />
-            </button>
-          ))}
-        </div>
+  }) => (
+    <div>
+      <Label className="mb-2 block">{label}</Label>
+      <div className="flex gap-1">
+        {[1, 2, 3, 4, 5].map((star) => (
+          <button
+            className="transition-colors hover:opacity-80 focus:outline-none"
+            key={star}
+            onClick={() => onChange(star)}
+            type="button"
+          >
+            <Star
+              className={`size-6 ${
+                star <= value ? "fill-primary text-primary" : "text-muted-foreground"
+              }`}
+            />
+          </button>
+        ))}
       </div>
-    )
-  }
+    </div>
+  )
 
   if (!reservation) {
     return (
@@ -192,7 +200,7 @@ export default function ReviewSubmissionPage() {
     <div className="container mx-auto max-w-4xl px-4 py-8">
       <div className="mb-6">
         <Link href="/trips">
-          <Button variant="ghost" size="sm">
+          <Button className="mb-6" variant="outline">
             <ArrowLeft className="mr-2 size-4" />
             Back to Trips
           </Button>
@@ -210,7 +218,7 @@ export default function ReviewSubmissionPage() {
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form className="space-y-6" onSubmit={handleSubmit}>
         {/* Vehicle Info Card */}
         <Card>
           <CardHeader>
@@ -224,14 +232,14 @@ export default function ReviewSubmissionPage() {
             <div className="grid gap-4 md:grid-cols-2">
               <div>
                 <Label>Rental Period</Label>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-muted-foreground text-sm">
                   {new Date(reservation.startDate).toLocaleDateString()} -{" "}
                   {new Date(reservation.endDate).toLocaleDateString()}
                 </p>
               </div>
               <div>
                 <Label>Total Days</Label>
-                <p className="text-sm text-muted-foreground">{reservation.totalDays} days</p>
+                <p className="text-muted-foreground text-sm">{reservation.totalDays} days</p>
               </div>
             </div>
           </CardContent>
@@ -243,32 +251,24 @@ export default function ReviewSubmissionPage() {
             <CardTitle>Your Review</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
-            <StarRating
-              value={rating}
-              onChange={setRating}
-              label="Overall Rating *"
-            />
+            <StarRating label="Overall Rating *" onChange={setRating} value={rating} />
 
             <div className="grid gap-4 md:grid-cols-2">
+              <StarRating label="Communication" onChange={setCommunication} value={communication} />
               <StarRating
-                value={communication}
-                onChange={setCommunication}
-                label="Communication"
-              />
-              <StarRating
-                value={vehicleCondition}
-                onChange={setVehicleCondition}
                 label="Vehicle Condition"
+                onChange={setVehicleCondition}
+                value={vehicleCondition}
               />
               <StarRating
-                value={professionalism}
-                onChange={setProfessionalism}
                 label="Professionalism"
+                onChange={setProfessionalism}
+                value={professionalism}
               />
               <StarRating
-                value={overallExperience}
-                onChange={setOverallExperience}
                 label="Overall Experience"
+                onChange={setOverallExperience}
+                value={overallExperience}
               />
             </div>
 
@@ -278,11 +278,11 @@ export default function ReviewSubmissionPage() {
               </Label>
               <Input
                 id="title"
-                value={title}
+                maxLength={100}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Give your review a title"
                 required
-                maxLength={100}
+                value={title}
               />
             </div>
 
@@ -292,51 +292,70 @@ export default function ReviewSubmissionPage() {
               </Label>
               <Textarea
                 id="review"
-                value={review}
                 onChange={(e) => setReview(e.target.value)}
                 placeholder="Share your experience..."
-                rows={6}
                 required
+                rows={6}
+                value={review}
               />
             </div>
 
             <div>
               <Label>Photos (Optional)</Label>
               <div className="mt-2 flex flex-wrap gap-2">
-                {photos.map((photo, index) => (
-                  <div key={index} className="relative">
+                {photos.map((photoKey, index) => (
+                  <div className="group relative" key={index}>
                     <img
                       alt={`Review photo ${index + 1}`}
                       className="h-24 w-24 rounded-lg object-cover"
-                      src={photo}
+                      src={getImageKitUrl(photoKey, { width: 96, height: 96, quality: 80 })}
                     />
+                    <button
+                      className="absolute right-1 top-1 rounded-full bg-destructive p-1 opacity-0 transition-opacity group-hover:opacity-100"
+                      onClick={() => handleRemovePhoto(index)}
+                      type="button"
+                    >
+                      <X className="size-3 text-destructive-foreground" />
+                    </button>
                   </div>
                 ))}
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handlePhotoUpload}
-                  className="h-24 w-24"
-                >
-                  <Upload className="size-4" />
-                </Button>
+                <label className="cursor-pointer">
+                  <input
+                    accept="image/*"
+                    className="hidden"
+                    disabled={isUploading}
+                    multiple
+                    onChange={handlePhotoUpload}
+                    ref={fileInputRef}
+                    type="file"
+                  />
+                  <div className="flex h-24 w-24 items-center justify-center rounded-lg border-2 border-dashed transition-colors hover:border-primary">
+                    {isUploading ? (
+                      <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                    ) : (
+                      <Upload className="size-4 text-muted-foreground" />
+                    )}
+                  </div>
+                </label>
               </div>
-              <p className="mt-2 text-xs text-muted-foreground">
-                Upload photos from your rental experience
+              <p className="mt-2 text-muted-foreground text-xs">
+                Upload photos from your rental experience (max 10MB per photo)
               </p>
             </div>
           </CardContent>
         </Card>
 
         <div className="flex gap-4">
-          <Button type="submit" disabled={isSubmitting} className="flex-1">
+          <Button className="flex-1" disabled={isSubmitting} type="submit">
             {isSubmitting ? (
               <>
                 <Loader2 className="mr-2 size-4 animate-spin" />
                 {isEditing ? "Updating..." : "Submitting..."}
               </>
+            ) : isEditing ? (
+              "Update Review"
             ) : (
-              isEditing ? "Update Review" : "Submit Review"
+              "Submit Review"
             )}
           </Button>
           <Link href="/trips">
@@ -349,4 +368,3 @@ export default function ReviewSubmissionPage() {
     </div>
   )
 }
-

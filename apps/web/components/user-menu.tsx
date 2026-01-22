@@ -2,6 +2,7 @@
 
 import { useAuth, useUser } from "@clerk/nextjs"
 import { Avatar, AvatarFallback, AvatarImage } from "@workspace/ui/components/avatar"
+import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import {
   DropdownMenu,
@@ -10,13 +11,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu"
+import { useQuery } from "convex/react"
 import {
   Calendar,
   Car,
   HeadphonesIcon,
   Heart,
   HelpCircle,
-  Info,
   LogOut,
   Menu,
   MessageSquare,
@@ -25,11 +26,17 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { api } from "@/lib/convex"
 
 export function UserMenu() {
   const { user, isSignedIn } = useUser()
   const { signOut } = useAuth()
   const pathname = usePathname()
+  const onboardingStatus = useQuery(api.users.getHostOnboardingStatus, isSignedIn ? {} : "skip")
+  const unreadCount = useQuery(
+    api.messages.getUnreadCount,
+    isSignedIn && user?.id ? { userId: user.id } : "skip"
+  )
 
   const handleSignOut = async () => {
     await signOut()
@@ -42,24 +49,31 @@ export function UserMenu() {
       <DropdownMenuTrigger asChild>
         <Button className="relative flex items-center gap-2 px-3 py-5" variant="ghost">
           <Menu className="size-5" />
-          <Avatar className="size-8">
-            {isSignedIn ? (
-              <>
-                <AvatarImage alt={user?.firstName || "User"} src={user?.imageUrl} />
+          <div className="relative">
+            <Avatar className="size-8">
+              {isSignedIn ? (
+                <>
+                  <AvatarImage alt={user?.firstName || "User"} src={user?.imageUrl} />
+                  <AvatarFallback>
+                    {(
+                      user?.firstName?.[0] ||
+                      user?.emailAddresses?.[0]?.emailAddress?.[0] ||
+                      "U"
+                    ).toUpperCase()}
+                  </AvatarFallback>
+                </>
+              ) : (
                 <AvatarFallback>
-                  {(
-                    user?.firstName?.[0] ||
-                    user?.emailAddresses?.[0]?.emailAddress?.[0] ||
-                    "U"
-                  ).toUpperCase()}
+                  <User className="size-5" />
                 </AvatarFallback>
-              </>
-            ) : (
-              <AvatarFallback>
-                <User className="size-5" />
-              </AvatarFallback>
+              )}
+            </Avatar>
+            {unreadCount !== undefined && unreadCount > 0 && (
+              <span className="absolute -right-1 -top-1 flex min-w-[1.25rem] items-center justify-center rounded-full bg-primary px-1 py-0.5 text-primary-foreground text-xs font-semibold leading-none">
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </span>
             )}
-          </Avatar>
+          </div>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">
@@ -81,19 +95,49 @@ export function UserMenu() {
             <DropdownMenuItem asChild>
               <Link className="flex items-center text-sm" href="/messages">
                 <MessageSquare className="mr-3 size-4" />
-                Inbox
+                <span>Inbox</span>
+                {unreadCount !== undefined && unreadCount > 0 && (
+                  <Badge className="ml-auto" variant="destructive">
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </Badge>
+                )}
               </Link>
             </DropdownMenuItem>
 
             <DropdownMenuSeparator />
 
             {/* Host Section */}
-            <DropdownMenuItem asChild>
-              <Link className="flex items-center text-sm" href="/host/dashboard">
-                <Car className="mr-3 size-4" />
-                Host Dashboard
-              </Link>
-            </DropdownMenuItem>
+            {isSignedIn && (
+              <>
+                {!onboardingStatus || onboardingStatus.status === "not_started" ? (
+                  <DropdownMenuItem asChild>
+                    <Link className="flex items-center text-sm" href="/host/onboarding">
+                      <Car className="mr-3 size-4" />
+                      Become a Host
+                    </Link>
+                  </DropdownMenuItem>
+                ) : onboardingStatus.status === "in_progress" ? (
+                  <DropdownMenuItem asChild>
+                    <Link className="flex items-center justify-between text-sm" href="/host/onboarding">
+                      <span className="flex items-center">
+                        <Car className="mr-3 size-4 shrink-0" />
+                        <span>Continue Setup</span>
+                      </span>
+                      <span className="ml-2 shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-amber-700 text-xs font-medium dark:bg-amber-900/30 dark:text-amber-400">
+                        In Progress
+                      </span>
+                    </Link>
+                  </DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem asChild>
+                    <Link className="flex items-center text-sm" href="/host/dashboard">
+                      <Car className="mr-3 size-4" />
+                      Host Dashboard
+                    </Link>
+                  </DropdownMenuItem>
+                )}
+              </>
+            )}
 
             <DropdownMenuSeparator />
 
@@ -124,15 +168,9 @@ export function UserMenu() {
               </Link>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
-              <Link className="flex items-center text-sm" href="/help">
-                <Info className="mr-3 size-4" />
-                Why choose Renegade
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
               <Link className="flex items-center text-sm" href="/contact">
                 <HeadphonesIcon className="mr-3 size-4" />
-                Contact support
+                Contact Renegade
               </Link>
             </DropdownMenuItem>
 

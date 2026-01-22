@@ -1,19 +1,6 @@
 "use client"
 
-import { usePathname } from "next/navigation"
-import Link from "next/link"
-import Image from "next/image"
-import {
-  Mail,
-  MessageSquare,
-  Shield,
-  Users,
-  Car,
-  MapPin,
-  LayoutDashboard,
-  LogOut,
-  User,
-} from "lucide-react"
+import { useClerk, useUser } from "@clerk/nextjs"
 import { Button } from "@workspace/ui/components/button"
 import {
   DropdownMenu,
@@ -23,15 +10,38 @@ import {
   DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu"
 import { cn } from "@workspace/ui/lib/utils"
-import { useClerk, useUser } from "@clerk/nextjs"
+import {
+  Car,
+  LogOut,
+  Mail,
+  MapPin,
+  MessageSquare,
+  Settings,
+  Shield,
+  User,
+  Users,
+  LayoutDashboard,
+  Calendar,
+  Star,
+  DollarSign,
+} from "lucide-react"
+import Image from "next/image"
+import Link from "next/link"
+import { usePathname } from "next/navigation"
 
 const navigation = [
+  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { name: "Reservations", href: "/reservations", icon: Calendar },
+  { name: "Payments", href: "/payments", icon: DollarSign },
+  { name: "Vehicles", href: "/vehicles", icon: Car },
+  { name: "Reviews", href: "/reviews", icon: Star },
   { name: "User Management", href: "/users", icon: Users },
-  { name: "Emails", href: "/mass-emails", icon: Mail },
-  { name: "Direct Messages", href: "/messages", icon: MessageSquare },
   { name: "Vehicle Approvals", href: "/vehicles/pending", icon: Car },
   { name: "Track Management", href: "/tracks", icon: MapPin },
   { name: "Disputes", href: "/disputes", icon: Shield },
+  { name: "Direct Messages", href: "/messages", icon: MessageSquare },
+  { name: "Emails", href: "/mass-emails", icon: Mail },
+  { name: "Platform Settings", href: "/settings", icon: Settings },
 ]
 
 export function AdminSidebar() {
@@ -48,29 +58,29 @@ export function AdminSidebar() {
       <div className="flex h-16 items-center border-b px-6">
         <div className="flex items-center gap-2">
           <Image
-            src="/logo.png"
             alt="Renegade Logo"
-            width={40}
-            height={40}
             className="rounded-full"
+            height={40}
+            src="/logo.png"
+            width={40}
           />
           <span className="font-bold text-lg">Admin Portal</span>
         </div>
       </div>
-      
+
       <nav className="flex-1 space-y-1 p-4">
         {navigation.map((item) => {
           const isActive = pathname === item.href || pathname?.startsWith(item.href + "/")
           return (
             <Link
-              key={item.name}
-              href={item.href}
               className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                "flex items-center gap-3 rounded-lg px-3 py-2 font-medium text-sm transition-colors",
                 isActive
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
               )}
+              href={item.href}
+              key={item.name}
             >
               <item.icon className="size-4" />
               {item.name}
@@ -82,7 +92,7 @@ export function AdminSidebar() {
       <div className="border-t p-4">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="w-full justify-start">
+            <Button className="w-full justify-start" variant="ghost">
               <User className="mr-2 size-4" />
               <span className="flex-1 text-left">
                 {user?.firstName || user?.emailAddresses?.[0]?.emailAddress || "User"}
@@ -91,12 +101,12 @@ export function AdminSidebar() {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
             <div className="px-2 py-1.5">
-              <p className="text-sm font-medium">
+              <p className="font-medium text-sm">
                 {user?.firstName && user?.lastName
                   ? `${user.firstName} ${user.lastName}`
                   : user?.firstName || "Admin User"}
               </p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-muted-foreground text-xs">
                 {user?.emailAddresses?.[0]?.emailAddress}
               </p>
             </div>
@@ -111,4 +121,3 @@ export function AdminSidebar() {
     </div>
   )
 }
-

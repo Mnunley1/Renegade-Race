@@ -1,23 +1,129 @@
 // convex/schema.ts
-import { defineSchema, defineTable } from 'convex/server';
-import { v } from 'convex/values';
+import { defineSchema, defineTable } from "convex/server"
+import { v } from "convex/values"
 
 export default defineSchema({
   users: defineTable({
     externalId: v.string(),
     name: v.string(),
-    role: v.optional(v.string()),
     email: v.optional(v.string()),
     phone: v.optional(v.string()),
     rating: v.optional(v.number()),
     totalRentals: v.optional(v.number()),
     memberSince: v.optional(v.string()),
-    profileImage: v.optional(v.string()),
-    userType: v.optional(
-      v.union(v.literal('driver'), v.literal('team'), v.literal('both'))
-    ),
+    profileImageR2Key: v.optional(v.string()), // R2 object key for profile image
+    isHost: v.optional(v.boolean()),
     isBanned: v.optional(v.boolean()),
-  }).index('by_external_id', ['externalId']),
+    // Stripe Connect fields
+    stripeAccountId: v.optional(v.string()),
+    stripeAccountStatus: v.optional(
+      v.union(
+        v.literal("pending"),
+        v.literal("enabled"),
+        v.literal("restricted"),
+        v.literal("disabled")
+      )
+    ),
+    // Stripe Customer fields (for renters)
+    stripeCustomerId: v.optional(v.string()),
+    // User interests/preferences
+    interests: v.optional(v.array(v.string())), // e.g., ['Track Racing', 'GT3 Cars', 'Formula Racing', 'Endurance']
+    // Notification preferences
+    notificationPreferences: v.optional(
+      v.object({
+        reservationUpdates: v.boolean(),
+        messages: v.boolean(),
+        reviewsAndRatings: v.boolean(),
+        paymentUpdates: v.boolean(),
+        marketing: v.boolean(),
+      })
+    ),
+    // Timestamp of last message digest email sent (to prevent spam)
+    lastMessageDigestAt: v.optional(v.number()),
+    // User profile fields
+    bio: v.optional(v.string()),
+    location: v.optional(v.string()),
+    experience: v.optional(v.string()),
+    // Host onboarding fields
+    hostOnboardingStatus: v.optional(
+      v.union(v.literal("not_started"), v.literal("in_progress"), v.literal("completed"))
+    ),
+    hostOnboardingSteps: v.optional(
+      v.object({
+        personalInfo: v.boolean(),
+        vehicleAdded: v.boolean(),
+        payoutSetup: v.boolean(),
+        safetyStandards: v.boolean(),
+      })
+    ),
+    // Temporary storage for vehicle address during onboarding
+    onboardingVehicleAddress: v.optional(
+      v.object({
+        street: v.string(),
+        city: v.string(),
+        state: v.string(),
+        zipCode: v.string(),
+        latitude: v.optional(v.number()),
+        longitude: v.optional(v.number()),
+      })
+    ),
+    // Temporary storage for onboarding draft data (allows users to save progress)
+    hostOnboardingDraft: v.optional(
+      v.object({
+        address: v.optional(
+          v.object({
+            street: v.string(),
+            city: v.string(),
+            state: v.string(),
+            zipCode: v.string(),
+            latitude: v.optional(v.number()),
+            longitude: v.optional(v.number()),
+          })
+        ),
+        vehicleData: v.optional(
+          v.object({
+            trackId: v.optional(v.string()),
+            make: v.string(),
+            model: v.string(),
+            year: v.number(),
+            dailyRate: v.number(),
+            description: v.string(),
+            horsepower: v.optional(v.number()),
+            transmission: v.optional(v.string()),
+            drivetrain: v.optional(v.string()),
+            engineType: v.optional(v.string()),
+            mileage: v.optional(v.number()),
+            amenities: v.array(v.string()),
+            addOns: v.array(
+              v.object({
+                name: v.string(),
+                price: v.number(),
+                description: v.optional(v.string()),
+                isRequired: v.optional(v.boolean()),
+                priceType: v.optional(v.union(v.literal("daily"), v.literal("one-time"))),
+              })
+            ),
+            advanceNotice: v.optional(v.string()),
+            minTripDuration: v.optional(v.string()),
+            maxTripDuration: v.optional(v.string()),
+            requireWeekendMin: v.optional(v.boolean()),
+          })
+        ),
+        currentStep: v.optional(v.number()),
+        lastSavedAt: v.optional(v.number()),
+        // Uploaded image keys from R2 (stored when photos are uploaded)
+        images: v.optional(
+          v.array(
+            v.object({
+              r2Key: v.string(),
+              isPrimary: v.boolean(),
+              order: v.number(),
+            })
+          )
+        ),
+      })
+    ),
+  }).index("by_external_id", ["externalId"]),
 
   tracks: defineTable({
     name: v.string(),
@@ -25,11 +131,11 @@ export default defineSchema({
     description: v.optional(v.string()),
     imageUrl: v.optional(v.string()),
     isActive: v.boolean(),
-  }).index('by_active', ['isActive']),
+  }).index("by_active", ["isActive"]),
 
   vehicles: defineTable({
     ownerId: v.string(),
-    trackId: v.id('tracks'),
+    trackId: v.id("tracks"),
     make: v.string(),
     model: v.string(),
     year: v.number(),
@@ -48,30 +154,44 @@ export default defineSchema({
         price: v.number(),
         description: v.optional(v.string()),
         isRequired: v.optional(v.boolean()),
+        priceType: v.optional(v.union(v.literal("daily"), v.literal("one-time"))),
       })
     ),
+    // Pickup location address
+    address: v.optional(
+      v.object({
+        street: v.string(),
+        city: v.string(),
+        state: v.string(),
+        zipCode: v.string(),
+        latitude: v.optional(v.number()),
+        longitude: v.optional(v.number()),
+      })
+    ),
+    // Availability settings
+    advanceNotice: v.optional(v.string()),
+    minTripDuration: v.optional(v.string()),
+    maxTripDuration: v.optional(v.string()),
+    requireWeekendMin: v.optional(v.boolean()),
     isActive: v.boolean(),
     isApproved: v.optional(v.boolean()),
     viewCount: v.optional(v.number()), // Total views
     shareCount: v.optional(v.number()), // Total shares
+    deletedAt: v.optional(v.number()), // Soft delete timestamp
     createdAt: v.number(),
     updatedAt: v.number(),
   })
-    .index('by_owner', ['ownerId'])
-    .index('by_track', ['trackId'])
-    .index('by_active', ['isActive'])
-    .index('by_owner_active', ['ownerId', 'isActive'])
-    .index('by_approved', ['isApproved'])
-    .index('by_active_approved', ['isActive', 'isApproved']),
+    .index("by_owner", ["ownerId"])
+    .index("by_track", ["trackId"])
+    .index("by_active", ["isActive"])
+    .index("by_owner_active", ["ownerId", "isActive"])
+    .index("by_approved", ["isApproved"])
+    .index("by_active_approved", ["isActive", "isApproved"]),
 
   vehicleImages: defineTable({
-    vehicleId: v.id('vehicles'),
-    storageId: v.optional(v.id('_storage')), // Primary image storage ID (optional for legacy support)
-    thumbnailStorageId: v.optional(v.id('_storage')),
-    cardStorageId: v.optional(v.id('_storage')),
-    detailStorageId: v.optional(v.id('_storage')),
-    heroStorageId: v.optional(v.id('_storage')),
-    imageUrl: v.string(), // Legacy field for backward compatibility
+    vehicleId: v.id("vehicles"),
+    r2Key: v.optional(v.string()), // R2 object key for the original image
+    imageUrl: v.optional(v.string()), // Legacy/external image URL
     isPrimary: v.boolean(),
     order: v.number(),
     metadata: v.optional(
@@ -87,23 +207,23 @@ export default defineSchema({
       })
     ),
   })
-    .index('by_vehicle', ['vehicleId'])
-    .index('by_vehicle_primary', ['vehicleId', 'isPrimary']),
+    .index("by_vehicle", ["vehicleId"])
+    .index("by_vehicle_primary", ["vehicleId", "isPrimary"]),
 
   availability: defineTable({
-    vehicleId: v.id('vehicles'),
+    vehicleId: v.id("vehicles"),
     date: v.string(), // YYYY-MM-DD format
     isAvailable: v.boolean(),
     reason: v.optional(v.string()), // For blocked dates
     price: v.optional(v.number()), // Override daily rate for specific dates
     createdAt: v.number(),
   })
-    .index('by_vehicle_date', ['vehicleId', 'date'])
-    .index('by_vehicle_available', ['vehicleId', 'isAvailable'])
-    .index('by_date_available', ['date', 'isAvailable']),
+    .index("by_vehicle_date", ["vehicleId", "date"])
+    .index("by_vehicle_available", ["vehicleId", "isAvailable"])
+    .index("by_date_available", ["date", "isAvailable"]),
 
   reservations: defineTable({
-    vehicleId: v.id('vehicles'),
+    vehicleId: v.id("vehicles"),
     renterId: v.string(),
     ownerId: v.string(),
     startDate: v.string(), // YYYY-MM-DD format
@@ -114,11 +234,11 @@ export default defineSchema({
     dailyRate: v.number(),
     totalAmount: v.number(),
     status: v.union(
-      v.literal('pending'),
-      v.literal('confirmed'),
-      v.literal('cancelled'),
-      v.literal('completed'),
-      v.literal('declined')
+      v.literal("pending"),
+      v.literal("confirmed"),
+      v.literal("cancelled"),
+      v.literal("completed"),
+      v.literal("declined")
     ),
     renterMessage: v.optional(v.string()),
     ownerMessage: v.optional(v.string()),
@@ -130,42 +250,38 @@ export default defineSchema({
           name: v.string(),
           price: v.number(),
           description: v.optional(v.string()),
+          priceType: v.optional(v.union(v.literal("daily"), v.literal("one-time"))),
         })
       )
     ),
     // Payment-related fields
-    paymentId: v.optional(v.id('payments')),
+    paymentId: v.optional(v.id("payments")),
     paymentStatus: v.optional(
-      v.union(
-        v.literal('pending'),
-        v.literal('paid'),
-        v.literal('failed'),
-        v.literal('refunded')
-      )
+      v.union(v.literal("pending"), v.literal("paid"), v.literal("failed"), v.literal("refunded"))
     ),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
-    .index('by_vehicle', ['vehicleId'])
-    .index('by_renter', ['renterId'])
-    .index('by_owner', ['ownerId'])
-    .index('by_status', ['status'])
-    .index('by_renter_status', ['renterId', 'status'])
-    .index('by_owner_status', ['ownerId', 'status'])
-    .index('by_dates', ['startDate', 'endDate']),
+    .index("by_vehicle", ["vehicleId"])
+    .index("by_renter", ["renterId"])
+    .index("by_owner", ["ownerId"])
+    .index("by_status", ["status"])
+    .index("by_renter_status", ["renterId", "status"])
+    .index("by_owner_status", ["ownerId", "status"])
+    .index("by_dates", ["startDate", "endDate"]),
 
   favorites: defineTable({
     userId: v.string(),
-    vehicleId: v.id('vehicles'),
+    vehicleId: v.id("vehicles"),
     createdAt: v.number(),
   })
-    .index('by_user', ['userId'])
-    .index('by_vehicle', ['vehicleId'])
-    .index('by_user_vehicle', ['userId', 'vehicleId']),
+    .index("by_user", ["userId"])
+    .index("by_vehicle", ["vehicleId"])
+    .index("by_user_vehicle", ["userId", "vehicleId"]),
 
   // New tables for messaging system
   conversations: defineTable({
-    vehicleId: v.id('vehicles'),
+    vehicleId: v.id("vehicles"),
     renterId: v.string(),
     ownerId: v.string(),
     lastMessageAt: v.number(),
@@ -181,32 +297,28 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
   })
-    .index('by_vehicle', ['vehicleId'])
-    .index('by_renter', ['renterId'])
-    .index('by_owner', ['ownerId'])
-    .index('by_renter_active', ['renterId', 'isActive'])
-    .index('by_owner_active', ['ownerId', 'isActive'])
-    .index('by_participants', ['renterId', 'ownerId'])
-    .index('by_last_message', ['lastMessageAt']),
+    .index("by_vehicle", ["vehicleId"])
+    .index("by_renter", ["renterId"])
+    .index("by_owner", ["ownerId"])
+    .index("by_renter_active", ["renterId", "isActive"])
+    .index("by_owner_active", ["ownerId", "isActive"])
+    .index("by_participants", ["renterId", "ownerId"])
+    .index("by_last_message", ["lastMessageAt"]),
 
   messages: defineTable({
-    conversationId: v.id('conversations'),
+    conversationId: v.id("conversations"),
     senderId: v.string(),
     content: v.string(),
-    messageType: v.union(
-      v.literal('text'),
-      v.literal('image'),
-      v.literal('system')
-    ),
-    replyTo: v.optional(v.id('messages')),
+    messageType: v.union(v.literal("text"), v.literal("image"), v.literal("system")),
+    replyTo: v.optional(v.id("messages")),
     isRead: v.boolean(),
     readAt: v.optional(v.number()),
     createdAt: v.number(),
   })
-    .index('by_conversation', ['conversationId'])
-    .index('by_sender', ['senderId'])
-    .index('by_conversation_created', ['conversationId', 'createdAt'])
-    .index('by_unread', ['conversationId', 'isRead']),
+    .index("by_conversation", ["conversationId"])
+    .index("by_sender", ["senderId"])
+    .index("by_conversation_created", ["conversationId", "createdAt"])
+    .index("by_unread", ["conversationId", "isRead"]),
 
   // New tables for driver-team matching system
   teams: defineTable({
@@ -216,11 +328,7 @@ export default defineSchema({
     logoUrl: v.optional(v.string()),
     location: v.string(),
     racingType: v.optional(
-      v.union(
-        v.literal('real-world'),
-        v.literal('sim-racing'),
-        v.literal('both')
-      )
+      v.union(v.literal("real-world"), v.literal("sim-racing"), v.literal("both"))
     ),
     simRacingPlatforms: v.optional(v.array(v.string())),
     specialties: v.array(v.string()), // e.g., ['GT3', 'Formula', 'Endurance', 'iRacing']
@@ -243,27 +351,25 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
   })
-    .index('by_owner', ['ownerId'])
-    .index('by_active', ['isActive'])
-    .index('by_location', ['location'])
-    .index('by_racing_type', ['racingType']),
+    .index("by_owner", ["ownerId"])
+    .index("by_active", ["isActive"])
+    .index("by_location", ["location"])
+    .index("by_racing_type", ["racingType"]),
 
   driverProfiles: defineTable({
     userId: v.string(),
+    avatarUrl: v.optional(v.string()),
+    headline: v.optional(v.string()),
     bio: v.string(),
     achievements: v.optional(v.string()),
     experience: v.union(
-      v.literal('beginner'),
-      v.literal('intermediate'),
-      v.literal('advanced'),
-      v.literal('professional')
+      v.literal("beginner"),
+      v.literal("intermediate"),
+      v.literal("advanced"),
+      v.literal("professional")
     ),
     racingType: v.optional(
-      v.union(
-        v.literal('real-world'),
-        v.literal('sim-racing'),
-        v.literal('both')
-      )
+      v.union(v.literal("real-world"), v.literal("sim-racing"), v.literal("both"))
     ),
     simRacingPlatforms: v.optional(v.array(v.string())), // e.g., ['iRacing', 'ACC', 'Gran Turismo']
     simRacingRating: v.optional(v.string()), // e.g., 'A License', 'iRating: 3500', 'S Rating'
@@ -287,20 +393,20 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
   })
-    .index('by_user', ['userId'])
-    .index('by_active', ['isActive'])
-    .index('by_location', ['location'])
-    .index('by_experience', ['experience'])
-    .index('by_racing_type', ['racingType']),
+    .index("by_user", ["userId"])
+    .index("by_active", ["isActive"])
+    .index("by_location", ["location"])
+    .index("by_experience", ["experience"])
+    .index("by_racing_type", ["racingType"]),
 
   teamApplications: defineTable({
-    teamId: v.id('teams'),
+    teamId: v.id("teams"),
     driverId: v.string(),
     status: v.union(
-      v.literal('pending'),
-      v.literal('accepted'),
-      v.literal('declined'),
-      v.literal('withdrawn')
+      v.literal("pending"),
+      v.literal("accepted"),
+      v.literal("declined"),
+      v.literal("withdrawn")
     ),
     message: v.string(),
     driverExperience: v.string(),
@@ -308,40 +414,40 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
   })
-    .index('by_team', ['teamId'])
-    .index('by_driver', ['driverId'])
-    .index('by_status', ['status'])
-    .index('by_team_status', ['teamId', 'status']),
+    .index("by_team", ["teamId"])
+    .index("by_driver", ["driverId"])
+    .index("by_status", ["status"])
+    .index("by_team_status", ["teamId", "status"]),
 
   // New tables for rental completion system
   rentalCompletions: defineTable({
-    reservationId: v.id('reservations'),
-    vehicleId: v.id('vehicles'),
+    reservationId: v.id("reservations"),
+    vehicleId: v.id("vehicles"),
     renterId: v.string(),
     ownerId: v.string(),
     status: v.union(
-      v.literal('pending_renter'),
-      v.literal('pending_owner'),
-      v.literal('completed'),
-      v.literal('disputed')
+      v.literal("pending_renter"),
+      v.literal("pending_owner"),
+      v.literal("completed"),
+      v.literal("disputed")
     ),
     // Renter's return form
     renterReturnForm: v.optional(
       v.object({
         returnDate: v.string(),
         vehicleCondition: v.union(
-          v.literal('excellent'),
-          v.literal('good'),
-          v.literal('fair'),
-          v.literal('poor'),
-          v.literal('damaged')
+          v.literal("excellent"),
+          v.literal("good"),
+          v.literal("fair"),
+          v.literal("poor"),
+          v.literal("damaged")
         ),
         fuelLevel: v.union(
-          v.literal('full'),
-          v.literal('3/4'),
-          v.literal('1/2'),
-          v.literal('1/4'),
-          v.literal('empty')
+          v.literal("full"),
+          v.literal("3/4"),
+          v.literal("1/2"),
+          v.literal("1/4"),
+          v.literal("empty")
         ),
         mileage: v.number(),
         notes: v.optional(v.string()),
@@ -368,34 +474,34 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
   })
-    .index('by_reservation', ['reservationId'])
-    .index('by_vehicle', ['vehicleId'])
-    .index('by_renter', ['renterId'])
-    .index('by_owner', ['ownerId'])
-    .index('by_status', ['status']),
+    .index("by_reservation", ["reservationId"])
+    .index("by_vehicle", ["vehicleId"])
+    .index("by_renter", ["renterId"])
+    .index("by_owner", ["ownerId"])
+    .index("by_status", ["status"]),
 
   vehicleVitals: defineTable({
-    rentalCompletionId: v.id('rentalCompletions'),
-    vehicleId: v.id('vehicles'),
+    rentalCompletionId: v.id("rentalCompletions"),
+    vehicleId: v.id("vehicles"),
     // Engine vitals
     engineTemp: v.optional(v.number()),
     oilPressure: v.optional(v.number()),
     oilLevel: v.optional(
       v.union(
-        v.literal('full'),
-        v.literal('3/4'),
-        v.literal('1/2'),
-        v.literal('1/4'),
-        v.literal('low')
+        v.literal("full"),
+        v.literal("3/4"),
+        v.literal("1/2"),
+        v.literal("1/4"),
+        v.literal("low")
       )
     ),
     coolantLevel: v.optional(
       v.union(
-        v.literal('full'),
-        v.literal('3/4'),
-        v.literal('1/2'),
-        v.literal('1/4'),
-        v.literal('low')
+        v.literal("full"),
+        v.literal("3/4"),
+        v.literal("1/2"),
+        v.literal("1/4"),
+        v.literal("low")
       )
     ),
     // Tire vitals
@@ -409,69 +515,66 @@ export default defineSchema({
     ),
     tireCondition: v.optional(
       v.union(
-        v.literal('excellent'),
-        v.literal('good'),
-        v.literal('fair'),
-        v.literal('poor'),
-        v.literal('needs_replacement')
+        v.literal("excellent"),
+        v.literal("good"),
+        v.literal("fair"),
+        v.literal("poor"),
+        v.literal("needs_replacement")
       )
     ),
     // Brake vitals
     brakePadCondition: v.optional(
       v.union(
-        v.literal('excellent'),
-        v.literal('good'),
-        v.literal('fair'),
-        v.literal('poor'),
-        v.literal('needs_replacement')
+        v.literal("excellent"),
+        v.literal("good"),
+        v.literal("fair"),
+        v.literal("poor"),
+        v.literal("needs_replacement")
       )
     ),
     brakeFluidLevel: v.optional(
       v.union(
-        v.literal('full'),
-        v.literal('3/4'),
-        v.literal('1/2'),
-        v.literal('1/4'),
-        v.literal('low')
+        v.literal("full"),
+        v.literal("3/4"),
+        v.literal("1/2"),
+        v.literal("1/4"),
+        v.literal("low")
       )
     ),
     // General condition
     bodyCondition: v.optional(
       v.union(
-        v.literal('excellent'),
-        v.literal('good'),
-        v.literal('fair'),
-        v.literal('poor'),
-        v.literal('damaged')
+        v.literal("excellent"),
+        v.literal("good"),
+        v.literal("fair"),
+        v.literal("poor"),
+        v.literal("damaged")
       )
     ),
     interiorCondition: v.optional(
       v.union(
-        v.literal('excellent'),
-        v.literal('good'),
-        v.literal('fair'),
-        v.literal('poor'),
-        v.literal('damaged')
+        v.literal("excellent"),
+        v.literal("good"),
+        v.literal("fair"),
+        v.literal("poor"),
+        v.literal("damaged")
       )
     ),
     notes: v.optional(v.string()),
     submittedBy: v.string(), // renterId or ownerId
     submittedAt: v.number(),
   })
-    .index('by_rental_completion', ['rentalCompletionId'])
-    .index('by_vehicle', ['vehicleId'])
-    .index('by_submitter', ['submittedBy']),
+    .index("by_rental_completion", ["rentalCompletionId"])
+    .index("by_vehicle", ["vehicleId"])
+    .index("by_submitter", ["submittedBy"]),
 
   rentalReviews: defineTable({
-    rentalCompletionId: v.id('rentalCompletions'),
-    reservationId: v.id('reservations'),
-    vehicleId: v.id('vehicles'),
+    rentalCompletionId: v.id("rentalCompletions"),
+    reservationId: v.id("reservations"),
+    vehicleId: v.id("vehicles"),
     reviewerId: v.string(), // renterId or ownerId
     reviewedId: v.string(), // the other party's ID
-    reviewType: v.union(
-      v.literal('renter_to_owner'),
-      v.literal('owner_to_renter')
-    ),
+    reviewType: v.union(v.literal("renter_to_owner"), v.literal("owner_to_renter")),
     // Rating (1-5 stars)
     rating: v.number(),
     // Review categories
@@ -498,17 +601,17 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
   })
-    .index('by_rental_completion', ['rentalCompletionId'])
-    .index('by_reservation', ['reservationId'])
-    .index('by_reviewer', ['reviewerId'])
-    .index('by_reviewed', ['reviewedId'])
-    .index('by_rating', ['rating'])
-    .index('by_public', ['isPublic'])
-    .index('by_vehicle', ['vehicleId']),
+    .index("by_rental_completion", ["rentalCompletionId"])
+    .index("by_reservation", ["reservationId"])
+    .index("by_reviewer", ["reviewerId"])
+    .index("by_reviewed", ["reviewedId"])
+    .index("by_rating", ["rating"])
+    .index("by_public", ["isPublic"])
+    .index("by_vehicle", ["vehicleId"]),
 
   // Payment system tables
   payments: defineTable({
-    reservationId: v.id('reservations'),
+    reservationId: v.id("reservations"),
     renterId: v.string(),
     ownerId: v.string(),
     amount: v.number(), // Total amount in cents
@@ -516,17 +619,20 @@ export default defineSchema({
     ownerAmount: v.number(), // Amount owner receives in cents
     currency: v.string(), // 'usd'
     status: v.union(
-      v.literal('pending'),
-      v.literal('processing'),
-      v.literal('succeeded'),
-      v.literal('failed'),
-      v.literal('cancelled'),
-      v.literal('refunded'),
-      v.literal('partially_refunded')
+      v.literal("pending"),
+      v.literal("processing"),
+      v.literal("succeeded"),
+      v.literal("failed"),
+      v.literal("cancelled"),
+      v.literal("refunded"),
+      v.literal("partially_refunded")
     ),
     stripePaymentIntentId: v.optional(v.string()),
+    stripeCheckoutSessionId: v.optional(v.string()),
+    stripeCustomerId: v.optional(v.string()),
     stripeChargeId: v.optional(v.string()),
     stripeTransferId: v.optional(v.string()), // For Connect transfers
+    stripeAccountId: v.optional(v.string()), // Owner's Connect account ID
     refundAmount: v.optional(v.number()),
     refundReason: v.optional(v.string()),
     failureReason: v.optional(v.string()),
@@ -541,17 +647,19 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
   })
-    .index('by_reservation', ['reservationId'])
-    .index('by_renter', ['renterId'])
-    .index('by_owner', ['ownerId'])
-    .index('by_status', ['status'])
-    .index('by_stripe_payment_intent', ['stripePaymentIntentId']),
+    .index("by_reservation", ["reservationId"])
+    .index("by_renter", ["renterId"])
+    .index("by_owner", ["ownerId"])
+    .index("by_status", ["status"])
+    .index("by_stripe_payment_intent", ["stripePaymentIntentId"])
+    .index("by_stripe_checkout_session", ["stripeCheckoutSessionId"])
+    .index("by_stripe_customer", ["stripeCustomerId"]),
 
   // Disputes table
   disputes: defineTable({
-    completionId: v.id('rentalCompletions'),
-    reservationId: v.id('reservations'),
-    vehicleId: v.id('vehicles'),
+    completionId: v.id("rentalCompletions"),
+    reservationId: v.id("reservations"),
+    vehicleId: v.id("vehicles"),
     renterId: v.string(),
     ownerId: v.string(),
     createdBy: v.string(), // renterId or ownerId
@@ -559,11 +667,7 @@ export default defineSchema({
     description: v.string(),
     photos: v.optional(v.array(v.string())),
     requestedResolution: v.optional(v.string()),
-    status: v.union(
-      v.literal('open'),
-      v.literal('resolved'),
-      v.literal('closed')
-    ),
+    status: v.union(v.literal("open"), v.literal("resolved"), v.literal("closed")),
     // Messages/updates in the dispute
     messages: v.optional(
       v.array(
@@ -580,10 +684,10 @@ export default defineSchema({
     resolution: v.optional(v.string()),
     resolutionType: v.optional(
       v.union(
-        v.literal('resolved_in_favor_renter'),
-        v.literal('resolved_in_favor_owner'),
-        v.literal('resolved_compromise'),
-        v.literal('dismissed')
+        v.literal("resolved_in_favor_renter"),
+        v.literal("resolved_in_favor_owner"),
+        v.literal("resolved_compromise"),
+        v.literal("dismissed")
       )
     ),
     resolvedAt: v.optional(v.number()),
@@ -591,13 +695,13 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
   })
-    .index('by_completion', ['completionId'])
-    .index('by_reservation', ['reservationId'])
-    .index('by_vehicle', ['vehicleId'])
-    .index('by_renter', ['renterId'])
-    .index('by_owner', ['ownerId'])
-    .index('by_status', ['status'])
-    .index('by_created_by', ['createdBy']),
+    .index("by_completion", ["completionId"])
+    .index("by_reservation", ["reservationId"])
+    .index("by_vehicle", ["vehicleId"])
+    .index("by_renter", ["renterId"])
+    .index("by_owner", ["ownerId"])
+    .index("by_status", ["status"])
+    .index("by_created_by", ["createdBy"]),
 
   // Platform settings for fees and configuration
   platformSettings: defineTable({
@@ -608,5 +712,5 @@ export default defineSchema({
     isActive: v.boolean(),
     createdAt: v.number(),
     updatedAt: v.number(),
-  }).index('by_active', ['isActive']),
-});
+  }).index("by_active", ["isActive"]),
+})

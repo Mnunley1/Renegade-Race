@@ -1,6 +1,18 @@
 import { v } from 'convex/values';
 import type { Id } from './_generated/dataModel';
+import { api } from './_generated/api';
 import { mutation, query } from './_generated/server';
+import {
+  getReservationPendingOwnerEmailTemplate,
+  getReservationConfirmedRenterEmailTemplate,
+  getReservationDeclinedRenterEmailTemplate,
+  getReservationCancelledEmailTemplate,
+  getReservationCompletedEmailTemplate,
+  sendTransactionalEmail,
+} from './emails';
+import { calculateDaysBetween } from './dateUtils';
+// TODO: Uncomment after installing @convex-dev/rate-limiter
+// import { rateLimiter } from './rateLimiter';
 
 // Get reservations for a user (as renter or owner)
 export const getByUser = query({
@@ -150,6 +162,7 @@ export const create = mutation({
           name: v.string(),
           price: v.number(),
           description: v.optional(v.string()),
+          priceType: v.optional(v.union(v.literal("daily"), v.literal("one-time"))),
         })
       )
     ),
@@ -159,6 +172,13 @@ export const create = mutation({
     if (!identity) {
       throw new Error('Not authenticated');
     }
+
+    // Rate limit: 10 reservations per hour per user
+    // TODO: Uncomment after installing @convex-dev/rate-limiter
+    // const rateLimitStatus = await rateLimiter.limit(ctx, "createReservation", {
+    //   key: identity.subject,
+    //   throws: true,
+    // });
 
     const renterId = identity.subject;
     const now = Date.now();
@@ -174,11 +194,8 @@ export const create = mutation({
     }
 
     // Calculate total days and amount
-    const start = new Date(args.startDate);
-    const end = new Date(args.endDate);
-    const totalDays = Math.ceil(
-      (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)
-    );
+    // Use date utility to avoid timezone issues
+    const totalDays = calculateDaysBetween(args.startDate, args.endDate);
 
     if (totalDays <= 0) {
       throw new Error('Invalid date range');
@@ -213,28 +230,22 @@ export const create = mutation({
     }
 
     // Check for conflicting reservations
+    // Two date ranges overlap if: existingStart <= newEnd AND existingEnd >= newStart
     const conflictingReservations = await ctx.db
       .query('reservations')
       .withIndex('by_vehicle', q => q.eq('vehicleId', args.vehicleId))
       .filter(q =>
         q.and(
+          // Only check active reservations (pending or confirmed)
           q.or(
             q.eq(q.field('status'), 'pending'),
             q.eq(q.field('status'), 'confirmed')
           ),
-          q.or(
-            q.and(
-              q.lte(q.field('startDate'), args.startDate),
-              q.gte(q.field('endDate'), args.startDate)
-            ),
-            q.and(
-              q.lte(q.field('startDate'), args.endDate),
-              q.gte(q.field('endDate'), args.endDate)
-            ),
-            q.and(
-              q.gte(q.field('startDate'), args.startDate),
-              q.lte(q.field('endDate'), args.endDate)
-            )
+          // Check for date overlap: existing reservation overlaps if
+          // existingStart <= newEnd AND existingEnd >= newStart
+          q.and(
+            q.lte(q.field('startDate'), args.endDate),
+            q.gte(q.field('endDate'), args.startDate)
           )
         )
       )
@@ -262,6 +273,44 @@ export const create = mutation({
       createdAt: now,
       updatedAt: now,
     });
+
+    // Send email to owner about new reservation request
+    try {
+      const [owner, renter] = await Promise.all([
+        ctx.db
+          .query('users')
+          .withIndex('by_external_id', q => q.eq('externalId', vehicle.ownerId))
+          .first(),
+        ctx.db
+          .query('users')
+          .withIndex('by_external_id', q => q.eq('externalId', renterId))
+          .first(),
+      ])
+
+      const ownerEmail = owner?.email || (identity as any).email
+      const renterName = renter?.name || identity.name || 'Guest'
+      const vehicleName = `${vehicle.year} ${vehicle.make} ${vehicle.model}`
+
+      if (ownerEmail) {
+        const webUrl = process.env.WEB_URL || 'https://renegaderentals.com'
+        const template = getReservationPendingOwnerEmailTemplate({
+          ownerName: owner?.name || 'Owner',
+          renterName,
+          vehicleName,
+          startDate: args.startDate,
+          endDate: args.endDate,
+          totalAmount,
+          renterMessage: args.renterMessage,
+          reservationUrl: `${webUrl}/host/reservations`,
+        })
+        await sendTransactionalEmail(ctx, ownerEmail, template)
+      }
+    } catch (error) {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { logError } = require("./logger")
+      logError(error, "Failed to send reservation created email")
+      // Don't fail the mutation if email fails
+    }
 
     return reservationId;
   },
@@ -298,6 +347,43 @@ export const approve = mutation({
       updatedAt: Date.now(),
     });
 
+    // Send email to renter about confirmed reservation
+    try {
+      const [vehicle, renter] = await Promise.all([
+        ctx.db.get(reservation.vehicleId),
+        ctx.db
+          .query('users')
+          .withIndex('by_external_id', q =>
+            q.eq('externalId', reservation.renterId)
+          )
+          .first(),
+      ])
+
+      if (vehicle && renter) {
+        const renterEmail = renter.email
+        const vehicleName = `${vehicle.year} ${vehicle.make} ${vehicle.model}`
+
+        if (renterEmail) {
+          const webUrl = process.env.WEB_URL || 'https://renegaderentals.com'
+          const template = getReservationConfirmedRenterEmailTemplate({
+            renterName: renter.name || 'Guest',
+            vehicleName,
+            startDate: reservation.startDate,
+            endDate: reservation.endDate,
+            totalAmount: reservation.totalAmount,
+            ownerMessage: args.ownerMessage,
+            reservationUrl: `${webUrl}/trips`,
+          })
+          await sendTransactionalEmail(ctx, renterEmail, template)
+        }
+      }
+    } catch (error) {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { logError } = require("./logger")
+      logError(error, "Failed to send reservation confirmed email")
+      // Don't fail the mutation if email fails
+    }
+
     return args.reservationId;
   },
 });
@@ -332,6 +418,38 @@ export const decline = mutation({
       ownerMessage: args.ownerMessage,
       updatedAt: Date.now(),
     });
+
+    // Send email to renter about declined reservation
+    try {
+      const [vehicle, renter] = await Promise.all([
+        ctx.db.get(reservation.vehicleId),
+        ctx.db
+          .query('users')
+          .withIndex('by_external_id', q =>
+            q.eq('externalId', reservation.renterId)
+          )
+          .first(),
+      ])
+
+      if (vehicle && renter) {
+        const renterEmail = renter.email
+        const vehicleName = `${vehicle.year} ${vehicle.make} ${vehicle.model}`
+
+        if (renterEmail) {
+          const template = getReservationDeclinedRenterEmailTemplate({
+            renterName: renter.name || 'Guest',
+            vehicleName,
+            ownerMessage: args.ownerMessage,
+          })
+          await sendTransactionalEmail(ctx, renterEmail, template)
+        }
+      }
+    } catch (error) {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { logError } = require("./logger")
+      logError(error, "Failed to send reservation declined email")
+      // Don't fail the mutation if email fails
+    }
 
     return args.reservationId;
   },
@@ -374,6 +492,78 @@ export const cancel = mutation({
       updatedAt: Date.now(),
     });
 
+    // Process automatic refund if payment exists and is paid
+    if (reservation.paymentId) {
+      try {
+        const payment = await ctx.db.get(reservation.paymentId);
+        if (payment && payment.status === 'succeeded' && payment.stripeChargeId) {
+          // Schedule refund processing (use scheduler to call internal action)
+          await ctx.scheduler.runAfter(0, api.stripe.processRefundOnCancellation, {
+            paymentId: reservation.paymentId,
+            reservationId: args.reservationId,
+            reason: args.cancellationReason || 'Reservation cancelled',
+          });
+        }
+      } catch (error) {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { logError } = require("./logger")
+        logError(error, "Failed to initiate refund on cancellation")
+        // Don't fail the cancellation if refund initiation fails
+        // The refund can be processed manually later
+      }
+    }
+
+    // Send emails to both parties about cancelled reservation
+    try {
+      const [vehicle, renter, owner] = await Promise.all([
+        ctx.db.get(reservation.vehicleId),
+        ctx.db
+          .query('users')
+          .withIndex('by_external_id', q =>
+            q.eq('externalId', reservation.renterId)
+          )
+          .first(),
+        ctx.db
+          .query('users')
+          .withIndex('by_external_id', q =>
+            q.eq('externalId', reservation.ownerId)
+          )
+          .first(),
+      ])
+
+      if (vehicle) {
+        const vehicleName = `${vehicle.year} ${vehicle.make} ${vehicle.model}`
+        const isRenter = reservation.renterId === identity.subject
+
+        // Email to renter
+        if (renter?.email) {
+          const template = getReservationCancelledEmailTemplate({
+            userName: renter.name || 'Guest',
+            vehicleName,
+            role: 'renter',
+            cancellationReason: args.cancellationReason,
+          })
+          await sendTransactionalEmail(ctx, renter.email, template)
+        }
+
+        // Email to owner
+        if (owner?.email) {
+          const template = getReservationCancelledEmailTemplate({
+            userName: owner.name || 'Owner',
+            vehicleName,
+            role: 'owner',
+            cancellationReason: args.cancellationReason,
+          })
+          await sendTransactionalEmail(ctx, owner.email, template)
+        }
+      }
+    } catch (error) {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { logError } = require("./logger")
+      logError(error, "Failed to send reservation cancelled emails")
+      // Don't fail the mutation if email fails
+    }
+
     return args.reservationId;
   },
 });
@@ -406,6 +596,57 @@ export const complete = mutation({
       status: 'completed',
       updatedAt: Date.now(),
     });
+
+    // Send emails to both parties about completed reservation (prompt for review)
+    try {
+      const [vehicle, renter, owner] = await Promise.all([
+        ctx.db.get(reservation.vehicleId),
+        ctx.db
+          .query('users')
+          .withIndex('by_external_id', q =>
+            q.eq('externalId', reservation.renterId)
+          )
+          .first(),
+        ctx.db
+          .query('users')
+          .withIndex('by_external_id', q =>
+            q.eq('externalId', reservation.ownerId)
+          )
+          .first(),
+      ])
+
+      if (vehicle) {
+        const vehicleName = `${vehicle.year} ${vehicle.make} ${vehicle.model}`
+        const webUrl = process.env.WEB_URL || 'https://renegaderentals.com'
+
+        // Email to renter (prompt to review owner/vehicle)
+        if (renter?.email) {
+          const template = getReservationCompletedEmailTemplate({
+            userName: renter.name || 'Guest',
+            vehicleName,
+            role: 'renter',
+            reviewUrl: `${webUrl}/review/${reservation._id}`,
+          })
+          await sendTransactionalEmail(ctx, renter.email, template)
+        }
+
+        // Email to owner (prompt to review renter)
+        if (owner?.email) {
+          const template = getReservationCompletedEmailTemplate({
+            userName: owner.name || 'Owner',
+            vehicleName,
+            role: 'owner',
+            reviewUrl: `${webUrl}/review/${reservation._id}`,
+          })
+          await sendTransactionalEmail(ctx, owner.email, template)
+        }
+      }
+    } catch (error) {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { logError } = require("./logger")
+      logError(error, "Failed to send reservation completed emails")
+      // Don't fail the mutation if email fails
+    }
 
     return args.reservationId;
   },

@@ -1,19 +1,19 @@
 "use client"
 
-import { useQuery, useMutation } from "convex/react"
 import { useUser } from "@clerk/nextjs"
-import { useParams, useRouter } from "next/navigation"
-import { useState } from "react"
+import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Label } from "@workspace/ui/components/label"
 import { Textarea } from "@workspace/ui/components/textarea"
-import { Badge } from "@workspace/ui/components/badge"
-import { Separator } from "@workspace/ui/components/separator"
-import { Loader2, ArrowLeft, AlertTriangle, Send, Calendar, Car } from "lucide-react"
+import { useMutation, useQuery } from "convex/react"
+import { AlertTriangle, ArrowLeft, Loader2, Send } from "lucide-react"
 import Link from "next/link"
-import { api } from "@/lib/convex"
+import { useParams, useRouter } from "next/navigation"
+import { useState } from "react"
 import { toast } from "sonner"
+import { api } from "@/lib/convex"
+import { handleErrorWithContext } from "@/lib/error-handler"
 
 export default function DisputeDetailPage() {
   const { user } = useUser()
@@ -25,10 +25,7 @@ export default function DisputeDetailPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Fetch dispute data
-  const dispute = useQuery(
-    api.disputes.getById,
-    disputeId ? { id: disputeId as any } : "skip"
-  )
+  const dispute = useQuery(api.disputes.getById, disputeId ? { id: disputeId as any } : "skip")
 
   const addMessage = useMutation(api.disputes.addMessage)
 
@@ -45,8 +42,12 @@ export default function DisputeDetailPage() {
       setMessage("")
       toast.success("Message added successfully")
     } catch (error) {
-      console.error("Error adding message:", error)
-      toast.error("Failed to add message")
+      handleErrorWithContext(error, {
+        action: "add message",
+        customMessages: {
+          generic: "Failed to add message. Please try again.",
+        },
+      })
     } finally {
       setIsSubmitting(false)
     }
@@ -87,7 +88,7 @@ export default function DisputeDetailPage() {
   const renter = dispute.renter
   const owner = dispute.owner
 
-  if (!vehicle || !reservation) {
+  if (!(vehicle && reservation)) {
     return (
       <div className="container mx-auto max-w-4xl px-4 py-8">
         <Card>
@@ -107,7 +108,7 @@ export default function DisputeDetailPage() {
     <div className="container mx-auto max-w-4xl px-4 py-8">
       <div className="mb-6">
         <Link href="/trips/disputes">
-          <Button variant="ghost" size="sm">
+          <Button className="mb-6" variant="outline">
             <ArrowLeft className="mr-2 size-4" />
             Back to Disputes
           </Button>
@@ -143,33 +144,27 @@ export default function DisputeDetailPage() {
             <div className="grid gap-4 md:grid-cols-2">
               <div>
                 <Label>Reason</Label>
-                <p className="font-semibold capitalize">
-                  {dispute.reason.replace(/_/g, " ")}
-                </p>
+                <p className="font-semibold capitalize">{dispute.reason.replace(/_/g, " ")}</p>
               </div>
               <div>
                 <Label>Created</Label>
-                <p className="text-sm text-muted-foreground">
-                  {formatDate(dispute.createdAt)}
-                </p>
+                <p className="text-muted-foreground text-sm">{formatDate(dispute.createdAt)}</p>
               </div>
             </div>
             <div>
               <Label>Description</Label>
-              <p className="mt-1 text-sm text-muted-foreground">{dispute.description}</p>
+              <p className="mt-1 text-muted-foreground text-sm">{dispute.description}</p>
             </div>
             {dispute.requestedResolution && (
               <div>
                 <Label>Requested Resolution</Label>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {dispute.requestedResolution}
-                </p>
+                <p className="mt-1 text-muted-foreground text-sm">{dispute.requestedResolution}</p>
               </div>
             )}
             {dispute.resolution && (
               <div>
                 <Label>Resolution</Label>
-                <p className="mt-1 text-sm text-muted-foreground">{dispute.resolution}</p>
+                <p className="mt-1 text-muted-foreground text-sm">{dispute.resolution}</p>
               </div>
             )}
           </CardContent>
@@ -188,13 +183,13 @@ export default function DisputeDetailPage() {
             <div className="grid gap-4 md:grid-cols-2">
               <div>
                 <Label>Rental Period</Label>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-muted-foreground text-sm">
                   {formatDate(reservation.startDate)} - {formatDate(reservation.endDate)}
                 </p>
               </div>
               <div>
                 <Label>Participants</Label>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-muted-foreground text-sm">
                   Renter: {renter?.name || "Unknown"} | Owner: {owner?.name || "Unknown"}
                 </p>
               </div>
@@ -215,27 +210,27 @@ export default function DisputeDetailPage() {
 
                 return (
                   <div
-                    key={msg.id}
                     className={`rounded-lg border p-4 ${
-                      isFromUser ? "bg-primary/5 border-primary/20" : "bg-muted/30"
+                      isFromUser ? "border-primary/20 bg-primary/5" : "bg-muted/30"
                     }`}
+                    key={msg.id}
                   >
                     <div className="mb-2 flex items-center justify-between">
                       <p className="font-semibold text-sm">
                         {isFromUser ? "You" : sender?.name || "Unknown"}
                       </p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-muted-foreground text-xs">
                         {formatDateTime(msg.createdAt)}
                       </p>
                     </div>
-                    <p className="text-sm text-muted-foreground">{msg.message}</p>
+                    <p className="text-muted-foreground text-sm">{msg.message}</p>
                     {msg.photos && msg.photos.length > 0 && (
                       <div className="mt-2 flex flex-wrap gap-2">
                         {msg.photos.map((photo, index) => (
                           <img
-                            key={index}
                             alt={`Message photo ${index + 1}`}
                             className="h-20 w-20 rounded-lg object-cover"
+                            key={index}
                             src={photo}
                           />
                         ))}
@@ -255,18 +250,18 @@ export default function DisputeDetailPage() {
               <CardTitle>Add Message</CardTitle>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleAddMessage} className="space-y-4">
+              <form className="space-y-4" onSubmit={handleAddMessage}>
                 <div>
                   <Label htmlFor="message">Message</Label>
                   <Textarea
                     id="message"
-                    value={message}
                     onChange={(e) => setMessage(e.target.value)}
                     placeholder="Add an update or message to this dispute..."
                     rows={4}
+                    value={message}
                   />
                 </div>
-                <Button type="submit" disabled={isSubmitting || !message.trim()}>
+                <Button disabled={isSubmitting || !message.trim()} type="submit">
                   {isSubmitting ? (
                     <>
                       <Loader2 className="mr-2 size-4 animate-spin" />
@@ -287,4 +282,3 @@ export default function DisputeDetailPage() {
     </div>
   )
 }
-

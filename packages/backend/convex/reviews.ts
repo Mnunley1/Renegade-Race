@@ -1,6 +1,11 @@
 import { v } from 'convex/values';
 import type { Id } from './_generated/dataModel';
+import { api } from './_generated/api';
 import { mutation, query } from './_generated/server';
+import {
+  getReviewResponseEmailTemplate,
+  sendTransactionalEmail,
+} from './emails';
 
 // Get review by completion ID for current user
 export const getByCompletion = query({
@@ -348,6 +353,63 @@ export const getVehicleStats = query({
   },
 });
 
+// Get review statistics for multiple vehicles (batch query for efficiency)
+export const getVehicleStatsBatch = query({
+  args: {
+    vehicleIds: v.array(v.id('vehicles')),
+  },
+  handler: async (ctx, args) => {
+    if (args.vehicleIds.length === 0) {
+      return {};
+    }
+
+    // Get all reviews for all vehicles in one query
+    const allReviews = await ctx.db
+      .query('rentalReviews')
+      .filter(q => 
+        q.and(
+          q.or(...args.vehicleIds.map(id => q.eq(q.field('vehicleId'), id))),
+          q.eq(q.field('isPublic'), true)
+        )
+      )
+      .collect();
+
+    // Group reviews by vehicle ID
+    const reviewsByVehicle = new Map<string, typeof allReviews>();
+    allReviews.forEach(review => {
+      const vehicleId = review.vehicleId;
+      if (!reviewsByVehicle.has(vehicleId)) {
+        reviewsByVehicle.set(vehicleId, []);
+      }
+      reviewsByVehicle.get(vehicleId)!.push(review);
+    });
+
+    // Calculate stats for each vehicle
+    const statsMap: Record<string, { averageRating: number; totalReviews: number }> = {};
+    
+    args.vehicleIds.forEach(vehicleId => {
+      const reviews = reviewsByVehicle.get(vehicleId) || [];
+      
+      if (reviews.length === 0) {
+        statsMap[vehicleId] = {
+          averageRating: 0,
+          totalReviews: 0,
+        };
+      } else {
+        const totalRating = reviews.reduce((sum, review) => sum + review.rating, 0);
+        const averageRating = totalRating / reviews.length;
+        
+        statsMap[vehicleId] = {
+          averageRating: Math.round(averageRating * 10) / 10,
+          totalReviews: reviews.length,
+        };
+      }
+    });
+
+    return statsMap;
+  },
+});
+
 // Submit a review response
 export const submitResponse = mutation({
   args: {
@@ -379,9 +441,45 @@ export const submitResponse = mutation({
         respondedAt: Date.now(),
       },
       updatedAt: Date.now(),
-    });
+    })
 
-    return args.reviewId;
+    // Send email to reviewer about review response
+    try {
+      const [vehicle, reviewer, reviewed] = await Promise.all([
+        ctx.db.get(review.vehicleId),
+        ctx.db
+          .query('users')
+          .withIndex('by_external_id', q =>
+            q.eq('externalId', review.reviewerId)
+          )
+          .first(),
+        ctx.db
+          .query('users')
+          .withIndex('by_external_id', q =>
+            q.eq('externalId', review.reviewedId)
+          )
+          .first(),
+      ])
+
+      if (vehicle && reviewer?.email && reviewed) {
+        const vehicleName = `${vehicle.year} ${vehicle.make} ${vehicle.model}`
+        const webUrl = process.env.WEB_URL || 'https://renegaderentals.com'
+        const template = getReviewResponseEmailTemplate({
+          reviewerName: reviewer.name || 'Guest',
+          reviewedName: reviewed.name || 'Guest',
+          vehicleName,
+          reviewUrl: `${webUrl}/profile`,
+        })
+        await sendTransactionalEmail(ctx, reviewer.email, template)
+      }
+    } catch (error) {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { logError } = require("./logger")
+      logError(error, "Failed to send review response email")
+      // Don't fail the mutation if email fails
+    }
+
+    return args.reviewId
   },
 });
 
@@ -515,10 +613,10 @@ export const updateReview = mutation({
       updatedAt: Date.now(),
     });
 
-    // TODO: Update the reviewed user's rating via scheduler
-    // await ctx.scheduler.runAfter(0, api.reviews.updateUserRating, {
-    //   userId: existingReview.reviewedId,
-    // });
+    // Update the reviewed user's rating via scheduler
+    await ctx.scheduler.runAfter(0, api.reviews.updateUserRating, {
+      userId: existingReview.reviewedId,
+    });
 
     return args.reviewId;
   },
@@ -593,12 +691,13 @@ export const deleteReview = mutation({
       throw new Error('Not authorized to delete this review');
     }
 
+    const reviewedId = review.reviewedId;
     await ctx.db.delete(args.reviewId);
 
-    // TODO: Update user rating after deletion
-    // await ctx.scheduler.runAfter(0, api.reviews.updateUserRating, {
-    //   userId: review.reviewedId,
-    // });
+    // Update user rating after deletion
+    await ctx.scheduler.runAfter(0, api.reviews.updateUserRating, {
+      userId: reviewedId,
+    });
 
     return args.reviewId;
   },

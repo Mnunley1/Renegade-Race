@@ -3,41 +3,68 @@
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent } from "@workspace/ui/components/card"
 import { useQuery } from "convex/react"
-import { ArrowRight, Award, Car, CheckCircle2, CreditCard, Search, Zap } from "lucide-react"
+import { ArrowRight, Car, CheckCircle2, CreditCard, Search, Zap } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { useMemo, useState } from "react"
 import { VehicleCard } from "@/components/vehicle-card"
 import { api } from "@/lib/convex"
+import type { Id } from "@/lib/convex"
 
 export default function HomePage() {
-  // Track video load error
+  // Track video load error for hero section
+  const [heroVideoFailed, setHeroVideoFailed] = useState(false)
+  // Track video load error for about section
   const [videoError, setVideoError] = useState(false)
 
   // Fetch vehicles from Convex
   const vehiclesData = useQuery(api.vehicles.getAllWithOptimizedImages, { limit: 6 })
 
   // Map vehicles to the format expected by VehicleCard
+  // Fetch vehicle stats for featured vehicles
+  const featuredVehicleIds = useMemo(() => {
+    if (!vehiclesData) return []
+    return vehiclesData.slice(0, 6).map((v) => v._id as Id<"vehicles">)
+  }, [vehiclesData])
+
+  const featuredVehicleStats = useQuery(
+    api.reviews.getVehicleStatsBatch,
+    featuredVehicleIds.length > 0 ? { vehicleIds: featuredVehicleIds } : "skip"
+  )
+
   const featuredVehicles = useMemo(() => {
     if (!vehiclesData) return []
     return vehiclesData.slice(0, 6).map((vehicle) => {
       const primaryImage = vehicle.images?.find((img) => img.isPrimary) || vehicle.images?.[0]
+      const stats = featuredVehicleStats?.[vehicle._id]
+      
+      // Build location string from vehicle address (city, state) or fall back to track location
+      const locationParts = []
+      if (vehicle.address?.city) locationParts.push(vehicle.address.city)
+      if (vehicle.address?.state) locationParts.push(vehicle.address.state)
+      const location = locationParts.length > 0 
+        ? locationParts.join(", ") 
+        : vehicle.track?.location || ""
+      
       return {
         id: vehicle._id,
-        image: primaryImage?.cardUrl || primaryImage?.imageUrl || "",
+        image: primaryImage?.cardUrl ?? "",
+        imageKey: primaryImage?.r2Key ?? undefined, // Pass r2Key for ImageKit
         name: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
         year: vehicle.year,
         make: vehicle.make,
         model: vehicle.model,
         pricePerDay: vehicle.dailyRate,
-        location: vehicle.track?.location || "",
-        rating: 0, // TODO: Calculate from reviews
-        reviews: 0, // TODO: Get from reviews
+        location,
+        track: vehicle.track?.name || "",
+        rating: stats?.averageRating || 0,
+        reviews: stats?.totalReviews || 0,
         horsepower: vehicle.horsepower,
         transmission: vehicle.transmission,
+        drivetrain: vehicle.drivetrain,
       }
     })
-  }, [vehiclesData])
+  }, [vehiclesData, featuredVehicleStats])
 
   const benefits = [
     "Instant booking confirmation",
@@ -49,28 +76,34 @@ export default function HomePage() {
     <div className="space-y-32 pb-32">
       {/* Hero Section */}
       <section className="relative h-screen max-h-[900px] min-h-[600px] overflow-hidden">
-        {/* Fallback Background Image */}
-        <div className="absolute inset-0">
-          <Image
-            alt="Racing on track"
-            className="object-cover"
-            fill
-            priority
-            src="/images/clement-delacre-JuEQI7nssh0-unsplash.jpg"
-          />
-        </div>
+        {/* Fallback Background Image - only shown when video fails */}
+        {heroVideoFailed && (
+          <div className="absolute inset-0">
+            <Image
+              alt="Racing on track"
+              className="object-cover"
+              fill
+              priority
+              src="/images/clement-delacre-JuEQI7nssh0-unsplash.jpg"
+            />
+          </div>
+        )}
 
-        {/* Video Background */}
-        <video
-          autoPlay
-          className="absolute inset-0 h-full w-full object-cover"
-          loop
-          muted
-          playsInline
-          poster="/images/clement-delacre-JuEQI7nssh0-unsplash.jpg"
-        >
-          <source src="/videos/renegade-hero-video.mp4" type="video/mp4" />
-        </video>
+        {/* Video Background - only shown when video hasn't failed */}
+        {!heroVideoFailed && (
+          <video
+            autoPlay
+            className="absolute inset-0 h-full w-full object-cover"
+            loop
+            muted
+            onAbort={() => setHeroVideoFailed(true)}
+            onError={() => setHeroVideoFailed(true)}
+            playsInline
+            poster="/images/hero-vid-thumbnail.png"
+          >
+            <source src="/videos/renegade-hero-video.mp4" type="video/mp4" />
+          </video>
+        )}
 
         {/* Dark Overlay for better text readability */}
         <div className="absolute inset-0 bg-black/50" />
@@ -102,16 +135,6 @@ export default function HomePage() {
                 <Button className="w-full sm:w-auto" size="lg">
                   <Car className="mr-2 size-5" />
                   Browse Vehicles
-                </Button>
-              </Link>
-              <Link href="/motorsports">
-                <Button
-                  className="w-full border-white/20 bg-white text-black hover:bg-white/90 sm:w-auto"
-                  size="lg"
-                  variant="outline"
-                >
-                  <Award className="mr-2 size-5" />
-                  Motorsports
                 </Button>
               </Link>
             </div>
@@ -304,7 +327,7 @@ export default function HomePage() {
                 playsInline
                 preload="metadata"
               >
-                <source src="/videos/renegade_promo_video.mp4" type="video/mp4" />
+                <source src="/videos/Renegade_promo_video.mp4" type="video/mp4" />
                 Your browser does not support the video tag.
               </video>
             )}
@@ -332,7 +355,7 @@ export default function HomePage() {
               </Link>
               <Link href="/host/dashboard">
                 <Button
-                  className="w-full border-white/20 bg-white/10 text-white backdrop-blur-sm hover:bg-white/20 sm:w-auto"
+                  className="w-full border-white/30 bg-white/15 text-white backdrop-blur-sm hover:bg-white/25 sm:w-auto dark:border-white/40 dark:bg-white/20 dark:hover:bg-white/30"
                   size="lg"
                   variant="outline"
                 >

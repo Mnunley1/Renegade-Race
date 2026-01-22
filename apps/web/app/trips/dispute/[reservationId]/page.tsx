@@ -1,20 +1,28 @@
 "use client"
 
-import { useQuery, useMutation } from "convex/react"
 import { useUser } from "@clerk/nextjs"
-import { useParams, useRouter } from "next/navigation"
-import { useState } from "react"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
-import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@workspace/ui/components/select"
 import { Textarea } from "@workspace/ui/components/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@workspace/ui/components/select"
-import { Badge } from "@workspace/ui/components/badge"
-import { Loader2, ArrowLeft, AlertTriangle, Upload } from "lucide-react"
+import { useMutation, useQuery } from "convex/react"
+import { AlertTriangle, ArrowLeft, Loader2, Upload, X } from "lucide-react"
 import Link from "next/link"
-import { api } from "@/lib/convex"
+import { useParams, useRouter } from "next/navigation"
+import { useState } from "react"
 import { toast } from "sonner"
+import { api } from "@/lib/convex"
+import type { Id } from "@/lib/convex"
+import { getImageKitUrl } from "@/lib/imagekit"
+import { handleErrorWithContext } from "@/lib/error-handler"
+import { usePhotoUpload } from "@/hooks/usePhotoUpload"
 
 export default function DisputeCreationPage() {
   const { user } = useUser()
@@ -25,23 +33,31 @@ export default function DisputeCreationPage() {
   const [reason, setReason] = useState("")
   const [description, setDescription] = useState("")
   const [requestedResolution, setRequestedResolution] = useState("")
-  const [photos, setPhotos] = useState<string[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const {
+    photos,
+    setPhotos,
+    isUploading,
+    fileInputRef,
+    handlePhotoUpload,
+    handleRemovePhoto,
+  } = usePhotoUpload()
 
   // Fetch reservation and completion data
   const reservation = useQuery(
     api.reservations.getById,
-    reservationId ? { id: reservationId as any } : "skip"
+    reservationId ? { id: reservationId as Id<"reservations"> } : "skip"
   )
 
   const completion = useQuery(
     api.rentalCompletions.getByReservation,
-    reservationId ? { reservationId: reservationId as any } : "skip"
+    reservationId ? { reservationId: reservationId as Id<"reservations"> } : "skip"
   )
 
   const existingDispute = useQuery(
     api.disputes.getByReservation,
-    reservationId ? { reservationId: reservationId as any } : "skip"
+    reservationId ? { reservationId: reservationId as Id<"reservations"> } : "skip"
   )
 
   const createDispute = useMutation(api.disputes.create)
@@ -53,7 +69,7 @@ export default function DisputeCreationPage() {
       return
     }
 
-    if (!reason || !description) {
+    if (!(reason && description)) {
       toast.error("Please fill in all required fields")
       return
     }
@@ -70,18 +86,19 @@ export default function DisputeCreationPage() {
       toast.success("Dispute created successfully")
       router.push("/trips/disputes")
     } catch (error) {
-      console.error("Error creating dispute:", error)
-      toast.error("Failed to create dispute")
+      handleErrorWithContext(error, {
+        action: "create dispute",
+        entity: "dispute",
+        customMessages: {
+          duplicate: "A dispute already exists for this reservation",
+          generic: "Failed to create dispute. Please try again or contact support.",
+        },
+      })
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  // Handle photo upload (placeholder)
-  const handlePhotoUpload = () => {
-    // TODO: Implement photo upload to storage
-    toast.info("Photo upload functionality coming soon")
-  }
 
   if (!reservation) {
     return (
@@ -114,7 +131,7 @@ export default function DisputeCreationPage() {
       <div className="container mx-auto max-w-4xl px-4 py-8">
         <div className="mb-6">
           <Link href="/trips/disputes">
-            <Button variant="ghost" size="sm">
+            <Button className="mb-6" variant="outline">
               <ArrowLeft className="mr-2 size-4" />
               Back to Disputes
             </Button>
@@ -140,7 +157,7 @@ export default function DisputeCreationPage() {
     <div className="container mx-auto max-w-4xl px-4 py-8">
       <div className="mb-6">
         <Link href="/trips">
-          <Button variant="ghost" size="sm">
+          <Button className="mb-6" variant="outline">
             <ArrowLeft className="mr-2 size-4" />
             Back to Trips
           </Button>
@@ -157,7 +174,7 @@ export default function DisputeCreationPage() {
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form className="space-y-6" onSubmit={handleSubmit}>
         {/* Vehicle Info Card */}
         <Card>
           <CardHeader>
@@ -171,14 +188,14 @@ export default function DisputeCreationPage() {
             <div className="grid gap-4 md:grid-cols-2">
               <div>
                 <Label>Rental Period</Label>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-muted-foreground text-sm">
                   {new Date(reservation.startDate).toLocaleDateString()} -{" "}
                   {new Date(reservation.endDate).toLocaleDateString()}
                 </p>
               </div>
               <div>
                 <Label>Total Days</Label>
-                <p className="text-sm text-muted-foreground">{reservation.totalDays} days</p>
+                <p className="text-muted-foreground text-sm">{reservation.totalDays} days</p>
               </div>
             </div>
           </CardContent>
@@ -194,7 +211,7 @@ export default function DisputeCreationPage() {
               <Label htmlFor="reason">
                 Reason for Dispute <span className="text-red-500">*</span>
               </Label>
-              <Select value={reason} onValueChange={setReason}>
+              <Select onValueChange={setReason} value={reason}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select a reason" />
                 </SelectTrigger>
@@ -215,11 +232,11 @@ export default function DisputeCreationPage() {
               </Label>
               <Textarea
                 id="description"
-                value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Please provide a detailed description of the issue..."
-                rows={6}
                 required
+                rows={6}
+                value={description}
               />
             </div>
 
@@ -227,36 +244,53 @@ export default function DisputeCreationPage() {
               <Label htmlFor="requestedResolution">Requested Resolution</Label>
               <Textarea
                 id="requestedResolution"
-                value={requestedResolution}
                 onChange={(e) => setRequestedResolution(e.target.value)}
                 placeholder="What resolution are you seeking? (e.g., refund, partial refund, etc.)"
                 rows={4}
+                value={requestedResolution}
               />
             </div>
 
             <div>
               <Label>Supporting Evidence (Photos)</Label>
               <div className="mt-2 flex flex-wrap gap-2">
-                {photos.map((photo, index) => (
-                  <div key={index} className="relative">
+                {photos.map((photoKey, index) => (
+                  <div className="group relative" key={index}>
                     <img
                       alt={`Dispute photo ${index + 1}`}
                       className="h-24 w-24 rounded-lg object-cover"
-                      src={photo}
+                      src={getImageKitUrl(photoKey, { width: 96, height: 96, quality: 80 })}
                     />
+                    <button
+                      className="absolute right-1 top-1 rounded-full bg-destructive p-1 opacity-0 transition-opacity group-hover:opacity-100"
+                      onClick={() => handleRemovePhoto(index)}
+                      type="button"
+                    >
+                      <X className="size-3 text-destructive-foreground" />
+                    </button>
                   </div>
                 ))}
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handlePhotoUpload}
-                  className="h-24 w-24"
-                >
-                  <Upload className="size-4" />
-                </Button>
+                <label className="cursor-pointer">
+                  <input
+                    accept="image/*"
+                    className="hidden"
+                    disabled={isUploading}
+                    multiple
+                    onChange={handlePhotoUpload}
+                    ref={fileInputRef}
+                    type="file"
+                  />
+                  <div className="flex h-24 w-24 items-center justify-center rounded-lg border-2 border-dashed transition-colors hover:border-primary">
+                    {isUploading ? (
+                      <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                    ) : (
+                      <Upload className="size-4 text-muted-foreground" />
+                    )}
+                  </div>
+                </label>
               </div>
-              <p className="mt-2 text-xs text-muted-foreground">
-                Upload photos as evidence for your dispute
+              <p className="mt-2 text-muted-foreground text-xs">
+                Upload photos as evidence for your dispute (max 10MB per photo)
               </p>
             </div>
           </CardContent>
@@ -276,7 +310,7 @@ export default function DisputeCreationPage() {
         </div>
 
         <div className="flex gap-4">
-          <Button type="submit" disabled={isSubmitting} className="flex-1">
+          <Button className="flex-1" disabled={isSubmitting} type="submit">
             {isSubmitting ? (
               <>
                 <Loader2 className="mr-2 size-4 animate-spin" />
@@ -296,4 +330,3 @@ export default function DisputeCreationPage() {
     </div>
   )
 }
-
