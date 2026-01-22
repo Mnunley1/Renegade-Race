@@ -26,13 +26,13 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { Suspense, useEffect, useMemo, useRef, useState } from "react"
 import { VehicleGallery } from "@/components/vehicle-gallery"
 import { api } from "@/lib/convex"
 import type { Id } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 
-export default function VehicleDetailsPage() {
+function VehicleDetailsPageContent() {
   const params = useParams()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -243,8 +243,16 @@ export default function VehicleDetailsPage() {
     )
   }
 
-  // Extract image URLs
-  const images = vehicle.images?.map((img) => img.cardUrl ?? "") || []
+  // Extract image r2Keys for ImageKit (sorted by order, then primary)
+  const images = vehicle.images
+    ?.slice()
+    .sort((a, b) => {
+      const orderA = a.order ?? Number.MAX_SAFE_INTEGER
+      const orderB = b.order ?? Number.MAX_SAFE_INTEGER
+      return orderA - orderB
+    })
+    .filter((img) => img.r2Key && img.r2Key.trim() !== "")
+    .map((img) => `/${img.r2Key}`) || []
 
   // Host information from owner
   const host = {
@@ -515,10 +523,10 @@ export default function VehicleDetailsPage() {
                         <div className="mb-3 flex items-start justify-between">
                           <div className="flex-1">
                             <div className="mb-1 flex items-center gap-2">
-                              {review.reviewerId ? (
+                              {review.reviewer?._id ? (
                                 <Link
                                   className="font-semibold transition-colors hover:text-primary"
-                                  href={`/r/${review.reviewerId}`}
+                                  href={`/r/${review.reviewer._id}`}
                                 >
                                   {review.reviewer?.name || "Anonymous"}
                                 </Link>
@@ -643,7 +651,7 @@ export default function VehicleDetailsPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  <Link className="block" href={`/r/${vehicle.ownerId}`}>
+                  <Link className="block" href={`/r/${vehicle.owner?._id}`}>
                     <div className="flex items-center gap-4 transition-opacity hover:opacity-80">
                       <Avatar className="size-16">
                         <AvatarImage src={host.avatar} />
@@ -787,5 +795,23 @@ export default function VehicleDetailsPage() {
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+export default function VehicleDetailsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="container mx-auto max-w-7xl px-4 py-8">
+          <div className="flex min-h-[60vh] items-center justify-center">
+            <div className="text-center">
+              <p className="text-muted-foreground">Loading vehicle details...</p>
+            </div>
+          </div>
+        </div>
+      }
+    >
+      <VehicleDetailsPageContent />
+    </Suspense>
   )
 }

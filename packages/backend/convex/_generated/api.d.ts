@@ -19,9 +19,11 @@ import type * as favorites from "../favorites.js";
 import type * as geocodeExistingVehicles from "../geocodeExistingVehicles.js";
 import type * as geocoding from "../geocoding.js";
 import type * as http from "../http.js";
+import type * as init from "../init.js";
 import type * as logger from "../logger.js";
 import type * as messages from "../messages.js";
 import type * as migrateAdalo from "../migrateAdalo.js";
+import type * as notificationCron from "../notificationCron.js";
 import type * as r2 from "../r2.js";
 import type * as rateLimitHelpers from "../rateLimitHelpers.js";
 import type * as rateLimiter from "../rateLimiter.js";
@@ -64,9 +66,11 @@ declare const fullApi: ApiFromModules<{
   geocodeExistingVehicles: typeof geocodeExistingVehicles;
   geocoding: typeof geocoding;
   http: typeof http;
+  init: typeof init;
   logger: typeof logger;
   messages: typeof messages;
   migrateAdalo: typeof migrateAdalo;
+  notificationCron: typeof notificationCron;
   r2: typeof r2;
   rateLimitHelpers: typeof rateLimitHelpers;
   rateLimiter: typeof rateLimiter;
@@ -95,6 +99,57 @@ export declare const internal: FilterApi<
 >;
 
 export declare const components: {
+  crons: {
+    public: {
+      del: FunctionReference<
+        "mutation",
+        "internal",
+        { identifier: { id: string } | { name: string } },
+        null
+      >;
+      get: FunctionReference<
+        "query",
+        "internal",
+        { identifier: { id: string } | { name: string } },
+        {
+          args: Record<string, any>;
+          functionHandle: string;
+          id: string;
+          name?: string;
+          schedule:
+            | { kind: "interval"; ms: number }
+            | { cronspec: string; kind: "cron"; tz?: string };
+        } | null
+      >;
+      list: FunctionReference<
+        "query",
+        "internal",
+        {},
+        Array<{
+          args: Record<string, any>;
+          functionHandle: string;
+          id: string;
+          name?: string;
+          schedule:
+            | { kind: "interval"; ms: number }
+            | { cronspec: string; kind: "cron"; tz?: string };
+        }>
+      >;
+      register: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          args: Record<string, any>;
+          functionHandle: string;
+          name?: string;
+          schedule:
+            | { kind: "interval"; ms: number }
+            | { cronspec: string; kind: "cron"; tz?: string };
+        },
+        string
+      >;
+    };
+  };
   resend: {
     lib: {
       cancelEmail: FunctionReference<

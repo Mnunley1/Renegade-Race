@@ -1,11 +1,22 @@
 "use client"
 
 import { useUser } from "@clerk/nextjs"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@workspace/ui/components/alert-dialog"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Separator } from "@workspace/ui/components/separator"
-import { useQuery } from "convex/react"
+import { useMutation, useQuery } from "convex/react"
 import {
   ArrowLeft,
   ArrowRight,
@@ -19,28 +30,38 @@ import {
   Gauge,
   Heart,
   Loader2,
-  MapPin,
-  MessageSquare,
   Settings,
   Share2,
-  Star,
-  TrendingUp,
+  Trash2,
   Users,
   XCircle,
 } from "lucide-react"
-import Image from "next/image"
 import Link from "next/link"
-import { useParams } from "next/navigation"
-import { useMemo } from "react"
+import { useParams, useRouter } from "next/navigation"
+import { useMemo, useState } from "react"
+import { toast } from "sonner"
+import { VehicleGallery } from "@/components/vehicle-gallery"
 import { api } from "@/lib/convex"
+import { handleErrorWithContext } from "@/lib/error-handler"
 
 export default function HostVehicleDetailPage() {
   const params = useParams()
+  const router = useRouter()
   const { user } = useUser()
   const vehicleId = params.id as string
+  const [isDeleting, setIsDeleting] = useState(false)
 
   // Fetch vehicle from Convex
   const vehicle = useQuery(api.vehicles.getById, vehicleId ? { id: vehicleId as any } : "skip")
+
+  // Check if vehicle can be deleted
+  const canDeleteResult = useQuery(
+    api.vehicles.canDelete,
+    vehicleId ? { id: vehicleId as any } : "skip"
+  )
+
+  // Delete mutation
+  const deleteVehicle = useMutation(api.vehicles.remove)
 
   // Fetch reservations for this vehicle (as owner)
   const allReservations = useQuery(
@@ -101,6 +122,24 @@ export default function HostVehicleDetailPage() {
     }
   }, [vehicleReservations, vehicle, pendingReservations, upcomingReservations])
 
+  // Extract r2Keys for the gallery - sort by order field set in edit page
+  const galleryImages = useMemo(() => {
+    if (!vehicle?.images || vehicle.images.length === 0) return []
+    
+    // Sort images by order field (set via drag-and-drop in edit page)
+    const sortedImages = [...vehicle.images].sort((a, b) => {
+      // Use order field as primary sort
+      const orderA = a.order ?? Number.MAX_SAFE_INTEGER
+      const orderB = b.order ?? Number.MAX_SAFE_INTEGER
+      return orderA - orderB
+    })
+    
+    // Extract r2Keys, filtering out any without valid keys
+    return sortedImages
+      .filter((img) => img.r2Key && img.r2Key.trim() !== "")
+      .map((img) => `/${img.r2Key}`)
+  }, [vehicle?.images])
+
   // Show loading state
   if (vehicle === undefined || allReservations === undefined) {
     return (
@@ -135,19 +174,6 @@ export default function HostVehicleDetailPage() {
     )
   }
 
-  // Check if vehicle has any valid images
-  const hasImages = vehicle.images && vehicle.images.length > 0 && vehicle.images.some(
-    (img) => img.heroUrl || img.detailUrl || img.cardUrl
-  )
-
-  const primaryImage =
-    vehicle.images?.find((img) => img.isPrimary)?.heroUrl ||
-    vehicle.images?.find((img) => img.isPrimary)?.detailUrl ||
-    vehicle.images?.[0]?.heroUrl ||
-    vehicle.images?.[0]?.detailUrl ||
-    vehicle.images?.[0]?.cardUrl ||
-    null
-
   const getStatusBadge = () => {
     if (vehicle.isActive && vehicle.isApproved) {
       return (
@@ -180,6 +206,25 @@ export default function HostVehicleDetailPage() {
       day: "numeric",
       year: "numeric",
     })
+  }
+
+  const handleDeleteVehicle = async () => {
+    setIsDeleting(true)
+    try {
+      await deleteVehicle({ id: vehicleId as any })
+      toast.success("Vehicle deleted successfully")
+      router.push("/host/vehicles/list")
+    } catch (error) {
+      handleErrorWithContext(error, {
+        action: "delete vehicle",
+        entity: "vehicle",
+        customMessages: {
+          generic: "Failed to delete vehicle. Please try again.",
+        },
+      })
+    } finally {
+      setIsDeleting(false)
+    }
   }
 
   return (
@@ -384,32 +429,11 @@ export default function HostVehicleDetailPage() {
             </Card>
           )}
 
-          {/* Vehicle Image */}
-          <Card className="overflow-hidden">
-            {hasImages && primaryImage ? (
-              <div className="relative h-96 w-full">
-                <Image
-                  alt={`${vehicle.year} ${vehicle.make} ${vehicle.model}`}
-                  className="object-cover"
-                  fill
-                  sizes="(max-width: 1024px) 100vw, 66vw"
-                  src={primaryImage}
-                />
-              </div>
-            ) : (
-              <div className="flex h-96 w-full items-center justify-center bg-muted">
-                <div className="flex flex-col items-center gap-4 text-center">
-                  <Car className="size-16 text-muted-foreground/40" />
-                  <div className="space-y-1">
-                    <p className="font-medium text-lg text-muted-foreground">No images available</p>
-                    <p className="text-muted-foreground text-sm">
-                      {vehicle.year} {vehicle.make} {vehicle.model}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-          </Card>
+          {/* Vehicle Gallery */}
+          <VehicleGallery
+            images={galleryImages}
+            vehicleName={`${vehicle.year} ${vehicle.make} ${vehicle.model}`}
+          />
 
           {/* Vehicle Details */}
           <Card>
@@ -596,6 +620,55 @@ export default function HostVehicleDetailPage() {
                   </div>
                   <span className="font-semibold">{stats.completedTrips}</span>
                 </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Danger Zone */}
+          <Card className="border-destructive/50">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-destructive text-base">Danger Zone</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    className="w-full justify-start"
+                    disabled={!canDeleteResult?.canDelete || isDeleting}
+                    size="sm"
+                    variant="destructive"
+                  >
+                    <Trash2 className="mr-2 size-4" />
+                    {isDeleting ? "Deleting..." : "Delete Vehicle"}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete Vehicle</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Are you sure you want to delete{" "}
+                      <span className="font-semibold">
+                        {vehicle.year} {vehicle.make} {vehicle.model}
+                      </span>
+                      ? This will hide the vehicle from search results and prevent new bookings.
+                      Existing completed reservations and reviews will be preserved.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      onClick={handleDeleteVehicle}
+                    >
+                      Delete Vehicle
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+              {canDeleteResult && !canDeleteResult.canDelete && (
+                <p className="mt-2 text-muted-foreground text-xs">
+                  {canDeleteResult.reason}
+                </p>
               )}
             </CardContent>
           </Card>
