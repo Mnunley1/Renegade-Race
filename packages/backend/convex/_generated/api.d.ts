@@ -1,0 +1,770 @@
+/* eslint-disable */
+/**
+ * Generated `api` utility.
+ *
+ * THIS CODE IS AUTOMATICALLY GENERATED.
+ *
+ * To regenerate, run `npx convex dev`.
+ * @module
+ */
+
+import type * as admin from "../admin.js";
+import type * as availability from "../availability.js";
+import type * as conversations from "../conversations.js";
+import type * as dateUtils from "../dateUtils.js";
+import type * as disputes from "../disputes.js";
+import type * as driverProfiles from "../driverProfiles.js";
+import type * as emails from "../emails.js";
+import type * as favorites from "../favorites.js";
+import type * as geocodeExistingVehicles from "../geocodeExistingVehicles.js";
+import type * as geocoding from "../geocoding.js";
+import type * as http from "../http.js";
+import type * as init from "../init.js";
+import type * as logger from "../logger.js";
+import type * as messages from "../messages.js";
+import type * as migrateAdalo from "../migrateAdalo.js";
+import type * as notificationCron from "../notificationCron.js";
+import type * as r2 from "../r2.js";
+import type * as rateLimitHelpers from "../rateLimitHelpers.js";
+import type * as rateLimiter from "../rateLimiter.js";
+import type * as rentalCompletions from "../rentalCompletions.js";
+import type * as reservations from "../reservations.js";
+import type * as reviews from "../reviews.js";
+import type * as seed from "../seed.js";
+import type * as stripe from "../stripe.js";
+import type * as teamApplications from "../teamApplications.js";
+import type * as teamDriverConnections from "../teamDriverConnections.js";
+import type * as teams from "../teams.js";
+import type * as tracks from "../tracks.js";
+import type * as users from "../users.js";
+import type * as vehicleAnalytics from "../vehicleAnalytics.js";
+import type * as vehicles from "../vehicles.js";
+
+import type {
+  ApiFromModules,
+  FilterApi,
+  FunctionReference,
+} from "convex/server";
+
+/**
+ * A utility for referencing Convex functions in your app's API.
+ *
+ * Usage:
+ * ```js
+ * const myFunctionReference = api.myModule.myFunction;
+ * ```
+ */
+declare const fullApi: ApiFromModules<{
+  admin: typeof admin;
+  availability: typeof availability;
+  conversations: typeof conversations;
+  dateUtils: typeof dateUtils;
+  disputes: typeof disputes;
+  driverProfiles: typeof driverProfiles;
+  emails: typeof emails;
+  favorites: typeof favorites;
+  geocodeExistingVehicles: typeof geocodeExistingVehicles;
+  geocoding: typeof geocoding;
+  http: typeof http;
+  init: typeof init;
+  logger: typeof logger;
+  messages: typeof messages;
+  migrateAdalo: typeof migrateAdalo;
+  notificationCron: typeof notificationCron;
+  r2: typeof r2;
+  rateLimitHelpers: typeof rateLimitHelpers;
+  rateLimiter: typeof rateLimiter;
+  rentalCompletions: typeof rentalCompletions;
+  reservations: typeof reservations;
+  reviews: typeof reviews;
+  seed: typeof seed;
+  stripe: typeof stripe;
+  teamApplications: typeof teamApplications;
+  teamDriverConnections: typeof teamDriverConnections;
+  teams: typeof teams;
+  tracks: typeof tracks;
+  users: typeof users;
+  vehicleAnalytics: typeof vehicleAnalytics;
+  vehicles: typeof vehicles;
+}>;
+declare const fullApiWithMounts: typeof fullApi;
+
+export declare const api: FilterApi<
+  typeof fullApiWithMounts,
+  FunctionReference<any, "public">
+>;
+export declare const internal: FilterApi<
+  typeof fullApiWithMounts,
+  FunctionReference<any, "internal">
+>;
+
+export declare const components: {
+  crons: {
+    public: {
+      del: FunctionReference<
+        "mutation",
+        "internal",
+        { identifier: { id: string } | { name: string } },
+        null
+      >;
+      get: FunctionReference<
+        "query",
+        "internal",
+        { identifier: { id: string } | { name: string } },
+        {
+          args: Record<string, any>;
+          functionHandle: string;
+          id: string;
+          name?: string;
+          schedule:
+            | { kind: "interval"; ms: number }
+            | { cronspec: string; kind: "cron"; tz?: string };
+        } | null
+      >;
+      list: FunctionReference<
+        "query",
+        "internal",
+        {},
+        Array<{
+          args: Record<string, any>;
+          functionHandle: string;
+          id: string;
+          name?: string;
+          schedule:
+            | { kind: "interval"; ms: number }
+            | { cronspec: string; kind: "cron"; tz?: string };
+        }>
+      >;
+      register: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          args: Record<string, any>;
+          functionHandle: string;
+          name?: string;
+          schedule:
+            | { kind: "interval"; ms: number }
+            | { cronspec: string; kind: "cron"; tz?: string };
+        },
+        string
+      >;
+    };
+  };
+  resend: {
+    lib: {
+      cancelEmail: FunctionReference<
+        "mutation",
+        "internal",
+        { emailId: string },
+        null
+      >;
+      cleanupAbandonedEmails: FunctionReference<
+        "mutation",
+        "internal",
+        { olderThan?: number },
+        null
+      >;
+      cleanupOldEmails: FunctionReference<
+        "mutation",
+        "internal",
+        { olderThan?: number },
+        null
+      >;
+      createManualEmail: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          from: string;
+          headers?: Array<{ name: string; value: string }>;
+          replyTo?: Array<string>;
+          subject: string;
+          to: Array<string> | string;
+        },
+        string
+      >;
+      get: FunctionReference<
+        "query",
+        "internal",
+        { emailId: string },
+        {
+          bcc?: Array<string>;
+          bounced?: boolean;
+          cc?: Array<string>;
+          clicked?: boolean;
+          complained: boolean;
+          createdAt: number;
+          deliveryDelayed?: boolean;
+          errorMessage?: string;
+          failed?: boolean;
+          finalizedAt: number;
+          from: string;
+          headers?: Array<{ name: string; value: string }>;
+          html?: string;
+          opened: boolean;
+          replyTo: Array<string>;
+          resendId?: string;
+          segment: number;
+          status:
+            | "waiting"
+            | "queued"
+            | "cancelled"
+            | "sent"
+            | "delivered"
+            | "delivery_delayed"
+            | "bounced"
+            | "failed";
+          subject?: string;
+          template?: {
+            id: string;
+            variables?: Record<string, string | number>;
+          };
+          text?: string;
+          to: Array<string>;
+        } | null
+      >;
+      getStatus: FunctionReference<
+        "query",
+        "internal",
+        { emailId: string },
+        {
+          bounced: boolean;
+          clicked: boolean;
+          complained: boolean;
+          deliveryDelayed: boolean;
+          errorMessage: string | null;
+          failed: boolean;
+          opened: boolean;
+          status:
+            | "waiting"
+            | "queued"
+            | "cancelled"
+            | "sent"
+            | "delivered"
+            | "delivery_delayed"
+            | "bounced"
+            | "failed";
+        } | null
+      >;
+      handleEmailEvent: FunctionReference<
+        "mutation",
+        "internal",
+        { event: any },
+        null
+      >;
+      sendEmail: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          bcc?: Array<string>;
+          cc?: Array<string>;
+          from: string;
+          headers?: Array<{ name: string; value: string }>;
+          html?: string;
+          options: {
+            apiKey: string;
+            initialBackoffMs: number;
+            onEmailEvent?: { fnHandle: string };
+            retryAttempts: number;
+            testMode: boolean;
+          };
+          replyTo?: Array<string>;
+          subject?: string;
+          template?: {
+            id: string;
+            variables?: Record<string, string | number>;
+          };
+          text?: string;
+          to: Array<string>;
+        },
+        string
+      >;
+      updateManualEmail: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          emailId: string;
+          errorMessage?: string;
+          resendId?: string;
+          status:
+            | "waiting"
+            | "queued"
+            | "cancelled"
+            | "sent"
+            | "delivered"
+            | "delivery_delayed"
+            | "bounced"
+            | "failed";
+        },
+        null
+      >;
+    };
+  };
+  r2: {
+    lib: {
+      deleteMetadata: FunctionReference<
+        "mutation",
+        "internal",
+        { bucket: string; key: string },
+        null
+      >;
+      deleteObject: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          accessKeyId: string;
+          bucket: string;
+          endpoint: string;
+          key: string;
+          secretAccessKey: string;
+        },
+        null
+      >;
+      deleteR2Object: FunctionReference<
+        "action",
+        "internal",
+        {
+          accessKeyId: string;
+          bucket: string;
+          endpoint: string;
+          key: string;
+          secretAccessKey: string;
+        },
+        null
+      >;
+      getMetadata: FunctionReference<
+        "query",
+        "internal",
+        {
+          accessKeyId: string;
+          bucket: string;
+          endpoint: string;
+          key: string;
+          secretAccessKey: string;
+        },
+        {
+          bucket: string;
+          bucketLink: string;
+          contentType?: string;
+          key: string;
+          lastModified: string;
+          link: string;
+          sha256?: string;
+          size?: number;
+          url: string;
+        } | null
+      >;
+      listMetadata: FunctionReference<
+        "query",
+        "internal",
+        {
+          accessKeyId: string;
+          bucket: string;
+          cursor?: string;
+          endpoint: string;
+          limit?: number;
+          secretAccessKey: string;
+        },
+        {
+          continueCursor: string;
+          isDone: boolean;
+          page: Array<{
+            bucket: string;
+            bucketLink: string;
+            contentType?: string;
+            key: string;
+            lastModified: string;
+            link: string;
+            sha256?: string;
+            size?: number;
+            url: string;
+          }>;
+          pageStatus?: null | "SplitRecommended" | "SplitRequired";
+          splitCursor?: null | string;
+        }
+      >;
+      store: FunctionReference<
+        "action",
+        "internal",
+        {
+          accessKeyId: string;
+          bucket: string;
+          endpoint: string;
+          secretAccessKey: string;
+          url: string;
+        },
+        any
+      >;
+      syncMetadata: FunctionReference<
+        "action",
+        "internal",
+        {
+          accessKeyId: string;
+          bucket: string;
+          endpoint: string;
+          key: string;
+          onComplete?: string;
+          secretAccessKey: string;
+        },
+        null
+      >;
+      upsertMetadata: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          bucket: string;
+          contentType?: string;
+          key: string;
+          lastModified: string;
+          link: string;
+          sha256?: string;
+          size?: number;
+        },
+        { isNew: boolean }
+      >;
+    };
+  };
+  stripe: {
+    private: {
+      handleCheckoutSessionCompleted: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          metadata?: any;
+          mode: string;
+          stripeCheckoutSessionId: string;
+          stripeCustomerId?: string;
+        },
+        null
+      >;
+      handleCustomerCreated: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          email?: string;
+          metadata?: any;
+          name?: string;
+          stripeCustomerId: string;
+        },
+        null
+      >;
+      handleCustomerUpdated: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          email?: string;
+          metadata?: any;
+          name?: string;
+          stripeCustomerId: string;
+        },
+        null
+      >;
+      handleInvoiceCreated: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          amountDue: number;
+          amountPaid: number;
+          created: number;
+          status: string;
+          stripeCustomerId: string;
+          stripeInvoiceId: string;
+          stripeSubscriptionId?: string;
+        },
+        null
+      >;
+      handleInvoicePaid: FunctionReference<
+        "mutation",
+        "internal",
+        { amountPaid: number; stripeInvoiceId: string },
+        null
+      >;
+      handleInvoicePaymentFailed: FunctionReference<
+        "mutation",
+        "internal",
+        { stripeInvoiceId: string },
+        null
+      >;
+      handlePaymentIntentSucceeded: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          amount: number;
+          created: number;
+          currency: string;
+          metadata?: any;
+          status: string;
+          stripeCustomerId?: string;
+          stripePaymentIntentId: string;
+        },
+        null
+      >;
+      handleSubscriptionCreated: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          cancelAtPeriodEnd: boolean;
+          currentPeriodEnd: number;
+          metadata?: any;
+          priceId: string;
+          quantity?: number;
+          status: string;
+          stripeCustomerId: string;
+          stripeSubscriptionId: string;
+        },
+        null
+      >;
+      handleSubscriptionDeleted: FunctionReference<
+        "mutation",
+        "internal",
+        { stripeSubscriptionId: string },
+        null
+      >;
+      handleSubscriptionUpdated: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          cancelAtPeriodEnd: boolean;
+          currentPeriodEnd: number;
+          metadata?: any;
+          quantity?: number;
+          status: string;
+          stripeSubscriptionId: string;
+        },
+        null
+      >;
+      updatePaymentCustomer: FunctionReference<
+        "mutation",
+        "internal",
+        { stripeCustomerId: string; stripePaymentIntentId: string },
+        null
+      >;
+      updateSubscriptionQuantityInternal: FunctionReference<
+        "mutation",
+        "internal",
+        { quantity: number; stripeSubscriptionId: string },
+        null
+      >;
+    };
+    public: {
+      createOrUpdateCustomer: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          email?: string;
+          metadata?: any;
+          name?: string;
+          stripeCustomerId: string;
+        },
+        string
+      >;
+      getCustomer: FunctionReference<
+        "query",
+        "internal",
+        { stripeCustomerId: string },
+        {
+          email?: string;
+          metadata?: any;
+          name?: string;
+          stripeCustomerId: string;
+        } | null
+      >;
+      getPayment: FunctionReference<
+        "query",
+        "internal",
+        { stripePaymentIntentId: string },
+        {
+          amount: number;
+          created: number;
+          currency: string;
+          metadata?: any;
+          orgId?: string;
+          status: string;
+          stripeCustomerId?: string;
+          stripePaymentIntentId: string;
+          userId?: string;
+        } | null
+      >;
+      getSubscription: FunctionReference<
+        "query",
+        "internal",
+        { stripeSubscriptionId: string },
+        {
+          cancelAtPeriodEnd: boolean;
+          currentPeriodEnd: number;
+          metadata?: any;
+          orgId?: string;
+          priceId: string;
+          quantity?: number;
+          status: string;
+          stripeCustomerId: string;
+          stripeSubscriptionId: string;
+          userId?: string;
+        } | null
+      >;
+      getSubscriptionByOrgId: FunctionReference<
+        "query",
+        "internal",
+        { orgId: string },
+        {
+          cancelAtPeriodEnd: boolean;
+          currentPeriodEnd: number;
+          metadata?: any;
+          orgId?: string;
+          priceId: string;
+          quantity?: number;
+          status: string;
+          stripeCustomerId: string;
+          stripeSubscriptionId: string;
+          userId?: string;
+        } | null
+      >;
+      listInvoices: FunctionReference<
+        "query",
+        "internal",
+        { stripeCustomerId: string },
+        Array<{
+          amountDue: number;
+          amountPaid: number;
+          created: number;
+          orgId?: string;
+          status: string;
+          stripeCustomerId: string;
+          stripeInvoiceId: string;
+          stripeSubscriptionId?: string;
+          userId?: string;
+        }>
+      >;
+      listInvoicesByOrgId: FunctionReference<
+        "query",
+        "internal",
+        { orgId: string },
+        Array<{
+          amountDue: number;
+          amountPaid: number;
+          created: number;
+          orgId?: string;
+          status: string;
+          stripeCustomerId: string;
+          stripeInvoiceId: string;
+          stripeSubscriptionId?: string;
+          userId?: string;
+        }>
+      >;
+      listInvoicesByUserId: FunctionReference<
+        "query",
+        "internal",
+        { userId: string },
+        Array<{
+          amountDue: number;
+          amountPaid: number;
+          created: number;
+          orgId?: string;
+          status: string;
+          stripeCustomerId: string;
+          stripeInvoiceId: string;
+          stripeSubscriptionId?: string;
+          userId?: string;
+        }>
+      >;
+      listPayments: FunctionReference<
+        "query",
+        "internal",
+        { stripeCustomerId: string },
+        Array<{
+          amount: number;
+          created: number;
+          currency: string;
+          metadata?: any;
+          orgId?: string;
+          status: string;
+          stripeCustomerId?: string;
+          stripePaymentIntentId: string;
+          userId?: string;
+        }>
+      >;
+      listPaymentsByOrgId: FunctionReference<
+        "query",
+        "internal",
+        { orgId: string },
+        Array<{
+          amount: number;
+          created: number;
+          currency: string;
+          metadata?: any;
+          orgId?: string;
+          status: string;
+          stripeCustomerId?: string;
+          stripePaymentIntentId: string;
+          userId?: string;
+        }>
+      >;
+      listPaymentsByUserId: FunctionReference<
+        "query",
+        "internal",
+        { userId: string },
+        Array<{
+          amount: number;
+          created: number;
+          currency: string;
+          metadata?: any;
+          orgId?: string;
+          status: string;
+          stripeCustomerId?: string;
+          stripePaymentIntentId: string;
+          userId?: string;
+        }>
+      >;
+      listSubscriptions: FunctionReference<
+        "query",
+        "internal",
+        { stripeCustomerId: string },
+        Array<{
+          cancelAtPeriodEnd: boolean;
+          currentPeriodEnd: number;
+          metadata?: any;
+          orgId?: string;
+          priceId: string;
+          quantity?: number;
+          status: string;
+          stripeCustomerId: string;
+          stripeSubscriptionId: string;
+          userId?: string;
+        }>
+      >;
+      listSubscriptionsByUserId: FunctionReference<
+        "query",
+        "internal",
+        { userId: string },
+        Array<{
+          cancelAtPeriodEnd: boolean;
+          currentPeriodEnd: number;
+          metadata?: any;
+          orgId?: string;
+          priceId: string;
+          quantity?: number;
+          status: string;
+          stripeCustomerId: string;
+          stripeSubscriptionId: string;
+          userId?: string;
+        }>
+      >;
+      updateSubscriptionMetadata: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          metadata: any;
+          orgId?: string;
+          stripeSubscriptionId: string;
+          userId?: string;
+        },
+        null
+      >;
+      updateSubscriptionQuantity: FunctionReference<
+        "action",
+        "internal",
+        { quantity: number; stripeSubscriptionId: string },
+        null
+      >;
+    };
+  };
+};
