@@ -1,5 +1,7 @@
 import { v } from "convex/values"
-import { mutation, query } from "./_generated/server"
+import { action, internalMutation, mutation, query } from "./_generated/server"
+import { internal } from "./_generated/api"
+import { calculateDistance } from "./geocoding"
 import { imagePresets, r2 } from "./r2"
 
 // Get all active and approved vehicles with optimized images
@@ -11,20 +13,34 @@ export const getAllWithOptimizedImages = query({
   handler: async (ctx, args) => {
     const { trackId, limit = 50 } = args
 
+    // Get current user identity to filter out their own vehicles
+    const identity = await ctx.auth.getUserIdentity()
+    const currentUserId = identity?.subject
+
     let vehicles
     if (trackId) {
       vehicles = await ctx.db
         .query("vehicles")
         .withIndex("by_track", (q) => q.eq("trackId", trackId))
-        .filter((q) => q.and(q.eq(q.field("isActive"), true), q.eq(q.field("isApproved"), true)))
+        .filter((q) => q.and(
+          q.eq(q.field("isActive"), true),
+          q.eq(q.field("isApproved"), true),
+          q.eq(q.field("deletedAt"), undefined)
+        ))
         .order("desc")
         .take(limit)
     } else {
       vehicles = await ctx.db
         .query("vehicles")
         .withIndex("by_active_approved", (q) => q.eq("isActive", true).eq("isApproved", true))
+        .filter((q) => q.eq(q.field("deletedAt"), undefined))
         .order("desc")
         .take(limit)
+    }
+
+    // Filter out vehicles owned by the current user (if authenticated)
+    if (currentUserId) {
+      vehicles = vehicles.filter((vehicle) => vehicle.ownerId !== currentUserId)
     }
 
     // Get vehicle images and owner details
@@ -42,6 +58,11 @@ export const getAllWithOptimizedImages = query({
             .first(),
           ctx.db.get(vehicle.trackId),
         ])
+
+        // Filter out vehicles from hosts without complete Stripe setup
+        if (!owner?.stripeAccountId || owner.stripeAccountStatus !== "enabled") {
+          return null
+        }
 
         const optimizedImages = images
           .filter((image) => image.r2Key)
@@ -63,7 +84,231 @@ export const getAllWithOptimizedImages = query({
       })
     )
 
-    return vehiclesWithDetails
+    // Filter out null values (vehicles from hosts without Stripe setup)
+    return vehiclesWithDetails.filter((v) => v !== null)
+  },
+})
+
+// Search vehicles with availability filtering (optimal batch query approach)
+export const searchWithAvailability = query({
+  args: {
+    startDate: v.optional(v.string()),
+    endDate: v.optional(v.string()),
+    trackId: v.optional(v.id("tracks")),
+    limit: v.optional(v.number()),
+    // Distance-based filtering (optional)
+    userLatitude: v.optional(v.number()),
+    userLongitude: v.optional(v.number()),
+    maxDistanceMiles: v.optional(v.number()), // Maximum distance in miles
+  },
+  handler: async (ctx, args) => {
+    // Normalize empty strings, null, or undefined to undefined for date filtering
+    const startDate = 
+      typeof args.startDate === "string" && args.startDate.trim() !== ""
+        ? args.startDate.trim()
+        : undefined
+    const endDate =
+      typeof args.endDate === "string" && args.endDate.trim() !== ""
+        ? args.endDate.trim()
+        : undefined
+    const { trackId, limit = 50 } = args
+
+    // Get current user identity to filter out their own vehicles
+    const identity = await ctx.auth.getUserIdentity()
+    const currentUserId = identity?.subject
+
+    // Step 1: Get all active/approved vehicles (single query), excluding soft-deleted
+    let vehiclesQuery = ctx.db
+      .query("vehicles")
+      .withIndex("by_active_approved", (q) => q.eq("isActive", true).eq("isApproved", true))
+      .filter((q) => q.eq(q.field("deletedAt"), undefined))
+
+    if (trackId) {
+      vehiclesQuery = ctx.db
+        .query("vehicles")
+        .withIndex("by_track", (q) => q.eq("trackId", trackId))
+        .filter((q) => q.and(
+          q.eq(q.field("isActive"), true),
+          q.eq(q.field("isApproved"), true),
+          q.eq(q.field("deletedAt"), undefined)
+        ))
+    }
+
+    // Get more vehicles initially to account for filtering
+    let vehicles = await vehiclesQuery.order("desc").take(limit * 2)
+
+    // Filter out vehicles owned by the current user (if authenticated)
+    if (currentUserId) {
+      vehicles = vehicles.filter((vehicle) => vehicle.ownerId !== currentUserId)
+    }
+
+    // Step 2: If dates provided, filter by availability using batch queries
+    let availableVehicles = vehicles
+
+    // Only filter by dates if both are provided and non-empty
+    if (startDate && endDate) {
+      // Batch query 1: Get blocked dates in the range (OPTIMIZED)
+      // Query without index and filter by date range and availability status
+      // This is still much faster than fetching all records (7.3M -> ~1,000)
+      const blockedDatesInRange = await ctx.db
+        .query("availability")
+        .filter((q) =>
+          q.and(
+            q.eq(q.field("isAvailable"), false),
+            q.gte(q.field("date"), startDate),
+            q.lte(q.field("date"), endDate)
+          )
+        )
+        .collect()
+
+      // Create a Set of vehicle IDs with blocked dates for O(1) lookup
+      const vehiclesWithBlockedDates = new Set(blockedDatesInRange.map((a) => a.vehicleId))
+
+      // Batch query 2: Get conflicting reservations in the range (OPTIMIZED)
+      // Use by_dates index to query reservations where startDate <= endDate (requested)
+      // Then filter by endDate >= startDate (requested) and status
+      // Overlap check: existingStart <= requestedEnd AND existingEnd >= requestedStart
+      const overlappingReservations = await ctx.db
+        .query("reservations")
+        .withIndex("by_dates", (q) => q.lte("startDate", endDate))
+        .filter((q) =>
+          q.and(
+            q.gte(q.field("endDate"), startDate),
+            q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "confirmed"))
+          )
+        )
+        .collect()
+
+      // Additional filter: Ensure reservation actually overlaps
+      // (by_dates index might return some false positives, so we verify overlap)
+      const conflictingReservations = overlappingReservations.filter((reservation) => {
+        // Overlap check: existingStart <= requestedEnd AND existingEnd >= requestedStart
+        return reservation.startDate <= endDate && reservation.endDate >= startDate
+      })
+
+      // Create a Set of vehicle IDs with conflicting reservations
+      const vehiclesWithConflicts = new Set(conflictingReservations.map((r) => r.vehicleId))
+
+      // Step 3: Filter vehicles in memory (O(n) where n = vehicles)
+      // A vehicle is unavailable if:
+      // - It has any blocked dates in the range, OR
+      // - It has conflicting reservations
+      availableVehicles = vehicles.filter((vehicle) => {
+        // Check if vehicle has blocked dates
+        if (vehiclesWithBlockedDates.has(vehicle._id)) {
+          return false
+        }
+
+        // Check if vehicle has conflicting reservations
+        if (vehiclesWithConflicts.has(vehicle._id)) {
+          return false
+        }
+
+        return true
+      })
+
+      // Limit results after filtering
+      availableVehicles = availableVehicles.slice(0, limit)
+    } else {
+      // No date filter, just limit
+      availableVehicles = vehicles.slice(0, limit)
+    }
+
+    // Step 4: Get vehicle details (images, owner, track) - parallel queries
+    const vehiclesWithDetails = await Promise.all(
+      availableVehicles.map(async (vehicle) => {
+        const [images, owner, track] = await Promise.all([
+          ctx.db
+            .query("vehicleImages")
+            .withIndex("by_vehicle", (q) => q.eq("vehicleId", vehicle._id))
+            .order("asc")
+            .collect(),
+          ctx.db
+            .query("users")
+            .withIndex("by_external_id", (q) => q.eq("externalId", vehicle.ownerId))
+            .first(),
+          ctx.db.get(vehicle.trackId),
+        ])
+
+        // Filter out vehicles from hosts without fully enabled, connected Stripe accounts
+        // Only show vehicles where the owner has:
+        // 1. A Stripe account ID (connected account)
+        // 2. An enabled Stripe account status
+        if (!owner?.stripeAccountId || owner.stripeAccountStatus !== "enabled") {
+          return null
+        }
+
+        const optimizedImages = images
+          .filter((image) => image.r2Key)
+          .map((image) => ({
+            ...image,
+            thumbnailUrl: imagePresets.thumbnail(image.r2Key as string),
+            cardUrl: imagePresets.card(image.r2Key as string),
+            detailUrl: imagePresets.detail(image.r2Key as string),
+            heroUrl: imagePresets.hero(image.r2Key as string),
+            originalUrl: imagePresets.original(image.r2Key as string),
+          }))
+
+        return {
+          ...vehicle,
+          images: optimizedImages,
+          owner,
+          track,
+        }
+      })
+    )
+
+    // Filter out null values (vehicles from hosts without Stripe setup)
+    let finalVehicles = vehiclesWithDetails.filter((v) => v !== null)
+
+    // Step 5: Apply distance-based filtering if coordinates provided
+    if (
+      args.userLatitude &&
+      args.userLongitude &&
+      args.maxDistanceMiles &&
+      args.maxDistanceMiles > 0
+    ) {
+      finalVehicles = finalVehicles.filter((vehicle) => {
+        // Skip vehicles without coordinates
+        if (!(vehicle.address?.latitude && vehicle.address?.longitude)) {
+          return false
+        }
+
+        // Calculate distance
+        const distance = calculateDistance(
+          args.userLatitude!,
+          args.userLongitude!,
+          vehicle.address.latitude,
+          vehicle.address.longitude
+        )
+
+        // Filter by maximum distance
+        return distance <= args.maxDistanceMiles!
+      })
+
+      // Sort by distance (closest first)
+      finalVehicles.sort((a, b) => {
+        if (!(a.address?.latitude && a.address?.longitude)) return 1
+        if (!(b.address?.latitude && b.address?.longitude)) return -1
+
+        const distanceA = calculateDistance(
+          args.userLatitude!,
+          args.userLongitude!,
+          a.address.latitude,
+          a.address.longitude
+        )
+        const distanceB = calculateDistance(
+          args.userLatitude!,
+          args.userLongitude!,
+          b.address.latitude,
+          b.address.longitude
+        )
+
+      return distanceA - distanceB
+    })
+    }
+
+    return finalVehicles
   },
 })
 
@@ -76,20 +321,34 @@ export const getAll = query({
   handler: async (ctx, args) => {
     const { trackId, limit = 50 } = args
 
+    // Get current user identity to filter out their own vehicles
+    const identity = await ctx.auth.getUserIdentity()
+    const currentUserId = identity?.subject
+
     let vehicles
     if (trackId) {
       vehicles = await ctx.db
         .query("vehicles")
         .withIndex("by_track", (q) => q.eq("trackId", trackId))
-        .filter((q) => q.and(q.eq(q.field("isActive"), true), q.eq(q.field("isApproved"), true)))
+        .filter((q) => q.and(
+          q.eq(q.field("isActive"), true),
+          q.eq(q.field("isApproved"), true),
+          q.eq(q.field("deletedAt"), undefined)
+        ))
         .order("desc")
         .take(limit)
     } else {
       vehicles = await ctx.db
         .query("vehicles")
         .withIndex("by_active_approved", (q) => q.eq("isActive", true).eq("isApproved", true))
+        .filter((q) => q.eq(q.field("deletedAt"), undefined))
         .order("desc")
         .take(limit)
+    }
+
+    // Filter out vehicles owned by the current user (if authenticated)
+    if (currentUserId) {
+      vehicles = vehicles.filter((vehicle) => vehicle.ownerId !== currentUserId)
     }
 
     // Get vehicle images and owner details
@@ -108,6 +367,11 @@ export const getAll = query({
           ctx.db.get(vehicle.trackId),
         ])
 
+        // Filter out vehicles from hosts without complete Stripe setup
+        if (!owner?.stripeAccountId || owner.stripeAccountStatus !== "enabled") {
+          return null
+        }
+
         return {
           ...vehicle,
           images,
@@ -117,7 +381,8 @@ export const getAll = query({
       })
     )
 
-    return vehiclesWithDetails
+    // Filter out null values (vehicles from hosts without Stripe setup)
+    return vehiclesWithDetails.filter((v) => v !== null)
   },
 })
 
@@ -176,15 +441,23 @@ export const getVehicleImageById = query({
   },
 })
 
-// Get vehicles by owner
+// Get vehicles by owner (excludes soft-deleted vehicles)
 export const getByOwner = query({
-  args: { ownerId: v.string() },
+  args: {
+    ownerId: v.string(),
+    includeDeleted: v.optional(v.boolean()),
+  },
   handler: async (ctx, args) => {
-    const vehicles = await ctx.db
+    let vehicles = await ctx.db
       .query("vehicles")
       .withIndex("by_owner_active", (q) => q.eq("ownerId", args.ownerId).eq("isActive", true))
       .order("desc")
       .collect()
+
+    // Filter out soft-deleted vehicles unless explicitly requested
+    if (!args.includeDeleted) {
+      vehicles = vehicles.filter((v) => !v.deletedAt)
+    }
 
     const vehiclesWithDetails = await Promise.all(
       vehicles.map(async (vehicle) => {
@@ -255,6 +528,7 @@ export const createVehicleWithImages = mutation({
           price: v.number(),
           description: v.optional(v.string()),
           isRequired: v.optional(v.boolean()),
+          priceType: v.optional(v.union(v.literal("daily"), v.literal("one-time"))),
         })
       )
     ),
@@ -264,6 +538,8 @@ export const createVehicleWithImages = mutation({
         city: v.string(),
         state: v.string(),
         zipCode: v.string(),
+        latitude: v.optional(v.number()),
+        longitude: v.optional(v.number()),
       })
     ),
     advanceNotice: v.optional(v.string()),
@@ -313,7 +589,7 @@ export const createVehicleWithImages = mutation({
       args.trackId = defaultTrack._id
     }
 
-    // Create the vehicle
+    // Create the vehicle (geocoding happens async after creation)
     const vehicleId = await ctx.db.insert("vehicles", {
       ownerId: userId,
       trackId: args.trackId,
@@ -339,6 +615,14 @@ export const createVehicleWithImages = mutation({
       createdAt: now,
       updatedAt: now,
     })
+
+    // Schedule geocoding action if address provided
+    if (args.address) {
+      await ctx.scheduler.runAfter(0, internal.vehicles.geocodeVehicleAddress, {
+        vehicleId,
+        address: args.address,
+      })
+    }
 
     // Create vehicle images (R2 only)
     await Promise.all(
@@ -438,6 +722,7 @@ export const update = mutation({
           price: v.number(),
           description: v.optional(v.string()),
           isRequired: v.optional(v.boolean()),
+          priceType: v.optional(v.union(v.literal("daily"), v.literal("one-time"))),
         })
       )
     ),
@@ -445,6 +730,16 @@ export const update = mutation({
     minTripDuration: v.optional(v.string()),
     maxTripDuration: v.optional(v.string()),
     requireWeekendMin: v.optional(v.boolean()),
+    address: v.optional(
+      v.object({
+        street: v.string(),
+        city: v.string(),
+        state: v.string(),
+        zipCode: v.string(),
+        latitude: v.optional(v.number()),
+        longitude: v.optional(v.number()),
+      })
+    ),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()
@@ -461,14 +756,188 @@ export const update = mutation({
       throw new Error("Not authorized to update this vehicle")
     }
 
+    // Check if address changed and needs geocoding
+    const addressChanged = args.address && (
+      !vehicle.address ||
+      vehicle.address.street !== args.address.street ||
+      vehicle.address.city !== args.address.city ||
+      vehicle.address.state !== args.address.state ||
+      vehicle.address.zipCode !== args.address.zipCode
+    )
+
     const { id, ...updateData } = args
     void id // Exclude id from updateData
+
+    // Save the address without coordinates first (geocoding happens async)
     await ctx.db.patch(args.id, {
       ...updateData,
       updatedAt: Date.now(),
     })
 
+    // Schedule geocoding action if address changed
+    if (addressChanged && args.address) {
+      await ctx.scheduler.runAfter(0, internal.vehicles.geocodeVehicleAddress, {
+        vehicleId: args.id,
+        address: args.address,
+      })
+    }
+
     return args.id
+  },
+})
+
+// Internal mutation to update vehicle coordinates after geocoding
+export const updateVehicleCoordinates = internalMutation({
+  args: {
+    vehicleId: v.id("vehicles"),
+    latitude: v.number(),
+    longitude: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const vehicle = await ctx.db.get(args.vehicleId)
+    if (!vehicle || !vehicle.address) {
+      return
+    }
+
+    await ctx.db.patch(args.vehicleId, {
+      address: {
+        ...vehicle.address,
+        latitude: args.latitude,
+        longitude: args.longitude,
+      },
+      updatedAt: Date.now(),
+    })
+  },
+})
+
+// Action to geocode a vehicle's address (can make network calls)
+export const geocodeVehicleAddress = action({
+  args: {
+    vehicleId: v.id("vehicles"),
+    address: v.object({
+      street: v.string(),
+      city: v.string(),
+      state: v.string(),
+      zipCode: v.string(),
+    }),
+  },
+  handler: async (ctx, args) => {
+    const { geocodeAddress } = await import("./geocoding")
+    
+    const result = await geocodeAddress(args.address)
+    
+    if (result) {
+      // Update the vehicle with coordinates
+      await ctx.runMutation(internal.vehicles.updateVehicleCoordinates, {
+        vehicleId: args.vehicleId,
+        latitude: result.latitude,
+        longitude: result.longitude,
+      })
+    }
+  },
+})
+
+// Check if vehicle can be deleted (has no pending actions)
+export const canDelete = query({
+  args: { id: v.id("vehicles") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) {
+      return { canDelete: false, reason: "Not authenticated" }
+    }
+
+    const vehicle = await ctx.db.get(args.id)
+    if (!vehicle) {
+      return { canDelete: false, reason: "Vehicle not found" }
+    }
+
+    if (vehicle.ownerId !== identity.subject) {
+      return { canDelete: false, reason: "Not authorized" }
+    }
+
+    if (vehicle.deletedAt) {
+      return { canDelete: false, reason: "Vehicle already deleted" }
+    }
+
+    const blockers: string[] = []
+
+    // Check for active or upcoming reservations (pending or confirmed)
+    const today = new Date().toISOString().split("T")[0]
+    const activeReservations = await ctx.db
+      .query("reservations")
+      .withIndex("by_vehicle", (q) => q.eq("vehicleId", args.id))
+      .filter((q) =>
+        q.and(
+          q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "confirmed")),
+          q.gte(q.field("endDate"), today)
+        )
+      )
+      .collect()
+
+    if (activeReservations.length > 0) {
+      const pendingCount = activeReservations.filter((r) => r.status === "pending").length
+      const confirmedCount = activeReservations.filter((r) => r.status === "confirmed").length
+      if (pendingCount > 0) {
+        blockers.push(`${pendingCount} pending reservation${pendingCount > 1 ? "s" : ""}`)
+      }
+      if (confirmedCount > 0) {
+        blockers.push(`${confirmedCount} confirmed/upcoming reservation${confirmedCount > 1 ? "s" : ""}`)
+      }
+    }
+
+    // Check for open disputes
+    const openDisputes = await ctx.db
+      .query("disputes")
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("vehicleId"), args.id),
+          q.eq(q.field("status"), "open")
+        )
+      )
+      .collect()
+
+    if (openDisputes.length > 0) {
+      blockers.push(`${openDisputes.length} open dispute${openDisputes.length > 1 ? "s" : ""}`)
+    }
+
+    // Check for pending payments (not succeeded, failed, cancelled, or refunded)
+    const vehicleReservationIds = await ctx.db
+      .query("reservations")
+      .withIndex("by_vehicle", (q) => q.eq("vehicleId", args.id))
+      .collect()
+
+    const reservationIds = vehicleReservationIds.map((r) => r._id)
+
+    if (reservationIds.length > 0) {
+      const pendingPayments = await ctx.db
+        .query("payments")
+        .filter((q) =>
+          q.or(
+            q.eq(q.field("status"), "pending"),
+            q.eq(q.field("status"), "processing")
+          )
+        )
+        .collect()
+
+      // Filter to only payments for this vehicle's reservations
+      const vehiclePendingPayments = pendingPayments.filter((p) =>
+        reservationIds.some((id) => id === p.reservationId)
+      )
+
+      if (vehiclePendingPayments.length > 0) {
+        blockers.push(`${vehiclePendingPayments.length} pending payment${vehiclePendingPayments.length > 1 ? "s" : ""}`)
+      }
+    }
+
+    if (blockers.length > 0) {
+      return {
+        canDelete: false,
+        reason: `Cannot delete vehicle with: ${blockers.join(", ")}`,
+        blockers,
+      }
+    }
+
+    return { canDelete: true, reason: null, blockers: [] }
   },
 })
 
@@ -490,7 +959,79 @@ export const remove = mutation({
       throw new Error("Not authorized to delete this vehicle")
     }
 
+    if (vehicle.deletedAt) {
+      throw new Error("Vehicle already deleted")
+    }
+
+    // Check for active or upcoming reservations (pending or confirmed)
+    const today = new Date().toISOString().split("T")[0]
+    const activeReservations = await ctx.db
+      .query("reservations")
+      .withIndex("by_vehicle", (q) => q.eq("vehicleId", args.id))
+      .filter((q) =>
+        q.and(
+          q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "confirmed")),
+          q.gte(q.field("endDate"), today)
+        )
+      )
+      .collect()
+
+    if (activeReservations.length > 0) {
+      throw new Error(
+        "Cannot delete vehicle with active or upcoming reservations. Please wait until all reservations are completed or cancelled."
+      )
+    }
+
+    // Check for open disputes
+    const openDisputes = await ctx.db
+      .query("disputes")
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("vehicleId"), args.id),
+          q.eq(q.field("status"), "open")
+        )
+      )
+      .collect()
+
+    if (openDisputes.length > 0) {
+      throw new Error(
+        "Cannot delete vehicle with open disputes. Please resolve all disputes first."
+      )
+    }
+
+    // Check for pending payments
+    const vehicleReservations = await ctx.db
+      .query("reservations")
+      .withIndex("by_vehicle", (q) => q.eq("vehicleId", args.id))
+      .collect()
+
+    const reservationIds = vehicleReservations.map((r) => r._id)
+
+    if (reservationIds.length > 0) {
+      const pendingPayments = await ctx.db
+        .query("payments")
+        .filter((q) =>
+          q.or(
+            q.eq(q.field("status"), "pending"),
+            q.eq(q.field("status"), "processing")
+          )
+        )
+        .collect()
+
+      const vehiclePendingPayments = pendingPayments.filter((p) =>
+        reservationIds.some((id) => id === p.reservationId)
+      )
+
+      if (vehiclePendingPayments.length > 0) {
+        throw new Error(
+          "Cannot delete vehicle with pending payments. Please wait for all payments to be processed."
+        )
+      }
+    }
+
+    // Soft delete: set deletedAt timestamp and deactivate
     await ctx.db.patch(args.id, {
+      deletedAt: Date.now(),
       isActive: false,
       updatedAt: Date.now(),
     })
@@ -571,12 +1112,94 @@ export const removeImage = mutation({
       try {
         await r2.deleteObject(ctx, image.r2Key)
       } catch (error) {
-        console.error(`Failed to delete R2 object ${image.r2Key}:`, error)
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { logError } = require("./logger")
+        logError(error, `Failed to delete R2 object ${image.r2Key}`)
         // Continue with database deletion even if R2 deletion fails
       }
     }
 
     await ctx.db.delete(args.imageId)
+    return args.imageId
+  },
+})
+
+// Update image order
+export const updateImageOrder = mutation({
+  args: {
+    vehicleId: v.id("vehicles"),
+    imageOrders: v.array(
+      v.object({
+        imageId: v.id("vehicleImages"),
+        order: v.number(),
+      })
+    ),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) {
+      throw new Error("Not authenticated")
+    }
+
+    const vehicle = await ctx.db.get(args.vehicleId)
+    if (!vehicle) {
+      throw new Error("Vehicle not found")
+    }
+
+    if (vehicle.ownerId !== identity.subject) {
+      throw new Error("Not authorized to modify this vehicle")
+    }
+
+    // Update all image orders
+    await Promise.all(
+      args.imageOrders.map(({ imageId, order }) => ctx.db.patch(imageId, { order }))
+    )
+
+    return { success: true }
+  },
+})
+
+// Update image properties (e.g., isPrimary)
+export const updateImage = mutation({
+  args: {
+    imageId: v.id("vehicleImages"),
+    isPrimary: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) {
+      throw new Error("Not authenticated")
+    }
+
+    const image = await ctx.db.get(args.imageId)
+    if (!image) {
+      throw new Error("Image not found")
+    }
+
+    const vehicle = await ctx.db.get(image.vehicleId)
+    if (!vehicle || vehicle.ownerId !== identity.subject) {
+      throw new Error("Not authorized to modify this vehicle")
+    }
+
+    // If setting as primary, unset other primary images
+    if (args.isPrimary === true) {
+      const existingImages = await ctx.db
+        .query("vehicleImages")
+        .withIndex("by_vehicle", (q) => q.eq("vehicleId", image.vehicleId))
+        .collect()
+
+      await Promise.all(
+        existingImages
+          .filter((img) => img.isPrimary && img._id !== args.imageId)
+          .map((img) => ctx.db.patch(img._id, { isPrimary: false }))
+      )
+    }
+
+    // Update the image
+    await ctx.db.patch(args.imageId, {
+      isPrimary: args.isPrimary ?? image.isPrimary,
+    })
+
     return args.imageId
   },
 })

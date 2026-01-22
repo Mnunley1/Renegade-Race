@@ -20,18 +20,27 @@ import {
   Shield,
   User,
   Users,
+  LayoutDashboard,
+  Calendar,
+  Star,
+  DollarSign,
 } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
 const navigation = [
+  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { name: "Reservations", href: "/reservations", icon: Calendar },
+  { name: "Payments", href: "/payments", icon: DollarSign },
+  { name: "Vehicles", href: "/vehicles", icon: Car },
+  { name: "Reviews", href: "/reviews", icon: Star },
   { name: "User Management", href: "/users", icon: Users },
-  { name: "Emails", href: "/mass-emails", icon: Mail },
-  { name: "Direct Messages", href: "/messages", icon: MessageSquare },
   { name: "Vehicle Approvals", href: "/vehicles/pending", icon: Car },
   { name: "Track Management", href: "/tracks", icon: MapPin },
   { name: "Disputes", href: "/disputes", icon: Shield },
+  { name: "Direct Messages", href: "/messages", icon: MessageSquare },
+  { name: "Emails", href: "/mass-emails", icon: Mail },
   { name: "Platform Settings", href: "/settings", icon: Settings },
 ]
 

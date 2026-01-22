@@ -9,7 +9,6 @@ import { Dialog, DialogContent } from "@workspace/ui/components/dialog"
 import { cn } from "@workspace/ui/lib/utils"
 import { useMutation, useQuery } from "convex/react"
 import {
-  ArrowLeft,
   Car,
   Check,
   Edit,
@@ -26,28 +25,35 @@ import {
   Zap,
 } from "lucide-react"
 import Link from "next/link"
-import { useParams, useRouter } from "next/navigation"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useParams, useRouter, useSearchParams } from "next/navigation"
+import { Suspense, useEffect, useMemo, useRef, useState } from "react"
 import { VehicleGallery } from "@/components/vehicle-gallery"
 import { api } from "@/lib/convex"
+import type { Id } from "@/lib/convex"
+import { handleErrorWithContext } from "@/lib/error-handler"
 
-export default function VehicleDetailsPage() {
+function VehicleDetailsPageContent() {
   const params = useParams()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { isSignedIn, user } = useUser()
   const id = params.id as string
   const [showLoginDialog, setShowLoginDialog] = useState(false)
   const [isCreatingConversation, setIsCreatingConversation] = useState(false)
   const hasTrackedView = useRef(false)
 
-  const vehicle = useQuery(api.vehicles.getById, { id: id as any })
-  const reviews = useQuery(api.reviews.getByVehicle, id ? { vehicleId: id as any } : "skip")
-  const reviewStats = useQuery(api.reviews.getVehicleStats, id ? { vehicleId: id as any } : "skip")
+  // Get date range from URL params
+  const startDate = searchParams.get("startDate")
+  const endDate = searchParams.get("endDate")
+
+  const vehicle = useQuery(api.vehicles.getById, { id: id as Id<"vehicles"> })
+  const reviews = useQuery(api.reviews.getByVehicle, id ? { vehicleId: id as Id<"vehicles"> } : "skip")
+  const reviewStats = useQuery(api.reviews.getVehicleStats, id ? { vehicleId: id as Id<"vehicles"> } : "skip")
 
   // Check if user has a completed reservation for this vehicle (to show "Write Review" button)
   const completedReservation = useQuery(
     api.reservations.getCompletedReservationForVehicle,
-    isSignedIn && user?.id && id ? { userId: user.id, vehicleId: id as any } : "skip"
+    isSignedIn && user?.id && id ? { userId: user.id, vehicleId: id as Id<"vehicles"> } : "skip"
   )
 
   // Check if user has already written a review for this vehicle
@@ -59,7 +65,7 @@ export default function VehicleDetailsPage() {
   // Check if vehicle is favorited
   const isFavorite = useQuery(
     api.favorites.isVehicleFavorited,
-    isSignedIn && id ? { vehicleId: id as any } : "skip"
+    isSignedIn && id ? { vehicleId: id as Id<"vehicles"> } : "skip"
   )
 
   // Toggle favorite mutation
@@ -93,14 +99,17 @@ export default function VehicleDetailsPage() {
     try {
       await toggleFavorite({ vehicleId: id as any })
     } catch (error: unknown) {
-      console.error("Error toggling favorite:", error)
-
       // If authentication error, show login dialog
       const errorMessage = error instanceof Error ? error.message : ""
       if (errorMessage.includes("Not authenticated") || errorMessage.includes("authentication")) {
         setShowLoginDialog(true)
       } else {
-        toast.error("An error occurred")
+        handleErrorWithContext(error, {
+          action: "update favorites",
+          customMessages: {
+            generic: "Failed to update favorites. Please try again.",
+          },
+        })
       }
     }
   }
@@ -138,14 +147,17 @@ export default function VehicleDetailsPage() {
       // Navigate to the messages page
       router.push(`/messages/${conversationId as string}`)
     } catch (error: unknown) {
-      console.error("Failed to start conversation:", error)
-
       // If authentication error, show login dialog
       const errorMessage = error instanceof Error ? error.message : ""
       if (errorMessage.includes("Not authenticated") || errorMessage.includes("authentication")) {
         setShowLoginDialog(true)
       } else {
-        toast.error("An error occurred")
+        handleErrorWithContext(error, {
+          action: "start conversation",
+          customMessages: {
+            generic: "Failed to start conversation. Please try again.",
+          },
+        })
       }
     } finally {
       setIsCreatingConversation(false)
@@ -157,7 +169,13 @@ export default function VehicleDetailsPage() {
     // Only track if we haven't tracked yet, vehicle is loaded and active, and we have an ID
     if (!hasTrackedView.current && vehicle && vehicle.isActive && id) {
       hasTrackedView.current = true
-      trackView({ vehicleId: id as any }).catch(console.error)
+      trackView({ vehicleId: id as Id<"vehicles"> }).catch((error) => {
+        handleErrorWithContext(error, {
+          action: "track view",
+          showToast: false,
+        })
+        // Silently fail - analytics tracking shouldn't break the page
+      })
     }
   }, [vehicle, id, trackView])
 
@@ -201,7 +219,10 @@ export default function VehicleDetailsPage() {
         platform,
       })
     } catch (error) {
-      console.error("Error sharing:", error)
+      handleErrorWithContext(error, {
+        action: "share vehicle",
+        showToast: false,
+      })
     }
   }
 
@@ -222,8 +243,16 @@ export default function VehicleDetailsPage() {
     )
   }
 
-  // Extract image URLs
-  const images = vehicle.images?.map((img) => img.cardUrl ?? "") || []
+  // Extract image r2Keys for ImageKit (sorted by order, then primary)
+  const images = vehicle.images
+    ?.slice()
+    .sort((a, b) => {
+      const orderA = a.order ?? Number.MAX_SAFE_INTEGER
+      const orderB = b.order ?? Number.MAX_SAFE_INTEGER
+      return orderA - orderB
+    })
+    .filter((img) => img.r2Key && img.r2Key.trim() !== "")
+    .map((img) => `/${img.r2Key}`) || []
 
   // Host information from owner
   const host = {
@@ -236,13 +265,7 @@ export default function VehicleDetailsPage() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="mb-8">
-        <Button className="mb-6" onClick={() => router.back()} variant="outline">
-          <ArrowLeft className="mr-2 size-4" />
-          Back
-        </Button>
-
-        {/* Header Section */}
+      {/* Header Section */}
         <div className="mb-6">
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div className="flex-1">
@@ -293,7 +316,6 @@ export default function VehicleDetailsPage() {
             </div>
           </div>
         </div>
-      </div>
 
       <VehicleGallery
         images={images}
@@ -501,10 +523,10 @@ export default function VehicleDetailsPage() {
                         <div className="mb-3 flex items-start justify-between">
                           <div className="flex-1">
                             <div className="mb-1 flex items-center gap-2">
-                              {review.reviewerId ? (
+                              {review.reviewer?._id ? (
                                 <Link
                                   className="font-semibold transition-colors hover:text-primary"
-                                  href={`/r/${review.reviewerId}`}
+                                  href={`/r/${review.reviewer._id}`}
                                 >
                                   {review.reviewer?.name || "Anonymous"}
                                 </Link>
@@ -603,7 +625,12 @@ export default function VehicleDetailsPage() {
                   </p>
                   <Button
                     className="w-full"
-                    onClick={() => router.push(`/checkout?vehicleId=${vehicle._id}`)}
+                    onClick={() => {
+                      const checkoutUrl = startDate && endDate
+                        ? `/checkout?vehicleId=${vehicle._id}&startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`
+                        : `/checkout?vehicleId=${vehicle._id}`
+                      router.push(checkoutUrl)
+                    }}
                     size="lg"
                   >
                     Reserve Now
@@ -624,7 +651,7 @@ export default function VehicleDetailsPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  <Link className="block" href={`/r/${vehicle.ownerId}`}>
+                  <Link className="block" href={`/r/${vehicle.owner?._id}`}>
                     <div className="flex items-center gap-4 transition-opacity hover:opacity-80">
                       <Avatar className="size-16">
                         <AvatarImage src={host.avatar} />
@@ -768,5 +795,23 @@ export default function VehicleDetailsPage() {
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+export default function VehicleDetailsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="container mx-auto max-w-7xl px-4 py-8">
+          <div className="flex min-h-[60vh] items-center justify-center">
+            <div className="text-center">
+              <p className="text-muted-foreground">Loading vehicle details...</p>
+            </div>
+          </div>
+        </div>
+      }
+    >
+      <VehicleDetailsPageContent />
+    </Suspense>
   )
 }

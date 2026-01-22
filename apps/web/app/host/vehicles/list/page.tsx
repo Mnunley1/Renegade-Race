@@ -1,11 +1,13 @@
 "use client"
 
 import { useUser } from "@clerk/nextjs"
+import { Image, ImageKitProvider } from "@imagekit/next"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent } from "@workspace/ui/components/card"
 import { useQuery } from "convex/react"
 import {
+  ArrowLeft,
   Calendar,
   Car,
   CheckCircle2,
@@ -14,7 +16,6 @@ import {
   Eye,
   Loader2,
   Plus,
-  Settings,
   XCircle,
 } from "lucide-react"
 import Link from "next/link"
@@ -85,6 +86,12 @@ export default function HostVehiclesListPage() {
   return (
     <div className="container mx-auto max-w-7xl px-4 py-8">
       <div className="mb-8">
+        <Link href="/host/dashboard">
+          <Button className="mb-4" variant="ghost">
+            <ArrowLeft className="mr-2 size-4" />
+            Back to Dashboard
+          </Button>
+        </Link>
         <div className="mb-2 flex items-center justify-between">
           <div>
             <h1 className="font-bold text-3xl">Your Vehicles</h1>
@@ -120,21 +127,35 @@ export default function HostVehiclesListPage() {
       ) : (
         <div className="space-y-4">
           {vehicles.map((vehicle) => {
-            const primaryImage =
-              vehicle.images?.find((img) => img.isPrimary)?.cardUrl ||
-              vehicle.images?.[0]?.cardUrl ||
-              "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=400"
+            // Get the primary image r2Key for ImageKit
+            const primaryImageKey =
+              vehicle.images?.find((img) => img.isPrimary)?.r2Key ||
+              vehicle.images?.[0]?.r2Key ||
+              null
+
+            const hasValidImage = primaryImageKey && primaryImageKey.trim() !== ""
 
             return (
               <Card className="overflow-hidden" key={vehicle._id}>
                 <div className="flex flex-col md:flex-row">
                   {/* Vehicle Image */}
-                  <div className="relative h-48 w-full shrink-0 overflow-hidden md:h-auto md:w-64">
-                    <img
-                      alt={`${vehicle.year} ${vehicle.make} ${vehicle.model}`}
-                      className="size-full object-cover"
-                      src={primaryImage}
-                    />
+                  <div className="relative flex h-48 w-full shrink-0 items-center justify-center overflow-hidden bg-muted md:h-auto md:w-64">
+                    {hasValidImage ? (
+                      <ImageKitProvider urlEndpoint={process.env.NEXT_PUBLIC_IMAGEKIT_URL_ENDPOINT || "https://ik.imagekit.io/renegaderace"}>
+                        <Image
+                          alt={`${vehicle.year} ${vehicle.make} ${vehicle.model}`}
+                          className="size-full object-cover"
+                          fill
+                          src={`/${primaryImageKey}`}
+                          transformation={[{ width: 400, height: 300, quality: 80 }]}
+                        />
+                      </ImageKitProvider>
+                    ) : (
+                      <div className="flex flex-col items-center gap-2 text-center">
+                        <Car className="size-12 text-muted-foreground/40" />
+                        <p className="text-muted-foreground text-xs">No image</p>
+                      </div>
+                    )}
                   </div>
 
                   {/* Vehicle Details */}
@@ -172,12 +193,6 @@ export default function HostVehiclesListPage() {
                         <Button size="sm" variant="outline">
                           <Eye className="mr-2 size-4" />
                           View Listing
-                        </Button>
-                      </Link>
-                      <Link href={`/host/vehicles/${vehicle._id}`}>
-                        <Button size="sm" variant="outline">
-                          <Settings className="mr-2 size-4" />
-                          Manage
                         </Button>
                       </Link>
                       <Link href={`/host/vehicles/${vehicle._id}/edit`}>

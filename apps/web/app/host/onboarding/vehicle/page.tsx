@@ -24,6 +24,7 @@ import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/lib/convex"
+import { handleErrorWithContext } from "@/lib/error-handler"
 
 export default function VehiclePage() {
   const router = useRouter()
@@ -136,8 +137,12 @@ export default function VehiclePage() {
       // Redirect to photos step
       router.push("/host/onboarding/photos")
     } catch (error) {
-      console.error("Failed to save vehicle data:", error)
-      toast.error("An error occurred")
+      handleErrorWithContext(error, {
+        action: "save vehicle data",
+        customMessages: {
+          generic: "Failed to save vehicle data. Please try again.",
+        },
+      })
     } finally {
       setIsSubmitting(false)
     }

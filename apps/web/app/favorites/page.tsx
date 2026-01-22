@@ -10,6 +10,7 @@ import { usePathname, useRouter } from "next/navigation"
 import { useMemo } from "react"
 import { VehicleCard } from "@/components/vehicle-card"
 import { api } from "@/lib/convex"
+import type { Id } from "@/lib/convex"
 
 export default function FavoritesPage() {
   const { user, isSignedIn, isLoaded: userLoaded } = useUser()
@@ -19,14 +20,28 @@ export default function FavoritesPage() {
   // Fetch user's favorites from Convex
   const favoritesData = useQuery(api.favorites.getUserFavorites, isSignedIn ? {} : "skip")
 
+  // Fetch vehicle stats for favorited vehicles
+  const favoriteVehicleIds = useMemo(() => {
+    if (!favoritesData) return []
+    return favoritesData
+      .map((fav: { vehicle?: { _id: Id<"vehicles"> } }) => fav.vehicle?._id as Id<"vehicles"> | undefined)
+      .filter((id: Id<"vehicles"> | undefined): id is Id<"vehicles"> => Boolean(id))
+  }, [favoritesData])
+
+  const favoriteVehicleStats = useQuery(
+    api.reviews.getVehicleStatsBatch,
+    favoriteVehicleIds.length > 0 ? { vehicleIds: favoriteVehicleIds } : "skip"
+  )
+
   // Map favorites to the format expected by VehicleCard
   const favorites = useMemo(() => {
     if (!(favoritesData && favoritesData.length)) return []
     return favoritesData
-      .map((fav) => {
+      .map((fav: { vehicle?: { _id: Id<"vehicles">; images?: Array<{ isPrimary: boolean; cardUrl?: string }>; year: number; make: string; model: string; dailyRate?: number; track?: { location?: string; name?: string } | null; horsepower?: number; transmission?: string } }) => {
         const vehicle = fav.vehicle
         if (!vehicle) return null
-        const primaryImage = vehicle.images?.find((img) => img.isPrimary) || vehicle.images?.[0]
+        const primaryImage = vehicle.images?.find((img: { isPrimary: boolean }) => img.isPrimary) || vehicle.images?.[0]
+        const stats = favoriteVehicleStats?.[vehicle._id]
         return {
           id: vehicle._id,
           image: primaryImage?.cardUrl ?? "",
@@ -37,8 +52,8 @@ export default function FavoritesPage() {
           pricePerDay: vehicle.dailyRate,
           location: vehicle.track?.location || "",
           track: vehicle.track?.name || "",
-          rating: 0, // TODO: Calculate from reviews
-          reviews: 0, // TODO: Get from reviews
+          rating: stats?.averageRating || 0,
+          reviews: stats?.totalReviews || 0,
           horsepower: vehicle.horsepower,
           transmission: vehicle.transmission || "",
         }

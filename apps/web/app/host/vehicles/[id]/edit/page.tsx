@@ -1,5 +1,7 @@
 "use client"
 
+import { useUploadFile } from "@convex-dev/r2/react"
+import { Image } from "@imagekit/next"
 import { Button } from "@workspace/ui/components/button"
 import {
   Card,
@@ -8,6 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@workspace/ui/components/card"
+import { Checkbox } from "@workspace/ui/components/checkbox"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import {
@@ -19,34 +22,30 @@ import {
 } from "@workspace/ui/components/select"
 import { Separator } from "@workspace/ui/components/separator"
 import { Textarea } from "@workspace/ui/components/textarea"
+import { cn } from "@workspace/ui/lib/utils"
 import { useMutation, useQuery } from "convex/react"
-import { ArrowLeft, Loader2 } from "lucide-react"
+import {
+  ArrowLeft,
+  Edit,
+  GripVertical,
+  Loader2,
+  MapPin,
+  Plus,
+  Star,
+  Trash2,
+  Upload,
+} from "lucide-react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
+import { toast } from "sonner"
 import { api } from "@/lib/convex"
+import { handleErrorWithContext } from "@/lib/error-handler"
+import { imagePresets } from "@/lib/imagekit"
 
 const TRANSMISSION_OPTIONS = ["Manual", "Automatic", "PDK", "DCT", "CVT"]
 const DRIVETRAIN_OPTIONS = ["RWD", "AWD", "FWD"]
 const ENGINE_TYPE_OPTIONS = ["V6", "V8", "V10", "V12", "Flat-6", "Inline-4", "Inline-6", "Electric"]
-
-const COMMON_AMENITIES = [
-  "GPS Navigation",
-  "Bluetooth",
-  "Apple CarPlay",
-  "Android Auto",
-  "Premium Sound System",
-  "Racing Seats",
-  "Roll Cage",
-  "Fire Suppression System",
-  "Data Logger",
-  "Telemetry System",
-  "Track Tires",
-  "Racing Wheels",
-  "Aerodynamic Package",
-  "Racing Suspension",
-  "Performance Exhaust",
-]
 
 export default function EditVehiclePage() {
   const params = useParams()
@@ -60,6 +59,32 @@ export default function EditVehiclePage() {
 
   // Mutations
   const updateVehicle = useMutation(api.vehicles.update)
+  const addImage = useMutation(api.vehicles.addImage)
+  const removeImage = useMutation(api.vehicles.removeImage)
+  const updateImageOrder = useMutation(api.vehicles.updateImageOrder)
+  const updateImage = useMutation(api.vehicles.updateImage)
+  const uploadFile = useUploadFile(api.r2)
+
+  // Image management state
+  const [images, setImages] = useState<
+    Array<{
+      _id: string
+      r2Key: string | undefined
+      isPrimary: boolean
+      order: number
+    }>
+  >([])
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
+  const [isUploading, setIsUploading] = useState(false)
+
+  // Add-on management state
+  const [newAddOn, setNewAddOn] = useState({
+    name: "",
+    price: "",
+    description: "",
+    isRequired: false,
+  })
+  const [editingAddOnIndex, setEditingAddOnIndex] = useState<number | null>(null)
 
   // Initialize form data
   const [formData, setFormData] = useState({
@@ -74,13 +99,17 @@ export default function EditVehiclePage() {
     drivetrain: "",
     engineType: "",
     mileage: 0,
-    amenities: [] as string[],
     addOns: [] as Array<{
       name: string
       price: number
       description?: string
       isRequired?: boolean
     }>,
+    // Pickup location fields
+    street: "",
+    city: "",
+    state: "",
+    zipCode: "",
   })
 
   // Populate form data when vehicle loads
@@ -98,9 +127,17 @@ export default function EditVehiclePage() {
         drivetrain: vehicle.drivetrain || "",
         engineType: vehicle.engineType || "",
         mileage: vehicle.mileage || 0,
-        amenities: vehicle.amenities || [],
         addOns: vehicle.addOns || [],
+        // Pickup location
+        street: vehicle.address?.street || "",
+        city: vehicle.address?.city || "",
+        state: vehicle.address?.state || "",
+        zipCode: vehicle.address?.zipCode || "",
       })
+
+      // Sort images by order
+      const sortedImages = [...(vehicle.images || [])].sort((a, b) => a.order - b.order)
+      setImages(sortedImages)
     }
   }, [vehicle])
 
@@ -159,13 +196,215 @@ export default function EditVehiclePage() {
     })
   }
 
-  const toggleAmenity = (amenity: string) => {
+  // Add-on management functions
+  const addAddOn = () => {
+    if (newAddOn.name && newAddOn.price) {
+      setFormData({
+        ...formData,
+        addOns: [
+          ...formData.addOns,
+          {
+            name: newAddOn.name,
+            price: Number(newAddOn.price),
+            description: newAddOn.description || undefined,
+            isRequired: newAddOn.isRequired,
+          },
+        ],
+      })
+      setNewAddOn({ name: "", price: "", description: "", isRequired: false })
+      toast.success("Add-on added")
+    } else {
+      toast.error("Please provide a name and price for the add-on")
+    }
+  }
+
+  const removeAddOn = (index: number) => {
     setFormData({
       ...formData,
-      amenities: formData.amenities.includes(amenity)
-        ? formData.amenities.filter((a) => a !== amenity)
-        : [...formData.amenities, amenity],
+      addOns: formData.addOns.filter((_, i) => i !== index),
     })
+    if (editingAddOnIndex === index) {
+      setEditingAddOnIndex(null)
+    } else if (editingAddOnIndex !== null && editingAddOnIndex > index) {
+      setEditingAddOnIndex(editingAddOnIndex - 1)
+    }
+    toast.success("Add-on removed")
+  }
+
+  const startEditingAddOn = (index: number) => {
+    const addOn = formData.addOns[index]
+    setNewAddOn({
+      name: addOn.name,
+      price: addOn.price.toString(),
+      description: addOn.description || "",
+      isRequired: addOn.isRequired,
+    })
+    setEditingAddOnIndex(index)
+  }
+
+  const saveEditedAddOn = () => {
+    if (editingAddOnIndex === null || !newAddOn.name || !newAddOn.price) {
+      toast.error("Please provide a name and price for the add-on")
+      return
+    }
+
+    const updatedAddOns = [...formData.addOns]
+    updatedAddOns[editingAddOnIndex] = {
+      name: newAddOn.name,
+      price: Number(newAddOn.price),
+      description: newAddOn.description || undefined,
+      isRequired: newAddOn.isRequired,
+    }
+
+    setFormData({
+      ...formData,
+      addOns: updatedAddOns,
+    })
+    setNewAddOn({ name: "", price: "", description: "", isRequired: false })
+    setEditingAddOnIndex(null)
+    toast.success("Add-on updated")
+  }
+
+  const cancelEditingAddOn = () => {
+    setNewAddOn({ name: "", price: "", description: "", isRequired: false })
+    setEditingAddOnIndex(null)
+  }
+
+  // Image management functions
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+
+    setIsUploading(true)
+    try {
+      const fileArray = Array.from(files)
+      for (let index = 0; index < fileArray.length; index++) {
+        const file = fileArray[index]
+        if (!file.type.startsWith("image/")) {
+          toast.error(`${file.name} is not an image file`)
+          continue
+        }
+
+        try {
+          // Add a small delay between uploads to avoid rate limiting
+          if (index > 0) {
+            await new Promise((resolve) => setTimeout(resolve, 500))
+          }
+
+          // Upload to R2
+          const r2Key = await uploadFile(file)
+
+          // Add image to database
+          const isPrimary = images.length === 0
+          await addImage({
+            vehicleId: vehicleId as any,
+            r2Key,
+            isPrimary,
+          })
+
+          toast.success(`Image ${file.name} uploaded successfully`)
+        } catch (error) {
+          handleErrorWithContext(error, {
+            action: `upload ${file.name}`,
+            customMessages: {
+              file_upload: `Failed to upload ${file.name}. Please try again.`,
+              generic: `Failed to upload ${file.name}. Please try again.`,
+            },
+          })
+        }
+      }
+    } finally {
+      setIsUploading(false)
+      // Reset file input
+      e.target.value = ""
+    }
+  }
+
+  const handleDeleteImage = async (imageId: string) => {
+    if (!confirm("Are you sure you want to delete this image?")) return
+
+    try {
+      await removeImage({ imageId: imageId as any })
+      toast.success("Image deleted successfully")
+    } catch (error) {
+      handleErrorWithContext(error, {
+        action: "delete image",
+        customMessages: {
+          generic: "Failed to delete image. Please try again.",
+        },
+      })
+    }
+  }
+
+  const handleSetPrimary = async (imageId: string) => {
+    try {
+      await updateImage({ imageId: imageId as any, isPrimary: true })
+      toast.success("Primary image updated")
+    } catch (error) {
+      handleErrorWithContext(error, {
+        action: "set primary image",
+        customMessages: {
+          generic: "Failed to set primary image. Please try again.",
+        },
+      })
+    }
+  }
+
+  // Drag and drop handlers
+  const handleDragStart = (index: number) => {
+    setDraggedIndex(index)
+  }
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault()
+    if (draggedIndex === null) return
+
+    if (draggedIndex !== index) {
+      const newImages = [...images]
+      const draggedImage = newImages[draggedIndex]
+      newImages.splice(draggedIndex, 1)
+      newImages.splice(index, 0, draggedImage)
+      setImages(newImages)
+      setDraggedIndex(index)
+    }
+  }
+
+  const handleDragEnd = async () => {
+    if (draggedIndex === null) return
+
+    try {
+      // Update order in database
+      const imageOrders = images.map((img, index) => ({
+        imageId: img._id as any,
+        order: index,
+      }))
+
+      await updateImageOrder({
+        vehicleId: vehicleId as any,
+        imageOrders,
+      })
+
+      toast.success("Image order updated")
+    } catch (error) {
+      handleErrorWithContext(error, {
+        action: "update image order",
+        customMessages: {
+          generic: "Failed to update image order. Please try again.",
+        },
+      })
+      // Reload images to revert UI changes
+      if (vehicle) {
+        const sortedImages = [...(vehicle.images || [])].sort((a, b) => a.order - b.order)
+        setImages(sortedImages)
+      }
+    } finally {
+      setDraggedIndex(null)
+    }
+  }
+
+  const getImageUrl = (r2Key: string | undefined) => {
+    if (!r2Key) return ""
+    return imagePresets.thumbnail(r2Key)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -173,6 +412,17 @@ export default function EditVehiclePage() {
     setIsSubmitting(true)
 
     try {
+      // Build address object if any address fields are filled
+      const hasAddress = formData.street || formData.city || formData.state || formData.zipCode
+      const address = hasAddress
+        ? {
+            street: formData.street.trim(),
+            city: formData.city.trim(),
+            state: formData.state.trim(),
+            zipCode: formData.zipCode.trim(),
+          }
+        : undefined
+
       await updateVehicle({
         id: vehicleId as any,
         trackId: formData.trackId ? (formData.trackId as any) : undefined,
@@ -186,15 +436,20 @@ export default function EditVehiclePage() {
         drivetrain: formData.drivetrain || undefined,
         engineType: formData.engineType || undefined,
         mileage: formData.mileage || undefined,
-        amenities: formData.amenities.length > 0 ? formData.amenities : undefined,
         addOns: formData.addOns.length > 0 ? formData.addOns : undefined,
+        address,
       })
 
       // Redirect to vehicle detail page after successful update
       router.push(`/host/vehicles/${vehicleId}`)
     } catch (error) {
-      console.error("Error updating vehicle:", error)
-      alert("Failed to update vehicle. Please try again.")
+      handleErrorWithContext(error, {
+        action: "update vehicle",
+        entity: "vehicle",
+        customMessages: {
+          generic: "Failed to update vehicle. Please try again.",
+        },
+      })
     } finally {
       setIsSubmitting(false)
     }
@@ -214,6 +469,141 @@ export default function EditVehiclePage() {
       </div>
 
       <form onSubmit={handleSubmit}>
+        {/* Image Section - Moved to Top */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Vehicle Images</CardTitle>
+            <CardDescription>Manage your vehicle photos</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <Label>Manage Images</Label>
+              <div className="relative">
+                <Input
+                  accept="image/*"
+                  className="hidden"
+                  disabled={isUploading}
+                  id="image-upload"
+                  multiple
+                  onChange={handleImageUpload}
+                  type="file"
+                />
+                <Label
+                  className={cn("cursor-pointer", isUploading && "cursor-not-allowed opacity-50")}
+                  htmlFor="image-upload"
+                >
+                  <Button disabled={isUploading} size="sm" type="button" variant="outline">
+                    <Upload className="mr-2 size-4" />
+                    {isUploading ? "Uploading..." : "Add Images"}
+                  </Button>
+                </Label>
+              </div>
+            </div>
+
+            {images.length === 0 ? (
+              <div className="flex min-h-32 items-center justify-center rounded-lg border border-dashed">
+                <div className="text-center">
+                  <p className="text-muted-foreground text-sm">No images uploaded yet</p>
+                  <p className="mt-1 text-muted-foreground text-xs">
+                    Drag and drop to reorder images
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {images.map((image, index) => (
+                  <div
+                    className={cn(
+                      "group relative overflow-hidden rounded-lg border bg-muted transition-all",
+                      draggedIndex === index && "opacity-50",
+                      image.isPrimary && "ring-2 ring-primary"
+                    )}
+                    draggable
+                    key={image._id}
+                    onDragEnd={handleDragEnd}
+                    onDragOver={(e) => handleDragOver(e, index)}
+                    onDragStart={() => handleDragStart(index)}
+                  >
+                    {image.r2Key ? (
+                      <div className="relative aspect-video">
+                        <Image
+                          alt={`Vehicle image ${index + 1}`}
+                          className="object-cover"
+                          fill
+                          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                          src={getImageUrl(image.r2Key)}
+                          urlEndpoint="https://ik.imagekit.io/renegaderace"
+                        />
+                      </div>
+                    ) : (
+                      <div className="flex aspect-video items-center justify-center bg-muted">
+                        <p className="text-muted-foreground text-sm">No image</p>
+                      </div>
+                    )}
+
+                    {/* Overlay with actions */}
+                    <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/60 opacity-0 transition-opacity group-hover:opacity-100">
+                      <Button
+                        className="bg-white/90 text-black hover:bg-white"
+                        onClick={() => handleSetPrimary(image._id)}
+                        size="sm"
+                        type="button"
+                        variant="ghost"
+                      >
+                        <Star
+                          className={cn(
+                            "size-4",
+                            image.isPrimary ? "fill-yellow-400 text-yellow-400" : ""
+                          )}
+                        />
+                      </Button>
+                      <Button
+                        className="bg-white/90 text-black hover:bg-white"
+                        onClick={() => handleDeleteImage(image._id)}
+                        size="sm"
+                        type="button"
+                        variant="ghost"
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
+
+                    {/* Drag handle */}
+                    <div className="absolute top-2 left-2 cursor-grab active:cursor-grabbing">
+                      <GripVertical className="size-5 text-white drop-shadow-lg" />
+                    </div>
+
+                    {/* Primary badge */}
+                    {image.isPrimary && (
+                      <div className="absolute top-2 right-2">
+                        <div className="flex items-center gap-1 rounded-full bg-primary px-2 py-1">
+                          <Star className="size-3 fill-white text-white" />
+                          <span className="font-medium text-white text-xs">Primary</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Order indicator */}
+                    <div className="absolute bottom-2 left-2">
+                      <div className="rounded-full bg-black/70 px-2 py-1">
+                        <span className="font-medium text-white text-xs">
+                          {index + 1} / {images.length}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {images.length > 0 && (
+              <p className="text-muted-foreground text-sm">
+                Drag images to reorder • Click the star icon to set as primary image
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <CardTitle>Vehicle Information</CardTitle>
@@ -394,27 +784,185 @@ export default function EditVehiclePage() {
             <Separator />
 
             <div className="space-y-4">
-              <h3 className="font-semibold text-lg">Amenities</h3>
-              <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
-                {COMMON_AMENITIES.map((amenity) => (
-                  <Button
-                    className="justify-start"
-                    key={amenity}
-                    onClick={(e) => {
-                      e.preventDefault()
-                      toggleAmenity(amenity)
-                    }}
-                    type="button"
-                    variant={formData.amenities.includes(amenity) ? "default" : "outline"}
-                  >
-                    {formData.amenities.includes(amenity) && (
-                      <span className="mr-2 flex size-4 items-center justify-center rounded-full bg-primary-foreground text-primary text-xs">
-                        ✓
-                      </span>
-                    )}
-                    {amenity}
-                  </Button>
-                ))}
+              <div>
+                <h3 className="flex items-center gap-2 font-semibold text-lg">
+                  <MapPin className="size-5" />
+                  Pickup Location
+                </h3>
+                <p className="text-muted-foreground text-sm">
+                  Where renters will pick up and return the vehicle
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="street">Street Address</Label>
+                <Input
+                  id="street"
+                  name="street"
+                  onChange={handleChange}
+                  placeholder="123 Main Street"
+                  value={formData.street}
+                />
+              </div>
+
+              <div className="grid gap-6 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="city">City</Label>
+                  <Input
+                    id="city"
+                    name="city"
+                    onChange={handleChange}
+                    placeholder="Los Angeles"
+                    value={formData.city}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="state">State</Label>
+                  <Input
+                    id="state"
+                    maxLength={2}
+                    name="state"
+                    onChange={handleChange}
+                    placeholder="CA"
+                    value={formData.state}
+                  />
+                </div>
+              </div>
+
+              <div className="md:w-1/2">
+                <div className="space-y-2">
+                  <Label htmlFor="zipCode">ZIP Code</Label>
+                  <Input
+                    id="zipCode"
+                    maxLength={10}
+                    name="zipCode"
+                    onChange={handleChange}
+                    placeholder="90001"
+                    value={formData.zipCode}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <Separator />
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-semibold text-lg">Add-ons</h3>
+                  <p className="text-muted-foreground text-sm">
+                    Additional services or items renters can purchase
+                  </p>
+                </div>
+              </div>
+
+              {formData.addOns.length > 0 && (
+                <div className="space-y-3">
+                  {formData.addOns.map((addOn, index) => (
+                    <div
+                      className="flex items-start justify-between gap-4 rounded-lg border p-4"
+                      key={index}
+                    >
+                      <div className="flex-1 space-y-1">
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium">{addOn.name}</p>
+                          {addOn.isRequired && (
+                            <span className="rounded-full bg-primary/10 px-2 py-0.5 font-medium text-primary text-xs">
+                              Required
+                            </span>
+                          )}
+                        </div>
+                        {addOn.description && (
+                          <p className="text-muted-foreground text-sm">{addOn.description}</p>
+                        )}
+                        <p className="font-semibold text-primary">${addOn.price}/day</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={() => startEditingAddOn(index)}
+                          size="sm"
+                          type="button"
+                          variant="outline"
+                        >
+                          <Edit className="size-4" />
+                        </Button>
+                        <Button
+                          onClick={() => removeAddOn(index)}
+                          size="sm"
+                          type="button"
+                          variant="ghost"
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="space-y-4 rounded-lg border p-4">
+                <h4 className="font-medium">
+                  {editingAddOnIndex !== null ? "Edit Add-on" : "Add New Add-on"}
+                </h4>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="addOnName">Add-on Name *</Label>
+                    <Input
+                      id="addOnName"
+                      onChange={(e) => setNewAddOn({ ...newAddOn, name: e.target.value })}
+                      placeholder="e.g., Professional Driving Instructor"
+                      value={newAddOn.name}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="addOnPrice">Price ($/day) *</Label>
+                    <Input
+                      id="addOnPrice"
+                      onChange={(e) => setNewAddOn({ ...newAddOn, price: e.target.value })}
+                      placeholder="150"
+                      type="number"
+                      value={newAddOn.price}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="addOnDescription">Description (Optional)</Label>
+                  <Input
+                    id="addOnDescription"
+                    onChange={(e) => setNewAddOn({ ...newAddOn, description: e.target.value })}
+                    placeholder="Brief description of the add-on"
+                    value={newAddOn.description}
+                  />
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    checked={newAddOn.isRequired}
+                    id="addOnRequired"
+                    onCheckedChange={(checked) =>
+                      setNewAddOn({ ...newAddOn, isRequired: checked === true })
+                    }
+                  />
+                  <Label className="cursor-pointer font-normal text-sm" htmlFor="addOnRequired">
+                    Required add-on (renters must purchase this)
+                  </Label>
+                </div>
+                <div className="flex gap-2">
+                  {editingAddOnIndex !== null ? (
+                    <>
+                      <Button onClick={saveEditedAddOn} type="button" variant="default">
+                        Save Changes
+                      </Button>
+                      <Button onClick={cancelEditingAddOn} type="button" variant="outline">
+                        Cancel
+                      </Button>
+                    </>
+                  ) : (
+                    <Button onClick={addAddOn} type="button" variant="outline">
+                      <Plus className="mr-2 size-4" />
+                      Add Add-on
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
 

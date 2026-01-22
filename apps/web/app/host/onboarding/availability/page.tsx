@@ -23,6 +23,7 @@ import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/lib/convex"
+import { handleErrorWithContext } from "@/lib/error-handler"
 
 const ADVANCE_NOTICE_OPTIONS = [
   { value: "same-day", label: "Same day" },
@@ -97,8 +98,12 @@ export default function AvailabilityPage() {
 
       router.push("/host/onboarding/safety")
     } catch (error) {
-      console.error("Failed to save availability:", error)
-      toast.error("An error occurred")
+      handleErrorWithContext(error, {
+        action: "save availability",
+        customMessages: {
+          generic: "Failed to save availability. Please try again.",
+        },
+      })
     } finally {
       setIsSubmitting(false)
     }

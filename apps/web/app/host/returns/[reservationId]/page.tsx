@@ -8,12 +8,16 @@ import { Checkbox } from "@workspace/ui/components/checkbox"
 import { Label } from "@workspace/ui/components/label"
 import { Textarea } from "@workspace/ui/components/textarea"
 import { useMutation, useQuery } from "convex/react"
-import { ArrowLeft, CheckCircle2, Loader2, Upload } from "lucide-react"
+import { ArrowLeft, CheckCircle2, Loader2, Upload, X } from "lucide-react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import { useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/lib/convex"
+import type { Id } from "@/lib/convex"
+import { getImageKitUrl } from "@/lib/imagekit"
+import { handleErrorWithContext } from "@/lib/error-handler"
+import { usePhotoUpload } from "@/hooks/usePhotoUpload"
 
 export default function ReturnReviewPage() {
   const { user } = useUser()
@@ -27,13 +31,21 @@ export default function ReturnReviewPage() {
   const [mileageMatches, setMileageMatches] = useState(true)
   const [damageReported, setDamageReported] = useState("")
   const [notes, setNotes] = useState("")
-  const [photos, setPhotos] = useState<string[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const {
+    photos,
+    setPhotos,
+    isUploading,
+    fileInputRef,
+    handlePhotoUpload,
+    handleRemovePhoto,
+  } = usePhotoUpload()
 
   // Fetch completion data
   const completion = useQuery(
     api.rentalCompletions.getByReservation,
-    reservationId ? { reservationId: reservationId as any } : "skip"
+    reservationId ? { reservationId: reservationId as Id<"reservations"> } : "skip"
   )
 
   const submitReturnReview = useMutation(api.rentalCompletions.submitOwnerReturnReview)
@@ -60,18 +72,17 @@ export default function ReturnReviewPage() {
       toast.success("Return review submitted successfully")
       router.push("/host/reservations")
     } catch (error) {
-      console.error("Error submitting return review:", error)
-      toast.error("Failed to submit return review")
+      handleErrorWithContext(error, {
+        action: "submit return review",
+        customMessages: {
+          generic: "Failed to submit return review. Please try again.",
+        },
+      })
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  // Handle photo upload (placeholder)
-  const handlePhotoUpload = () => {
-    // TODO: Implement photo upload to storage
-    toast.info("Photo upload functionality coming soon")
-  }
 
   if (!completion) {
     return (
@@ -308,26 +319,43 @@ export default function ReturnReviewPage() {
             <div>
               <Label>Photos (Optional)</Label>
               <div className="mt-2 flex flex-wrap gap-2">
-                {photos.map((photo, index) => (
-                  <div className="relative" key={index}>
+                {photos.map((photoKey, index) => (
+                  <div className="group relative" key={index}>
                     <img
                       alt={`Review photo ${index + 1}`}
                       className="h-24 w-24 rounded-lg object-cover"
-                      src={photo}
+                      src={getImageKitUrl(photoKey, { width: 96, height: 96, quality: 80 })}
                     />
+                    <button
+                      className="absolute right-1 top-1 rounded-full bg-destructive p-1 opacity-0 transition-opacity group-hover:opacity-100"
+                      onClick={() => handleRemovePhoto(index)}
+                      type="button"
+                    >
+                      <X className="size-3 text-destructive-foreground" />
+                    </button>
                   </div>
                 ))}
-                <Button
-                  className="h-24 w-24"
-                  onClick={handlePhotoUpload}
-                  type="button"
-                  variant="outline"
-                >
-                  <Upload className="size-4" />
-                </Button>
+                <label className="cursor-pointer">
+                  <input
+                    accept="image/*"
+                    className="hidden"
+                    disabled={isUploading}
+                    multiple
+                    onChange={handlePhotoUpload}
+                    ref={fileInputRef}
+                    type="file"
+                  />
+                  <div className="flex h-24 w-24 items-center justify-center rounded-lg border-2 border-dashed transition-colors hover:border-primary">
+                    {isUploading ? (
+                      <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                    ) : (
+                      <Upload className="size-4 text-muted-foreground" />
+                    )}
+                  </div>
+                </label>
               </div>
               <p className="mt-2 text-muted-foreground text-xs">
-                Upload photos if there are discrepancies or damage
+                Upload photos if there are discrepancies or damage (max 10MB per photo)
               </p>
             </div>
           </CardContent>

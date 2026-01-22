@@ -1,14 +1,16 @@
 import { StripeSubscriptions } from "@convex-dev/stripe"
 import { v } from "convex/values"
 import Stripe from "stripe"
-import { api, components } from "./_generated/api"
+import { api, components, internal } from "./_generated/api"
 import type { Id } from "./_generated/dataModel"
-import { action, mutation, query } from "./_generated/server"
+import { action, internalAction, mutation, query } from "./_generated/server"
 import {
   getPaymentFailedEmailTemplate,
   getPaymentSucceededEmailTemplate,
   sendTransactionalEmail,
 } from "./emails"
+// TODO: Uncomment after installing @convex-dev/rate-limiter
+// import { rateLimiter } from "./rateLimiter"
 
 // Initialize Stripe client from component
 const stripeClient = new StripeSubscriptions(components.stripe, {})
@@ -183,6 +185,7 @@ export const updatePlatformSettings = mutation({
 export const createConnectAccount = action({
   args: {
     ownerId: v.string(),
+    returnUrlBase: v.optional(v.string()), // Allow client to specify the base URL for redirects
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()
@@ -234,11 +237,48 @@ export const createConnectAccount = action({
       completed: true,
     })
 
+    // Determine the base URL to use for redirects
+    // Priority: client-provided URL > WEB_URL env var > production default
+    let baseUrl = args.returnUrlBase || process.env.WEB_URL || "https://renegaderentals.com"
+    
+    // Validate the URL is allowed (security check)
+    // In development, allow localhost, ngrok, and 127.0.0.1
+    // In production, only allow configured production domains
+    const isDevelopment = 
+      baseUrl.includes("localhost") || 
+      baseUrl.includes("ngrok") ||
+      baseUrl.includes("127.0.0.1") ||
+      baseUrl.startsWith("http://")
+    
+    // Production allowed domains
+    const allowedProductionDomains = [
+      "https://renegaderentals.com",
+      // Add other production/staging domains here as needed
+    ]
+    
+    // If not development, validate against allowed domains
+    if (!isDevelopment) {
+      const isAllowed = allowedProductionDomains.some(domain => 
+        baseUrl.startsWith(domain)
+      )
+      if (!isAllowed) {
+        throw new Error(
+          `Invalid return URL: ${baseUrl}. ` +
+          `Allowed domains: ${allowedProductionDomains.join(", ")}`
+        )
+      }
+    }
+    
+    // Ensure baseUrl doesn't end with a slash
+    if (baseUrl.endsWith("/")) {
+      baseUrl = baseUrl.slice(0, -1)
+    }
+    
     // Create account link for onboarding
     const accountLink = await stripe.accountLinks.create({
       account: account.id,
-      refresh_url: `${process.env.WEB_URL || "https://renegaderentals.com"}/host/onboarding/wizard?step=7`,
-      return_url: `${process.env.WEB_URL || "https://renegaderentals.com"}/host/onboarding/wizard?step=7&stripe_return=true`,
+      refresh_url: `${baseUrl}/host/dashboard?stripe_refresh=true`,
+      return_url: `${baseUrl}/host/dashboard?stripe_return=true`,
       type: "account_onboarding",
     })
 
@@ -276,6 +316,68 @@ export const getConnectAccountStatus = action({
       chargesEnabled: account.charges_enabled,
       payoutsEnabled: account.payouts_enabled,
       accountId: account.id,
+    }
+  },
+})
+
+// Refresh Connect account status (sync with Stripe)
+// Call this to update the database status based on current Stripe account state
+export const refreshConnectAccountStatus = action({
+  args: {
+    ownerId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.runQuery(api.users.getByExternalId, {
+      externalId: args.ownerId,
+    })
+
+    if (!user?.stripeAccountId) {
+      return {
+        success: false,
+        reason: "No Stripe Connect account found",
+      }
+    }
+
+    const stripe = getStripe()
+    const account = await stripe.accounts.retrieve(user.stripeAccountId)
+
+    // Determine account status based on Stripe account state
+    // Same logic as the webhook handler
+    let status: "pending" | "enabled" | "restricted" | "disabled"
+
+    if (account.details_submitted === false || !account.charges_enabled) {
+      status = "pending"
+    } else if (account.payouts_enabled === false) {
+      status = "pending"
+    } else if (account.charges_enabled && account.payouts_enabled && account.details_submitted) {
+      // Check for blocking restrictions (currently_due, past_due, or disabled_reason)
+      // Note: eventually_due requirements are normal and don't block functionality
+      const hasBlockingRestrictions = 
+        (account.requirements?.currently_due && account.requirements.currently_due.length > 0) ||
+        (account.requirements?.past_due && account.requirements.past_due.length > 0) ||
+        (account.requirements?.disabled_reason !== null && account.requirements?.disabled_reason !== undefined)
+
+      if (hasBlockingRestrictions) {
+        status = "restricted"
+      } else {
+        status = "enabled"
+      }
+    } else {
+      status = "pending"
+    }
+
+    // Update the status in Convex
+    await ctx.runMutation(internal.users.updateStripeAccountStatus, {
+      stripeAccountId: user.stripeAccountId,
+      status,
+    })
+
+    return {
+      success: true,
+      status,
+      chargesEnabled: account.charges_enabled,
+      payoutsEnabled: account.payouts_enabled,
+      detailsSubmitted: account.details_submitted,
     }
   },
 })
@@ -352,8 +454,24 @@ export const createCheckoutSession = action({
     const stripe = getStripe()
     const connectAccount = await stripe.accounts.retrieve(owner.stripeAccountId)
 
-    if (!(connectAccount.details_submitted && connectAccount.charges_enabled)) {
-      throw new Error("Owner account is not fully set up")
+    if (!connectAccount.details_submitted) {
+      throw new Error("Owner account onboarding is not complete. Please complete Stripe onboarding.")
+    }
+
+    if (!connectAccount.charges_enabled) {
+      throw new Error("Owner account cannot accept charges yet. Please complete Stripe onboarding.")
+    }
+
+    // Check if transfers capability is enabled (required for destination payments)
+    const transfersEnabled =
+      connectAccount.capabilities?.transfers === "active" ||
+      connectAccount.capabilities?.crypto_transfers === "active" ||
+      connectAccount.capabilities?.legacy_payments === "active"
+
+    if (!transfersEnabled) {
+      throw new Error(
+        "Owner account does not have transfers enabled. Please complete Stripe onboarding to enable transfers capability."
+      )
     }
 
     // Calculate platform fee
@@ -461,6 +579,14 @@ export const createPaymentIntent = action({
       throw new Error("Not authenticated")
     }
 
+    // Rate limit: 20 payment operations per hour per user
+    // TODO: Uncomment after installing @convex-dev/rate-limiter
+    // await ctx.runMutation(internal.rateLimitHelpers.checkRateLimit, {
+    //   name: "processPayment",
+    //   key: identity.subject,
+    //   throws: true,
+    // })
+
     const reservation = await ctx.runQuery(api.reservations.getById, {
       id: args.reservationId,
     })
@@ -483,6 +609,30 @@ export const createPaymentIntent = action({
 
     if (!owner?.stripeAccountId) {
       throw new Error("Owner must complete Stripe onboarding before accepting payments")
+    }
+
+    // Verify Connect account is ready and has required capabilities
+    const stripe = getStripe()
+    const connectAccount = await stripe.accounts.retrieve(owner.stripeAccountId)
+
+    if (!connectAccount.details_submitted) {
+      throw new Error("Owner account onboarding is not complete. Please complete Stripe onboarding.")
+    }
+
+    if (!connectAccount.charges_enabled) {
+      throw new Error("Owner account cannot accept charges yet. Please complete Stripe onboarding.")
+    }
+
+    // Check if transfers capability is enabled (required for destination payments)
+    const transfersEnabled =
+      connectAccount.capabilities?.transfers === "active" ||
+      connectAccount.capabilities?.crypto_transfers === "active" ||
+      connectAccount.capabilities?.legacy_payments === "active"
+
+    if (!transfersEnabled) {
+      throw new Error(
+        "Owner account does not have transfers enabled. Please complete Stripe onboarding to enable transfers capability."
+      )
     }
 
     // Calculate platform fee
@@ -509,7 +659,6 @@ export const createPaymentIntent = action({
     }
 
     // Create Stripe Payment Intent with Connect
-    const stripe = getStripe()
     const paymentIntent = await stripe.paymentIntents.create({
       amount: args.amount,
       currency: "usd",
@@ -686,7 +835,9 @@ export const handlePaymentSuccess = mutation({
         await sendTransactionalEmail(ctx, renter.email, template)
       }
     } catch (error) {
-      console.error("Failed to send payment success email:", error)
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { logError } = require("./logger")
+      logError(error, "Failed to send payment success email")
     }
   },
 })
@@ -734,7 +885,9 @@ export const handlePaymentFailure = mutation({
         await sendTransactionalEmail(ctx, renter.email, template)
       }
     } catch (error) {
-      console.error("Failed to send payment failure email:", error)
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { logError } = require("./logger")
+      logError(error, "Failed to send payment failure email")
     }
   },
 })
@@ -775,6 +928,57 @@ export const createCustomerPortalSession = action({
 // ============================================================================
 // Refunds (with Connect support)
 // ============================================================================
+
+// Internal action to process refund on cancellation (called via scheduler)
+export const processRefundOnCancellation = internalAction({
+  args: {
+    paymentId: v.id("payments"),
+    reservationId: v.id("reservations"),
+    reason: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const payment = await ctx.runQuery(api.stripe.getPaymentById, {
+      paymentId: args.paymentId,
+    })
+    
+    if (!(payment && payment.stripeChargeId)) {
+      throw new Error("Payment not found or charge ID missing")
+    }
+
+    // Only refund if payment is succeeded
+    if (payment.status !== "succeeded") {
+      return { skipped: true, reason: `Payment status is ${payment.status}, cannot refund` }
+    }
+
+    const stripe = getStripe()
+
+    // Refund with Connect - automatically reverses transfer
+    const refundParams: Stripe.RefundCreateParams = {
+      charge: payment.stripeChargeId,
+      reverse_transfer: true, // Automatically reverse the transfer to owner
+      refund_application_fee: true, // Refund your platform fee too
+      reason: "requested_by_customer" as Stripe.RefundCreateParams.Reason,
+    }
+
+    const refund = await stripe.refunds.create(refundParams)
+
+    await ctx.runMutation(api.stripe.updateRefundStatus, {
+      paymentId: args.paymentId,
+      status: "refunded",
+      refundAmount: refund.amount,
+      refundReason: args.reason,
+    })
+
+    // Update reservation payment status
+    await ctx.runMutation(api.stripe.updateReservationStatus, {
+      reservationId: args.reservationId,
+      status: "cancelled",
+      paymentStatus: "refunded",
+    })
+
+    return { success: true, refundId: refund.id }
+  },
+})
 
 export const processRefund = action({
   args: {

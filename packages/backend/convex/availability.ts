@@ -1,5 +1,6 @@
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
+import { generateDateRange } from './dateUtils';
 
 // Get availability for a vehicle
 export const getByVehicle = query({
@@ -54,28 +55,22 @@ export const checkAvailability = query({
     const blockedDates = availability.filter(a => !a.isAvailable);
 
     // Get conflicting reservations
+    // Two date ranges overlap if: existingStart <= newEnd AND existingEnd >= newStart
     const conflictingReservations = await ctx.db
       .query('reservations')
       .withIndex('by_vehicle', q => q.eq('vehicleId', vehicleId))
       .filter(q =>
         q.and(
+          // Only check active reservations (pending or confirmed)
           q.or(
             q.eq(q.field('status'), 'pending'),
             q.eq(q.field('status'), 'confirmed')
           ),
-          q.or(
-            q.and(
-              q.lte(q.field('startDate'), startDate),
-              q.gte(q.field('endDate'), startDate)
-            ),
-            q.and(
-              q.lte(q.field('startDate'), endDate),
-              q.gte(q.field('endDate'), endDate)
-            ),
-            q.and(
-              q.gte(q.field('startDate'), startDate),
-              q.lte(q.field('endDate'), endDate)
-            )
+          // Check for date overlap: existing reservation overlaps if
+          // existingStart <= newEnd AND existingEnd >= newStart
+          q.and(
+            q.lte(q.field('startDate'), endDate),
+            q.gte(q.field('endDate'), startDate)
           )
         )
       )
@@ -166,14 +161,8 @@ export const blockDateRange = mutation({
       throw new Error('Not authorized to modify this vehicle');
     }
 
-    const start = new Date(args.startDate);
-    const end = new Date(args.endDate);
-    const dates: string[] = [];
-
-    // Generate all dates in the range
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      dates.push(d.toISOString().split('T')[0]);
-    }
+    // Generate all dates in the range using date utility to avoid timezone issues
+    const dates = generateDateRange(args.startDate, args.endDate);
 
     // Block each date
     const results = await Promise.all(
@@ -292,14 +281,8 @@ export const setDefaultAvailability = mutation({
       throw new Error('Not authorized to modify this vehicle');
     }
 
-    const start = new Date(args.startDate);
-    const end = new Date(args.endDate);
-    const dates: string[] = [];
-
-    // Generate all dates in the range
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      dates.push(d.toISOString().split('T')[0]);
-    }
+    // Generate all dates in the range using date utility to avoid timezone issues
+    const dates = generateDateRange(args.startDate, args.endDate);
 
     // Set availability for each date
     const results = await Promise.all(
