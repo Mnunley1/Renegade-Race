@@ -257,6 +257,7 @@ export function VehicleGallery({ images, vehicleName }: VehicleGalleryProps) {
                     priority
                     sizes="100vw"
                     src={validImages[selectedIndex]}
+                    urlEndpoint="https://ik.imagekit.io/renegaderace"
                   />
                 </div>
               )}
@@ -311,6 +312,7 @@ export function VehicleGallery({ images, vehicleName }: VehicleGalleryProps) {
                         fill
                         sizes="80px"
                         src={image}
+                        urlEndpoint="https://ik.imagekit.io/renegaderace"
                       />
                     </button>
                   ))}

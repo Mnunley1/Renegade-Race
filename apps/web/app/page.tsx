@@ -37,19 +37,31 @@ export default function HomePage() {
     return vehiclesData.slice(0, 6).map((vehicle) => {
       const primaryImage = vehicle.images?.find((img) => img.isPrimary) || vehicle.images?.[0]
       const stats = featuredVehicleStats?.[vehicle._id]
+      
+      // Build location string from vehicle address (city, state) or fall back to track location
+      const locationParts = []
+      if (vehicle.address?.city) locationParts.push(vehicle.address.city)
+      if (vehicle.address?.state) locationParts.push(vehicle.address.state)
+      const location = locationParts.length > 0 
+        ? locationParts.join(", ") 
+        : vehicle.track?.location || ""
+      
       return {
         id: vehicle._id,
         image: primaryImage?.cardUrl ?? "",
+        imageKey: primaryImage?.r2Key ?? undefined, // Pass r2Key for ImageKit
         name: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
         year: vehicle.year,
         make: vehicle.make,
         model: vehicle.model,
         pricePerDay: vehicle.dailyRate,
-        location: vehicle.track?.location || "",
+        location,
+        track: vehicle.track?.name || "",
         rating: stats?.averageRating || 0,
         reviews: stats?.totalReviews || 0,
         horsepower: vehicle.horsepower,
         transmission: vehicle.transmission,
+        drivetrain: vehicle.drivetrain,
       }
     })
   }, [vehiclesData, featuredVehicleStats])

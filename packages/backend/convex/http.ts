@@ -112,7 +112,7 @@ registerRoutes(http, components.stripe, {
       }
 
       // Determine account status based on Stripe account state
-      let status: "pending" | "active" | "restricted" | "disabled";
+      let status: "pending" | "enabled" | "restricted" | "disabled";
 
       // Check if account is disabled
       if (account.details_submitted === false || !account.charges_enabled) {
@@ -121,18 +121,19 @@ registerRoutes(http, components.stripe, {
         // Account can accept charges but not payouts yet
         status = "pending";
       } else if (account.charges_enabled && account.payouts_enabled && account.details_submitted) {
-        // Check for restrictions or holds
-        const hasRestrictions = 
+        // Check for blocking restrictions (currently_due, past_due, or disabled_reason)
+        // Note: eventually_due requirements are normal and don't block functionality
+        const hasBlockingRestrictions = 
           (account.requirements?.currently_due && account.requirements.currently_due.length > 0) ||
           (account.requirements?.past_due && account.requirements.past_due.length > 0) ||
-          (account.requirements?.eventually_due && account.requirements.eventually_due.length > 0) ||
           (account.requirements?.disabled_reason !== null && account.requirements?.disabled_reason !== undefined);
 
-        if (hasRestrictions) {
+        if (hasBlockingRestrictions) {
           status = "restricted";
         } else {
-          // Account is fully active with no holds or restrictions
-          status = "active";
+          // Account is fully enabled - charges and payouts enabled, details submitted
+          // eventually_due requirements are normal and don't affect enabled status
+          status = "enabled";
         }
       } else {
         status = "pending";

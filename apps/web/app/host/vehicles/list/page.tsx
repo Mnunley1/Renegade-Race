@@ -1,6 +1,7 @@
 "use client"
 
 import { useUser } from "@clerk/nextjs"
+import { Image, ImageKitProvider } from "@imagekit/next"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent } from "@workspace/ui/components/card"
@@ -126,28 +127,29 @@ export default function HostVehiclesListPage() {
       ) : (
         <div className="space-y-4">
           {vehicles.map((vehicle) => {
-            // Check if vehicle has any valid images
-            const hasImages =
-              vehicle.images &&
-              vehicle.images.length > 0 &&
-              vehicle.images.some((img) => img.cardUrl || img.heroUrl || img.detailUrl)
-
-            const primaryImage =
-              vehicle.images?.find((img) => img.isPrimary)?.cardUrl ||
-              vehicle.images?.[0]?.cardUrl ||
+            // Get the primary image r2Key for ImageKit
+            const primaryImageKey =
+              vehicle.images?.find((img) => img.isPrimary)?.r2Key ||
+              vehicle.images?.[0]?.r2Key ||
               null
+
+            const hasValidImage = primaryImageKey && primaryImageKey.trim() !== ""
 
             return (
               <Card className="overflow-hidden" key={vehicle._id}>
                 <div className="flex flex-col md:flex-row">
                   {/* Vehicle Image */}
                   <div className="relative flex h-48 w-full shrink-0 items-center justify-center overflow-hidden bg-muted md:h-auto md:w-64">
-                    {hasImages && primaryImage ? (
-                      <img
-                        alt={`${vehicle.year} ${vehicle.make} ${vehicle.model}`}
-                        className="size-full object-cover"
-                        src={primaryImage}
-                      />
+                    {hasValidImage ? (
+                      <ImageKitProvider urlEndpoint={process.env.NEXT_PUBLIC_IMAGEKIT_URL_ENDPOINT || "https://ik.imagekit.io/renegaderace"}>
+                        <Image
+                          alt={`${vehicle.year} ${vehicle.make} ${vehicle.model}`}
+                          className="size-full object-cover"
+                          fill
+                          src={`/${primaryImageKey}`}
+                          transformation={[{ width: 400, height: 300, quality: 80 }]}
+                        />
+                      </ImageKitProvider>
                     ) : (
                       <div className="flex flex-col items-center gap-2 text-center">
                         <Car className="size-12 text-muted-foreground/40" />

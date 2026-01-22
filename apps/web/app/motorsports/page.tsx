@@ -17,13 +17,13 @@ import { Flag, MapPin, Plus, RefreshCw, Search, Settings, User, Users, Zap, X } 
 import Image from "next/image"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { useEffect, useMemo, useState } from "react"
+import { Suspense, useEffect, useMemo, useState } from "react"
 import { DriverCard } from "@/components/driver-card"
 import { TeamCard } from "@/components/team-card"
 import { useDebounce } from "@/hooks/useDebounce"
 import { api } from "@/lib/convex"
 
-export default function MotorsportsPage() {
+function MotorsportsContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [activeTab, setActiveTab] = useState<"drivers" | "teams">("teams")
@@ -682,5 +682,23 @@ export default function MotorsportsPage() {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+export default function MotorsportsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="container mx-auto px-4 py-8">
+          <div className="flex min-h-[60vh] items-center justify-center">
+            <div className="text-center">
+              <p className="text-muted-foreground">Loading...</p>
+            </div>
+          </div>
+        </div>
+      }
+    >
+      <MotorsportsContent />
+    </Suspense>
   )
 }

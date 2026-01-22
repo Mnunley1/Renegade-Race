@@ -78,7 +78,7 @@ const saveFiltersToStorage = (filters: Record<string, unknown>) => {
   }
 }
 
-export default function VehiclesPage() {
+function VehiclesPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
@@ -400,6 +400,7 @@ export default function VehiclesPage() {
       : "skip"
   )
 
+
   // Fetch vehicle stats for all vehicles
   const vehicleStats = useQuery(
     api.reviews.getVehicleStatsBatch,
@@ -414,15 +415,25 @@ export default function VehiclesPage() {
     const mapped = vehiclesData.map((vehicle) => {
       const primaryImage = vehicle.images?.find((img) => img.isPrimary) || vehicle.images?.[0]
       const stats = vehicleStats?.[vehicle._id]
+      
+      // Build location string from vehicle address (city, state) or fall back to track location
+      const locationParts = []
+      if (vehicle.address?.city) locationParts.push(vehicle.address.city)
+      if (vehicle.address?.state) locationParts.push(vehicle.address.state)
+      const location = locationParts.length > 0 
+        ? locationParts.join(", ") 
+        : vehicle.track?.location || ""
+      
       return {
         id: vehicle._id,
         image: primaryImage?.cardUrl ?? "",
+        imageKey: primaryImage?.r2Key ?? undefined, // Pass r2Key for ImageKit
         name: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
         year: vehicle.year,
         make: vehicle.make,
         model: vehicle.model,
         pricePerDay: vehicle.dailyRate,
-        location: vehicle.track?.location || "",
+        location,
         track: vehicle.track?.name || "",
         rating: stats?.averageRating || 0,
         reviews: stats?.totalReviews || 0,
@@ -1710,81 +1721,38 @@ export default function VehiclesPage() {
             </CardContent>
           </Card>
 
-          {/* Results Summary */}
-          <div className="mt-4 flex flex-col gap-3 sm:mt-6 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-            {/* Show Filters Button - On the left */}
-            <div className="xl:hidden">
-              <Sheet
-                onOpenChange={(open) => {
-                  if (typeof window !== "undefined" && window.innerWidth < 1300) {
-                    setShowFilters(open)
-                  } else {
-                    setShowFilters(false)
-                  }
-                }}
-                open={showFilters}
-              >
-                {!showFilters && (
-                  <SheetTrigger asChild>
-                    <Button className="w-full shadow-sm sm:w-auto" size="lg" variant="outline">
-                      <Filter className="mr-2 size-4" />
-                      Show Filters
-                      {activeFiltersCount > 0 && (
-                        <Badge className="ml-2 text-xs" variant="secondary">
-                          {activeFiltersCount}
-                        </Badge>
-                      )}
-                    </Button>
-                  </SheetTrigger>
-                )}
-                <SheetContent className="w-full overflow-y-auto sm:max-w-sm" side="left">
-                  <SheetHeader>
-                    <SheetTitle>Filters</SheetTitle>
-                  </SheetHeader>
-                  <div className="mt-6">{filterContent}</div>
-                </SheetContent>
-              </Sheet>
-            </div>
-            {/* Vehicle count and Sort dropdown - On the right, same line */}
-            <div className="flex items-center gap-4">
-              <p className="whitespace-nowrap text-muted-foreground text-sm sm:text-base">
-                <span className="font-bold text-base text-foreground sm:text-lg">
-                  {filteredVehicles.length}
-                </span>{" "}
-                {filteredVehicles.length === 1 ? "vehicle" : "vehicles"} available
-              </p>
-              <Select onValueChange={setSortBy} value={sortBy}>
-                <SelectTrigger className="h-9 w-[180px] text-sm sm:h-10 sm:w-[200px]">
-                  <SelectValue placeholder="Sort by" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="popularity">Popularity</SelectItem>
-                  <SelectItem value="price-low">Price: Low to High</SelectItem>
-                  <SelectItem value="price-high">Price: High to Low</SelectItem>
-                  <SelectItem value="newest">Newest</SelectItem>
-                  <SelectItem value="rating">Highest Rated</SelectItem>
-                  <SelectItem value="horsepower">Horsepower</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button
-                className="h-9 sm:h-10"
-                onClick={() => setViewMode("grid")}
-                size="sm"
-                variant={viewMode === "grid" ? "default" : "outline"}
-              >
-                <Grid3x3 className="size-4" />
-                <span className="ml-1.5 hidden text-xs sm:ml-2 sm:inline sm:text-sm">Grid</span>
-              </Button>
-              <Button
-                className="h-9 sm:h-10"
-                onClick={() => setViewMode("list")}
-                size="sm"
-                variant={viewMode === "list" ? "default" : "outline"}
-              >
-                <List className="size-4" />
-                <span className="ml-1.5 hidden text-xs sm:ml-2 sm:inline sm:text-sm">List</span>
-              </Button>
-            </div>
+          {/* Show Filters Button - Mobile only */}
+          <div className="mt-4 sm:mt-6 xl:hidden">
+            <Sheet
+              onOpenChange={(open) => {
+                if (typeof window !== "undefined" && window.innerWidth < 1300) {
+                  setShowFilters(open)
+                } else {
+                  setShowFilters(false)
+                }
+              }}
+              open={showFilters}
+            >
+              {!showFilters && (
+                <SheetTrigger asChild>
+                  <Button className="w-full shadow-sm sm:w-auto" size="lg" variant="outline">
+                    <Filter className="mr-2 size-4" />
+                    Show Filters
+                    {activeFiltersCount > 0 && (
+                      <Badge className="ml-2 text-xs" variant="secondary">
+                        {activeFiltersCount}
+                      </Badge>
+                    )}
+                  </Button>
+                </SheetTrigger>
+              )}
+              <SheetContent className="w-full overflow-y-auto sm:max-w-sm" side="left">
+                <SheetHeader>
+                  <SheetTitle>Filters</SheetTitle>
+                </SheetHeader>
+                <div className="mt-6">{filterContent}</div>
+              </SheetContent>
+            </Sheet>
           </div>
         </div>
       </div>
@@ -1798,6 +1766,51 @@ export default function VehiclesPage() {
 
           {/* Vehicle Grid - Results Column */}
           <div className="w-full">
+            {/* Results Summary Bar - Vehicle count on left, Sort on right */}
+            <div className="mb-6 flex items-center justify-between border-b pb-4">
+              {/* Vehicle Count - Left side */}
+              <p className="text-muted-foreground text-sm sm:text-base">
+                <span className="font-bold text-base text-foreground sm:text-lg">
+                  {filteredVehicles.length}
+                </span>{" "}
+                {filteredVehicles.length === 1 ? "vehicle" : "vehicles"} available
+              </p>
+
+              {/* Sort and View Controls - Right side */}
+              <div className="flex items-center gap-2 sm:gap-3">
+                <Select onValueChange={setSortBy} value={sortBy}>
+                  <SelectTrigger className="h-9 w-[140px] text-sm sm:h-10 sm:w-[180px]">
+                    <SelectValue placeholder="Sort by" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="popularity">Popularity</SelectItem>
+                    <SelectItem value="price-low">Price: Low to High</SelectItem>
+                    <SelectItem value="price-high">Price: High to Low</SelectItem>
+                    <SelectItem value="newest">Newest</SelectItem>
+                    <SelectItem value="rating">Highest Rated</SelectItem>
+                    <SelectItem value="horsepower">Horsepower</SelectItem>
+                  </SelectContent>
+                </Select>
+                <div className="hidden sm:flex sm:items-center sm:gap-1">
+                  <Button
+                    className="size-9"
+                    onClick={() => setViewMode("grid")}
+                    size="icon"
+                    variant={viewMode === "grid" ? "default" : "ghost"}
+                  >
+                    <Grid3x3 className="size-4" />
+                  </Button>
+                  <Button
+                    className="size-9"
+                    onClick={() => setViewMode("list")}
+                    size="icon"
+                    variant={viewMode === "list" ? "default" : "ghost"}
+                  >
+                    <List className="size-4" />
+                  </Button>
+                </div>
+              </div>
+            </div>
             {vehiclesData === undefined || tracksData === undefined ? (
               <div
                 className={cn(
@@ -1907,5 +1920,24 @@ export default function VehiclesPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function VehiclesPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="container mx-auto px-4 py-8">
+          <div className="flex min-h-[60vh] items-center justify-center">
+            <div className="text-center">
+              <Loader2 className="mx-auto mb-4 size-8 animate-spin text-muted-foreground" />
+              <p className="text-muted-foreground">Loading vehicles...</p>
+            </div>
+          </div>
+        </div>
+      }
+    >
+      <VehiclesPageContent />
+    </Suspense>
   )
 }

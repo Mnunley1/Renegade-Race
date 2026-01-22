@@ -40,16 +40,16 @@ const nextConfig = {
       },
     ],
   },
+  // Set workspace root to avoid lockfile detection warnings
+  outputFileTracingRoot: resolve(__dirname, "../.."),
   // Turbopack is now the default bundler in Next.js 16
   // Configuration for Turbopack alias resolution
-  experimental: {
-    turbo: {
-      resolveAlias: {
-        "@renegade/backend": resolve(__dirname, "../../packages/backend"),
-      },
+  turbopack: {
+    resolveAlias: {
+      "@renegade/backend": resolve(__dirname, "../../packages/backend"),
     },
   },
-  // Webpack config for fallback (when not using Turbopack)
+  // Webpack config for fallback (when using --webpack flag)
   webpack: (config) => {
     // Allow importing from backend package's generated files
     config.resolve.alias = {
