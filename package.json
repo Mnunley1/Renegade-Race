@@ -5,6 +5,9 @@
   "scripts": {
     "build": "turbo build",
     "dev": "turbo dev",
+    "dev:web": "turbo dev --filter=web",
+    "dev:admin": "turbo dev --filter=admin",
+    "dev:backend": "turbo dev --filter=@renegade/backend",
     "lint": "turbo lint",
     "format": "biome format --write .",
     "lint:check": "biome lint .",
