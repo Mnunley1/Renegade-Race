@@ -5,6 +5,7 @@
   "types": "index.ts",
   "private": true,
   "scripts": {
+    "dev": "convex dev",
     "convex:dev": "convex dev",
     "convex:deploy": "convex deploy",
     "convex:mcp": "convex mcp start",
@@ -16,6 +17,8 @@
   },
   "dependencies": {
     "@clerk/clerk-sdk-node": "^5.1.6",
+    "@convex-dev/crons": "^0.1.4",
+    "@convex-dev/rate-limiter": "^0.2.12",
     "@convex-dev/r2": "^0.8.1",
     "@convex-dev/resend": "^0.2.1",
     "@convex-dev/stripe": "^0.1.0",

@@ -15,6 +15,7 @@ import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import { Loader2, Save, Settings as SettingsIcon, DollarSign } from "lucide-react"
 import { toast } from "sonner"
+import { handleErrorWithContext } from "@/lib/error-handler"
 
 export default function SettingsPage() {
   const settings = useQuery(api.stripe.getPlatformSettings)
@@ -70,8 +71,7 @@ export default function SettingsPage() {
       })
       toast.success("Platform settings updated successfully")
     } catch (error) {
-      console.error("Failed to update platform settings:", error)
-      toast.error("An error occurred")
+      handleErrorWithContext(error, { action: "update platform settings" })
     } finally {
       setIsSaving(false)
     }
@@ -265,3 +265,6 @@ export default function SettingsPage() {
     </div>
   )
 }
+
+
+

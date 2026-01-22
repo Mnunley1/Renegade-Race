@@ -1,6 +1,7 @@
 import type { UserJSON } from "@clerk/backend"
 import { type Validator, v } from "convex/values"
-import { internalMutation, mutation, type QueryCtx, query } from "./_generated/server"
+import { action, internalMutation, mutation, type QueryCtx, query } from "./_generated/server"
+import { internal } from "./_generated/api"
 import { getWelcomeEmailTemplate, sendTransactionalEmail } from "./emails"
 import { imagePresets, r2 } from "./r2"
 
@@ -12,6 +13,36 @@ export const current = query({
 export const getByExternalId = query({
   args: { externalId: v.string() },
   handler: async (ctx, args) => await userByExternalId(ctx, args.externalId),
+})
+
+// Get user by Convex document ID (for public profile pages)
+export const getById = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId)
+    if (!user) {
+      return null
+    }
+    // Return public profile data (exclude sensitive fields)
+    return {
+      _id: user._id,
+      name: user.name,
+      profileImage: user.profileImageR2Key
+        ? imagePresets.avatar(user.profileImageR2Key)
+        : undefined,
+      location: user.location,
+      bio: user.bio,
+      memberSince: user.memberSince,
+      totalRentals: user.totalRentals,
+      rating: user.rating,
+      experience: user.experience,
+      interests: user.interests,
+      externalId: user.externalId, // Needed for fetching vehicles/reviews
+      // Verification status (without exposing actual email/phone)
+      isEmailVerified: !!user.email,
+      isPhoneVerified: !!user.phone,
+    }
+  },
 })
 
 export const upsertFromClerk = internalMutation({
@@ -36,7 +67,9 @@ export const upsertFromClerk = internalMutation({
           const template = getWelcomeEmailTemplate(userName)
           await sendTransactionalEmail(ctx, userEmail, template)
         } catch (error) {
-          console.error("Failed to send welcome email:", error)
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const { logError } = require("./logger")
+          logError(error, "Failed to send welcome email")
           // Don't fail the mutation if email fails
         }
       }
@@ -55,9 +88,41 @@ export const deleteFromClerk = internalMutation({
     const user = await userByExternalId(ctx, clerkUserId)
 
     if (user !== null) {
+      // Check if this user is a host with active or upcoming rentals
+      const today = new Date().toISOString().split("T")[0]
+      
+      // Get all vehicles owned by this user
+      const ownedVehicles = await ctx.db
+        .query("vehicles")
+        .withIndex("by_owner", (q) => q.eq("ownerId", clerkUserId))
+        .collect()
+
+      // Check for active or upcoming reservations on any of their vehicles
+      for (const vehicle of ownedVehicles) {
+        const activeReservations = await ctx.db
+          .query("reservations")
+          .withIndex("by_vehicle", (q) => q.eq("vehicleId", vehicle._id))
+          .filter((q) =>
+            q.and(
+              // Only check pending or confirmed reservations
+              q.or(
+                q.eq(q.field("status"), "pending"),
+                q.eq(q.field("status"), "confirmed")
+              ),
+              // Check if reservation end date is in the future (active or upcoming)
+              q.gte(q.field("endDate"), today)
+            )
+          )
+          .collect()
+
+        if (activeReservations.length > 0) {
+          throw new Error(
+            `Cannot delete host account with active or upcoming rentals. User has ${activeReservations.length} active reservation(s) on vehicle ${vehicle.make} ${vehicle.model}.`
+          )
+        }
+      }
+
       await ctx.db.delete(user._id)
-    } else {
-      console.warn(`Can't delete user, there is none for Clerk user ID: ${clerkUserId}`)
     }
   },
 })
@@ -171,6 +236,61 @@ export const updateProfile = mutation({
   },
 })
 
+// Update notification preferences
+export const updateNotificationPreferences = mutation({
+  args: {
+    preferences: v.object({
+      reservationUpdates: v.boolean(),
+      messages: v.boolean(),
+      reviewsAndRatings: v.boolean(),
+      paymentUpdates: v.boolean(),
+      marketing: v.boolean(),
+    }),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) {
+      throw new Error("Not authenticated")
+    }
+
+    const user = await userByExternalId(ctx, identity.subject)
+    if (!user) {
+      throw new Error("User not found")
+    }
+
+    await ctx.db.patch(user._id, {
+      notificationPreferences: args.preferences,
+    })
+
+    return user._id
+  },
+})
+
+// Get notification preferences for current user
+export const getNotificationPreferences = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) {
+      return null
+    }
+
+    const user = await userByExternalId(ctx, identity.subject)
+    if (!user) {
+      return null
+    }
+
+    // Return default preferences if none set
+    return user.notificationPreferences || {
+      reservationUpdates: true,
+      messages: true,
+      reviewsAndRatings: true,
+      paymentUpdates: true,
+      marketing: false,
+    }
+  },
+})
+
 export const setStripeAccountId = mutation({
   args: {
     userId: v.string(),
@@ -192,6 +312,42 @@ export const setStripeAccountId = mutation({
     })
 
     return user._id
+  },
+})
+
+// Find user by Stripe account ID
+export const getByStripeAccountId = query({
+  args: { stripeAccountId: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("users")
+      .filter((q) => q.eq(q.field("stripeAccountId"), args.stripeAccountId))
+      .first()
+  },
+})
+
+// Update Stripe account status (called from webhook)
+export const updateStripeAccountStatus = internalMutation({
+  args: {
+    stripeAccountId: v.string(),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("enabled"),
+      v.literal("restricted"),
+      v.literal("disabled")
+    ),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db
+      .query("users")
+      .filter((q) => q.eq(q.field("stripeAccountId"), args.stripeAccountId))
+      .first()
+
+    if (user) {
+      await ctx.db.patch(user._id, {
+        stripeAccountStatus: args.status,
+      })
+    }
   },
 })
 
@@ -382,12 +538,68 @@ export const saveOnboardingVehicleAddress = mutation({
       throw new Error("User not found")
     }
 
+    // Save address without coordinates first (geocoding happens async)
     await ctx.db.patch(user._id, {
       onboardingVehicleAddress: args.address,
       hostOnboardingStatus: user.hostOnboardingStatus === "not_started" ? "in_progress" : user.hostOnboardingStatus || "in_progress",
     })
 
+    // Schedule geocoding action
+    await ctx.scheduler.runAfter(0, internal.users.geocodeOnboardingAddress, {
+      userId: user._id,
+      address: args.address,
+    })
+
     return { success: true }
+  },
+})
+
+// Internal mutation to update onboarding address coordinates after geocoding
+export const updateOnboardingAddressCoordinates = internalMutation({
+  args: {
+    userId: v.id("users"),
+    latitude: v.number(),
+    longitude: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId)
+    if (!user || !user.onboardingVehicleAddress) {
+      return
+    }
+
+    await ctx.db.patch(args.userId, {
+      onboardingVehicleAddress: {
+        ...user.onboardingVehicleAddress,
+        latitude: args.latitude,
+        longitude: args.longitude,
+      },
+    })
+  },
+})
+
+// Action to geocode onboarding address (can make network calls)
+export const geocodeOnboardingAddress = action({
+  args: {
+    userId: v.id("users"),
+    address: v.object({
+      street: v.string(),
+      city: v.string(),
+      state: v.string(),
+      zipCode: v.string(),
+    }),
+  },
+  handler: async (ctx, args) => {
+    const { geocodeAddress } = await import("./geocoding")
+    
+    const result = await geocodeAddress(args.address)
+    
+    if (result) {
+      await ctx.runMutation(internal.users.updateOnboardingAddressCoordinates, {
+        userId: args.userId,
+        latitude: result.latitude,
+        longitude: result.longitude,
+      })
+    }
   },
 })
 
@@ -508,6 +720,7 @@ export const saveOnboardingDraft = mutation({
             price: v.number(),
             description: v.optional(v.string()),
             isRequired: v.optional(v.boolean()),
+            priceType: v.optional(v.union(v.literal("daily"), v.literal("one-time"))),
           })
         ),
         advanceNotice: v.optional(v.string()),
@@ -647,7 +860,9 @@ export const clearOnboardingDraft = mutation({
           try {
             await r2.deleteObject(ctx, image.r2Key)
           } catch (error) {
-            console.error(`Failed to delete orphaned R2 image ${image.r2Key}:`, error)
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const { logError } = require("./logger")
+            logError(error, `Failed to delete orphaned R2 image ${image.r2Key}`)
             // Continue with cleanup even if R2 deletion fails
           }
         }
@@ -684,7 +899,9 @@ export const startOverOnboarding = mutation({
           try {
             await r2.deleteObject(ctx, image.r2Key)
           } catch (error) {
-            console.error(`Failed to delete orphaned R2 image ${image.r2Key}:`, error)
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const { logError } = require("./logger")
+            logError(error, `Failed to delete orphaned R2 image ${image.r2Key}`)
             // Continue with cleanup even if R2 deletion fails
           }
         }

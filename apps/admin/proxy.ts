@@ -1,9 +1,8 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server"
 import { NextResponse } from "next/server"
 
-// All routes except sign-in and debug require authentication and admin role
+// All routes except sign-in require authentication and admin role
 const isPublicRoute = createRouteMatcher(["/sign-in(.*)"])
-const isDebugRoute = createRouteMatcher(["/debug(.*)"])
 
 export default clerkMiddleware(async (auth, req) => {
   const { userId, sessionClaims, orgId } = await auth()
@@ -21,11 +20,6 @@ export default clerkMiddleware(async (auth, req) => {
     return NextResponse.redirect(url)
   }
 
-  // Allow authenticated users to access debug page (even if not admin)
-  if (isDebugRoute(req)) {
-    return NextResponse.next()
-  }
-
   // Check if user has admin role
   // Clerk stores metadata in publicMetadata when set via dashboard
   // This matches how the backend Convex functions check for admin role
@@ -35,18 +29,6 @@ export default clerkMiddleware(async (auth, req) => {
     (publicMetadata.role as string | undefined) ||
     (sessionMetadata.orgRole as string | undefined) ||
     ((sessionMetadata.metadata as Record<string, unknown>)?.role as string | undefined)
-
-  // Debug logging (remove in production)
-  if (process.env.NODE_ENV === "development") {
-    // biome-ignore lint: Development debugging only
-    console.log("Admin check:", {
-      userId,
-      orgId,
-      role,
-      publicMetadata,
-      sessionClaimsKeys: sessionClaims ? Object.keys(sessionClaims) : null,
-    })
-  }
 
   if (role !== "admin") {
     // Redirect non-admin users to sign-in with error message

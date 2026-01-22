@@ -19,7 +19,7 @@ export default defineSchema({
     stripeAccountStatus: v.optional(
       v.union(
         v.literal("pending"),
-        v.literal("active"),
+        v.literal("enabled"),
         v.literal("restricted"),
         v.literal("disabled")
       )
@@ -28,6 +28,18 @@ export default defineSchema({
     stripeCustomerId: v.optional(v.string()),
     // User interests/preferences
     interests: v.optional(v.array(v.string())), // e.g., ['Track Racing', 'GT3 Cars', 'Formula Racing', 'Endurance']
+    // Notification preferences
+    notificationPreferences: v.optional(
+      v.object({
+        reservationUpdates: v.boolean(),
+        messages: v.boolean(),
+        reviewsAndRatings: v.boolean(),
+        paymentUpdates: v.boolean(),
+        marketing: v.boolean(),
+      })
+    ),
+    // Timestamp of last message digest email sent (to prevent spam)
+    lastMessageDigestAt: v.optional(v.number()),
     // User profile fields
     bio: v.optional(v.string()),
     location: v.optional(v.string()),
@@ -51,6 +63,8 @@ export default defineSchema({
         city: v.string(),
         state: v.string(),
         zipCode: v.string(),
+        latitude: v.optional(v.number()),
+        longitude: v.optional(v.number()),
       })
     ),
     // Temporary storage for onboarding draft data (allows users to save progress)
@@ -62,6 +76,8 @@ export default defineSchema({
             city: v.string(),
             state: v.string(),
             zipCode: v.string(),
+            latitude: v.optional(v.number()),
+            longitude: v.optional(v.number()),
           })
         ),
         vehicleData: v.optional(
@@ -84,6 +100,7 @@ export default defineSchema({
                 price: v.number(),
                 description: v.optional(v.string()),
                 isRequired: v.optional(v.boolean()),
+                priceType: v.optional(v.union(v.literal("daily"), v.literal("one-time"))),
               })
             ),
             advanceNotice: v.optional(v.string()),
@@ -137,12 +154,30 @@ export default defineSchema({
         price: v.number(),
         description: v.optional(v.string()),
         isRequired: v.optional(v.boolean()),
+        priceType: v.optional(v.union(v.literal("daily"), v.literal("one-time"))),
       })
     ),
+    // Pickup location address
+    address: v.optional(
+      v.object({
+        street: v.string(),
+        city: v.string(),
+        state: v.string(),
+        zipCode: v.string(),
+        latitude: v.optional(v.number()),
+        longitude: v.optional(v.number()),
+      })
+    ),
+    // Availability settings
+    advanceNotice: v.optional(v.string()),
+    minTripDuration: v.optional(v.string()),
+    maxTripDuration: v.optional(v.string()),
+    requireWeekendMin: v.optional(v.boolean()),
     isActive: v.boolean(),
     isApproved: v.optional(v.boolean()),
     viewCount: v.optional(v.number()), // Total views
     shareCount: v.optional(v.number()), // Total shares
+    deletedAt: v.optional(v.number()), // Soft delete timestamp
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -215,6 +250,7 @@ export default defineSchema({
           name: v.string(),
           price: v.number(),
           description: v.optional(v.string()),
+          priceType: v.optional(v.union(v.literal("daily"), v.literal("one-time"))),
         })
       )
     ),
