@@ -1,8 +1,5 @@
 "use client"
 
-import { useMutation } from "convex/react"
-import { useState, useEffect } from "react"
-import { useRouter, usePathname } from "next/navigation"
 import { useUser } from "@clerk/nextjs"
 import { Button } from "@workspace/ui/components/button"
 import {
@@ -23,48 +20,25 @@ import {
 } from "@workspace/ui/components/select"
 import { Separator } from "@workspace/ui/components/separator"
 import { Textarea } from "@workspace/ui/components/textarea"
-import { ArrowLeft, Check, Plus, X, Loader2 } from "lucide-react"
+import { useMutation } from "convex/react"
+import { ArrowLeft, Check, Loader2, Plus, X } from "lucide-react"
 import Link from "next/link"
+import { usePathname, useRouter } from "next/navigation"
+import { useEffect, useState } from "react"
 import { api } from "@/lib/convex"
+import { handleErrorWithContext } from "@/lib/error-handler"
+import {
+  REAL_WORLD_CATEGORIES,
+  SIM_RACING_CATEGORIES,
+  SIM_RACING_PLATFORMS,
+  RACING_TYPES,
+} from "@/lib/constants"
 
+// Combine real-world and sim-racing categories for team specialties
 const COMMON_SPECIALTIES = [
-  "GT3",
-  "GT4",
-  "Formula",
-  "Open Wheel",
-  "Endurance",
-  "Time Attack",
-  "Drifting",
-  "Club Racing",
-  "Vintage Racing",
+  ...REAL_WORLD_CATEGORIES,
   "Cup Series",
-  "Track Days",
-  // Sim Racing Categories
-  "iRacing",
-  "Assetto Corsa Competizione",
-  "Gran Turismo",
-  "F1 Esports",
-  "Sim Racing - GT",
-  "Sim Racing - Formula",
-  "Sim Racing - Endurance",
-  "Sim Racing - Oval",
-]
-
-const SIM_RACING_PLATFORMS = [
-  "iRacing",
-  "Assetto Corsa Competizione",
-  "Gran Turismo 7",
-  "F1 24",
-  "rFactor 2",
-  "RaceRoom",
-  "Automobilista 2",
-  "Other",
-]
-
-const RACING_TYPES = [
-  { value: "real-world", label: "Real-World Racing" },
-  { value: "sim-racing", label: "Sim Racing" },
-  { value: "both", label: "Both" },
+  ...SIM_RACING_CATEGORIES,
 ]
 
 export default function CreateTeamProfilePage() {
@@ -102,7 +76,9 @@ export default function CreateTeamProfilePage() {
   // Redirect to sign-in if not authenticated
   useEffect(() => {
     if (userLoaded && !isSignedIn) {
-      router.push(`/sign-in?redirect_url=${encodeURIComponent(pathname || "/motorsports/profile/team")}`)
+      router.push(
+        `/sign-in?redirect_url=${encodeURIComponent(pathname || "/motorsports/profile/team")}`
+      )
     }
   }, [isSignedIn, userLoaded, router, pathname])
 
@@ -116,8 +92,11 @@ export default function CreateTeamProfilePage() {
         description: formData.description,
         logoUrl: formData.logoUrl || undefined,
         location: formData.location,
-        racingType: formData.racingType ? (formData.racingType as "real-world" | "sim-racing" | "both") : undefined,
-        simRacingPlatforms: formData.simRacingPlatforms.length > 0 ? formData.simRacingPlatforms : undefined,
+        racingType: formData.racingType
+          ? (formData.racingType as "real-world" | "sim-racing" | "both")
+          : undefined,
+        simRacingPlatforms:
+          formData.simRacingPlatforms.length > 0 ? formData.simRacingPlatforms : undefined,
         specialties: formData.specialties,
         availableSeats: formData.availableSeats,
         requirements: formData.requirements,
@@ -137,8 +116,13 @@ export default function CreateTeamProfilePage() {
       // Redirect to motorsports page after successful creation
       router.push("/motorsports/teams")
     } catch (error) {
-      console.error("Error creating team profile:", error)
-      alert("Failed to create team profile. Please try again.")
+      handleErrorWithContext(error, {
+        action: "create team profile",
+        entity: "team profile",
+        customMessages: {
+          generic: "Failed to create team profile. Please try again.",
+        },
+      })
     } finally {
       setIsSubmitting(false)
     }
@@ -232,7 +216,7 @@ export default function CreateTeamProfilePage() {
   return (
     <div className="container mx-auto max-w-4xl px-4 py-8">
       <Link href="/motorsports/teams">
-        <Button className="mb-6" variant="ghost">
+        <Button className="mb-6" variant="outline">
           <ArrowLeft className="mr-2 size-4" />
           Back to Teams
         </Button>

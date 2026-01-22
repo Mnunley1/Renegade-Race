@@ -1,15 +1,16 @@
 "use client"
 
-import { Suspense } from "react"
-import { useSearchParams } from "next/navigation"
-import { useQuery } from "convex/react"
-import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Button } from "@workspace/ui/components/button"
+import { Card, CardContent } from "@workspace/ui/components/card"
 import { Separator } from "@workspace/ui/components/separator"
-import { CheckCircle2, Calendar, MapPin, Clock } from "lucide-react"
-import { api } from "@/lib/convex"
+import { useQuery } from "convex/react"
+import { Calendar, CheckCircle2, Clock, MapPin } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
+import { useSearchParams } from "next/navigation"
+import { Suspense } from "react"
+import { api } from "@/lib/convex"
+import { formatDateForDisplay } from "@/lib/date-utils"
 
 function CheckoutSuccessContent() {
   const searchParams = useSearchParams()
@@ -17,7 +18,7 @@ function CheckoutSuccessContent() {
 
   const reservation = useQuery(
     api.reservations.getById,
-    reservationId ? ({ id: reservationId as any }) : "skip"
+    reservationId ? { id: reservationId as any } : "skip"
   )
 
   if (!reservationId) {
@@ -50,7 +51,7 @@ function CheckoutSuccessContent() {
 
   const vehicle = reservation.vehicle
   const primaryImage =
-    vehicle?.images?.find((img) => img.isPrimary)?.cardUrl || vehicle?.images?.[0]?.cardUrl || ""
+    vehicle?.images?.find((img: { isPrimary: boolean; cardUrl?: string }) => img.isPrimary)?.cardUrl || vehicle?.images?.[0]?.cardUrl || ""
 
   return (
     <div className="container mx-auto max-w-4xl px-4 py-8">
@@ -59,14 +60,14 @@ function CheckoutSuccessContent() {
           <div className="mx-auto max-w-2xl text-center">
             <CheckCircle2 className="mx-auto mb-4 size-16 text-green-500" />
             <h1 className="mb-2 font-bold text-4xl">Reservation Confirmed!</h1>
-            <p className="mb-8 text-muted-foreground text-lg">
+            <p className="mb-8 text-lg text-muted-foreground">
               Your payment has been processed successfully. Your reservation details are below.
             </p>
 
             <div className="mb-8 rounded-lg border bg-muted/50 p-6 text-left">
               {vehicle && (
                 <div className="mb-6 flex gap-4">
-                  {primaryImage && (
+                  {primaryImage && primaryImage.trim() !== "" ? (
                     <div className="relative h-32 w-48 shrink-0 overflow-hidden rounded-lg">
                       <Image
                         alt={`${vehicle.year} ${vehicle.make} ${vehicle.model}`}
@@ -76,7 +77,7 @@ function CheckoutSuccessContent() {
                         src={primaryImage}
                       />
                     </div>
-                  )}
+                  ) : null}
                   <div className="flex-1">
                     <h2 className="mb-2 font-bold text-2xl">
                       {vehicle.year} {vehicle.make} {vehicle.model}
@@ -101,8 +102,8 @@ function CheckoutSuccessContent() {
                   </div>
                   <div className="text-right">
                     <p className="font-medium">
-                      {new Date(reservation.startDate).toLocaleDateString()} -{" "}
-                      {new Date(reservation.endDate).toLocaleDateString()}
+                      {formatDateForDisplay(reservation.startDate)} -{" "}
+                      {formatDateForDisplay(reservation.endDate)}
                     </p>
                     <p className="text-muted-foreground text-sm">
                       {reservation.totalDays} {reservation.totalDays === 1 ? "day" : "days"}
@@ -145,7 +146,7 @@ function CheckoutSuccessContent() {
               <Button asChild size="lg">
                 <Link href="/trips">View My Trips</Link>
               </Button>
-              <Button asChild variant="outline" size="lg">
+              <Button asChild size="lg" variant="outline">
                 <Link href="/vehicles">Browse More Vehicles</Link>
               </Button>
             </div>
@@ -173,4 +174,3 @@ export default function CheckoutSuccessPage() {
     </Suspense>
   )
 }
-

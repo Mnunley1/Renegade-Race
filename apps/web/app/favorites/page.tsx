@@ -1,38 +1,50 @@
 "use client"
 
-import { useQuery } from "convex/react"
 import { useUser } from "@clerk/nextjs"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent } from "@workspace/ui/components/card"
+import { useQuery } from "convex/react"
 import { Heart, Loader2 } from "lucide-react"
 import Link from "next/link"
-import { useRouter, usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
+import { useMemo } from "react"
 import { VehicleCard } from "@/components/vehicle-card"
 import { api } from "@/lib/convex"
-import { useMemo } from "react"
+import type { Id } from "@/lib/convex"
 
 export default function FavoritesPage() {
   const { user, isSignedIn, isLoaded: userLoaded } = useUser()
   const router = useRouter()
   const pathname = usePathname()
-  
+
   // Fetch user's favorites from Convex
-  const favoritesData = useQuery(
-    api.favorites.getUserFavorites,
-    isSignedIn ? {} : "skip"
+  const favoritesData = useQuery(api.favorites.getUserFavorites, isSignedIn ? {} : "skip")
+
+  // Fetch vehicle stats for favorited vehicles
+  const favoriteVehicleIds = useMemo(() => {
+    if (!favoritesData) return []
+    return favoritesData
+      .map((fav: { vehicle?: { _id: Id<"vehicles"> } }) => fav.vehicle?._id as Id<"vehicles"> | undefined)
+      .filter((id: Id<"vehicles"> | undefined): id is Id<"vehicles"> => Boolean(id))
+  }, [favoritesData])
+
+  const favoriteVehicleStats = useQuery(
+    api.reviews.getVehicleStatsBatch,
+    favoriteVehicleIds.length > 0 ? { vehicleIds: favoriteVehicleIds } : "skip"
   )
 
   // Map favorites to the format expected by VehicleCard
   const favorites = useMemo(() => {
-    if (!favoritesData || !favoritesData.length) return []
+    if (!(favoritesData && favoritesData.length)) return []
     return favoritesData
-      .map((fav) => {
+      .map((fav: { vehicle?: { _id: Id<"vehicles">; images?: Array<{ isPrimary: boolean; cardUrl?: string }>; year: number; make: string; model: string; dailyRate?: number; track?: { location?: string; name?: string } | null; horsepower?: number; transmission?: string } }) => {
         const vehicle = fav.vehicle
         if (!vehicle) return null
-        const primaryImage = vehicle.images?.find((img) => img.isPrimary) || vehicle.images?.[0]
+        const primaryImage = vehicle.images?.find((img: { isPrimary: boolean }) => img.isPrimary) || vehicle.images?.[0]
+        const stats = favoriteVehicleStats?.[vehicle._id]
         return {
           id: vehicle._id,
-          image: primaryImage?.cardUrl || primaryImage?.imageUrl || "",
+          image: primaryImage?.cardUrl ?? "",
           name: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
           year: vehicle.year,
           make: vehicle.make,
@@ -40,8 +52,8 @@ export default function FavoritesPage() {
           pricePerDay: vehicle.dailyRate,
           location: vehicle.track?.location || "",
           track: vehicle.track?.name || "",
-          rating: 0, // TODO: Calculate from reviews
-          reviews: 0, // TODO: Get from reviews
+          rating: stats?.averageRating || 0,
+          reviews: stats?.totalReviews || 0,
           horsepower: vehicle.horsepower,
           transmission: vehicle.transmission || "",
         }
@@ -108,9 +120,7 @@ export default function FavoritesPage() {
     <div className="container mx-auto px-4 py-8">
       <div className="mb-8">
         <h1 className="mb-2 font-bold text-3xl">Favorites</h1>
-        <p className="text-muted-foreground">
-          {favorites.length === 0 ? "No favorites yet" : `${favorites.length} saved vehicles`}
-        </p>
+        <p className="text-muted-foreground">Manage your favorite vehicles</p>
       </div>
 
       {favorites.length === 0 ? (
@@ -132,20 +142,20 @@ export default function FavoritesPage() {
         <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
           {favorites.map((vehicle) => (
             <VehicleCard
-              key={vehicle.id}
+              horsepower={vehicle.horsepower}
               id={vehicle.id}
               image={vehicle.image}
-              name={vehicle.name}
-              year={vehicle.year}
+              key={vehicle.id}
+              location={vehicle.location}
               make={vehicle.make}
               model={vehicle.model}
+              name={vehicle.name}
               pricePerDay={vehicle.pricePerDay}
-              location={vehicle.location}
-              track={vehicle.track}
               rating={vehicle.rating}
               reviews={vehicle.reviews}
-              horsepower={vehicle.horsepower}
+              track={vehicle.track}
               transmission={vehicle.transmission}
+              year={vehicle.year}
             />
           ))}
         </div>

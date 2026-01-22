@@ -1,26 +1,26 @@
 "use client"
 
-import { useQuery, useMutation } from "convex/react"
-import { useState, useMemo } from "react"
-import { Button } from "@workspace/ui/components/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
+import { useUser } from "@clerk/nextjs"
 import { Badge } from "@workspace/ui/components/badge"
+import { Button } from "@workspace/ui/components/button"
+import { Card, CardContent } from "@workspace/ui/components/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
+import { useMutation, useQuery } from "convex/react"
 import {
   Calendar,
-  DollarSign,
+  Car,
   CheckCircle2,
   Clock,
-  XCircle,
+  DollarSign,
+  Loader2,
   MessageSquare,
   User,
-  Car,
-  Filter,
-  Loader2,
+  XCircle,
 } from "lucide-react"
 import Link from "next/link"
-import { useUser } from "@clerk/nextjs"
+import { useMemo, useState } from "react"
 import { api } from "@/lib/convex"
+import { handleErrorWithContext } from "@/lib/error-handler"
 
 export default function HostReservationsPage() {
   const { user } = useUser()
@@ -61,9 +61,8 @@ export default function HostReservationsPage() {
   // Count pending returns
   const pendingReturnsCount = useMemo(() => {
     if (!pendingCompletions) return 0
-    return pendingCompletions.filter(
-      (c) => c.status === "pending_owner" && c.ownerId === user?.id
-    ).length
+    return pendingCompletions.filter((c) => c.status === "pending_owner" && c.ownerId === user?.id)
+      .length
   }, [pendingCompletions, user?.id])
 
   // Combine all reservations
@@ -168,8 +167,12 @@ export default function HostReservationsPage() {
         reservationId: reservationId as any,
       })
     } catch (error) {
-      console.error("Error approving reservation:", error)
-      alert("Failed to approve reservation. Please try again.")
+      handleErrorWithContext(error, {
+        action: "approve reservation",
+        customMessages: {
+          generic: "Failed to approve reservation. Please try again.",
+        },
+      })
     }
   }
 
@@ -179,8 +182,12 @@ export default function HostReservationsPage() {
         reservationId: reservationId as any,
       })
     } catch (error) {
-      console.error("Error declining reservation:", error)
-      alert("Failed to decline reservation. Please try again.")
+      handleErrorWithContext(error, {
+        action: "decline reservation",
+        customMessages: {
+          generic: "Failed to decline reservation. Please try again.",
+        },
+      })
     }
   }
 
@@ -199,17 +206,18 @@ export default function HostReservationsPage() {
                 <Clock className="size-5 text-orange-600 dark:text-orange-400" />
                 <div>
                   <p className="font-semibold text-orange-700 dark:text-orange-400">
-                    {pendingReturnsCount} Return{pendingReturnsCount !== 1 ? "s" : ""} Pending Review
+                    {pendingReturnsCount} Return{pendingReturnsCount !== 1 ? "s" : ""} Pending
+                    Review
                   </p>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-muted-foreground text-sm">
                     Review the return forms submitted by renters
                   </p>
                 </div>
               </div>
               <Button
                 onClick={() => setSelectedStatus("pending_returns")}
-                variant="outline"
                 size="sm"
+                variant="outline"
               >
                 View Pending Returns
               </Button>
@@ -250,7 +258,9 @@ export default function HostReservationsPage() {
               <CardContent className="p-12 text-center">
                 <Calendar className="mx-auto mb-4 size-12 text-muted-foreground" />
                 <p className="mb-2 font-semibold text-lg">No reservations found</p>
-                <p className="text-muted-foreground">Reservations will appear here when renters book your vehicles</p>
+                <p className="text-muted-foreground">
+                  Reservations will appear here when renters book your vehicles
+                </p>
               </CardContent>
             </Card>
           ) : (
@@ -258,14 +268,14 @@ export default function HostReservationsPage() {
               {filteredReservations.map((reservation) => {
                 const vehicleImage =
                   reservation.vehicle?.images?.[0]?.cardUrl ||
-                  reservation.vehicle?.images?.[0]?.imageUrl ||
+                  reservation.vehicle?.images?.[0]?.cardUrl ||
                   "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=400"
 
                 return (
                   <Card key={reservation._id}>
                     <div className="flex flex-col md:flex-row">
                       {/* Vehicle Image */}
-                      <div className="relative h-48 w-full md:h-auto md:w-64 shrink-0 overflow-hidden">
+                      <div className="relative h-48 w-full shrink-0 overflow-hidden md:h-auto md:w-64">
                         <img
                           alt={`${reservation.vehicle?.year} ${reservation.vehicle?.make} ${reservation.vehicle?.model}`}
                           className="size-full object-cover"
@@ -293,7 +303,9 @@ export default function HostReservationsPage() {
                             <div className="mb-3 flex items-center gap-3">
                               <div className="flex items-center gap-2">
                                 <User className="size-4 text-muted-foreground" />
-                                <span className="font-medium">{reservation.renter?.name || "Unknown Renter"}</span>
+                                <span className="font-medium">
+                                  {reservation.renter?.name || "Unknown Renter"}
+                                </span>
                               </div>
                               <span className="text-muted-foreground">•</span>
                               <span className="text-muted-foreground text-sm">
@@ -309,7 +321,8 @@ export default function HostReservationsPage() {
                             <div>
                               <p className="text-muted-foreground text-xs">Dates</p>
                               <p className="font-medium">
-                                {formatDate(reservation.startDate)} - {formatDate(reservation.endDate)}
+                                {formatDate(reservation.startDate)} -{" "}
+                                {formatDate(reservation.endDate)}
                               </p>
                             </div>
                           </div>
@@ -362,13 +375,14 @@ export default function HostReservationsPage() {
                                 </Button>
                               </>
                             )}
-                            {reservation.status === "confirmed" && completionStatusMap.has(reservation._id) && (
-                              <Link href={`/host/returns/${reservation._id}`}>
-                                <Button size="sm" variant="default">
-                                  Review Return
-                                </Button>
-                              </Link>
-                            )}
+                            {reservation.status === "confirmed" &&
+                              completionStatusMap.has(reservation._id) && (
+                                <Link href={`/host/returns/${reservation._id}`}>
+                                  <Button size="sm" variant="default">
+                                    Review Return
+                                  </Button>
+                                </Link>
+                              )}
                             {reservation.status === "confirmed" && (
                               <Link href={`/messages?conversation=${reservation._id}`}>
                                 <Button size="sm" variant="outline">
@@ -407,13 +421,13 @@ export default function HostReservationsPage() {
               {pendingReservations.map((reservation) => {
                 const vehicleImage =
                   reservation.vehicle?.images?.[0]?.cardUrl ||
-                  reservation.vehicle?.images?.[0]?.imageUrl ||
+                  reservation.vehicle?.images?.[0]?.cardUrl ||
                   "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=400"
 
                 return (
                   <Card key={reservation._id}>
                     <div className="flex flex-col md:flex-row">
-                      <div className="relative h-48 w-full md:h-auto md:w-64 shrink-0 overflow-hidden">
+                      <div className="relative h-48 w-full shrink-0 overflow-hidden md:h-auto md:w-64">
                         <img
                           alt={`${reservation.vehicle?.year} ${reservation.vehicle?.make} ${reservation.vehicle?.model}`}
                           className="size-full object-cover"
@@ -428,10 +442,13 @@ export default function HostReservationsPage() {
                               {reservation.vehicle?.model}
                             </h2>
                             <div className="mb-3 flex items-center gap-3">
-                              <span className="font-medium">{reservation.renter?.name || "Unknown Renter"}</span>
+                              <span className="font-medium">
+                                {reservation.renter?.name || "Unknown Renter"}
+                              </span>
                               <span className="text-muted-foreground">•</span>
                               <span className="text-muted-foreground text-sm">
-                                {formatDate(reservation.startDate)} - {formatDate(reservation.endDate)}
+                                {formatDate(reservation.startDate)} -{" "}
+                                {formatDate(reservation.endDate)}
                               </span>
                             </div>
                           </div>
@@ -489,7 +506,7 @@ export default function HostReservationsPage() {
                 return (
                   <Card key={reservation._id}>
                     <div className="flex flex-col md:flex-row">
-                      <div className="relative h-48 w-full md:h-auto md:w-64 shrink-0 overflow-hidden">
+                      <div className="relative h-48 w-full shrink-0 overflow-hidden md:h-auto md:w-64">
                         <img
                           alt={`${reservation.vehicle?.year} ${reservation.vehicle?.make} ${reservation.vehicle?.model}`}
                           className="size-full object-cover"
@@ -507,7 +524,8 @@ export default function HostReservationsPage() {
                               <span className="font-medium">{reservation.renter.name}</span>
                               <span className="text-muted-foreground">•</span>
                               <span className="text-muted-foreground text-sm">
-                                {formatDate(reservation.startDate)} - {formatDate(reservation.endDate)}
+                                {formatDate(reservation.startDate)} -{" "}
+                                {formatDate(reservation.endDate)}
                               </span>
                             </div>
                           </div>
@@ -518,13 +536,14 @@ export default function HostReservationsPage() {
                             ${Math.round((reservation.totalAmount || 0) / 100).toLocaleString()}
                           </p>
                           <div className="flex gap-2">
-                            {reservation.status === "confirmed" && completionStatusMap.has(reservation._id) && (
-                              <Link href={`/host/returns/${reservation._id}`}>
-                                <Button size="sm" variant="default">
-                                  Review Return
-                                </Button>
-                              </Link>
-                            )}
+                            {reservation.status === "confirmed" &&
+                              completionStatusMap.has(reservation._id) && (
+                                <Link href={`/host/returns/${reservation._id}`}>
+                                  <Button size="sm" variant="default">
+                                    Review Return
+                                  </Button>
+                                </Link>
+                              )}
                             <Link href={`/messages?conversation=${reservation._id}`}>
                               <Button size="sm" variant="outline">
                                 <MessageSquare className="mr-2 size-4" />
@@ -556,13 +575,12 @@ export default function HostReservationsPage() {
               {completedReservations.map((reservation) => {
                 const vehicleImage =
                   reservation.vehicle?.images?.[0]?.cardUrl ||
-                  reservation.vehicle?.images?.[0]?.imageUrl ||
                   "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=400"
 
                 return (
                   <Card key={reservation._id}>
                     <div className="flex flex-col md:flex-row">
-                      <div className="relative h-48 w-full md:h-auto md:w-64 shrink-0 overflow-hidden">
+                      <div className="relative h-48 w-full shrink-0 overflow-hidden md:h-auto md:w-64">
                         <img
                           alt={`${reservation.vehicle?.year} ${reservation.vehicle?.make} ${reservation.vehicle?.model}`}
                           className="size-full object-cover"
@@ -577,10 +595,13 @@ export default function HostReservationsPage() {
                               {reservation.vehicle?.model}
                             </h2>
                             <div className="mb-3 flex items-center gap-3">
-                              <span className="font-medium">{reservation.renter?.name || "Unknown Renter"}</span>
+                              <span className="font-medium">
+                                {reservation.renter?.name || "Unknown Renter"}
+                              </span>
                               <span className="text-muted-foreground">•</span>
                               <span className="text-muted-foreground text-sm">
-                                {formatDate(reservation.startDate)} - {formatDate(reservation.endDate)}
+                                {formatDate(reservation.startDate)} -{" "}
+                                {formatDate(reservation.endDate)}
                               </span>
                             </div>
                           </div>
@@ -631,13 +652,13 @@ export default function HostReservationsPage() {
 
                   const vehicleImage =
                     completion.vehicle?.images?.[0]?.cardUrl ||
-                    completion.vehicle?.images?.[0]?.imageUrl ||
+                    completion.vehicle?.images?.[0]?.cardUrl ||
                     "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=400"
 
                   return (
-                    <Card key={completion._id} className="border-orange-500/50">
+                    <Card className="border-orange-500/50" key={completion._id}>
                       <div className="flex flex-col md:flex-row">
-                        <div className="relative h-48 w-full md:h-auto md:w-64 shrink-0 overflow-hidden">
+                        <div className="relative h-48 w-full shrink-0 overflow-hidden md:h-auto md:w-64">
                           <img
                             alt={`${completion.vehicle?.year} ${completion.vehicle?.make} ${completion.vehicle?.model}`}
                             className="size-full object-cover"
@@ -663,16 +684,18 @@ export default function HostReservationsPage() {
                                 </span>
                                 <span className="text-muted-foreground">•</span>
                                 <span className="text-muted-foreground text-sm">
-                                  {formatDate(reservation.startDate)} - {formatDate(reservation.endDate)}
+                                  {formatDate(reservation.startDate)} -{" "}
+                                  {formatDate(reservation.endDate)}
                                 </span>
                               </div>
                               {completion.renterReturnForm && (
                                 <div className="mb-3 rounded-lg border border-orange-500/30 bg-orange-500/10 p-3">
-                                  <p className="mb-1 text-sm font-semibold text-orange-700 dark:text-orange-400">
+                                  <p className="mb-1 font-semibold text-orange-700 text-sm dark:text-orange-400">
                                     Return Form Submitted
                                   </p>
-                                  <p className="text-xs text-muted-foreground">
-                                    Submitted {formatTimeAgo(completion.renterReturnForm.submittedAt)}
+                                  <p className="text-muted-foreground text-xs">
+                                    Submitted{" "}
+                                    {formatTimeAgo(completion.renterReturnForm.submittedAt)}
                                   </p>
                                 </div>
                               )}

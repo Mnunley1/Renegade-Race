@@ -3,10 +3,12 @@
 import { useUser } from "@clerk/nextjs"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
-import { useQuery } from "convex/react"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
+import { Separator } from "@workspace/ui/components/separator"
+import { useAction, useQuery } from "convex/react"
 import {
   AlertCircle,
+  ArrowRight,
   Calendar,
   Car,
   CheckCircle2,
@@ -15,18 +17,52 @@ import {
   Eye,
   Heart,
   Loader2,
+  MessageSquare,
   Plus,
   Share2,
+  Star,
   TrendingUp,
   XCircle,
 } from "lucide-react"
+import { Image, ImageKitProvider } from "@imagekit/next"
 import Link from "next/link"
-import { useMemo } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { Suspense, useEffect, useMemo, useState } from "react"
+import { toast } from "sonner"
+import { HostOnboardingChecklist } from "@/components/host-onboarding-checklist"
 import { api } from "@/lib/convex"
+import { handleError, handleErrorWithContext } from "@/lib/error-handler"
 
-export default function HostDashboardPage() {
+function HostDashboardContent() {
   const { user } = useUser()
-  console.log("user", user)
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const [showChecklist, setShowChecklist] = useState(false)
+  const [isLoadingConnect, setIsLoadingConnect] = useState(false)
+  const [connectError, setConnectError] = useState<string | null>(null)
+  const [connectStatus, setConnectStatus] = useState<{
+    hasAccount: boolean
+    isComplete: boolean
+    chargesEnabled?: boolean
+    payoutsEnabled?: boolean
+    accountId?: string
+  } | null>(null)
+  const [stripeReturnHandled, setStripeReturnHandled] = useState(false)
+
+  const fetchConnectStatus = useAction(api.stripe.getConnectAccountStatus)
+  const refreshConnectStatus = useAction(api.stripe.refreshConnectAccountStatus)
+  const startOrContinueOnboarding = useAction(api.stripe.createConnectAccount)
+  const createDashboardLink = useAction(api.stripe.createConnectLoginLink)
+
+  // Check onboarding status
+  const onboardingStatus = useQuery(api.users.getHostOnboardingStatus, user?.id ? {} : "skip")
+
+  // Redirect if onboarding not complete
+  useEffect(() => {
+    if (onboardingStatus && onboardingStatus.status !== "completed") {
+      router.push("/host/onboarding")
+    }
+  }, [onboardingStatus, router])
 
   // Fetch data from Convex
   const vehicles = useQuery(api.vehicles.getByOwner, user?.id ? { ownerId: user.id } : "skip")
@@ -44,29 +80,86 @@ export default function HostDashboardPage() {
     user?.id ? { ownerId: user.id } : "skip"
   )
 
+  // Handle Stripe return/refresh query parameters
+  useEffect(() => {
+    const stripeReturn = searchParams.get("stripe_return")
+    const stripeRefresh = searchParams.get("stripe_refresh")
+
+    if ((stripeReturn || stripeRefresh) && !stripeReturnHandled) {
+      setStripeReturnHandled(true)
+      
+      // Clean up the URL by removing stripe params
+      const url = new URL(window.location.href)
+      url.searchParams.delete("stripe_return")
+      url.searchParams.delete("stripe_refresh")
+      router.replace(url.pathname + url.search, { scroll: false })
+
+      if (stripeRefresh) {
+        // User needs to restart onboarding (link expired)
+        toast.info("Your Stripe session expired. Please try again.")
+      }
+      // For stripe_return, we'll show success/status after loading account status below
+    }
+  }, [searchParams, stripeReturnHandled, router])
+
+  useEffect(() => {
+    const loadStatus = async () => {
+      if (!user?.id) return
+      setIsLoadingConnect(true)
+      setConnectError(null)
+      try {
+        // First, refresh the Stripe account status in our database to sync with Stripe
+        // This ensures our database reflects the current Stripe account state
+        await refreshConnectStatus({ ownerId: user.id }).catch(() => {
+          // Silently ignore refresh errors - we'll still try to fetch status
+        })
+        
+        const status = await fetchConnectStatus({ ownerId: user.id })
+        setConnectStatus(status)
+
+        // Show toast if returning from Stripe onboarding
+        if (stripeReturnHandled && status) {
+          if (status.isComplete) {
+            toast.success("Your Stripe account is set up! You can now receive payments.")
+          } else if (status.hasAccount) {
+            toast.info("Stripe setup incomplete. Please complete the remaining steps to receive payments.")
+          }
+        }
+      } catch (error) {
+        handleError(error, { showToast: false })
+        const errorMessage = "Failed to load payout status"
+        setConnectError(errorMessage)
+      } finally {
+        setIsLoadingConnect(false)
+      }
+    }
+
+    loadStatus()
+  }, [fetchConnectStatus, refreshConnectStatus, user?.id, stripeReturnHandled])
+
   // Calculate stats from real data
   const stats = useMemo(() => {
     const totalVehicles = vehicles?.length || 0
     const pendingBookings = pendingReservations?.length || 0
     const upcomingBookings = confirmedReservations?.length || 0
 
-    // Calculate total earnings from confirmed reservations
+    // Calculate total earnings from confirmed reservations (in cents, convert to dollars)
     const totalEarnings =
-      confirmedReservations?.reduce((sum, res) => sum + (res.totalAmount || 0), 0) || 0
+      confirmedReservations?.reduce((sum: number, res: { totalAmount?: number }) => sum + (res.totalAmount || 0), 0) || 0
 
     // Get average rating from review stats
     const averageRating = reviewStats?.averageRating || 0
 
     // Calculate analytics totals
-    const totalViews = vehicleAnalytics?.reduce((sum, v) => sum + v.totalViews, 0) || 0
-    const totalShares = vehicleAnalytics?.reduce((sum, v) => sum + v.totalShares, 0) || 0
-    const totalFavorites = vehicleAnalytics?.reduce((sum, v) => sum + v.favoriteCount, 0) || 0
+    const totalViews = vehicleAnalytics?.reduce((sum: number, v: { totalViews: number }) => sum + v.totalViews, 0) || 0
+    const totalShares = vehicleAnalytics?.reduce((sum: number, v: { totalShares: number }) => sum + v.totalShares, 0) || 0
+    const totalFavorites = vehicleAnalytics?.reduce((sum: number, v: { favoriteCount: number }) => sum + v.favoriteCount, 0) || 0
 
     return {
       totalVehicles,
       pendingBookings,
       upcomingBookings,
-      totalEarnings,
+      totalEarnings: Math.round(totalEarnings / 100), // Convert cents to dollars
       averageRating,
       totalViews,
       totalShares,
@@ -74,12 +167,13 @@ export default function HostDashboardPage() {
     }
   }, [vehicles, pendingReservations, confirmedReservations, reviewStats, vehicleAnalytics])
 
+
   // Map recent vehicles from real data
   const recentVehicles = useMemo(() => {
     if (!vehicles || vehicles.length === 0) return []
 
-    return vehicles.slice(0, 3).map((vehicle) => {
-      const primaryImage = vehicle.images?.find((img) => img.isPrimary) || vehicle.images?.[0]
+    return vehicles.slice(0, 3).map((vehicle: { _id: string; images?: Array<{ isPrimary: boolean; cardUrl?: string; r2Key?: string }>; make: string; model: string; year: number; isApproved?: boolean; isActive?: boolean; dailyRate?: number }) => {
+      const primaryImage = vehicle.images?.find((img: { isPrimary: boolean }) => img.isPrimary) || vehicle.images?.[0]
 
       // Calculate bookings and earnings from reservations
       const vehicleReservations = [
@@ -88,7 +182,10 @@ export default function HostDashboardPage() {
       ].filter((res) => res.vehicleId === vehicle._id)
 
       const bookings = vehicleReservations.length
-      const earnings = vehicleReservations.reduce((sum, res) => sum + (res.totalAmount || 0), 0)
+      const earnings = vehicleReservations.reduce(
+        (sum, res) => sum + Math.round((res.totalAmount || 0) / 100),
+        0
+      )
 
       const status = vehicle.isApproved ? "active" : vehicle.isActive ? "pending" : "inactive"
 
@@ -100,41 +197,12 @@ export default function HostDashboardPage() {
         year: vehicle.year,
         status,
         bookings,
-        earnings: Math.round(earnings / 100), // Convert cents to dollars
-        image:
-          primaryImage?.cardUrl ||
-          primaryImage?.imageUrl ||
-          "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=400",
+        earnings,
+        imageKey: primaryImage?.r2Key ?? "",
+        dailyRate: vehicle.dailyRate,
       }
     })
   }, [vehicles, pendingReservations, confirmedReservations])
-
-  const recentActivity = [
-    {
-      id: "1",
-      type: "booking_request",
-      title: "New booking request",
-      description: "John Smith wants to rent your Porsche 911 GT3",
-      time: "2 hours ago",
-      status: "pending",
-    },
-    {
-      id: "2",
-      type: "booking_confirmed",
-      title: "Booking confirmed",
-      description: "Sarah Johnson confirmed booking for Ferrari F8 Tributo",
-      time: "5 hours ago",
-      status: "confirmed",
-    },
-    {
-      id: "3",
-      type: "vehicle_approved",
-      title: "Vehicle approved",
-      description: "Your Lamborghini Huracán has been approved and is now live",
-      time: "1 day ago",
-      status: "approved",
-    },
-  ]
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -164,17 +232,18 @@ export default function HostDashboardPage() {
     }
   }
 
-  const getActivityIcon = (type: string) => {
-    switch (type) {
-      case "booking_request":
-        return <AlertCircle className="size-4 text-blue-500" />
-      case "booking_confirmed":
-        return <CheckCircle2 className="size-4 text-green-500" />
-      case "vehicle_approved":
-        return <CheckCircle2 className="size-4 text-green-500" />
-      default:
-        return <Clock className="size-4 text-gray-500" />
-    }
+  // Helper function to get time ago string
+  function getTimeAgo(timestamp: number): string {
+    const now = Date.now()
+    const diff = now - timestamp
+    const minutes = Math.floor(diff / 60000)
+    const hours = Math.floor(diff / 3600000)
+    const days = Math.floor(diff / 86400000)
+
+    if (minutes < 1) return "Just now"
+    if (minutes < 60) return `${minutes} ${minutes === 1 ? "minute" : "minutes"} ago`
+    if (hours < 24) return `${hours} ${hours === 1 ? "hour" : "hours"} ago`
+    return `${days} ${days === 1 ? "day" : "days"} ago`
   }
 
   // Show loading state while data is being fetched
@@ -185,7 +254,53 @@ export default function HostDashboardPage() {
     reviewStats === undefined ||
     vehicleAnalytics === undefined
 
-  if (isLoading) {
+  const handleOnboarding = async () => {
+    if (!user?.id) return
+    setIsLoadingConnect(true)
+    setConnectError(null)
+    try {
+      // Pass the current origin so redirects work with any domain (localhost, ngrok, staging, production)
+      const returnUrlBase = typeof window !== "undefined" ? window.location.origin : undefined
+      
+      const result = await startOrContinueOnboarding({ 
+        ownerId: user.id,
+        returnUrlBase, // Pass current domain for flexible redirects
+      })
+      if (result.onboardingUrl) {
+        window.location.href = result.onboardingUrl
+        return
+      }
+      const status = await fetchConnectStatus({ ownerId: user.id })
+      setConnectStatus(status)
+    } catch (error) {
+      handleError(error, { showToast: false })
+      const errorMessage = "Failed to start Stripe onboarding. Please try again."
+      setConnectError(errorMessage)
+    } finally {
+      setIsLoadingConnect(false)
+    }
+  }
+
+  const handleOpenDashboard = async () => {
+    if (!user?.id) return
+    setIsLoadingConnect(true)
+    setConnectError(null)
+    try {
+      const link = await createDashboardLink({ ownerId: user.id })
+      if (link.url) {
+        window.location.href = link.url
+      }
+    } catch (error) {
+      handleError(error, { showToast: false })
+      const errorMessage = "Failed to open Stripe dashboard. Please try again."
+      setConnectError(errorMessage)
+    } finally {
+      setIsLoadingConnect(false)
+    }
+  }
+
+  // Show loading or redirect if onboarding not complete
+  if (isLoading || !onboardingStatus) {
     return (
       <div className="container mx-auto max-w-7xl px-4 py-8">
         <div className="flex min-h-[60vh] items-center justify-center">
@@ -198,263 +313,517 @@ export default function HostDashboardPage() {
     )
   }
 
+  if (onboardingStatus.status !== "completed") {
+    return null // Will redirect via useEffect
+  }
+
   return (
-    <div className="container mx-auto max-w-7xl px-4 py-8">
-      <div className="mb-8">
-        <div className="mb-2 flex items-center justify-between">
-          <div>
-            <h1 className="font-bold text-3xl">Host Dashboard</h1>
+    <>
+      <HostOnboardingChecklist onOpenChange={setShowChecklist} open={showChecklist} />
+      <div className="container mx-auto max-w-7xl px-4 py-6 sm:py-8">
+        {/* Stripe Account Setup Banner */}
+        {connectStatus && !connectStatus.isComplete && (
+          <Card className="mb-6 border-amber-200 bg-amber-50/80 dark:border-amber-900/50 dark:bg-amber-950/30">
+            <CardHeader>
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="mt-0.5 size-5 shrink-0 text-amber-600 dark:text-amber-400" />
+                  <div>
+                    <CardTitle className="text-amber-900 dark:text-amber-100">
+                      Complete Your Stripe Account Setup
+                    </CardTitle>
+                    <CardDescription className="mt-1.5 text-amber-800 dark:text-amber-200">
+                      {connectStatus.hasAccount
+                        ? "Your Stripe account is not fully set up. Your vehicles will not be displayed to renters until you complete the onboarding process. Complete setup to display your vehicles and start receiving payouts."
+                        : "Your vehicles will not be displayed to renters until you complete Stripe account setup. Set up your account to display your vehicles and receive payouts from your rentals. This only takes a few minutes."}
+                    </CardDescription>
+                  </div>
+                </div>
+                <Button
+                  disabled={isLoadingConnect || !user?.id}
+                  onClick={handleOnboarding}
+                  size="lg"
+                  className="shrink-0 bg-amber-600 text-white hover:bg-amber-700 dark:bg-amber-500 dark:hover:bg-amber-600"
+                >
+                  {isLoadingConnect ? (
+                    <>
+                      <Loader2 className="mr-2 size-4 animate-spin" />
+                      Working...
+                    </>
+                  ) : (
+                    <>
+                      {connectStatus.hasAccount ? "Continue Setup" : "Set Up Payouts"}
+                      <ArrowRight className="ml-2 size-4" />
+                    </>
+                  )}
+                </Button>
+              </div>
+            </CardHeader>
+          </Card>
+        )}
+
+        {/* Header Section */}
+        <div className="mb-8">
+          <div className="mb-6">
+            <h1 className="font-bold text-3xl sm:text-4xl">Dashboard</h1>
             <p className="mt-2 text-muted-foreground">
-              Manage your vehicles, bookings, and earnings all in one place
+              Welcome back, {user?.firstName || "Host"}. Here's what's happening with your listings.
             </p>
           </div>
-          <Link href="/host/vehicles/new">
-            <Button size="lg">
-              <Plus className="mr-2 size-4" />
-              List Your Vehicle
-            </Button>
-          </Link>
-        </div>
-      </div>
 
-      {/* Stats Grid */}
-      <div className="mb-8 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="font-medium text-muted-foreground text-sm">
-              Total Vehicles
-            </CardTitle>
-            <Car className="size-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="font-bold text-2xl">{stats.totalVehicles}</div>
-            <p className="text-muted-foreground text-xs">
-              {stats.totalVehicles === 1 ? "vehicle listed" : "vehicles listed"}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="font-medium text-muted-foreground text-sm">
-              Pending Bookings
-            </CardTitle>
-            <Clock className="size-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="font-bold text-2xl">{stats.pendingBookings}</div>
-            <p className="text-muted-foreground text-xs">Awaiting your response</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="font-medium text-muted-foreground text-sm">
-              Upcoming Bookings
-            </CardTitle>
-            <Calendar className="size-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="font-bold text-2xl">{stats.upcomingBookings}</div>
-            <p className="text-muted-foreground text-xs">Confirmed reservations</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="font-medium text-muted-foreground text-sm">
-              Total Earnings
-            </CardTitle>
-            <DollarSign className="size-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="font-bold text-2xl">
-              ${Math.round(stats.totalEarnings / 100).toLocaleString()}
-            </div>
-            <p className="text-muted-foreground text-xs">All-time earnings</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="font-medium text-muted-foreground text-sm">
-              Average Rating
-            </CardTitle>
-            <TrendingUp className="size-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="font-bold text-2xl">{stats.averageRating}</div>
-            <p className="text-muted-foreground text-xs">From renters</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Analytics Grid */}
-      <div className="mb-8 grid gap-6 md:grid-cols-3">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="font-medium text-muted-foreground text-sm">
-              Total Views
-            </CardTitle>
-            <Eye className="size-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="font-bold text-2xl">{stats.totalViews.toLocaleString()}</div>
-            <p className="text-muted-foreground text-xs">Listing views</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="font-medium text-muted-foreground text-sm">
-              Total Shares
-            </CardTitle>
-            <Share2 className="size-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="font-bold text-2xl">{stats.totalShares.toLocaleString()}</div>
-            <p className="text-muted-foreground text-xs">Times shared</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="font-medium text-muted-foreground text-sm">
-              Total Favorites
-            </CardTitle>
-            <Heart className="size-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="font-bold text-2xl">{stats.totalFavorites.toLocaleString()}</div>
-            <p className="text-muted-foreground text-xs">Saved by users</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-8 lg:grid-cols-3">
-        {/* Recent Vehicles */}
-        <div className="lg:col-span-2">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Your Vehicles</CardTitle>
-              <Link href="/host/vehicles/list">
-                <Button size="sm" variant="outline">
-                  View All
-                </Button>
-              </Link>
-            </CardHeader>
-            <CardContent>
-              {recentVehicles.length === 0 ? (
-                <div className="py-12 text-center">
-                  <Car className="mx-auto mb-4 size-12 text-muted-foreground" />
-                  <p className="mb-2 font-semibold text-lg">No vehicles yet</p>
-                  <p className="mb-6 text-muted-foreground">
-                    List your first vehicle to start earning
-                  </p>
-                  <Link href="/host/vehicles/new">
-                    <Button>
-                      <Plus className="mr-2 size-4" />
-                      List Your Vehicle
+          {/* Key Metrics - Hero Stats */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Card className="border-primary/20 bg-primary/5">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="font-medium text-sm text-muted-foreground">
+                  Pending Bookings
+                </CardTitle>
+                <Clock className="size-4 text-primary" />
+              </CardHeader>
+              <CardContent>
+                <div className="font-bold text-3xl">{stats.pendingBookings}</div>
+                <p className="mt-1 text-xs text-muted-foreground">Require your attention</p>
+                {stats.pendingBookings > 0 && (
+                  <Link href="/host/reservations?status=pending">
+                    <Button className="mt-3 w-full" size="sm" variant="outline">
+                      Review Now
+                      <ArrowRight className="ml-2 size-3" />
                     </Button>
                   </Link>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {recentVehicles.map((vehicle) => (
-                    <div
-                      className="flex items-center gap-4 rounded-lg border p-4 transition-colors hover:bg-muted/50"
-                      key={vehicle.id}
-                    >
-                      <div className="relative size-20 shrink-0 overflow-hidden rounded-lg">
-                        <img
-                          alt={vehicle.name}
-                          className="size-full object-cover"
-                          src={vehicle.image}
-                        />
-                      </div>
-                      <div className="flex-1">
-                        <div className="mb-2 flex items-start justify-between">
-                          <div>
-                            <h3 className="font-semibold text-lg">
-                              {vehicle.year} {vehicle.make} {vehicle.model}
-                            </h3>
-                            <p className="text-muted-foreground text-sm">{vehicle.name}</p>
-                          </div>
-                          {getStatusBadge(vehicle.status)}
-                        </div>
-                        <div className="flex items-center gap-4 text-sm">
-                          <span className="text-muted-foreground">{vehicle.bookings} bookings</span>
-                          <span className="text-muted-foreground">•</span>
-                          <span className="font-semibold">
-                            ${vehicle.earnings.toLocaleString()} earned
-                          </span>
-                        </div>
-                      </div>
-                      <Link href={`/host/vehicles/${vehicle.id}`}>
-                        <Button size="sm" variant="outline">
-                          Manage
-                        </Button>
-                      </Link>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="font-medium text-sm text-muted-foreground">
+                  Total Earnings
+                </CardTitle>
+                <DollarSign className="size-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="font-bold text-3xl">${stats.totalEarnings.toLocaleString()}</div>
+                <p className="mt-1 text-xs text-muted-foreground">All-time revenue</p>
+                {connectStatus && !connectStatus.isComplete && (
+                  <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+                    Complete Stripe setup to receive payouts
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="font-medium text-sm text-muted-foreground">
+                  Active Vehicles
+                </CardTitle>
+                <Car className="size-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="font-bold text-3xl">{stats.totalVehicles}</div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {vehicles?.filter((v: { isApproved?: boolean; isActive?: boolean }) => v.isApproved && v.isActive).length || 0} approved
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="font-medium text-sm text-muted-foreground">
+                  Average Rating
+                </CardTitle>
+                <Star className="size-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-baseline gap-2">
+                  <div className="font-bold text-3xl">
+                    {stats.averageRating > 0 ? stats.averageRating.toFixed(1) : "—"}
+                  </div>
+                  {stats.averageRating > 0 && (
+                    <div className="flex items-center gap-0.5 text-yellow-500">
+                      <Star className="size-4 fill-current" />
                     </div>
-                  ))}
+                  )}
                 </div>
-              )}
-            </CardContent>
-          </Card>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {reviewStats?.totalReviews || 0} reviews
+                </p>
+              </CardContent>
+            </Card>
+          </div>
         </div>
 
-        {/* Sidebar */}
-        <div>
-          {/* Quick Actions */}
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle>Quick Actions</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <Link className="block" href="/host/reservations">
-                <Button className="w-full justify-start" size="sm" variant="outline">
-                  <Calendar className="mr-2 size-4" />
-                  View All Reservations
-                </Button>
-              </Link>
-              <Link className="block" href="/host/vehicles/list">
-                <Button className="w-full justify-start" size="sm" variant="outline">
-                  <Car className="mr-2 size-4" />
-                  Manage Vehicles
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
-
-          {/* Recent Activity */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Recent Activity</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {recentActivity.length === 0 ? (
-                <div className="py-8 text-center">
-                  <Clock className="mx-auto mb-4 size-8 text-muted-foreground" />
-                  <p className="text-muted-foreground text-sm">No recent activity</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {recentActivity.map((activity) => (
-                    <div className="flex gap-3" key={activity.id}>
-                      <div className="mt-0.5 shrink-0">{getActivityIcon(activity.type)}</div>
-                      <div className="flex-1 space-y-1">
-                        <p className="font-medium text-sm">{activity.title}</p>
-                        <p className="text-muted-foreground text-xs">{activity.description}</p>
-                        <p className="text-muted-foreground text-xs">{activity.time}</p>
-                      </div>
+        {/* Main Content Grid */}
+        <div className="grid gap-6 lg:grid-cols-3">
+          {/* Left Column - Main Content */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Pending Bookings - Priority Section */}
+            {stats.pendingBookings > 0 && (
+              <Card className="border-yellow-200 bg-yellow-50/50 dark:border-yellow-900 dark:bg-yellow-950/20">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <AlertCircle className="size-5 text-yellow-600 dark:text-yellow-400" />
+                        Action Required
+                      </CardTitle>
+                      <CardDescription className="mt-1">
+                        You have {stats.pendingBookings} booking{" "}
+                        {stats.pendingBookings === 1 ? "request" : "requests"} waiting for your
+                        response
+                      </CardDescription>
                     </div>
-                  ))}
+                    <Link href="/host/reservations?status=pending">
+                      <Button variant="outline">
+                        View All
+                        <ArrowRight className="ml-2 size-4" />
+                      </Button>
+                    </Link>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {pendingReservations?.slice(0, 3).map((reservation: { _id: string; createdAt: number; totalAmount?: number; vehicle?: { year: number; make: string; model: string; images?: Array<{ isPrimary: boolean; cardUrl?: string }> }; renter?: { name?: string } }) => {
+                      const vehicleName = reservation.vehicle
+                        ? `${reservation.vehicle.year} ${reservation.vehicle.make} ${reservation.vehicle.model}`
+                        : "Vehicle"
+                      const renterName = reservation.renter?.name || "Guest"
+                      const primaryImage =
+                        reservation.vehicle?.images?.find((img: { isPrimary: boolean }) => img.isPrimary) ||
+                        reservation.vehicle?.images?.[0]
+
+                      const hasImage = primaryImage?.cardUrl
+
+                      return (
+                        <Link
+                          key={reservation._id}
+                          href={`/host/reservations/${reservation._id}`}
+                        >
+                          <div className="flex items-center gap-4 rounded-lg border bg-background p-4 transition-colors hover:bg-muted/50">
+                            <div className="relative flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted">
+                              {hasImage && primaryImage?.cardUrl ? (
+                                <Image
+                                  alt={vehicleName}
+                                  className="object-cover"
+                                  fill
+                                  sizes="64px"
+                                  src={primaryImage.cardUrl}
+                                />
+                              ) : (
+                                <Car className="size-6 text-muted-foreground/40" />
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-sm">{vehicleName}</p>
+                              <p className="text-muted-foreground text-xs">
+                                {renterName} • {getTimeAgo(reservation.createdAt)}
+                              </p>
+                              <p className="mt-1 font-semibold text-sm">
+                                ${Math.round((reservation.totalAmount || 0) / 100).toLocaleString()}
+                              </p>
+                            </div>
+                            <Button size="sm">Review</Button>
+                          </div>
+                        </Link>
+                      )
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Your Vehicles */}
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle>Your Vehicles</CardTitle>
+                  <CardDescription className="mt-1">
+                    Manage your listings and track performance
+                  </CardDescription>
                 </div>
-              )}
-            </CardContent>
-          </Card>
+                <Link href="/host/vehicles/list">
+                  <Button size="sm" variant="outline">
+                    View All
+                    <ArrowRight className="ml-2 size-4" />
+                  </Button>
+                </Link>
+              </CardHeader>
+              <CardContent>
+                {recentVehicles.length === 0 ? (
+                  <div className="py-12 text-center">
+                    <Car className="mx-auto mb-4 size-12 text-muted-foreground" />
+                    <p className="mb-2 font-semibold text-lg">No vehicles yet</p>
+                    <p className="mb-6 text-muted-foreground text-sm">
+                      List your first vehicle to start earning
+                    </p>
+                    <Link href="/host/vehicles/new">
+                      <Button>
+                        <Plus className="mr-2 size-4" />
+                        List Your Vehicle
+                      </Button>
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="grid gap-4 sm:grid-cols-1">
+                    {recentVehicles.map((vehicle: { id: string; name: string; imageKey?: string; status?: string; year: number; make: string; model: string; dailyRate?: number; bookings: number; earnings: number }) => (
+                      <Link key={vehicle.id} href={`/host/vehicles/${vehicle.id}`}>
+                        <Card className="group overflow-hidden transition-all hover:shadow-lg">
+                          <div className="flex flex-col sm:flex-row">
+                            {/* Vehicle Image - Larger and more prominent */}
+                            <div className="relative flex h-48 w-full shrink-0 items-center justify-center overflow-hidden bg-muted sm:h-auto sm:w-48">
+                              {vehicle.imageKey && vehicle.imageKey.trim() !== "" ? (
+                                <ImageKitProvider urlEndpoint={process.env.NEXT_PUBLIC_IMAGEKIT_URL_ENDPOINT || "https://ik.imagekit.io/renegaderace"}>
+                                  <Image
+                                    alt={vehicle.name}
+                                    src={`/${vehicle.imageKey}`}
+                                    fill
+                                    className="object-cover transition-transform duration-300 group-hover:scale-105"
+                                    transformation={[{ width: 400, height: 300, quality: 80 }]}
+                                  />
+                                </ImageKitProvider>
+                              ) : (
+                                <div className="flex flex-col items-center gap-2 text-center">
+                                  <Car className="size-12 text-muted-foreground/40" />
+                                  <p className="text-muted-foreground text-xs">No image</p>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Vehicle Details */}
+                            <div className="flex flex-1 flex-col p-6">
+                              <div className="mb-4 flex items-start justify-between gap-4">
+                                <div className="flex-1 min-w-0">
+                                  <div className="mb-2 flex items-center gap-2">
+                                    <h3 className="font-bold text-xl">
+                                      {vehicle.year} {vehicle.make} {vehicle.model}
+                                    </h3>
+                                    {getStatusBadge(vehicle.status || "")}
+                                  </div>
+
+                                  {/* Key Metrics - Better organized */}
+                                  <div className="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-3">
+                                    <div>
+                                      <p className="text-muted-foreground text-xs">Daily Rate</p>
+                                      <p className="font-semibold text-base">
+                                        ${vehicle.dailyRate.toLocaleString()}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <p className="text-muted-foreground text-xs">Total Bookings</p>
+                                      <p className="font-semibold text-base">{vehicle.bookings}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-muted-foreground text-xs">Total Earned</p>
+                                      <p className="font-semibold text-base text-primary">
+                                        ${vehicle.earnings.toLocaleString()}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </Card>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Performance Metrics */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Performance Overview</CardTitle>
+                <CardDescription className="mt-1">How your listings are performing</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <div className="rounded-lg border p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-muted-foreground text-sm">Total Views</span>
+                      <Eye className="size-4 text-muted-foreground" />
+                    </div>
+                    <div className="font-bold text-2xl">{stats.totalViews.toLocaleString()}</div>
+                    <p className="text-muted-foreground text-xs mt-1">Listing views</p>
+                  </div>
+
+                  <div className="rounded-lg border p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-muted-foreground text-sm">Total Shares</span>
+                      <Share2 className="size-4 text-muted-foreground" />
+                    </div>
+                    <div className="font-bold text-2xl">{stats.totalShares.toLocaleString()}</div>
+                    <p className="text-muted-foreground text-xs mt-1">Times shared</p>
+                  </div>
+
+                  <div className="rounded-lg border p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-muted-foreground text-sm">Total Favorites</span>
+                      <Heart className="size-4 text-muted-foreground" />
+                    </div>
+                    <div className="font-bold text-2xl">{stats.totalFavorites.toLocaleString()}</div>
+                    <p className="text-muted-foreground text-xs mt-1">Saved by users</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Right Sidebar */}
+          <div className="space-y-6">
+            {/* Host Hub - Prominent Actions */}
+            <Card className="border-primary/20 bg-primary/5">
+              <CardHeader>
+                <CardTitle className="text-lg">Host Hub</CardTitle>
+                <CardDescription className="mt-1">Quick access to manage your business</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Link className="block" href="/host/reservations">
+                  <Button className="w-full justify-start" size="lg" variant="default">
+                    <Calendar className="mr-3 size-5" />
+                    <span className="font-semibold">All Reservations</span>
+                    <div className="ml-auto flex items-center gap-2">
+                      {stats.pendingBookings > 0 && (
+                        <Badge variant="destructive">
+                          {stats.pendingBookings}
+                        </Badge>
+                      )}
+                      <ArrowRight className="size-4" />
+                    </div>
+                  </Button>
+                </Link>
+                <Link className="block" href="/host/vehicles/list">
+                  <Button className="w-full justify-start" size="lg" variant="default">
+                    <Car className="mr-3 size-5" />
+                    <span className="font-semibold">Manage Vehicles</span>
+                    <ArrowRight className="ml-auto size-4" />
+                  </Button>
+                </Link>
+                <Link className="block" href="/messages">
+                  <Button className="w-full justify-start" size="lg" variant="default">
+                    <MessageSquare className="mr-3 size-5" />
+                    <span className="font-semibold">Messages</span>
+                    <ArrowRight className="ml-auto size-4" />
+                  </Button>
+                </Link>
+                <Link className="block" href="/host/vehicles/new">
+                  <Button className="w-full justify-start bg-primary text-primary-foreground hover:bg-primary/90" size="lg">
+                    <Plus className="mr-3 size-5" />
+                    <span className="font-semibold">List New Vehicle</span>
+                    <ArrowRight className="ml-auto size-4" />
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
+
+            {/* Payments & Payouts */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Payments & Payouts</CardTitle>
+                <CardDescription className="mt-1">Manage your Stripe account</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {connectError && (
+                  <p className="text-destructive text-sm" role="alert">
+                    {connectError}
+                  </p>
+                )}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-sm">Account Status</span>
+                    </div>
+                    {connectStatus?.isComplete ? (
+                      <Badge className="gap-1.5 bg-green-500/10 text-green-700 dark:text-green-400">
+                        <CheckCircle2 className="size-3" />
+                        Connected
+                      </Badge>
+                    ) : (
+                      <Badge className="gap-1.5 bg-red-500/10 text-red-700 dark:text-red-400" variant="secondary">
+                        <XCircle className="size-3" />
+                        Not Set Up
+                      </Badge>
+                    )}
+                  </div>
+                  {connectStatus?.isComplete && (
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-sm">Payouts</span>
+                      </div>
+                      {connectStatus?.payoutsEnabled ? (
+                        <Badge className="gap-1.5 bg-green-500/10 text-green-700 dark:text-green-400">
+                          <CheckCircle2 className="size-3" />
+                          Enabled
+                        </Badge>
+                      ) : (
+                        <Badge className="gap-1.5" variant="secondary">
+                          <Clock className="size-3" />
+                          Pending
+                        </Badge>
+                      )}
+                    </div>
+                  )}
+                  {connectStatus && !connectStatus.isComplete && (
+                    <p className="text-muted-foreground text-xs">
+                      Complete setup to receive payouts from your rentals
+                    </p>
+                  )}
+                </div>
+                <Separator />
+                <div className="flex flex-col gap-2">
+                  <Button
+                    disabled={isLoadingConnect || !user?.id}
+                    onClick={handleOnboarding}
+                    size="sm"
+                    className={
+                      connectStatus && !connectStatus.isComplete
+                        ? "bg-red-600 text-white hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600"
+                        : ""
+                    }
+                  >
+                    {isLoadingConnect
+                      ? "Working..."
+                      : connectStatus?.isComplete
+                        ? "Manage Account"
+                        : "Set Up Payouts"}
+                  </Button>
+                  {connectStatus?.isComplete && (
+                    <Button
+                      disabled={isLoadingConnect || !user?.id}
+                      onClick={handleOpenDashboard}
+                      variant="outline"
+                      size="sm"
+                    >
+                      Stripe Dashboard
+                    </Button>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+          </div>
         </div>
       </div>
-    </div>
+    </>
+  )
+}
+
+export default function HostDashboardPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="container mx-auto max-w-7xl px-4 py-8">
+          <div className="flex min-h-[60vh] items-center justify-center">
+            <div className="text-center">
+              <Loader2 className="mx-auto mb-4 size-8 animate-spin text-muted-foreground" />
+              <p className="text-muted-foreground">Loading dashboard...</p>
+            </div>
+          </div>
+        </div>
+      }
+    >
+      <HostDashboardContent />
+    </Suspense>
   )
 }

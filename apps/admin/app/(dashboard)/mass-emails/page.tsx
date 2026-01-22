@@ -23,6 +23,7 @@ import {
 import { Mail, Send, Loader2 } from "lucide-react"
 import { api } from "@/lib/convex"
 import { toast } from "sonner"
+import { handleErrorWithContext } from "@/lib/error-handler"
 
 export default function MassEmailsPage() {
   const sendMassEmail = useMutation(api.emails.sendMassEmail)
@@ -63,9 +64,7 @@ export default function MassEmailsPage() {
       setHtmlContent("")
       setCustomRecipients("")
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to send emails"
-      )
+      handleErrorWithContext(error, { action: "send emails", entity: "emails" })
     } finally {
       setIsSending(false)
     }
