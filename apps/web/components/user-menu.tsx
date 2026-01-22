@@ -118,12 +118,14 @@ export function UserMenu() {
                   </DropdownMenuItem>
                 ) : onboardingStatus.status === "in_progress" ? (
                   <DropdownMenuItem asChild>
-                    <Link className="flex items-center text-sm" href="/host/onboarding">
-                      <Car className="mr-3 size-4" />
-                      <span>Complete Host Setup</span>
-                      <Badge className="ml-auto" variant="secondary">
+                    <Link className="flex items-center justify-between text-sm" href="/host/onboarding">
+                      <span className="flex items-center">
+                        <Car className="mr-3 size-4 shrink-0" />
+                        <span>Continue Setup</span>
+                      </span>
+                      <span className="ml-2 shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-amber-700 text-xs font-medium dark:bg-amber-900/30 dark:text-amber-400">
                         In Progress
-                      </Badge>
+                      </span>
                     </Link>
                   </DropdownMenuItem>
                 ) : (

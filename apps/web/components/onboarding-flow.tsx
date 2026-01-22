@@ -11,7 +11,6 @@ import {
 import { Checkbox } from "@workspace/ui/components/checkbox"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
-import { Separator } from "@workspace/ui/components/separator"
 import {
   Select,
   SelectContent,
@@ -22,13 +21,12 @@ import {
 import { Textarea } from "@workspace/ui/components/textarea"
 import { useUploadFile } from "@convex-dev/r2/react"
 import { useMutation, useQuery } from "convex/react"
-import { ArrowRight, CheckCircle2, Loader2, Plus, Upload, X } from "lucide-react"
+import { ArrowRight, Loader2, Plus, Upload, X } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/lib/convex"
 import type { Id } from "@/lib/convex"
-import { COMMON_AMENITIES } from "@/lib/constants"
 import { handleErrorWithContext } from "@/lib/error-handler"
 
 const ADVANCE_NOTICE_OPTIONS = [
@@ -87,16 +85,16 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
   const [images, setImages] = useState<Array<{ file: File; preview: string }>>([])
   const [isSubmittingPhotos, setIsSubmittingPhotos] = useState(false)
 
-  // Step 3: Amenities state
-  const [amenities, setAmenities] = useState<string[]>([])
+  // Step 3: Add-ons state
   const [addOns, setAddOns] = useState<
-    Array<{ name: string; price: number; description: string; isRequired: boolean }>
+    Array<{ name: string; price: number; description: string; isRequired: boolean; priceType: "daily" | "one-time" }>
   >([])
   const [newAddOn, setNewAddOn] = useState({
     name: "",
     price: "",
     description: "",
     isRequired: false,
+    priceType: "daily" as "daily" | "one-time",
   })
   const [isSubmittingAmenities, setIsSubmittingAmenities] = useState(false)
 
@@ -127,7 +125,6 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
         transmission: draft.vehicleData.transmission || prev.transmission,
         drivetrain: draft.vehicleData.drivetrain || prev.drivetrain,
       }))
-      setAmenities(draft.vehicleData.amenities || [])
       setAddOns(draft.vehicleData.addOns || [])
       if (draft.vehicleData.advanceNotice) setAdvanceNotice(draft.vehicleData.advanceNotice)
       if (draft.vehicleData.minTripDuration) setMinTripDuration(draft.vehicleData.minTripDuration)
@@ -184,6 +181,9 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
       vehicleFormData.year &&
       vehicleFormData.dailyRate &&
       vehicleFormData.description &&
+      vehicleFormData.horsepower &&
+      vehicleFormData.transmission &&
+      vehicleFormData.drivetrain &&
       vehicleFormData.street &&
       vehicleFormData.city &&
       vehicleFormData.state &&
@@ -212,9 +212,9 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
           year: Number(vehicleFormData.year),
           dailyRate: Number(vehicleFormData.dailyRate),
           description: vehicleFormData.description,
-          horsepower: vehicleFormData.horsepower ? Number(vehicleFormData.horsepower) : undefined,
-          transmission: vehicleFormData.transmission || undefined,
-          drivetrain: vehicleFormData.drivetrain || undefined,
+          horsepower: Number(vehicleFormData.horsepower),
+          transmission: vehicleFormData.transmission,
+          drivetrain: vehicleFormData.drivetrain,
           amenities: [],
           addOns: [],
         },
@@ -313,12 +313,6 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
   }
 
   // Step 3 Handlers
-  const toggleAmenity = (amenity: string) => {
-    setAmenities((prev) =>
-      prev.includes(amenity) ? prev.filter((a) => a !== amenity) : [...prev, amenity]
-    )
-  }
-
   const addAddOn = () => {
     if (newAddOn.name && newAddOn.price) {
       setAddOns((prev) => [
@@ -328,9 +322,10 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
           price: Number(newAddOn.price),
           description: newAddOn.description,
           isRequired: newAddOn.isRequired,
+          priceType: newAddOn.priceType,
         },
       ])
-      setNewAddOn({ name: "", price: "", description: "", isRequired: false })
+      setNewAddOn({ name: "", price: "", description: "", isRequired: false, priceType: "daily" })
     }
   }
 
@@ -349,7 +344,7 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
       await saveDraft({
         vehicleData: {
           ...draft.vehicleData,
-          amenities,
+          amenities: [],
           addOns,
         },
         currentStep: 4,
@@ -590,21 +585,23 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
 
               <div className="grid gap-6 md:grid-cols-3">
                 <div className="space-y-2">
-                  <Label htmlFor="horsepower">Horsepower (Optional)</Label>
+                  <Label htmlFor="horsepower">Horsepower *</Label>
                   <Input
                     id="horsepower"
                     name="horsepower"
                     onChange={handleVehicleChange}
                     placeholder="500"
+                    required
                     type="number"
                     value={vehicleFormData.horsepower}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="transmission">Transmission (Optional)</Label>
+                  <Label htmlFor="transmission">Transmission *</Label>
                   <Select
                     onValueChange={(value) => handleVehicleSelectChange("transmission", value)}
                     value={vehicleFormData.transmission}
+                    required
                   >
                     <SelectTrigger id="transmission">
                       <SelectValue placeholder="Select transmission" />
@@ -618,10 +615,11 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="drivetrain">Drivetrain (Optional)</Label>
+                  <Label htmlFor="drivetrain">Drivetrain *</Label>
                   <Select
                     onValueChange={(value) => handleVehicleSelectChange("drivetrain", value)}
                     value={vehicleFormData.drivetrain}
+                    required
                   >
                     <SelectTrigger id="drivetrain">
                       <SelectValue placeholder="Select drivetrain" />
@@ -815,7 +813,7 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
                     </>
                   ) : (
                     <>
-                      Continue to Amenities
+                      Continue to Add-ons
                       <ArrowRight className="ml-2 size-4" />
                     </>
                   )}
@@ -827,52 +825,26 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
       )
     }
 
-    // Step 3: Amenities
+    // Step 3: Add-ons
     if (currentStep === 3) {
       return (
         <div className="container mx-auto max-w-2xl px-4 py-4 md:py-16">
           <div className="mb-4 md:mb-8">
-            <h1 className="mb-2 font-bold text-3xl">Amenities & Extras</h1>
+            <h1 className="mb-2 font-bold text-3xl">Add-ons</h1>
             <p className="text-muted-foreground">
-              Add amenities included with your vehicle and optional extras renters can purchase.
+              Add optional extras that renters can purchase with your vehicle.
             </p>
           </div>
 
           <Card>
             <CardHeader>
-              <CardTitle>Amenities</CardTitle>
+              <CardTitle>Optional Add-ons</CardTitle>
               <CardDescription>
-                Select all amenities that come standard with your vehicle
+                Additional services or items renters can purchase
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
-                {COMMON_AMENITIES.map((amenity) => (
-                  <Button
-                    className="justify-start"
-                    key={amenity}
-                    onClick={(e) => {
-                      e.preventDefault()
-                      toggleAmenity(amenity)
-                    }}
-                    type="button"
-                    variant={amenities.includes(amenity) ? "default" : "outline"}
-                  >
-                    {amenities.includes(amenity) && <CheckCircle2 className="mr-2 size-4" />}
-                    {amenity}
-                  </Button>
-                ))}
-              </div>
-
-              <Separator />
-
               <div className="space-y-4">
-                <div>
-                  <Label>Add-ons (Optional)</Label>
-                  <p className="text-muted-foreground text-xs">
-                    Additional services or items renters can purchase
-                  </p>
-                </div>
 
                 {addOns.length > 0 && (
                   <div className="space-y-2">
@@ -886,7 +858,9 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
                           {addOn.description && (
                             <p className="text-muted-foreground text-sm">{addOn.description}</p>
                           )}
-                          <p className="font-semibold text-primary">${addOn.price}/day</p>
+                          <p className="font-semibold text-primary">
+                            ${addOn.price}{addOn.priceType === "daily" ? "/day" : " one-time"}
+                          </p>
                         </div>
                         <Button
                           onClick={() => removeAddOn(index)}
@@ -907,16 +881,16 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
                       <Label htmlFor="addOnName">Add-on Name</Label>
                       <Input
                         id="addOnName"
-                        onChange={(e) => setNewAddOn({ ...newAddOn, name: e.target.value })}
+                        onChange={(e) => setNewAddOn((prev) => ({ ...prev, name: e.target.value }))}
                         placeholder="e.g., Professional Driving Instructor"
                         value={newAddOn.name}
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="addOnPrice">Price ($/day)</Label>
+                      <Label htmlFor="addOnPrice">Price ($)</Label>
                       <Input
                         id="addOnPrice"
-                        onChange={(e) => setNewAddOn({ ...newAddOn, price: e.target.value })}
+                        onChange={(e) => setNewAddOn((prev) => ({ ...prev, price: e.target.value }))}
                         placeholder="150"
                         type="number"
                         value={newAddOn.price}
@@ -924,10 +898,25 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
                     </div>
                   </div>
                   <div className="space-y-2">
+                    <Label htmlFor="addOnPriceType">Payment Type</Label>
+                    <Select
+                      onValueChange={(value: "daily" | "one-time") => setNewAddOn((prev) => ({ ...prev, priceType: value }))}
+                      value={newAddOn.priceType}
+                    >
+                      <SelectTrigger id="addOnPriceType">
+                        <SelectValue placeholder="Select payment type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="daily">Daily fee</SelectItem>
+                        <SelectItem value="one-time">One-time payment</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
                     <Label htmlFor="addOnDescription">Description (Optional)</Label>
                     <Input
                       id="addOnDescription"
-                      onChange={(e) => setNewAddOn({ ...newAddOn, description: e.target.value })}
+                      onChange={(e) => setNewAddOn((prev) => ({ ...prev, description: e.target.value }))}
                       placeholder="Brief description of the add-on"
                       value={newAddOn.description}
                     />

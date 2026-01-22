@@ -16,7 +16,7 @@ import { Separator } from "@workspace/ui/components/separator"
 import { ArrowRight, Eye, EyeOff, Lock, Mail } from "lucide-react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
-import { useEffect, useState, useMemo } from "react"
+import { Suspense, useEffect, useState, useMemo } from "react"
 
 type ClerkError = {
   errors?: Array<{ message: string }>
@@ -39,7 +39,7 @@ function getRedirectUrl(searchParams: URLSearchParams): string {
   return "/"
 }
 
-export default function SignInPage() {
+function SignInPageContent() {
   const { signIn, setActive, isLoaded } = useSignIn()
   const { isSignedIn, isLoaded: userLoaded } = useUser()
   const [email, setEmail] = useState("")
@@ -255,5 +255,27 @@ export default function SignInPage() {
         </CardFooter>
       </Card>
     </div>
+  )
+}
+
+export default function SignInPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="space-y-3 sm:space-y-4">
+          <div className="text-center">
+            <h1 className="mb-1 font-bold text-2xl sm:mb-2 sm:text-3xl">Welcome Back</h1>
+            <p className="text-muted-foreground text-xs sm:text-sm">
+              Sign in to access your account and continue your track car rental experience
+            </p>
+          </div>
+          <div className="text-center">
+            <p className="text-muted-foreground">Loading...</p>
+          </div>
+        </div>
+      }
+    >
+      <SignInPageContent />
+    </Suspense>
   )
 }

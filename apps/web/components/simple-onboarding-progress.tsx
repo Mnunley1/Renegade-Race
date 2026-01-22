@@ -5,7 +5,7 @@ import { CheckCircle2 } from "lucide-react"
 const SIMPLE_STEPS = [
   { id: "vehicle", label: "Vehicle & Location" },
   { id: "photos", label: "Photos" },
-  { id: "amenities", label: "Amenities & Extras" },
+  { id: "addons", label: "Add-ons" },
   { id: "availability", label: "Availability" },
   { id: "safety", label: "Safety & Terms" },
 ]

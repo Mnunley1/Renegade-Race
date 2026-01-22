@@ -162,6 +162,7 @@ export const create = mutation({
           name: v.string(),
           price: v.number(),
           description: v.optional(v.string()),
+          priceType: v.optional(v.union(v.literal("daily"), v.literal("one-time"))),
         })
       )
     ),

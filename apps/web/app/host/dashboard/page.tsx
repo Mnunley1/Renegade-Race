@@ -24,17 +24,19 @@ import {
   TrendingUp,
   XCircle,
 } from "lucide-react"
-import Image from "next/image"
+import { Image, ImageKitProvider } from "@imagekit/next"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { useEffect, useMemo, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { Suspense, useEffect, useMemo, useState } from "react"
+import { toast } from "sonner"
 import { HostOnboardingChecklist } from "@/components/host-onboarding-checklist"
 import { api } from "@/lib/convex"
 import { handleError, handleErrorWithContext } from "@/lib/error-handler"
 
-export default function HostDashboardPage() {
+function HostDashboardContent() {
   const { user } = useUser()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [showChecklist, setShowChecklist] = useState(false)
   const [isLoadingConnect, setIsLoadingConnect] = useState(false)
   const [connectError, setConnectError] = useState<string | null>(null)
@@ -45,8 +47,10 @@ export default function HostDashboardPage() {
     payoutsEnabled?: boolean
     accountId?: string
   } | null>(null)
+  const [stripeReturnHandled, setStripeReturnHandled] = useState(false)
 
   const fetchConnectStatus = useAction(api.stripe.getConnectAccountStatus)
+  const refreshConnectStatus = useAction(api.stripe.refreshConnectAccountStatus)
   const startOrContinueOnboarding = useAction(api.stripe.createConnectAccount)
   const createDashboardLink = useAction(api.stripe.createConnectLoginLink)
 
@@ -76,14 +80,51 @@ export default function HostDashboardPage() {
     user?.id ? { ownerId: user.id } : "skip"
   )
 
+  // Handle Stripe return/refresh query parameters
+  useEffect(() => {
+    const stripeReturn = searchParams.get("stripe_return")
+    const stripeRefresh = searchParams.get("stripe_refresh")
+
+    if ((stripeReturn || stripeRefresh) && !stripeReturnHandled) {
+      setStripeReturnHandled(true)
+      
+      // Clean up the URL by removing stripe params
+      const url = new URL(window.location.href)
+      url.searchParams.delete("stripe_return")
+      url.searchParams.delete("stripe_refresh")
+      router.replace(url.pathname + url.search, { scroll: false })
+
+      if (stripeRefresh) {
+        // User needs to restart onboarding (link expired)
+        toast.info("Your Stripe session expired. Please try again.")
+      }
+      // For stripe_return, we'll show success/status after loading account status below
+    }
+  }, [searchParams, stripeReturnHandled, router])
+
   useEffect(() => {
     const loadStatus = async () => {
       if (!user?.id) return
       setIsLoadingConnect(true)
       setConnectError(null)
       try {
+        // First, refresh the Stripe account status in our database to sync with Stripe
+        // This ensures our database reflects the current Stripe account state
+        await refreshConnectStatus({ ownerId: user.id }).catch(() => {
+          // Silently ignore refresh errors - we'll still try to fetch status
+        })
+        
         const status = await fetchConnectStatus({ ownerId: user.id })
         setConnectStatus(status)
+
+        // Show toast if returning from Stripe onboarding
+        if (stripeReturnHandled && status) {
+          if (status.isComplete) {
+            toast.success("Your Stripe account is set up! You can now receive payments.")
+          } else if (status.hasAccount) {
+            toast.info("Stripe setup incomplete. Please complete the remaining steps to receive payments.")
+          }
+        }
       } catch (error) {
         handleError(error, { showToast: false })
         const errorMessage = "Failed to load payout status"
@@ -94,7 +135,7 @@ export default function HostDashboardPage() {
     }
 
     loadStatus()
-  }, [fetchConnectStatus, user?.id])
+  }, [fetchConnectStatus, refreshConnectStatus, user?.id, stripeReturnHandled])
 
   // Calculate stats from real data
   const stats = useMemo(() => {
@@ -131,7 +172,7 @@ export default function HostDashboardPage() {
   const recentVehicles = useMemo(() => {
     if (!vehicles || vehicles.length === 0) return []
 
-    return vehicles.slice(0, 3).map((vehicle: { _id: string; images?: Array<{ isPrimary: boolean; cardUrl?: string }>; make: string; model: string; year: number; isApproved?: boolean; isActive?: boolean; dailyRate?: number }) => {
+    return vehicles.slice(0, 3).map((vehicle: { _id: string; images?: Array<{ isPrimary: boolean; cardUrl?: string; r2Key?: string }>; make: string; model: string; year: number; isApproved?: boolean; isActive?: boolean; dailyRate?: number }) => {
       const primaryImage = vehicle.images?.find((img: { isPrimary: boolean }) => img.isPrimary) || vehicle.images?.[0]
 
       // Calculate bookings and earnings from reservations
@@ -157,7 +198,7 @@ export default function HostDashboardPage() {
         status,
         bookings,
         earnings,
-        image: primaryImage?.cardUrl ?? "",
+        imageKey: primaryImage?.r2Key ?? "",
         dailyRate: vehicle.dailyRate,
       }
     })
@@ -218,7 +259,13 @@ export default function HostDashboardPage() {
     setIsLoadingConnect(true)
     setConnectError(null)
     try {
-      const result = await startOrContinueOnboarding({ ownerId: user.id })
+      // Pass the current origin so redirects work with any domain (localhost, ngrok, staging, production)
+      const returnUrlBase = typeof window !== "undefined" ? window.location.origin : undefined
+      
+      const result = await startOrContinueOnboarding({ 
+        ownerId: user.id,
+        returnUrlBase, // Pass current domain for flexible redirects
+      })
       if (result.onboardingUrl) {
         window.location.href = result.onboardingUrl
         return
@@ -518,37 +565,27 @@ export default function HostDashboardPage() {
                   </div>
                 ) : (
                   <div className="grid gap-4 sm:grid-cols-1">
-                    {recentVehicles.map((vehicle: { id: string; name: string; image?: string; status?: string; year: number; make: string; model: string; dailyRate?: number; bookings: number; earnings: number }) => (
+                    {recentVehicles.map((vehicle: { id: string; name: string; imageKey?: string; status?: string; year: number; make: string; model: string; dailyRate?: number; bookings: number; earnings: number }) => (
                       <Link key={vehicle.id} href={`/host/vehicles/${vehicle.id}`}>
                         <Card className="group overflow-hidden transition-all hover:shadow-lg">
                           <div className="flex flex-col sm:flex-row">
                             {/* Vehicle Image - Larger and more prominent */}
                             <div className="relative flex h-48 w-full shrink-0 items-center justify-center overflow-hidden bg-muted sm:h-auto sm:w-48">
-                              {vehicle.image && vehicle.image.trim() !== "" ? (
-                                <>
+                              {vehicle.imageKey && vehicle.imageKey.trim() !== "" ? (
+                                <ImageKitProvider urlEndpoint={process.env.NEXT_PUBLIC_IMAGEKIT_URL_ENDPOINT || "https://ik.imagekit.io/renegaderace"}>
                                   <Image
                                     alt={vehicle.name}
-                                    className="object-cover transition-transform duration-300 group-hover:scale-105"
+                                    src={`/${vehicle.imageKey}`}
                                     fill
-                                    sizes="(max-width: 640px) 100vw, 192px"
-                                    src={vehicle.image || ""}
+                                    className="object-cover transition-transform duration-300 group-hover:scale-105"
+                                    transformation={[{ width: 400, height: 300, quality: 80 }]}
                                   />
-                                  {/* Status badge overlay */}
-                                  <div className="absolute top-3 left-3">
-                                    {getStatusBadge(vehicle.status || "")}
-                                  </div>
-                                </>
+                                </ImageKitProvider>
                               ) : (
-                                <>
-                                  <div className="flex flex-col items-center gap-2 text-center">
-                                    <Car className="size-12 text-muted-foreground/40" />
-                                    <p className="text-muted-foreground text-xs">No image</p>
-                                  </div>
-                                  {/* Status badge overlay */}
-                                  <div className="absolute top-3 left-3">
-                                    {getStatusBadge(vehicle.status || "")}
-                                  </div>
-                                </>
+                                <div className="flex flex-col items-center gap-2 text-center">
+                                  <Car className="size-12 text-muted-foreground/40" />
+                                  <p className="text-muted-foreground text-xs">No image</p>
+                                </div>
                               )}
                             </div>
 
@@ -556,9 +593,12 @@ export default function HostDashboardPage() {
                             <div className="flex flex-1 flex-col p-6">
                               <div className="mb-4 flex items-start justify-between gap-4">
                                 <div className="flex-1 min-w-0">
-                                  <h3 className="mb-2 font-bold text-xl">
-                                    {vehicle.year} {vehicle.make} {vehicle.model}
-                                  </h3>
+                                  <div className="mb-2 flex items-center gap-2">
+                                    <h3 className="font-bold text-xl">
+                                      {vehicle.year} {vehicle.make} {vehicle.model}
+                                    </h3>
+                                    {getStatusBadge(vehicle.status || "")}
+                                  </div>
 
                                   {/* Key Metrics - Better organized */}
                                   <div className="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-3">
@@ -766,5 +806,24 @@ export default function HostDashboardPage() {
         </div>
       </div>
     </>
+  )
+}
+
+export default function HostDashboardPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="container mx-auto max-w-7xl px-4 py-8">
+          <div className="flex min-h-[60vh] items-center justify-center">
+            <div className="text-center">
+              <Loader2 className="mx-auto mb-4 size-8 animate-spin text-muted-foreground" />
+              <p className="text-muted-foreground">Loading dashboard...</p>
+            </div>
+          </div>
+        </div>
+      }
+    >
+      <HostDashboardContent />
+    </Suspense>
   )
 }

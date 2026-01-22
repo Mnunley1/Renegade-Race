@@ -19,7 +19,7 @@ export default defineSchema({
     stripeAccountStatus: v.optional(
       v.union(
         v.literal("pending"),
-        v.literal("active"),
+        v.literal("enabled"),
         v.literal("restricted"),
         v.literal("disabled")
       )
@@ -38,6 +38,8 @@ export default defineSchema({
         marketing: v.boolean(),
       })
     ),
+    // Timestamp of last message digest email sent (to prevent spam)
+    lastMessageDigestAt: v.optional(v.number()),
     // User profile fields
     bio: v.optional(v.string()),
     location: v.optional(v.string()),
@@ -98,6 +100,7 @@ export default defineSchema({
                 price: v.number(),
                 description: v.optional(v.string()),
                 isRequired: v.optional(v.boolean()),
+                priceType: v.optional(v.union(v.literal("daily"), v.literal("one-time"))),
               })
             ),
             advanceNotice: v.optional(v.string()),
@@ -151,6 +154,7 @@ export default defineSchema({
         price: v.number(),
         description: v.optional(v.string()),
         isRequired: v.optional(v.boolean()),
+        priceType: v.optional(v.union(v.literal("daily"), v.literal("one-time"))),
       })
     ),
     // Pickup location address
@@ -173,6 +177,7 @@ export default defineSchema({
     isApproved: v.optional(v.boolean()),
     viewCount: v.optional(v.number()), // Total views
     shareCount: v.optional(v.number()), // Total shares
+    deletedAt: v.optional(v.number()), // Soft delete timestamp
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -245,6 +250,7 @@ export default defineSchema({
           name: v.string(),
           price: v.number(),
           description: v.optional(v.string()),
+          priceType: v.optional(v.union(v.literal("daily"), v.literal("one-time"))),
         })
       )
     ),
