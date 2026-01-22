@@ -772,6 +772,88 @@ Renegade Race Rentals Support Team
   return { subject, html, text }
 }
 
+// Email template: Unread messages digest
+export function getUnreadMessagesDigestEmailTemplate(data: {
+  userName: string
+  totalUnreadCount: number
+  conversations: Array<{
+    senderName: string
+    vehicleName: string
+    unreadCount: number
+    lastMessagePreview: string
+  }>
+  messagesUrl: string
+}): { subject: string; html: string; text: string } {
+  const subject =
+    data.totalUnreadCount === 1
+      ? "You have 1 unread message"
+      : `You have ${data.totalUnreadCount} unread messages`
+
+  // Build conversation list HTML
+  const conversationListHtml = data.conversations
+    .map(
+      (conv) => `
+      <div style="background-color: #f5f5f5; padding: 15px; border-radius: 8px; margin-bottom: 10px;">
+        <p style="margin: 0 0 5px 0;"><strong>${conv.senderName}</strong> about <strong>${conv.vehicleName}</strong></p>
+        <p style="margin: 0 0 5px 0; color: #666; font-size: 14px;">${conv.unreadCount} unread message${conv.unreadCount > 1 ? "s" : ""}</p>
+        <p style="margin: 0; color: #888; font-style: italic; font-size: 14px;">"${conv.lastMessagePreview.length > 100 ? conv.lastMessagePreview.substring(0, 100) + "..." : conv.lastMessagePreview}"</p>
+      </div>
+    `
+    )
+    .join("")
+
+  // Build conversation list text
+  const conversationListText = data.conversations
+    .map(
+      (conv) =>
+        `- ${conv.senderName} about ${conv.vehicleName} (${conv.unreadCount} unread)\n  "${conv.lastMessagePreview.length > 80 ? conv.lastMessagePreview.substring(0, 80) + "..." : conv.lastMessagePreview}"`
+    )
+    .join("\n\n")
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+      <div style="text-align: center; margin-bottom: 30px;">
+        <h1 style="color: #1a1a1a;">You Have Unread Messages</h1>
+      </div>
+      <p>Hi ${data.userName},</p>
+      <p>You have <strong>${data.totalUnreadCount}</strong> unread message${data.totalUnreadCount > 1 ? "s" : ""} waiting for you:</p>
+      <div style="margin: 20px 0;">
+        ${conversationListHtml}
+      </div>
+      <p style="text-align: center; margin: 30px 0;">
+        <a href="${data.messagesUrl}" style="background-color: #1a1a1a; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">View Messages</a>
+      </p>
+      <p style="margin-top: 30px;">
+        Best regards,<br>
+        Renegade Race Rentals
+      </p>
+    </body>
+    </html>
+  `
+  const text = `
+You Have Unread Messages
+
+Hi ${data.userName},
+
+You have ${data.totalUnreadCount} unread message${data.totalUnreadCount > 1 ? "s" : ""} waiting for you:
+
+${conversationListText}
+
+View your messages: ${data.messagesUrl}
+
+Best regards,
+Renegade Race Rentals
+  `.trim()
+
+  return { subject, html, text }
+}
+
 // Helper function to convert email to test address if in test mode
 function getTestEmail(originalEmail: string): string {
   if (isTestMode()) {

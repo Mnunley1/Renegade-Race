@@ -15,6 +15,36 @@ export const getByExternalId = query({
   handler: async (ctx, args) => await userByExternalId(ctx, args.externalId),
 })
 
+// Get user by Convex document ID (for public profile pages)
+export const getById = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId)
+    if (!user) {
+      return null
+    }
+    // Return public profile data (exclude sensitive fields)
+    return {
+      _id: user._id,
+      name: user.name,
+      profileImage: user.profileImageR2Key
+        ? imagePresets.avatar(user.profileImageR2Key)
+        : undefined,
+      location: user.location,
+      bio: user.bio,
+      memberSince: user.memberSince,
+      totalRentals: user.totalRentals,
+      rating: user.rating,
+      experience: user.experience,
+      interests: user.interests,
+      externalId: user.externalId, // Needed for fetching vehicles/reviews
+      // Verification status (without exposing actual email/phone)
+      isEmailVerified: !!user.email,
+      isPhoneVerified: !!user.phone,
+    }
+  },
+})
+
 export const upsertFromClerk = internalMutation({
   args: { data: v.any() as Validator<UserJSON> }, // no runtime validation, trust Clerk
   async handler(ctx, { data }) {
@@ -302,7 +332,7 @@ export const updateStripeAccountStatus = internalMutation({
     stripeAccountId: v.string(),
     status: v.union(
       v.literal("pending"),
-      v.literal("active"),
+      v.literal("enabled"),
       v.literal("restricted"),
       v.literal("disabled")
     ),
@@ -690,6 +720,7 @@ export const saveOnboardingDraft = mutation({
             price: v.number(),
             description: v.optional(v.string()),
             isRequired: v.optional(v.boolean()),
+            priceType: v.optional(v.union(v.literal("daily"), v.literal("one-time"))),
           })
         ),
         advanceNotice: v.optional(v.string()),

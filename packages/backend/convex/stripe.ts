@@ -185,6 +185,7 @@ export const updatePlatformSettings = mutation({
 export const createConnectAccount = action({
   args: {
     ownerId: v.string(),
+    returnUrlBase: v.optional(v.string()), // Allow client to specify the base URL for redirects
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()
@@ -236,11 +237,48 @@ export const createConnectAccount = action({
       completed: true,
     })
 
+    // Determine the base URL to use for redirects
+    // Priority: client-provided URL > WEB_URL env var > production default
+    let baseUrl = args.returnUrlBase || process.env.WEB_URL || "https://renegaderentals.com"
+    
+    // Validate the URL is allowed (security check)
+    // In development, allow localhost, ngrok, and 127.0.0.1
+    // In production, only allow configured production domains
+    const isDevelopment = 
+      baseUrl.includes("localhost") || 
+      baseUrl.includes("ngrok") ||
+      baseUrl.includes("127.0.0.1") ||
+      baseUrl.startsWith("http://")
+    
+    // Production allowed domains
+    const allowedProductionDomains = [
+      "https://renegaderentals.com",
+      // Add other production/staging domains here as needed
+    ]
+    
+    // If not development, validate against allowed domains
+    if (!isDevelopment) {
+      const isAllowed = allowedProductionDomains.some(domain => 
+        baseUrl.startsWith(domain)
+      )
+      if (!isAllowed) {
+        throw new Error(
+          `Invalid return URL: ${baseUrl}. ` +
+          `Allowed domains: ${allowedProductionDomains.join(", ")}`
+        )
+      }
+    }
+    
+    // Ensure baseUrl doesn't end with a slash
+    if (baseUrl.endsWith("/")) {
+      baseUrl = baseUrl.slice(0, -1)
+    }
+    
     // Create account link for onboarding
     const accountLink = await stripe.accountLinks.create({
       account: account.id,
-      refresh_url: `${process.env.WEB_URL || "https://renegaderentals.com"}/host/onboarding/wizard?step=7`,
-      return_url: `${process.env.WEB_URL || "https://renegaderentals.com"}/host/onboarding/wizard?step=7&stripe_return=true`,
+      refresh_url: `${baseUrl}/host/dashboard?stripe_refresh=true`,
+      return_url: `${baseUrl}/host/dashboard?stripe_return=true`,
       type: "account_onboarding",
     })
 
@@ -278,6 +316,68 @@ export const getConnectAccountStatus = action({
       chargesEnabled: account.charges_enabled,
       payoutsEnabled: account.payouts_enabled,
       accountId: account.id,
+    }
+  },
+})
+
+// Refresh Connect account status (sync with Stripe)
+// Call this to update the database status based on current Stripe account state
+export const refreshConnectAccountStatus = action({
+  args: {
+    ownerId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.runQuery(api.users.getByExternalId, {
+      externalId: args.ownerId,
+    })
+
+    if (!user?.stripeAccountId) {
+      return {
+        success: false,
+        reason: "No Stripe Connect account found",
+      }
+    }
+
+    const stripe = getStripe()
+    const account = await stripe.accounts.retrieve(user.stripeAccountId)
+
+    // Determine account status based on Stripe account state
+    // Same logic as the webhook handler
+    let status: "pending" | "enabled" | "restricted" | "disabled"
+
+    if (account.details_submitted === false || !account.charges_enabled) {
+      status = "pending"
+    } else if (account.payouts_enabled === false) {
+      status = "pending"
+    } else if (account.charges_enabled && account.payouts_enabled && account.details_submitted) {
+      // Check for blocking restrictions (currently_due, past_due, or disabled_reason)
+      // Note: eventually_due requirements are normal and don't block functionality
+      const hasBlockingRestrictions = 
+        (account.requirements?.currently_due && account.requirements.currently_due.length > 0) ||
+        (account.requirements?.past_due && account.requirements.past_due.length > 0) ||
+        (account.requirements?.disabled_reason !== null && account.requirements?.disabled_reason !== undefined)
+
+      if (hasBlockingRestrictions) {
+        status = "restricted"
+      } else {
+        status = "enabled"
+      }
+    } else {
+      status = "pending"
+    }
+
+    // Update the status in Convex
+    await ctx.runMutation(internal.users.updateStripeAccountStatus, {
+      stripeAccountId: user.stripeAccountId,
+      status,
+    })
+
+    return {
+      success: true,
+      status,
+      chargesEnabled: account.charges_enabled,
+      payoutsEnabled: account.payouts_enabled,
+      detailsSubmitted: account.details_submitted,
     }
   },
 })

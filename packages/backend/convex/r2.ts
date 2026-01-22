@@ -15,6 +15,7 @@ export const r2 = new R2(components.r2)
 
 /**
  * Generate ImageKit URL with transformations
+ * ImageKit must be configured with R2 as an external S3-compatible origin
  * @param key - R2 object key
  * @param options - ImageKit transformation options
  */
@@ -29,11 +30,17 @@ export function getImageKitUrl(
     fit?: "inside" | "outside" | "cover" | "contain"
   }
 ): string {
-  // Get ImageKit URL endpoint from environment
-  // In production, this should be set via: npx convex env set IMAGEKIT_URL_ENDPOINT <your-url>
-  const imageKitEndpoint = process.env.IMAGEKIT_URL_ENDPOINT || "https://ik.imgkit.net/default"
+  // ImageKit URL endpoint - set via: npx convex env set IMAGEKIT_URL_ENDPOINT https://ik.imagekit.io/your_id
+  // ImageKit must be configured with your R2 bucket as an external S3-compatible origin
+  const imageKitEndpoint = process.env.IMAGEKIT_URL_ENDPOINT
+  
+  if (!imageKitEndpoint) {
+    console.warn(`[R2] IMAGEKIT_URL_ENDPOINT is not configured. Set it via: npx convex env set IMAGEKIT_URL_ENDPOINT https://ik.imagekit.io/your_id`)
+    // Return a placeholder - won't work but helps with debugging
+    return `/api/image/${key}`
+  }
 
-  // Build transformation parameters
+  // Build transformation parameters for ImageKit
   const transformations: string[] = []
 
   if (options?.width) {
