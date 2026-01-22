@@ -35,11 +35,11 @@ import {
   X,
 } from "lucide-react"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { Suspense, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/lib/convex"
 
-export default function ChatPage() {
+function ChatPageContent() {
   const { user, isSignedIn } = useUser()
   const params = useParams()
   const searchParams = useSearchParams()
@@ -887,5 +887,21 @@ export default function ChatPage() {
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+export default function ChatPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center">
+          <div className="text-center">
+            <p className="text-muted-foreground">Loading conversation...</p>
+          </div>
+        </div>
+      }
+    >
+      <ChatPageContent />
+    </Suspense>
   )
 }
