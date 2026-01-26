@@ -1,8 +1,8 @@
 import { v } from 'convex/values';
 import type { Id } from './_generated/dataModel';
 import { mutation, query } from './_generated/server';
-// TODO: Uncomment after installing @convex-dev/rate-limiter
-// import { rateLimiter } from './rateLimiter';
+import { rateLimiter } from './rateLimiter';
+import { sanitizeMessage } from './sanitize';
 
 // Get messages for a conversation
 export const getByConversation = query({
@@ -114,11 +114,10 @@ export const send = mutation({
     }
 
     // Rate limit: 20 messages per minute per user
-    // TODO: Uncomment after installing @convex-dev/rate-limiter
-    // await rateLimiter.limit(ctx, "sendMessage", {
-    //   key: identity.subject,
-    //   throws: true,
-    // });
+    await rateLimiter.limit(ctx, "sendMessage", {
+      key: identity.subject,
+      throws: true,
+    });
 
     const senderId = identity.subject;
     const now = Date.now();
@@ -192,11 +191,11 @@ export const send = mutation({
       }
     }
 
-    // Create the message
+    // Create the message with sanitized content
     const messageId = await ctx.db.insert('messages', {
       conversationId,
       senderId,
-      content: args.content,
+      content: sanitizeMessage(args.content),
       messageType: args.messageType || 'text',
       replyTo: args.replyTo,
       isRead: false,
@@ -457,9 +456,9 @@ export const editMessage = mutation({
       );
     }
 
-    // Update the message content
+    // Update the message content with sanitized input
     await ctx.db.patch(args.messageId, {
-      content: args.content,
+      content: sanitizeMessage(args.content),
     });
 
     return args.messageId;
