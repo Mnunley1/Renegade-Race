@@ -9,8 +9,52 @@ import {
   getPaymentSucceededEmailTemplate,
   sendTransactionalEmail,
 } from "./emails"
-// TODO: Uncomment after installing @convex-dev/rate-limiter
-// import { rateLimiter } from "./rateLimiter"
+import { parseLocalDate, calculateDaysBetween } from "./dateUtils"
+import { rateLimiter } from "./rateLimiter"
+
+// ============================================================================
+// Cancellation Policy - Tiered Refund Calculation
+// ============================================================================
+
+/**
+ * Calculate refund percentage based on cancellation policy.
+ * Policy tiers:
+ * - 7+ days before start: 100% refund (full)
+ * - 2-7 days before start: 50% refund (partial)
+ * - <48 hours before start: 0% refund (none)
+ *
+ * @param startDate - Rental start date in YYYY-MM-DD format
+ * @param cancellationDate - Date of cancellation (defaults to now)
+ * @returns Object with refund percentage and policy tier
+ */
+export function calculateRefundTier(
+  startDate: string,
+  cancellationDate?: Date
+): { percentage: number; policy: "full" | "partial" | "none" } {
+  const now = cancellationDate || new Date()
+  const start = parseLocalDate(startDate)
+
+  if (!start) {
+    // If we can't parse the date, default to no refund for safety
+    return { percentage: 0, policy: "none" }
+  }
+
+  // Set both dates to start of day for accurate comparison
+  now.setHours(0, 0, 0, 0)
+  start.setHours(0, 0, 0, 0)
+
+  // Calculate days until start
+  const diffTime = start.getTime() - now.getTime()
+  const daysUntilStart = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+
+  if (daysUntilStart >= 7) {
+    return { percentage: 100, policy: "full" }
+  } else if (daysUntilStart >= 2) {
+    return { percentage: 50, policy: "partial" }
+  } else {
+    return { percentage: 0, policy: "none" }
+  }
+}
 
 // Initialize Stripe client from component
 const stripeClient = new StripeSubscriptions(components.stripe, {})
@@ -441,6 +485,48 @@ export const createCheckoutSession = action({
       throw new Error("Reservation must be pending to create payment")
     }
 
+    // Get current vehicle pricing to validate payment amount
+    const vehicle = await ctx.runQuery(api.vehicles.getById, {
+      id: reservation.vehicleId,
+    })
+
+    if (!vehicle) {
+      throw new Error("Vehicle not found")
+    }
+
+    // Recalculate total from current pricing (server-side validation)
+    const totalDays = calculateDaysBetween(reservation.startDate, reservation.endDate)
+    const baseAmount = totalDays * vehicle.dailyRate
+
+    // Validate add-ons against vehicle's current add-ons
+    let addOnsTotal = 0
+    if (reservation.addOns && reservation.addOns.length > 0) {
+      for (const reservationAddOn of reservation.addOns) {
+        const vehicleAddOn = vehicle.addOns?.find(
+          (va) => va.name === reservationAddOn.name
+        )
+        if (!vehicleAddOn) {
+          throw new Error(`Add-on "${reservationAddOn.name}" is no longer available`)
+        }
+        if (vehicleAddOn.price !== reservationAddOn.price) {
+          throw new Error(
+            `Add-on "${reservationAddOn.name}" price has changed from ${reservationAddOn.price} to ${vehicleAddOn.price} cents`
+          )
+        }
+        addOnsTotal += reservationAddOn.price
+      }
+    }
+
+    const expectedTotal = baseAmount + addOnsTotal
+
+    // Validate that the payment amount matches the recalculated total
+    if (args.amount !== expectedTotal) {
+      throw new Error(
+        `Payment amount mismatch: expected ${expectedTotal} cents (based on current pricing), got ${args.amount} cents. ` +
+          `Vehicle daily rate may have changed.`
+      )
+    }
+
     // Get owner's Stripe Connect account
     const owner = await ctx.runQuery(api.users.getByExternalId, {
       externalId: reservation.ownerId,
@@ -580,12 +666,10 @@ export const createPaymentIntent = action({
     }
 
     // Rate limit: 20 payment operations per hour per user
-    // TODO: Uncomment after installing @convex-dev/rate-limiter
-    // await ctx.runMutation(internal.rateLimitHelpers.checkRateLimit, {
-    //   name: "processPayment",
-    //   key: identity.subject,
-    //   throws: true,
-    // })
+    await rateLimiter.limit(ctx, "processPayment", {
+      key: identity.subject,
+      throws: true,
+    })
 
     const reservation = await ctx.runQuery(api.reservations.getById, {
       id: args.reservationId,
@@ -600,6 +684,48 @@ export const createPaymentIntent = action({
 
     if (reservation.status !== "pending") {
       throw new Error("Reservation must be pending to create payment")
+    }
+
+    // Get current vehicle pricing to validate payment amount
+    const vehicle = await ctx.runQuery(api.vehicles.getById, {
+      id: reservation.vehicleId,
+    })
+
+    if (!vehicle) {
+      throw new Error("Vehicle not found")
+    }
+
+    // Recalculate total from current pricing (server-side validation)
+    const totalDays = calculateDaysBetween(reservation.startDate, reservation.endDate)
+    const baseAmount = totalDays * vehicle.dailyRate
+
+    // Validate add-ons against vehicle's current add-ons
+    let addOnsTotal = 0
+    if (reservation.addOns && reservation.addOns.length > 0) {
+      for (const reservationAddOn of reservation.addOns) {
+        const vehicleAddOn = vehicle.addOns?.find(
+          (va) => va.name === reservationAddOn.name
+        )
+        if (!vehicleAddOn) {
+          throw new Error(`Add-on "${reservationAddOn.name}" is no longer available`)
+        }
+        if (vehicleAddOn.price !== reservationAddOn.price) {
+          throw new Error(
+            `Add-on "${reservationAddOn.name}" price has changed from ${reservationAddOn.price} to ${vehicleAddOn.price} cents`
+          )
+        }
+        addOnsTotal += reservationAddOn.price
+      }
+    }
+
+    const expectedTotal = baseAmount + addOnsTotal
+
+    // Validate that the payment amount matches the recalculated total
+    if (args.amount !== expectedTotal) {
+      throw new Error(
+        `Payment amount mismatch: expected ${expectedTotal} cents (based on current pricing), got ${args.amount} cents. ` +
+          `Vehicle daily rate may have changed.`
+      )
     }
 
     // Get owner's Stripe Connect account
@@ -930,6 +1056,7 @@ export const createCustomerPortalSession = action({
 // ============================================================================
 
 // Internal action to process refund on cancellation (called via scheduler)
+// Uses tiered refund policy: 7+ days = 100%, 2-7 days = 50%, <48 hours = 0%
 export const processRefundOnCancellation = internalAction({
   args: {
     paymentId: v.id("payments"),
@@ -940,7 +1067,7 @@ export const processRefundOnCancellation = internalAction({
     const payment = await ctx.runQuery(api.stripe.getPaymentById, {
       paymentId: args.paymentId,
     })
-    
+
     if (!(payment && payment.stripeChargeId)) {
       throw new Error("Payment not found or charge ID missing")
     }
@@ -950,33 +1077,85 @@ export const processRefundOnCancellation = internalAction({
       return { skipped: true, reason: `Payment status is ${payment.status}, cannot refund` }
     }
 
+    // Get the reservation start date to calculate refund tier
+    const startDate = payment.metadata?.startDate
+    if (!startDate) {
+      throw new Error("Payment metadata missing start date")
+    }
+
+    // Calculate refund tier based on cancellation policy
+    const { percentage, policy } = calculateRefundTier(startDate)
+
+    // If no refund is due, just update the status
+    if (percentage === 0) {
+      await ctx.runMutation(api.stripe.updateRefundStatus, {
+        paymentId: args.paymentId,
+        status: "succeeded", // Keep as succeeded, no refund
+        refundAmount: 0,
+        refundReason: `${args.reason} - No refund (cancelled less than 48 hours before start)`,
+        refundPercentage: 0,
+        refundPolicy: "none",
+      })
+
+      // Update reservation payment status
+      await ctx.runMutation(api.stripe.updateReservationStatus, {
+        reservationId: args.reservationId,
+        status: "cancelled",
+        paymentStatus: "paid", // Payment was successful, just no refund
+      })
+
+      return {
+        success: true,
+        refunded: false,
+        reason: "No refund due - cancelled less than 48 hours before start",
+        policy,
+        percentage
+      }
+    }
+
     const stripe = getStripe()
 
-    // Refund with Connect - automatically reverses transfer
+    // Calculate the refund amount based on percentage
+    const refundAmount = Math.round(payment.amount * (percentage / 100))
+
+    // Refund with Connect - automatically reverses transfer proportionally
     const refundParams: Stripe.RefundCreateParams = {
       charge: payment.stripeChargeId,
+      amount: refundAmount, // Partial or full based on policy
       reverse_transfer: true, // Automatically reverse the transfer to owner
-      refund_application_fee: true, // Refund your platform fee too
+      refund_application_fee: percentage === 100, // Only refund platform fee on full refund
       reason: "requested_by_customer" as Stripe.RefundCreateParams.Reason,
     }
 
     const refund = await stripe.refunds.create(refundParams)
 
+    // Determine status based on refund percentage
+    const newStatus = percentage === 100 ? "refunded" : "partially_refunded"
+
     await ctx.runMutation(api.stripe.updateRefundStatus, {
       paymentId: args.paymentId,
-      status: "refunded",
+      status: newStatus,
       refundAmount: refund.amount,
       refundReason: args.reason,
+      refundPercentage: percentage,
+      refundPolicy: policy,
     })
 
     // Update reservation payment status
     await ctx.runMutation(api.stripe.updateReservationStatus, {
       reservationId: args.reservationId,
       status: "cancelled",
-      paymentStatus: "refunded",
+      paymentStatus: newStatus,
     })
 
-    return { success: true, refundId: refund.id }
+    return {
+      success: true,
+      refundId: refund.id,
+      refunded: true,
+      refundAmount: refund.amount,
+      percentage,
+      policy
+    }
   },
 })
 
@@ -1089,12 +1268,16 @@ export const updateRefundStatus = mutation({
     status: v.string(),
     refundAmount: v.optional(v.number()),
     refundReason: v.optional(v.string()),
+    refundPercentage: v.optional(v.number()),
+    refundPolicy: v.optional(v.union(v.literal("full"), v.literal("partial"), v.literal("none"))),
   },
   handler: async (ctx, args) => {
     await ctx.db.patch(args.paymentId, {
-      status: args.status as "pending" | "cancelled" | "failed" | "refunded" | "partially_refunded",
+      status: args.status as "pending" | "cancelled" | "failed" | "refunded" | "partially_refunded" | "succeeded",
       refundAmount: args.refundAmount,
       refundReason: args.refundReason,
+      refundPercentage: args.refundPercentage,
+      refundPolicy: args.refundPolicy,
       updatedAt: Date.now(),
     })
   },

@@ -6,6 +6,7 @@ import {
   getReviewResponseEmailTemplate,
   sendTransactionalEmail,
 } from './emails';
+import { sanitizeReview, sanitizeShortText } from './sanitize';
 
 // Get review by completion ID for current user
 export const getByCompletion = query({
@@ -437,7 +438,7 @@ export const submitResponse = mutation({
 
     await ctx.db.patch(args.reviewId, {
       response: {
-        text: args.response,
+        text: sanitizeReview(args.response),
         respondedAt: Date.now(),
       },
       updatedAt: Date.now(),
@@ -607,8 +608,8 @@ export const updateReview = mutation({
       vehicleCondition: args.vehicleCondition,
       professionalism: args.professionalism,
       overallExperience: args.overallExperience,
-      title: args.title,
-      review: args.review,
+      title: sanitizeShortText(args.title),
+      review: sanitizeReview(args.review),
       photos: args.photos,
       updatedAt: Date.now(),
     });
