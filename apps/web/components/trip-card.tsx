@@ -1,14 +1,30 @@
 "use client"
 
-import { Badge } from "@workspace/ui/components/badge"
+import { useState } from "react"
+import { useMutation } from "convex/react"
+import { api } from "@renegade/backend/convex/_generated/api"
+import type { Id } from "@renegade/backend/convex/_generated/dataModel"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent } from "@workspace/ui/components/card"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@workspace/ui/components/alert-dialog"
 import { cn } from "@workspace/ui/lib/utils"
-import { Calendar, Car, ChevronRight, Clock, MapPin } from "lucide-react"
+import { Calendar, Car, ChevronRight, Clock, MapPin, XCircle } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import type { ComponentProps } from "react"
 import { formatDateForDisplay } from "@/lib/date-utils"
+import { StatusBadge } from "@/components/status-badge"
+import { toast } from "sonner"
 
 interface TripCardProps extends ComponentProps<"div"> {
   reservationId: string
@@ -30,25 +46,6 @@ interface TripCardProps extends ComponentProps<"div"> {
   addOns?: Array<{ name: string; price: number; description?: string }>
 }
 
-const statusConfig = {
-  pending: {
-    label: "Pending",
-    variant: "outline" as const,
-    className: "border-yellow-500 text-yellow-700 dark:text-yellow-500",
-  },
-  confirmed: {
-    label: "Confirmed",
-    variant: "default" as const,
-    className: "border-green-500 text-green-700 dark:text-green-500",
-  },
-  cancelled: { label: "Cancelled", variant: "destructive" as const, className: "" },
-  completed: {
-    label: "Completed",
-    variant: "secondary" as const,
-    className: "border-gray-500 text-gray-700 dark:text-gray-400",
-  },
-  declined: { label: "Declined", variant: "destructive" as const, className: "" },
-}
 
 function formatDate(dateString: string): string {
   return formatDateForDisplay(dateString)
@@ -61,6 +58,46 @@ function formatTime(timeString?: string): string {
   const period = hour >= 12 ? "PM" : "AM"
   const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour
   return `${displayHour}:${minutes} ${period}`
+}
+
+/**
+ * Calculate refund tier based on cancellation timing
+ * Returns the refund percentage and policy name
+ */
+function calculateRefundTier(startDate: string): {
+  percentage: number
+  policy: "full" | "partial" | "none"
+  refundAmount: (totalAmount: number) => number
+} {
+  const now = new Date()
+  const start = new Date(startDate + "T00:00:00")
+
+  // Set both to start of day for comparison
+  now.setHours(0, 0, 0, 0)
+  start.setHours(0, 0, 0, 0)
+
+  const diffTime = start.getTime() - now.getTime()
+  const daysUntilStart = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+
+  if (daysUntilStart >= 7) {
+    return {
+      percentage: 100,
+      policy: "full",
+      refundAmount: (total) => total,
+    }
+  } else if (daysUntilStart >= 2) {
+    return {
+      percentage: 50,
+      policy: "partial",
+      refundAmount: (total) => Math.round(total * 0.5),
+    }
+  } else {
+    return {
+      percentage: 0,
+      policy: "none",
+      refundAmount: () => 0,
+    }
+  }
 }
 
 export function TripCard({
@@ -84,7 +121,32 @@ export function TripCard({
   className,
   ...props
 }: TripCardProps) {
-  const statusInfo = statusConfig[status]
+  const [isCancelling, setIsCancelling] = useState(false)
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const cancelReservation = useMutation(api.reservations.cancel)
+
+  const canCancel = status === "pending" || status === "confirmed"
+  const refundTier = canCancel ? calculateRefundTier(startDate) : null
+
+  const handleCancel = async () => {
+    if (!canCancel) return
+
+    setIsCancelling(true)
+    try {
+      await cancelReservation({
+        reservationId: reservationId as Id<"reservations">,
+        cancellationReason: "Cancelled by renter",
+      })
+      toast.success("Reservation cancelled successfully")
+      setIsDialogOpen(false)
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to cancel reservation"
+      )
+    } finally {
+      setIsCancelling(false)
+    }
+  }
 
   return (
     <Card
@@ -113,12 +175,7 @@ export function TripCard({
 
         {/* Status Badge */}
         <div className="absolute top-3 left-3 z-10">
-          <Badge
-            className={cn("bg-background/90 backdrop-blur-sm", statusInfo.className)}
-            variant={statusInfo.variant}
-          >
-            {statusInfo.label}
-          </Badge>
+          <StatusBadge status={status} className="bg-background/90 backdrop-blur-sm" />
         </div>
       </div>
 
@@ -216,6 +273,96 @@ export function TripCard({
                 <ChevronRight className="ml-2 size-4" />
               </Link>
             </Button>
+
+            {/* Cancel Button for pending/confirmed reservations */}
+            {canCancel && (
+              <AlertDialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="destructive"
+                    className="w-full"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <XCircle className="mr-2 size-4" />
+                    Cancel Reservation
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Cancel Reservation?</AlertDialogTitle>
+                    <AlertDialogDescription asChild>
+                      <div className="space-y-4">
+                        <p>
+                          Are you sure you want to cancel your reservation for{" "}
+                          <span className="font-medium text-foreground">
+                            {vehicleYear} {vehicleMake} {vehicleModel}
+                          </span>
+                          ?
+                        </p>
+
+                        {/* Refund Information */}
+                        {refundTier && (
+                          <div className="rounded-lg border bg-muted/50 p-4">
+                            <div className="font-medium text-foreground text-sm">
+                              Refund Policy
+                            </div>
+                            <div className="mt-2 space-y-1 text-sm">
+                              {refundTier.policy === "full" && (
+                                <>
+                                  <p className="text-green-600 dark:text-green-400">
+                                    You will receive a <span className="font-semibold">full refund</span> of ${refundTier.refundAmount(totalAmount).toLocaleString()}.
+                                  </p>
+                                  <p className="text-muted-foreground text-xs">
+                                    7+ days before your trip start date.
+                                  </p>
+                                </>
+                              )}
+                              {refundTier.policy === "partial" && (
+                                <>
+                                  <p className="text-yellow-600 dark:text-yellow-400">
+                                    You will receive a <span className="font-semibold">50% refund</span> of ${refundTier.refundAmount(totalAmount).toLocaleString()}.
+                                  </p>
+                                  <p className="text-muted-foreground text-xs">
+                                    2-7 days before your trip start date.
+                                  </p>
+                                </>
+                              )}
+                              {refundTier.policy === "none" && (
+                                <>
+                                  <p className="text-red-600 dark:text-red-400">
+                                    <span className="font-semibold">No refund available.</span>
+                                  </p>
+                                  <p className="text-muted-foreground text-xs">
+                                    Less than 48 hours before your trip start date.
+                                  </p>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        <p className="text-muted-foreground text-xs">
+                          This action cannot be undone.
+                        </p>
+                      </div>
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel disabled={isCancelling}>
+                      Keep Reservation
+                    </AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={handleCancel}
+                      disabled={isCancelling}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      {isCancelling ? "Cancelling..." : "Yes, Cancel Reservation"}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+
             {status === "confirmed" && (
               <Button
                 asChild

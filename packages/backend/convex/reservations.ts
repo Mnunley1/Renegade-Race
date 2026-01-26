@@ -11,8 +11,8 @@ import {
   sendTransactionalEmail,
 } from './emails';
 import { calculateDaysBetween } from './dateUtils';
-// TODO: Uncomment after installing @convex-dev/rate-limiter
-// import { rateLimiter } from './rateLimiter';
+import { rateLimiter } from './rateLimiter';
+import { sanitizeMessage, sanitizeShortText } from './sanitize';
 
 // Get reservations for a user (as renter or owner)
 export const getByUser = query({
@@ -174,11 +174,10 @@ export const create = mutation({
     }
 
     // Rate limit: 10 reservations per hour per user
-    // TODO: Uncomment after installing @convex-dev/rate-limiter
-    // const rateLimitStatus = await rateLimiter.limit(ctx, "createReservation", {
-    //   key: identity.subject,
-    //   throws: true,
-    // });
+    await rateLimiter.limit(ctx, "createReservation", {
+      key: identity.subject,
+      throws: true,
+    });
 
     const renterId = identity.subject;
     const now = Date.now();
@@ -201,12 +200,23 @@ export const create = mutation({
       throw new Error('Invalid date range');
     }
 
+    // Validate daily rate is positive
+    if (vehicle.dailyRate <= 0) {
+      throw new Error('Invalid daily rate');
+    }
+
     // Calculate base amount from daily rate
     let baseAmount = totalDays * vehicle.dailyRate;
 
     // Add add-ons to total amount
     let addOnsTotal = 0;
     if (args.addOns && args.addOns.length > 0) {
+      // Validate all add-on prices are positive
+      for (const addOn of args.addOns) {
+        if (addOn.price <= 0) {
+          throw new Error(`Invalid add-on price for ${addOn.name}`);
+        }
+      }
       addOnsTotal = args.addOns.reduce((sum, addOn) => sum + addOn.price, 0);
     }
 
@@ -231,7 +241,7 @@ export const create = mutation({
 
     // Check for conflicting reservations
     // Two date ranges overlap if: existingStart <= newEnd AND existingEnd >= newStart
-    const conflictingReservations = await ctx.db
+    const potentialConflicts = await ctx.db
       .query('reservations')
       .withIndex('by_vehicle', q => q.eq('vehicleId', args.vehicleId))
       .filter(q =>
@@ -251,11 +261,32 @@ export const create = mutation({
       )
       .collect();
 
+    // Filter out stale pending reservations without payment
+    // For pending reservations without payment, only block if created recently (15 min grace period)
+    // This prevents abandoned checkouts from permanently blocking vehicles
+    const PENDING_GRACE_PERIOD_MS = 15 * 60 * 1000 // 15 minutes
+
+    const conflictingReservations = potentialConflicts.filter((reservation) => {
+      // Confirmed reservations always block
+      if (reservation.status === 'confirmed') {
+        return true
+      }
+
+      // Pending reservations with payment always block
+      if (reservation.paymentId) {
+        return true
+      }
+
+      // Pending reservations without payment only block if created recently
+      const age = now - reservation.createdAt
+      return age < PENDING_GRACE_PERIOD_MS
+    });
+
     if (conflictingReservations.length > 0) {
       throw new Error('Selected dates conflict with existing reservations');
     }
 
-    // Create the reservation
+    // Create the reservation with sanitized content
     const reservationId = await ctx.db.insert('reservations', {
       vehicleId: args.vehicleId,
       renterId,
@@ -268,11 +299,50 @@ export const create = mutation({
       dailyRate: vehicle.dailyRate,
       totalAmount,
       status: 'pending',
-      renterMessage: args.renterMessage,
+      renterMessage: args.renterMessage ? sanitizeMessage(args.renterMessage) : undefined,
       addOns: args.addOns,
       createdAt: now,
       updatedAt: now,
     });
+
+    // Re-check for conflicts after insert to prevent race conditions
+    // This handles the case where two users book the same dates simultaneously
+    const concurrentConflicts = await ctx.db
+      .query('reservations')
+      .withIndex('by_vehicle', q => q.eq('vehicleId', args.vehicleId))
+      .filter(q =>
+        q.and(
+          // Exclude our own reservation
+          q.neq(q.field('_id'), reservationId),
+          // Only check active reservations
+          q.or(
+            q.eq(q.field('status'), 'pending'),
+            q.eq(q.field('status'), 'confirmed')
+          ),
+          // Check for date overlap
+          q.and(
+            q.lte(q.field('startDate'), args.endDate),
+            q.gte(q.field('endDate'), args.startDate)
+          )
+        )
+      )
+      .collect();
+
+    // Check if any concurrent reservation was created after our initial check
+    // Filter using the same logic as before (grace period for stale pending)
+    const actualConflicts = concurrentConflicts.filter((reservation) => {
+      if (reservation.status === 'confirmed') return true;
+      if (reservation.paymentId) return true;
+      // For pending without payment, only conflict if created before our reservation
+      // (i.e., they won the race)
+      return reservation.createdAt < now;
+    });
+
+    if (actualConflicts.length > 0) {
+      // Roll back our reservation - another user won the race
+      await ctx.db.delete(reservationId);
+      throw new Error('Selected dates conflict with a reservation that was just created. Please try different dates.');
+    }
 
     // Send email to owner about new reservation request
     try {
@@ -343,7 +413,7 @@ export const approve = mutation({
 
     await ctx.db.patch(args.reservationId, {
       status: 'confirmed',
-      ownerMessage: args.ownerMessage,
+      ownerMessage: args.ownerMessage ? sanitizeMessage(args.ownerMessage) : undefined,
       updatedAt: Date.now(),
     });
 
@@ -415,7 +485,7 @@ export const decline = mutation({
 
     await ctx.db.patch(args.reservationId, {
       status: 'declined',
-      ownerMessage: args.ownerMessage,
+      ownerMessage: args.ownerMessage ? sanitizeMessage(args.ownerMessage) : undefined,
       updatedAt: Date.now(),
     });
 
@@ -488,7 +558,7 @@ export const cancel = mutation({
 
     await ctx.db.patch(args.reservationId, {
       status: 'cancelled',
-      cancellationReason: args.cancellationReason,
+      cancellationReason: args.cancellationReason ? sanitizeShortText(args.cancellationReason) : undefined,
       updatedAt: Date.now(),
     });
 
@@ -828,6 +898,57 @@ export const getCompletedReservationForVehicle = query({
       vehicle,
       renter,
       owner,
+    };
+  },
+});
+
+// ============================================================================
+// Cleanup Functions for Stale Pending Reservations
+// ============================================================================
+
+/**
+ * Clean up stale pending reservations without payment.
+ * This should be called periodically (e.g., by a cron job) to:
+ * - Cancel pending reservations without payment that are older than 15 minutes
+ * - This frees up vehicle availability for other users
+ *
+ * Called via: ctx.scheduler or cron.ts
+ */
+export const cleanupStalePendingReservations = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const STALE_THRESHOLD_MS = 15 * 60 * 1000 // 15 minutes
+    const now = Date.now()
+    const cutoffTime = now - STALE_THRESHOLD_MS
+
+    // Find all pending reservations without payment that are older than 15 minutes
+    const staleReservations = await ctx.db
+      .query('reservations')
+      .withIndex('by_status', q => q.eq('status', 'pending'))
+      .filter(q =>
+        q.and(
+          // No payment associated
+          q.eq(q.field('paymentId'), undefined),
+          // Created more than 15 minutes ago
+          q.lt(q.field('createdAt'), cutoffTime)
+        )
+      )
+      .collect();
+
+    // Cancel each stale reservation
+    const cancelledIds: Id<'reservations'>[] = [];
+    for (const reservation of staleReservations) {
+      await ctx.db.patch(reservation._id, {
+        status: 'cancelled',
+        cancellationReason: 'Automatically cancelled - checkout not completed within 15 minutes',
+        updatedAt: now,
+      });
+      cancelledIds.push(reservation._id);
+    }
+
+    return {
+      cleanedUp: cancelledIds.length,
+      reservationIds: cancelledIds,
     };
   },
 });
