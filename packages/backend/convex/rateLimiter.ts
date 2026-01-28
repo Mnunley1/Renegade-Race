@@ -93,6 +93,13 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
     capacity: 3,
   },
 
+  // Report creation: 5 per hour per user (prevents abuse)
+  createReport: {
+    kind: "fixed window",
+    rate: 5,
+    period: HOUR,
+  },
+
   // ============================================
   // HTTP Webhook Endpoints (IP-based)
   // ============================================

@@ -31,6 +31,24 @@ export function Footer() {
             >
               Contact Us
             </Link>
+            <Link
+              className="text-muted-foreground transition-colors hover:text-foreground"
+              href="/how-it-works"
+            >
+              How It Works
+            </Link>
+            <Link
+              className="text-muted-foreground transition-colors hover:text-foreground"
+              href="/safety"
+            >
+              Safety
+            </Link>
+            <Link
+              className="text-muted-foreground transition-colors hover:text-foreground"
+              href="/cancellation-policy"
+            >
+              Cancellation Policy
+            </Link>
           </nav>
 
           <div className="flex items-center gap-4">

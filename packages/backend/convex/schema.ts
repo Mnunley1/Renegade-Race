@@ -40,6 +40,8 @@ export default defineSchema({
         marketing: v.boolean(),
       })
     ),
+    // Owner cancellation tracking
+    ownerCancellationCount: v.optional(v.number()),
     // Timestamp of last message digest email sent (to prevent spam)
     lastMessageDigestAt: v.optional(v.number()),
     // User profile fields
@@ -177,6 +179,10 @@ export default defineSchema({
     minTripDuration: v.optional(v.string()),
     maxTripDuration: v.optional(v.string()),
     requireWeekendMin: v.optional(v.boolean()),
+    // Cancellation policy
+    cancellationPolicy: v.optional(
+      v.union(v.literal("flexible"), v.literal("moderate"), v.literal("strict"))
+    ),
     isActive: v.boolean(),
     isApproved: v.optional(v.boolean()),
     viewCount: v.optional(v.number()), // Total views
@@ -744,4 +750,70 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
   }).index("by_active", ["isActive"]),
+
+  // Notifications
+  notifications: defineTable({
+    userId: v.string(),
+    type: v.union(
+      v.literal("reservation_approved"),
+      v.literal("reservation_declined"),
+      v.literal("reservation_cancelled"),
+      v.literal("reservation_completed"),
+      v.literal("new_message"),
+      v.literal("payment_success"),
+      v.literal("payment_failed"),
+      v.literal("dispute_update"),
+      v.literal("review_received"),
+      v.literal("system")
+    ),
+    title: v.string(),
+    message: v.string(),
+    isRead: v.boolean(),
+    link: v.optional(v.string()),
+    metadata: v.optional(v.any()),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_read", ["userId", "isRead"])
+    .index("by_user_created", ["userId", "createdAt"]),
+
+  // Reports
+  reports: defineTable({
+    reporterId: v.string(),
+    reportedUserId: v.optional(v.string()),
+    reportedVehicleId: v.optional(v.id("vehicles")),
+    reportedReviewId: v.optional(v.id("rentalReviews")),
+    reason: v.union(
+      v.literal("inappropriate_content"),
+      v.literal("fraud"),
+      v.literal("safety_concern"),
+      v.literal("harassment"),
+      v.literal("spam"),
+      v.literal("other")
+    ),
+    description: v.string(),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("reviewed"),
+      v.literal("resolved"),
+      v.literal("dismissed")
+    ),
+    adminNotes: v.optional(v.string()),
+    resolvedAt: v.optional(v.number()),
+    resolvedBy: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_reporter", ["reporterId"])
+    .index("by_status", ["status"])
+    .index("by_reported_user", ["reportedUserId"]),
+
+  // User blocks
+  userBlocks: defineTable({
+    blockerId: v.string(),
+    blockedUserId: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_blocker", ["blockerId"])
+    .index("by_blocked", ["blockedUserId"])
+    .index("by_blocker_blocked", ["blockerId", "blockedUserId"]),
 })
