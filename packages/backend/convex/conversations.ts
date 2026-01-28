@@ -65,7 +65,33 @@ export const getByUser = query({
       })
     )
 
-    return conversationsWithDetails
+    // Filter out conversations where either party has blocked the other
+    const filteredConversations: typeof conversationsWithDetails = []
+    for (const conversation of conversationsWithDetails) {
+      const otherUserId = role === "renter" ? conversation.ownerId : conversation.renterId
+
+      // Check if either user has blocked the other
+      const block1 = await ctx.db
+        .query("userBlocks")
+        .withIndex("by_blocker_blocked", (q) =>
+          q.eq("blockerId", userId).eq("blockedUserId", otherUserId)
+        )
+        .first()
+
+      const block2 = await ctx.db
+        .query("userBlocks")
+        .withIndex("by_blocker_blocked", (q) =>
+          q.eq("blockerId", otherUserId).eq("blockedUserId", userId)
+        )
+        .first()
+
+      // Only include if neither has blocked the other
+      if (!(block1 || block2)) {
+        filteredConversations.push(conversation)
+      }
+    }
+
+    return filteredConversations
   },
 })
 
@@ -561,7 +587,9 @@ export const bulkHostConversationActions = mutation({
 
     for (const conversationId of conversationIds) {
       const conversation = await ctx.db.get(conversationId)
-      if (!conversation) continue
+      if (!conversation) {
+        continue
+      }
 
       // Verify this conversation belongs to the host (either as owner or renter)
       if (conversation.ownerId !== hostId && conversation.renterId !== hostId) {

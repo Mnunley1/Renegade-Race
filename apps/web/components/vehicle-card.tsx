@@ -125,7 +125,7 @@ export function VehicleCard({
     <Link className="block h-full" href={vehicleUrl}>
       <Card
         className={cn(
-          "group relative flex h-full cursor-pointer flex-col overflow-hidden border border-border/50 bg-card transition-all duration-300 hover:border-primary/30 hover:shadow-primary/5 hover:shadow-xl",
+          "group relative flex h-full cursor-pointer flex-col overflow-hidden border border-border bg-card transition-colors duration-200 hover:border-primary/40",
           className
         )}
         {...props}
@@ -149,25 +149,25 @@ export function VehicleCard({
               />
             </ImageKitProvider>
           ) : (
-            <div className="flex h-full items-center justify-center bg-gradient-to-br from-muted to-muted/50">
+            <div className="flex h-full items-center justify-center bg-muted">
               <Car className="size-16 text-muted-foreground/50" />
             </div>
           )}
 
-          {/* Gradient Overlay */}
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+          {/* Overlay */}
+          <div className="pointer-events-none absolute inset-0 bg-black/20" />
 
           {/* Top Badges */}
           <div className="absolute top-3 left-3 z-10 flex flex-wrap gap-2">
             {track && (
-              <Badge className="border-0 bg-black/70 text-white text-xs backdrop-blur-sm hover:bg-black/70">
+              <Badge className="border-0 bg-black/70 text-white text-xs hover:bg-black/70">
                 {track}
               </Badge>
             )}
             {horsepower && horsepower > 0 && (
               <Badge
                 variant="secondary"
-                className="border-0 bg-primary/90 text-primary-foreground text-xs backdrop-blur-sm hover:bg-primary/90"
+                className="border-0 bg-primary/90 text-primary-foreground text-xs hover:bg-primary/90"
               >
                 <Gauge className="mr-1 size-3" />
                 {horsepower} HP
@@ -177,7 +177,7 @@ export function VehicleCard({
 
           {/* Favorite Button */}
           <Button
-            className="absolute top-3 right-3 z-10 size-9 rounded-full bg-white/90 shadow-lg backdrop-blur-sm transition-all hover:scale-110 hover:bg-white"
+            className="absolute top-3 right-3 z-10 size-9 rounded-full bg-white/90 transition-colors hover:bg-white"
             onClick={handleFavoriteClick}
             size="icon"
             variant="ghost"
@@ -194,7 +194,7 @@ export function VehicleCard({
 
           {/* Price Tag - Bottom of Image */}
           <div className="absolute bottom-3 left-3 z-10">
-            <div className="flex items-baseline gap-1 rounded-lg bg-white/95 px-3 py-1.5 shadow-lg backdrop-blur-sm">
+            <div className="flex items-baseline gap-1 rounded-md bg-white/95 px-3 py-1.5">
               <span className="font-bold text-gray-900 text-lg">${pricePerDay}</span>
               <span className="text-gray-600 text-xs">/day</span>
             </div>
@@ -250,7 +250,7 @@ export function VehicleCard({
 
       {/* Login Dialog */}
       <Dialog onOpenChange={setShowLoginDialog} open={showLoginDialog}>
-        <DialogContent className="border-0 bg-white/95 p-0 shadow-2xl backdrop-blur sm:max-w-md dark:bg-gray-900/95">
+        <DialogContent className="border border-border bg-background p-0 sm:max-w-md">
           <Card className="border-0 shadow-none">
             <CardContent className="p-8">
               {/* Header */}

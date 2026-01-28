@@ -1355,10 +1355,10 @@ function VehiclesPageContent() {
   return (
     <div className="min-h-screen bg-background">
       {/* Hero Section */}
-      <div className="relative overflow-hidden border-border border-b bg-gradient-to-b from-background to-muted/20">
+      <div className="relative overflow-hidden border-border border-b bg-background">
         <div className="container relative z-10 mx-auto px-4 py-6 sm:px-6 sm:py-8 md:py-12">
           <div className="mb-4 text-center sm:mb-6 md:mb-8">
-            <h1 className="mb-2 font-bold text-2xl tracking-tight sm:mb-3 sm:text-3xl md:text-4xl lg:text-5xl">
+            <h1 className="mb-2 font-bold text-3xl tracking-tight sm:mb-3 md:text-4xl lg:text-5xl">
               Find Your Perfect Track Vehicle
             </h1>
             <p className="mx-auto max-w-2xl text-muted-foreground text-sm sm:text-base md:text-lg">
@@ -1367,14 +1367,14 @@ function VehiclesPageContent() {
           </div>
 
           {/* Enhanced Search Bar */}
-          <Card className="shadow-lg">
+          <Card>
             <CardContent className="p-3 sm:p-4 md:p-6">
               <div className="space-y-3 sm:space-y-4">
                 {/* Enhanced Search Input with Autocomplete */}
                 <div className="relative">
                   <Search className="-translate-y-1/2 absolute top-1/2 left-3 size-4 text-muted-foreground sm:left-4 sm:size-5" />
                   <Input
-                    className="h-12 pr-3 pl-10 text-sm shadow-sm sm:h-14 sm:pr-4 sm:pl-12 sm:text-base"
+                    className="h-12 pr-3 pl-10 text-sm  sm:h-14 sm:pr-4 sm:pl-12 sm:text-base"
                     onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
                     onChange={(e) => {
                       setSearchQuery(e.target.value)
@@ -1385,7 +1385,7 @@ function VehiclesPageContent() {
                     value={searchQuery}
                   />
                   {showSuggestions && searchSuggestions.length > 0 && (
-                    <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-lg">
+                    <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover">
                       {searchSuggestions.map((suggestion, index) => (
                         <button
                           className="w-full px-3 py-2 text-left text-sm hover:bg-accent sm:px-4"
@@ -1490,7 +1490,7 @@ function VehiclesPageContent() {
                       <PopoverTrigger asChild>
                         <Button
                           className={cn(
-                            "h-10 w-full justify-start text-left font-normal text-sm shadow-sm sm:h-12 sm:text-base",
+                            "h-10 w-full justify-start text-left font-normal text-sm  sm:h-12 sm:text-base",
                             !dateRange && "text-muted-foreground"
                           )}
                           id="date-range"
@@ -1743,7 +1743,7 @@ function VehiclesPageContent() {
             >
               {!showFilters && (
                 <SheetTrigger asChild>
-                  <Button className="w-full shadow-sm sm:w-auto" size="lg" variant="outline">
+                  <Button className="w-full  sm:w-auto" size="lg" variant="outline">
                     <Filter className="mr-2 size-4" />
                     Show Filters
                     {activeFiltersCount > 0 && (
@@ -1909,7 +1909,7 @@ function VehiclesPageContent() {
                 {hasMore && (
                   <div className="mt-6 flex flex-col items-center gap-3 sm:mt-8 sm:gap-4">
                     <Button
-                      className="w-full shadow-sm sm:w-auto"
+                      className="w-full  sm:w-auto"
                       onClick={loadMore}
                       size="lg"
                       variant="outline"

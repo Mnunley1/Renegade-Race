@@ -1,9 +1,9 @@
 import { v } from "convex/values"
-import { action, internalMutation, mutation, query } from "./_generated/server"
 import { api, internal } from "./_generated/api"
+import { action, internalMutation, mutation, query } from "./_generated/server"
+import { checkAdmin } from "./admin"
 import { calculateDistance } from "./geocoding"
 import { imagePresets, r2 } from "./r2"
-import { checkAdmin } from "./admin"
 
 // Get all active and approved vehicles with optimized images
 export const getAllWithOptimizedImages = query({
@@ -293,8 +293,12 @@ export const searchWithAvailability = query({
 
       // Sort by distance (closest first)
       finalVehicles.sort((a, b) => {
-        if (!(a.address?.latitude && a.address?.longitude)) return 1
-        if (!(b.address?.latitude && b.address?.longitude)) return -1
+        if (!(a.address?.latitude && a.address?.longitude)) {
+          return 1
+        }
+        if (!(b.address?.latitude && b.address?.longitude)) {
+          return -1
+        }
 
         const distanceA = calculateDistance(
           args.userLatitude!,
@@ -435,7 +439,9 @@ export const getVehicleImageById = query({
   args: { id: v.id("vehicleImages") },
   handler: async (ctx, args) => {
     const image = await ctx.db.get(args.id)
-    if (!(image && image.r2Key)) return null
+    if (!image?.r2Key) {
+      return null
+    }
 
     return {
       ...image,
@@ -553,6 +559,9 @@ export const createVehicleWithImages = mutation({
     minTripDuration: v.optional(v.string()),
     maxTripDuration: v.optional(v.string()),
     requireWeekendMin: v.optional(v.boolean()),
+    cancellationPolicy: v.optional(
+      v.union(v.literal("flexible"), v.literal("moderate"), v.literal("strict"))
+    ),
     images: v.array(
       v.object({
         r2Key: v.string(),
@@ -617,6 +626,7 @@ export const createVehicleWithImages = mutation({
       minTripDuration: args.minTripDuration,
       maxTripDuration: args.maxTripDuration,
       requireWeekendMin: args.requireWeekendMin,
+      cancellationPolicy: args.cancellationPolicy || "moderate",
       isActive: true,
       isApproved: false,
       createdAt: now,
@@ -737,6 +747,9 @@ export const update = mutation({
     minTripDuration: v.optional(v.string()),
     maxTripDuration: v.optional(v.string()),
     requireWeekendMin: v.optional(v.boolean()),
+    cancellationPolicy: v.optional(
+      v.union(v.literal("flexible"), v.literal("moderate"), v.literal("strict"))
+    ),
     address: v.optional(
       v.object({
         street: v.string(),
@@ -802,7 +815,7 @@ export const updateVehicleCoordinates = internalMutation({
   },
   handler: async (ctx, args) => {
     const vehicle = await ctx.db.get(args.vehicleId)
-    if (!(vehicle && vehicle.address)) {
+    if (!vehicle?.address) {
       return
     }
 

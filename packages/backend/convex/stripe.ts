@@ -5,12 +5,12 @@ import { api, components, internal } from "./_generated/api"
 import type { Id } from "./_generated/dataModel"
 import { action, internalAction, mutation, query } from "./_generated/server"
 import { checkAdmin } from "./admin"
+import { calculateDaysBetween, parseLocalDate } from "./dateUtils"
 import {
   getPaymentFailedEmailTemplate,
   getPaymentSucceededEmailTemplate,
   sendTransactionalEmail,
 } from "./emails"
-import { parseLocalDate, calculateDaysBetween } from "./dateUtils"
 import { rateLimiter } from "./rateLimiter"
 
 // ============================================================================
@@ -19,17 +19,29 @@ import { rateLimiter } from "./rateLimiter"
 
 /**
  * Calculate refund percentage based on cancellation policy.
- * Policy tiers:
+ *
+ * Flexible Policy:
+ * - 1+ days before start: 100% refund (full)
+ * - <24 hours before start: 50% refund (partial)
+ *
+ * Moderate Policy (default):
  * - 7+ days before start: 100% refund (full)
  * - 2-7 days before start: 50% refund (partial)
  * - <48 hours before start: 0% refund (none)
  *
+ * Strict Policy:
+ * - 14+ days before start: 100% refund (full)
+ * - 7-14 days before start: 50% refund (partial)
+ * - <7 days before start: 0% refund (none)
+ *
  * @param startDate - Rental start date in YYYY-MM-DD format
+ * @param policyType - Cancellation policy type
  * @param cancellationDate - Date of cancellation (defaults to now)
  * @returns Object with refund percentage and policy tier
  */
 export function calculateRefundTier(
   startDate: string,
+  policyType: "flexible" | "moderate" | "strict" = "moderate",
   cancellationDate?: Date
 ): { percentage: number; policy: "full" | "partial" | "none" } {
   const now = cancellationDate || new Date()
@@ -48,6 +60,25 @@ export function calculateRefundTier(
   const diffTime = start.getTime() - now.getTime()
   const daysUntilStart = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
 
+  // Apply policy-specific rules
+  if (policyType === "flexible") {
+    if (daysUntilStart >= 1) {
+      return { percentage: 100, policy: "full" }
+    }
+    return { percentage: 50, policy: "partial" }
+  }
+
+  if (policyType === "strict") {
+    if (daysUntilStart >= 14) {
+      return { percentage: 100, policy: "full" }
+    }
+    if (daysUntilStart >= 7) {
+      return { percentage: 50, policy: "partial" }
+    }
+    return { percentage: 0, policy: "none" }
+  }
+
+  // Default: moderate policy
   if (daysUntilStart >= 7) {
     return { percentage: 100, policy: "full" }
   }
@@ -986,7 +1017,9 @@ export const handlePaymentSuccess = mutation({
   },
   handler: async (ctx, args) => {
     const payment = await ctx.db.get(args.paymentId)
-    if (!payment) return
+    if (!payment) {
+      return
+    }
 
     await ctx.db.patch(args.paymentId, {
       status: "succeeded",
@@ -999,6 +1032,19 @@ export const handlePaymentSuccess = mutation({
         status: "confirmed",
         paymentStatus: "paid",
         updatedAt: Date.now(),
+      })
+
+      // Trigger notification for renter
+      await ctx.scheduler.runAfter(0, internal.notifications.createNotification, {
+        userId: payment.renterId,
+        type: "payment_success",
+        title: "Payment Successful",
+        message: `Your payment of $${(payment.amount / 100).toFixed(2)} was successful.`,
+        link: "/trips",
+        metadata: {
+          paymentId: args.paymentId,
+          reservationId: payment.reservationId,
+        },
       })
     } catch (error) {
       // If updating reservation fails after payment succeeded, log and schedule retry
@@ -1031,7 +1077,6 @@ export const handlePaymentSuccess = mutation({
 
     // Send payment success email
     try {
-
       const [reservation, vehicle, renter] = await Promise.all([
         ctx.db.get(payment.reservationId),
         payment.metadata?.vehicleId
@@ -1072,7 +1117,9 @@ export const handlePaymentFailure = mutation({
   },
   handler: async (ctx, args) => {
     const payment = await ctx.db.get(args.paymentId)
-    if (!payment) return
+    if (!payment) {
+      return
+    }
 
     await ctx.db.patch(args.paymentId, {
       status: "failed",
@@ -1080,9 +1127,22 @@ export const handlePaymentFailure = mutation({
       updatedAt: Date.now(),
     })
 
+    // Trigger notification for renter
+    await ctx.scheduler.runAfter(0, internal.notifications.createNotification, {
+      userId: payment.renterId,
+      type: "payment_failed",
+      title: "Payment Failed",
+      message: "Your payment failed. Please try again or use a different payment method.",
+      link: `/checkout?reservationId=${payment.reservationId}`,
+      metadata: {
+        paymentId: args.paymentId,
+        reservationId: payment.reservationId,
+        failureReason: args.failureReason,
+      },
+    })
+
     // Send payment failure email
     try {
-
       const [reservation, vehicle, renter] = await Promise.all([
         ctx.db.get(payment.reservationId),
         payment.metadata?.vehicleId
@@ -1153,12 +1213,13 @@ export const createCustomerPortalSession = action({
 // ============================================================================
 
 // Internal action to process refund on cancellation (called via scheduler)
-// Uses tiered refund policy: 7+ days = 100%, 2-7 days = 50%, <48 hours = 0%
+// Uses tiered refund policy based on vehicle's cancellation policy
 export const processRefundOnCancellation = internalAction({
   args: {
     paymentId: v.id("payments"),
     reservationId: v.id("reservations"),
     reason: v.string(),
+    forceFullRefund: v.optional(v.boolean()),
   },
   handler: async (
     ctx,
@@ -1177,7 +1238,7 @@ export const processRefundOnCancellation = internalAction({
       paymentId: args.paymentId,
     })
 
-    if (!(payment && payment.stripeChargeId)) {
+    if (!payment?.stripeChargeId) {
       throw new Error("Payment not found or charge ID missing")
     }
 
@@ -1186,14 +1247,44 @@ export const processRefundOnCancellation = internalAction({
       return { skipped: true, reason: `Payment status is ${payment.status}, cannot refund` }
     }
 
+    // Get the reservation to fetch vehicle cancellation policy
+    const reservation = await ctx.runQuery(api.reservations.getById, {
+      id: args.reservationId,
+    })
+
+    if (!reservation) {
+      throw new Error("Reservation not found")
+    }
+
+    // Get vehicle to fetch cancellation policy
+    const vehicle = await ctx.runQuery(api.vehicles.getById, {
+      id: reservation.vehicleId,
+    })
+
+    if (!vehicle) {
+      throw new Error("Vehicle not found")
+    }
+
     // Get the reservation start date to calculate refund tier
     const startDate = payment.metadata?.startDate
     if (!startDate) {
       throw new Error("Payment metadata missing start date")
     }
 
-    // Calculate refund tier based on cancellation policy
-    const { percentage, policy } = calculateRefundTier(startDate)
+    // If forceFullRefund is true (owner cancellation), apply 100% refund
+    let percentage: number
+    let policy: "full" | "partial" | "none"
+
+    if (args.forceFullRefund) {
+      percentage = 100
+      policy = "full"
+    } else {
+      // Calculate refund tier based on vehicle's cancellation policy
+      const policyType = vehicle.cancellationPolicy || "moderate"
+      const refundTier = calculateRefundTier(startDate, policyType)
+      percentage = refundTier.percentage
+      policy = refundTier.policy
+    }
 
     // If no refund is due, just update the status
     if (percentage === 0) {
@@ -1319,7 +1410,7 @@ export const processRefund: ReturnType<typeof action> = action({
     const payment = await ctx.runQuery(api.stripe.getPaymentById, {
       paymentId: args.paymentId,
     })
-    if (!(payment && payment.stripeChargeId)) {
+    if (!payment?.stripeChargeId) {
       throw new Error("Payment not found")
     }
 
@@ -1343,7 +1434,9 @@ export const processRefund: ReturnType<typeof action> = action({
       refund_application_fee: true, // Refund your platform fee too
     }
 
-    if (args.amount) refundParams.amount = args.amount
+    if (args.amount) {
+      refundParams.amount = args.amount
+    }
     if (args.reason) {
       refundParams.reason = args.reason as Stripe.RefundCreateParams.Reason
     }
@@ -1457,7 +1550,6 @@ export const getUserPayments = query({
 
     const paymentsWithDetails = await Promise.all(
       payments.map(async (payment) => {
-  
         const [reservation, vehicle, owner] = await Promise.all([
           ctx.db.get(payment.reservationId),
           payment.metadata?.vehicleId
@@ -1488,7 +1580,9 @@ export const getPaymentById = query({
   },
   handler: async (ctx, args) => {
     const payment = await ctx.db.get(args.paymentId)
-    if (!payment) return null
+    if (!payment) {
+      return null
+    }
 
     const [reservation, vehicle, renter, owner] = await Promise.all([
       ctx.db.get(payment.reservationId),
@@ -1699,7 +1793,6 @@ export const handleChargeRefunded = mutation({
       .first()
 
     if (!payment) {
-      console.log(`Payment not found for intent: ${args.stripePaymentIntentId}`)
       return
     }
 
@@ -1723,8 +1816,6 @@ export const handleChargeRefunded = mutation({
         })
       }
     }
-
-    console.log(`Processed refund for payment ${payment._id}: ${args.refundAmount} cents`)
   },
 })
 
@@ -1740,7 +1831,6 @@ export const handleTransferFailed = mutation({
     const payment = payments.find((p) => p.stripeTransferId === args.stripeTransferId)
 
     if (!payment) {
-      console.log(`Payment not found for transfer: ${args.stripeTransferId}`)
       return
     }
 
@@ -1748,8 +1838,6 @@ export const handleTransferFailed = mutation({
       failureReason: args.failureReason || "Transfer failed",
       updatedAt: Date.now(),
     })
-
-    console.log(`Transfer failed for payment ${payment._id}: ${args.failureReason}`)
   },
 })
 
@@ -1761,18 +1849,11 @@ export const handlePayoutFailed = mutation({
     failureReason: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<void> => {
-    // Log the payout failure - payouts are for the host's Stripe account
-    console.log(
-      `Payout ${args.payoutId} failed for account ${args.stripeAccountId}: ${args.failureReason}`
-    )
-
     // Find user by Stripe account ID
     const users = await ctx.db.query("users").collect()
     const user = users.find((u) => u.stripeAccountId === args.stripeAccountId)
 
     if (user) {
-      // Could send an email notification to the host about failed payout
-      console.log(`Payout failed for user ${user._id}`)
     }
   },
 })
@@ -1791,7 +1872,6 @@ export const handlePaymentCanceled = mutation({
       .first()
 
     if (!payment) {
-      console.log(`Payment not found for canceled intent: ${args.stripePaymentIntentId}`)
       return
     }
 
@@ -1813,8 +1893,6 @@ export const handlePaymentCanceled = mutation({
         }
       }
     }
-
-    console.log(`Payment ${payment._id} canceled`)
   },
 })
 
@@ -1829,7 +1907,6 @@ export const handleAccountDeauthorized = mutation({
     const user = users.find((u) => u.stripeAccountId === args.stripeAccountId)
 
     if (!user) {
-      console.log(`User not found for deauthorized account: ${args.stripeAccountId}`)
       return
     }
 
@@ -1837,8 +1914,6 @@ export const handleAccountDeauthorized = mutation({
     await ctx.db.patch(user._id, {
       stripeAccountStatus: "disabled",
     })
-
-    console.log(`Account ${args.stripeAccountId} deauthorized for user ${user._id}`)
   },
 })
 
@@ -1859,22 +1934,13 @@ export const handleDisputeCreated = mutation({
       .first()
 
     if (!payment) {
-      console.log(`Payment not found for disputed intent: ${args.stripePaymentIntentId}`)
       return
     }
-
-    // Log the dispute - actual dispute handling may require manual intervention
-    console.log(
-      `Dispute ${args.disputeId} created for payment ${payment._id}: ${args.disputeReason} (${args.disputeAmount} cents)`
-    )
 
     // Could create a system notification or flag the reservation for review
     if (payment.reservationId) {
       const reservation = await ctx.db.get(payment.reservationId)
       if (reservation) {
-        // The dispute should be handled through the existing dispute system
-        // This webhook just logs the Stripe-side dispute
-        console.log(`Reservation ${payment.reservationId} has a Stripe dispute`)
       }
     }
   },

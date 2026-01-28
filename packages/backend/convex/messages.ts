@@ -1,9 +1,10 @@
 import { v } from "convex/values"
+import { internal } from "./_generated/api"
 import type { Id } from "./_generated/dataModel"
 import { mutation, query } from "./_generated/server"
+import { checkAdmin } from "./admin"
 import { rateLimiter } from "./rateLimiter"
 import { sanitizeMessage } from "./sanitize"
-import { checkAdmin } from "./admin"
 
 // Get messages for a conversation
 export const getByConversation = query({
@@ -201,6 +202,27 @@ export const send = mutation({
     // Activate conversation if it's currently inactive (first message or reactivating)
     // This ensures the recipient only sees the conversation after the first message is sent
     const activateConversation = !conversation?.isActive
+
+    // Determine the recipient (the other party in the conversation)
+    const recipientId =
+      conversation && conversation.renterId === senderId
+        ? conversation.ownerId
+        : conversation?.renterId
+
+    // Trigger notification for the recipient
+    if (recipientId) {
+      await ctx.scheduler.runAfter(0, internal.notifications.createNotification, {
+        userId: recipientId,
+        type: "new_message",
+        title: "New Message",
+        message: args.content.substring(0, 100), // First 100 chars as preview
+        link: `/messages/${conversationId}`,
+        metadata: {
+          conversationId,
+          senderId,
+        },
+      })
+    }
 
     if (conversation && conversation.renterId === senderId) {
       // Sender is renter, so owner receives the message
@@ -633,7 +655,9 @@ export const bulkMarkHostConversationsAsRead = mutation({
     const updatedConversations: Id<"conversations">[] = []
 
     for (const conversation of conversations) {
-      if (!conversation) continue
+      if (!conversation) {
+        continue
+      }
 
       // Mark all unread messages as read
       const unreadMessages = await ctx.db
@@ -685,7 +709,9 @@ export const bulkArchiveHostConversations = mutation({
 
     for (const conversationId of conversationIds) {
       const conversation = await ctx.db.get(conversationId)
-      if (!conversation) continue
+      if (!conversation) {
+        continue
+      }
 
       // Verify this conversation belongs to the host
       if (conversation.ownerId !== hostId) {

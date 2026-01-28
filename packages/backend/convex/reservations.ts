@@ -1,16 +1,16 @@
 import { v } from "convex/values"
-import type { Id } from "./_generated/dataModel"
 import { internal } from "./_generated/api"
+import type { Id } from "./_generated/dataModel"
 import { mutation, query } from "./_generated/server"
+import { calculateDaysBetween } from "./dateUtils"
 import {
-  getReservationPendingOwnerEmailTemplate,
-  getReservationConfirmedRenterEmailTemplate,
-  getReservationDeclinedRenterEmailTemplate,
   getReservationCancelledEmailTemplate,
   getReservationCompletedEmailTemplate,
+  getReservationConfirmedRenterEmailTemplate,
+  getReservationDeclinedRenterEmailTemplate,
+  getReservationPendingOwnerEmailTemplate,
   sendTransactionalEmail,
 } from "./emails"
-import { calculateDaysBetween } from "./dateUtils"
 import { rateLimiter } from "./rateLimiter"
 import { sanitizeMessage, sanitizeShortText } from "./sanitize"
 
@@ -97,7 +97,9 @@ export const getById = query({
   args: { id: v.id("reservations") },
   handler: async (ctx, args) => {
     const reservation = await ctx.db.get(args.id)
-    if (!reservation) return null
+    if (!reservation) {
+      return null
+    }
 
     const [vehicle, renter, owner] = await Promise.all([
       ctx.db.get(reservation.vehicleId),
@@ -178,6 +180,25 @@ export const create = mutation({
 
     if (vehicle.ownerId === renterId) {
       throw new Error("Cannot book your own vehicle")
+    }
+
+    // Check if either party has blocked the other
+    const block1 = await ctx.db
+      .query("userBlocks")
+      .withIndex("by_blocker_blocked", (q) =>
+        q.eq("blockerId", renterId).eq("blockedUserId", vehicle.ownerId)
+      )
+      .first()
+
+    const block2 = await ctx.db
+      .query("userBlocks")
+      .withIndex("by_blocker_blocked", (q) =>
+        q.eq("blockerId", vehicle.ownerId).eq("blockedUserId", renterId)
+      )
+      .first()
+
+    if (block1 || block2) {
+      throw new Error("Cannot book vehicles from blocked users")
     }
 
     // Calculate total days and amount
@@ -341,8 +362,12 @@ export const create = mutation({
     // Check if any concurrent reservation was created after our initial check
     // Use Convex _creationTime for reliable ordering (set atomically by database)
     const actualConflicts = concurrentConflicts.filter((reservation) => {
-      if (reservation.status === "confirmed") return true
-      if (reservation.paymentId) return true
+      if (reservation.status === "confirmed") {
+        return true
+      }
+      if (reservation.paymentId) {
+        return true
+      }
       // For pending without payment, only conflict if created before our reservation
       // using _creationTime (set by Convex) for reliable ordering
       return reservation._creationTime < ourCreationTime
@@ -429,6 +454,18 @@ export const approve = mutation({
       updatedAt: Date.now(),
     })
 
+    // Trigger notification for renter
+    await ctx.scheduler.runAfter(0, internal.notifications.createNotification, {
+      userId: reservation.renterId,
+      type: "reservation_approved",
+      title: "Reservation Approved",
+      message: "Your reservation has been approved by the host.",
+      link: "/trips",
+      metadata: {
+        reservationId: args.reservationId,
+      },
+    })
+
     // Send email to renter about confirmed reservation
     try {
       const [vehicle, renter] = await Promise.all([
@@ -499,6 +536,18 @@ export const decline = mutation({
       updatedAt: Date.now(),
     })
 
+    // Trigger notification for renter
+    await ctx.scheduler.runAfter(0, internal.notifications.createNotification, {
+      userId: reservation.renterId,
+      type: "reservation_declined",
+      title: "Reservation Declined",
+      message: "Your reservation request has been declined.",
+      link: `/vehicles/${reservation.vehicleId}`,
+      metadata: {
+        reservationId: args.reservationId,
+      },
+    })
+
     // Send email to renter about declined reservation
     try {
       const [vehicle, renter] = await Promise.all([
@@ -566,17 +615,51 @@ export const cancel = mutation({
       updatedAt: Date.now(),
     })
 
+    // Detect if the canceller is the owner
+    const isOwnerCancelling = identity.subject === reservation.ownerId
+
+    // Trigger notification for the other party
+    const otherPartyId = isOwnerCancelling ? reservation.renterId : reservation.ownerId
+    await ctx.scheduler.runAfter(0, internal.notifications.createNotification, {
+      userId: otherPartyId,
+      type: "reservation_cancelled",
+      title: "Reservation Cancelled",
+      message: "A reservation has been cancelled.",
+      link: isOwnerCancelling ? "/trips" : "/host/reservations",
+      metadata: {
+        reservationId: args.reservationId,
+      },
+    })
+
     // Process automatic refund if payment exists and is paid
     if (reservation.paymentId) {
       try {
         const payment = await ctx.db.get(reservation.paymentId)
         if (payment && payment.status === "succeeded" && payment.stripeChargeId) {
+          // If owner is cancelling a confirmed reservation, force 100% refund
+          const forceFullRefund = isOwnerCancelling && reservation.status === "confirmed"
+
           // Schedule refund processing (use scheduler to call internal action)
           await ctx.scheduler.runAfter(0, internal.stripe.processRefundOnCancellation, {
             paymentId: reservation.paymentId,
             reservationId: args.reservationId,
             reason: args.cancellationReason || "Reservation cancelled",
+            forceFullRefund,
           })
+
+          // If owner cancelled a confirmed reservation, increment their cancellation count
+          if (forceFullRefund) {
+            const owner = await ctx.db
+              .query("users")
+              .withIndex("by_external_id", (q) => q.eq("externalId", reservation.ownerId))
+              .first()
+
+            if (owner) {
+              await ctx.db.patch(owner._id, {
+                ownerCancellationCount: (owner.ownerCancellationCount || 0) + 1,
+              })
+            }
+          }
         }
       } catch (error) {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -603,7 +686,7 @@ export const cancel = mutation({
 
       if (vehicle) {
         const vehicleName = `${vehicle.year} ${vehicle.make} ${vehicle.model}`
-        const isRenter = reservation.renterId === identity.subject
+        const _isRenter = reservation.renterId === identity.subject
 
         // Email to renter
         if (renter?.email) {
@@ -665,6 +748,29 @@ export const complete = mutation({
     await ctx.db.patch(args.reservationId, {
       status: "completed",
       updatedAt: Date.now(),
+    })
+
+    // Trigger notifications for both parties
+    await ctx.scheduler.runAfter(0, internal.notifications.createNotification, {
+      userId: reservation.renterId,
+      type: "reservation_completed",
+      title: "Reservation Completed",
+      message: "Your reservation has been completed. Please leave a review!",
+      link: `/review/${args.reservationId}`,
+      metadata: {
+        reservationId: args.reservationId,
+      },
+    })
+
+    await ctx.scheduler.runAfter(0, internal.notifications.createNotification, {
+      userId: reservation.ownerId,
+      type: "reservation_completed",
+      title: "Reservation Completed",
+      message: "A reservation has been completed. Please leave a review!",
+      link: `/review/${args.reservationId}`,
+      metadata: {
+        reservationId: args.reservationId,
+      },
     })
 
     // Send emails to both parties about completed reservation (prompt for review)
@@ -852,7 +958,9 @@ export const getCompletedReservationForVehicle = query({
       .order("desc")
       .first()
 
-    if (!reservation) return null
+    if (!reservation) {
+      return null
+    }
 
     // Get related data
     const [vehicle, renter, owner] = await Promise.all([
