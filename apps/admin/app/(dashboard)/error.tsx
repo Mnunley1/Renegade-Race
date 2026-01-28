@@ -1,0 +1,28 @@
+"use client"
+
+import { useEffect } from "react"
+import { Button } from "@workspace/ui/components/button"
+import { AlertTriangle } from "lucide-react"
+
+export default function ErrorBoundary({
+  error,
+  reset,
+}: {
+  error: Error & { digest?: string }
+  reset: () => void
+}) {
+  useEffect(() => {
+    if (process.env.NODE_ENV === "development") {
+      console.error(error)
+    }
+  }, [error])
+
+  return (
+    <div className="flex min-h-[50vh] flex-col items-center justify-center gap-4">
+      <AlertTriangle className="h-12 w-12 text-destructive" />
+      <h2 className="text-xl font-semibold">Something went wrong</h2>
+      <p className="text-muted-foreground">{error.message}</p>
+      <Button onClick={reset}>Try again</Button>
+    </div>
+  )
+}
