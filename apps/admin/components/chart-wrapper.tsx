@@ -37,7 +37,7 @@ export function ChartWrapper({
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-base font-semibold">{title}</CardTitle>
+        <CardTitle className="font-semibold text-base">{title}</CardTitle>
         <div className="flex items-center gap-2">
           {onGranularityChange && (
             <div className="flex rounded-md border">
@@ -71,13 +71,7 @@ export function ChartWrapper({
           )}
         </div>
       </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          <Skeleton className="h-[300px] w-full" />
-        ) : (
-          children
-        )}
-      </CardContent>
+      <CardContent>{isLoading ? <Skeleton className="h-[300px] w-full" /> : children}</CardContent>
     </Card>
   )
 }

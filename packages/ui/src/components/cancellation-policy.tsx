@@ -1,7 +1,7 @@
 "use client"
 
 import { AlertCircle, Calendar, CheckCircle2, Clock, Info, XCircle } from "lucide-react"
-import * as React from "react"
+import type * as React from "react"
 import { cn } from "../lib/utils"
 
 interface CancellationPolicyProps {
@@ -56,10 +56,11 @@ export function CancellationPolicy({
 }: CancellationPolicyProps) {
   if (variant === "inline") {
     return (
-      <div className={cn("flex items-center gap-2 text-sm text-muted-foreground", className)}>
+      <div className={cn("flex items-center gap-2 text-muted-foreground text-sm", className)}>
         <Info className="size-4 shrink-0" />
         <span>
-          Free cancellation up to 7 days before pickup. 50% refund 2-7 days before. No refund within 48 hours.
+          Free cancellation up to 7 days before pickup. 50% refund 2-7 days before. No refund within
+          48 hours.
         </span>
       </div>
     )
@@ -67,18 +68,14 @@ export function CancellationPolicy({
 
   if (variant === "compact") {
     return (
-      <div
-        className={cn(
-          showCard && "rounded-lg border bg-muted/30 p-4",
-          className
-        )}
-      >
+      <div className={cn(showCard && "rounded-lg border bg-muted/30 p-4", className)}>
         <div className="flex items-start gap-3">
           <Calendar className="mt-0.5 size-5 shrink-0 text-primary" />
           <div>
             <h4 className="mb-1 font-medium">Cancellation Policy</h4>
-            <p className="text-sm text-muted-foreground">
-              Full refund 7+ days before pickup. 50% refund 2-7 days before. No refund within 48 hours.
+            <p className="text-muted-foreground text-sm">
+              Full refund 7+ days before pickup. 50% refund 2-7 days before. No refund within 48
+              hours.
             </p>
           </div>
         </div>
@@ -88,12 +85,7 @@ export function CancellationPolicy({
 
   // Full variant
   return (
-    <div
-      className={cn(
-        showCard && "rounded-lg border bg-card p-6",
-        className
-      )}
-    >
+    <div className={cn(showCard && "rounded-lg border bg-card p-6", className)}>
       <div className="mb-4 flex items-center gap-2">
         <Calendar className="size-5 text-primary" />
         <h3 className="font-semibold text-lg">Cancellation Policy</h3>
@@ -105,10 +97,7 @@ export function CancellationPolicy({
           return (
             <div
               key={tier.name}
-              className={cn(
-                "flex items-center gap-4 rounded-lg p-3",
-                tier.bgColor
-              )}
+              className={cn("flex items-center gap-4 rounded-lg p-3", tier.bgColor)}
             >
               <Icon className={cn("size-5 shrink-0", tier.iconColor)} />
               <div className="flex-1">
@@ -118,7 +107,7 @@ export function CancellationPolicy({
                     {tier.refundPercent}% refund
                   </span>
                 </div>
-                <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                <div className="flex items-center gap-1.5 text-muted-foreground text-sm">
                   <Clock className="size-3.5" />
                   <span>{tier.timeframe}</span>
                 </div>
@@ -128,7 +117,7 @@ export function CancellationPolicy({
         })}
       </div>
 
-      <p className="mt-4 text-xs text-muted-foreground">
+      <p className="mt-4 text-muted-foreground text-xs">
         Refunds are processed within 5-10 business days to your original payment method.
       </p>
     </div>

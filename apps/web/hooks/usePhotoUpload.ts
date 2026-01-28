@@ -34,7 +34,7 @@ export function usePhotoUpload(options: UsePhotoUploadOptions = {}) {
       }
 
       for (let index = 0; index < fileArray.length; index++) {
-        const file = fileArray[index]
+        const file = fileArray[index]!
         if (!file.type.startsWith("image/")) {
           toast.error(`${file.name} is not an image file`)
           continue
@@ -42,7 +42,9 @@ export function usePhotoUpload(options: UsePhotoUploadOptions = {}) {
 
         // Check file size
         if (file.size > MAX_FILE_SIZE_BYTES) {
-          toast.error(`${file.name} is too large. Maximum size is ${MAX_FILE_SIZE_BYTES / 1024 / 1024}MB.`)
+          toast.error(
+            `${file.name} is too large. Maximum size is ${MAX_FILE_SIZE_BYTES / 1024 / 1024}MB.`
+          )
           continue
         }
 

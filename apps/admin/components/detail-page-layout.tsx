@@ -17,13 +17,13 @@ export function DetailPageLayout({ title, badges, actions, children }: DetailPag
   return (
     <div>
       <div className="mb-6">
-        <Button variant="ghost" size="sm" onClick={() => router.back()} className="mb-4 -ml-2">
+        <Button variant="ghost" size="sm" onClick={() => router.back()} className="-ml-2 mb-4">
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back
         </Button>
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
+            <h1 className="font-bold text-2xl tracking-tight">{title}</h1>
             {badges}
           </div>
           {actions && <div className="flex items-center gap-2">{actions}</div>}

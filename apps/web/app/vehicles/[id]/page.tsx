@@ -24,6 +24,7 @@ import {
   UserPlus,
   Zap,
 } from "lucide-react"
+import Head from "next/head"
 import Link from "next/link"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { Suspense, useEffect, useMemo, useRef, useState } from "react"
@@ -47,8 +48,14 @@ function VehicleDetailsPageContent() {
   const endDate = searchParams.get("endDate")
 
   const vehicle = useQuery(api.vehicles.getById, { id: id as Id<"vehicles"> })
-  const reviews = useQuery(api.reviews.getByVehicle, id ? { vehicleId: id as Id<"vehicles"> } : "skip")
-  const reviewStats = useQuery(api.reviews.getVehicleStats, id ? { vehicleId: id as Id<"vehicles"> } : "skip")
+  const reviews = useQuery(
+    api.reviews.getByVehicle,
+    id ? { vehicleId: id as Id<"vehicles"> } : "skip"
+  )
+  const reviewStats = useQuery(
+    api.reviews.getVehicleStats,
+    id ? { vehicleId: id as Id<"vehicles"> } : "skip"
+  )
 
   // Check if user has a completed reservation for this vehicle (to show "Write Review" button)
   const completedReservation = useQuery(
@@ -59,7 +66,7 @@ function VehicleDetailsPageContent() {
   // Check if user has already written a review for this vehicle
   const hasUserReviewed = useMemo(() => {
     if (!(isSignedIn && user?.id && reviews)) return false
-    return reviews.some((review) => review.reviewerId === user.id)
+    return reviews.some((review: any) => review.reviewerId === user.id)
   }, [isSignedIn, user?.id, reviews])
 
   // Check if vehicle is favorited
@@ -172,7 +179,6 @@ function VehicleDetailsPageContent() {
       trackView({ vehicleId: id as Id<"vehicles"> }).catch((error) => {
         handleErrorWithContext(error, {
           action: "track view",
-          showToast: false,
         })
         // Silently fail - analytics tracking shouldn't break the page
       })
@@ -221,7 +227,6 @@ function VehicleDetailsPageContent() {
     } catch (error) {
       handleErrorWithContext(error, {
         action: "share vehicle",
-        showToast: false,
       })
     }
   }
@@ -244,15 +249,16 @@ function VehicleDetailsPageContent() {
   }
 
   // Extract image r2Keys for ImageKit (sorted by order, then primary)
-  const images = vehicle.images
-    ?.slice()
-    .sort((a, b) => {
-      const orderA = a.order ?? Number.MAX_SAFE_INTEGER
-      const orderB = b.order ?? Number.MAX_SAFE_INTEGER
-      return orderA - orderB
-    })
-    .filter((img) => img.r2Key && img.r2Key.trim() !== "")
-    .map((img) => `/${img.r2Key}`) || []
+  const images =
+    vehicle.images
+      ?.slice()
+      .sort((a: any, b: any) => {
+        const orderA = a.order ?? Number.MAX_SAFE_INTEGER
+        const orderB = b.order ?? Number.MAX_SAFE_INTEGER
+        return orderA - orderB
+      })
+      .filter((img: any) => img.r2Key && img.r2Key.trim() !== "")
+      .map((img: any) => `/${img.r2Key}`) || []
 
   // Host information from owner
   const host = {
@@ -263,9 +269,31 @@ function VehicleDetailsPageContent() {
     tripsCompleted: vehicle.owner?.totalRentals || 0,
   }
 
+  // JSON-LD structured data for SEO
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
+    description: vehicle.description,
+    offers: {
+      "@type": "Offer",
+      price: vehicle.dailyRate / 100,
+      priceCurrency: "USD",
+      availability: "https://schema.org/InStock",
+    },
+  }
+
   return (
-    <div className="container mx-auto px-4 py-8">
-      {/* Header Section */}
+    <>
+      <Head>
+        <link rel="canonical" href={`https://renegaderentals.com/vehicles/${id}`} />
+      </Head>
+      <div className="container mx-auto px-4 py-8">
+        <script
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+          type="application/ld+json"
+        />
+        {/* Header Section */}
         <div className="mb-6">
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div className="flex-1">
@@ -317,484 +345,486 @@ function VehicleDetailsPageContent() {
           </div>
         </div>
 
-      <VehicleGallery
-        images={images}
-        vehicleName={`${vehicle.year} ${vehicle.make} ${vehicle.model}`}
-      />
+        <VehicleGallery
+          images={images}
+          vehicleName={`${vehicle.year} ${vehicle.make} ${vehicle.model}`}
+        />
 
-      <div className="grid gap-8 lg:grid-cols-3">
-        <div className="space-y-8 lg:col-span-2">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Car className="size-5 text-primary" />
-                Description
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="whitespace-pre-line text-muted-foreground">{vehicle.description}</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Gauge className="size-5 text-primary" />
-                Specifications
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {vehicle.horsepower ||
-              vehicle.transmission ||
-              vehicle.drivetrain ||
-              vehicle.engineType ||
-              vehicle.mileage ? (
-                <div className="grid gap-6 sm:grid-cols-2">
-                  {vehicle.horsepower && (
-                    <div className="flex items-start gap-3">
-                      <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                        <Zap className="size-5 text-primary" />
-                      </div>
-                      <div className="flex-1">
-                        <p className="mb-1 font-medium text-muted-foreground text-xs uppercase tracking-wide">
-                          Horsepower
-                        </p>
-                        <p className="font-bold text-2xl">
-                          {vehicle.horsepower.toLocaleString()} hp
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                  {vehicle.transmission && (
-                    <div className="flex items-start gap-3">
-                      <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                        <Car className="size-5 text-primary" />
-                      </div>
-                      <div className="flex-1">
-                        <p className="mb-1 font-medium text-muted-foreground text-xs uppercase tracking-wide">
-                          Transmission
-                        </p>
-                        <p className="font-bold text-xl">{vehicle.transmission}</p>
-                      </div>
-                    </div>
-                  )}
-                  {vehicle.drivetrain && (
-                    <div className="flex items-start gap-3">
-                      <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                        <Route className="size-5 text-primary" />
-                      </div>
-                      <div className="flex-1">
-                        <p className="mb-1 font-medium text-muted-foreground text-xs uppercase tracking-wide">
-                          Drivetrain
-                        </p>
-                        <p className="font-bold text-xl">{vehicle.drivetrain}</p>
-                      </div>
-                    </div>
-                  )}
-                  {vehicle.engineType && (
-                    <div className="flex items-start gap-3">
-                      <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                        <Gauge className="size-5 text-primary" />
-                      </div>
-                      <div className="flex-1">
-                        <p className="mb-1 font-medium text-muted-foreground text-xs uppercase tracking-wide">
-                          Engine Type
-                        </p>
-                        <p className="font-bold text-xl">{vehicle.engineType}</p>
-                      </div>
-                    </div>
-                  )}
-                  {vehicle.mileage && (
-                    <div className="flex items-start gap-3">
-                      <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                        <Route className="size-5 text-primary" />
-                      </div>
-                      <div className="flex-1">
-                        <p className="mb-1 font-medium text-muted-foreground text-xs uppercase tracking-wide">
-                          Mileage
-                        </p>
-                        <p className="font-bold text-xl">
-                          {vehicle.mileage.toLocaleString()} miles
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <p className="py-8 text-center text-muted-foreground">
-                  No specifications available
-                </p>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Amenities Card */}
-          {vehicle.amenities && vehicle.amenities.length > 0 && (
+        <div className="grid gap-8 lg:grid-cols-3">
+          <div className="space-y-8 lg:col-span-2">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Check className="size-5 text-primary" />
-                  Amenities & Features
+                  <Car className="size-5 text-primary" />
+                  Description
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {vehicle.amenities.map((amenity) => (
-                    <div className="flex items-center gap-2" key={amenity}>
-                      <Check className="size-4 shrink-0 text-primary" />
-                      <span className="text-sm">{amenity}</span>
-                    </div>
-                  ))}
-                </div>
+                <p className="whitespace-pre-line text-muted-foreground">{vehicle.description}</p>
               </CardContent>
             </Card>
-          )}
 
-          {/* Track Information Card */}
-          {vehicle.track && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Route className="size-5 text-primary" />
-                  Track Information
+                  <Gauge className="size-5 text-primary" />
+                  Specifications
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="mb-2 font-semibold text-lg">{vehicle.track.name}</h3>
-                    {vehicle.track.description && (
-                      <p className="text-muted-foreground leading-relaxed">
-                        {vehicle.track.description}
-                      </p>
+                {vehicle.horsepower ||
+                vehicle.transmission ||
+                vehicle.drivetrain ||
+                vehicle.engineType ||
+                vehicle.mileage ? (
+                  <div className="grid gap-6 sm:grid-cols-2">
+                    {vehicle.horsepower && (
+                      <div className="flex items-start gap-3">
+                        <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                          <Zap className="size-5 text-primary" />
+                        </div>
+                        <div className="flex-1">
+                          <p className="mb-1 font-medium text-muted-foreground text-xs uppercase tracking-wide">
+                            Horsepower
+                          </p>
+                          <p className="font-bold text-2xl">
+                            {vehicle.horsepower.toLocaleString()} hp
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    {vehicle.transmission && (
+                      <div className="flex items-start gap-3">
+                        <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                          <Car className="size-5 text-primary" />
+                        </div>
+                        <div className="flex-1">
+                          <p className="mb-1 font-medium text-muted-foreground text-xs uppercase tracking-wide">
+                            Transmission
+                          </p>
+                          <p className="font-bold text-xl">{vehicle.transmission}</p>
+                        </div>
+                      </div>
+                    )}
+                    {vehicle.drivetrain && (
+                      <div className="flex items-start gap-3">
+                        <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                          <Route className="size-5 text-primary" />
+                        </div>
+                        <div className="flex-1">
+                          <p className="mb-1 font-medium text-muted-foreground text-xs uppercase tracking-wide">
+                            Drivetrain
+                          </p>
+                          <p className="font-bold text-xl">{vehicle.drivetrain}</p>
+                        </div>
+                      </div>
+                    )}
+                    {vehicle.engineType && (
+                      <div className="flex items-start gap-3">
+                        <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                          <Gauge className="size-5 text-primary" />
+                        </div>
+                        <div className="flex-1">
+                          <p className="mb-1 font-medium text-muted-foreground text-xs uppercase tracking-wide">
+                            Engine Type
+                          </p>
+                          <p className="font-bold text-xl">{vehicle.engineType}</p>
+                        </div>
+                      </div>
+                    )}
+                    {vehicle.mileage && (
+                      <div className="flex items-start gap-3">
+                        <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                          <Route className="size-5 text-primary" />
+                        </div>
+                        <div className="flex-1">
+                          <p className="mb-1 font-medium text-muted-foreground text-xs uppercase tracking-wide">
+                            Mileage
+                          </p>
+                          <p className="font-bold text-xl">
+                            {vehicle.mileage.toLocaleString()} miles
+                          </p>
+                        </div>
+                      </div>
                     )}
                   </div>
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <MapPin className="size-4" />
-                    <span>{vehicle.track.location}</span>
-                  </div>
-                </div>
+                ) : (
+                  <p className="py-8 text-center text-muted-foreground">
+                    No specifications available
+                  </p>
+                )}
               </CardContent>
             </Card>
-          )}
 
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2">
-                  <Star className="size-5 text-primary" />
-                  Reviews
-                  {reviewStats && reviewStats.totalReviews > 0 && (
-                    <span className="ml-2 font-normal text-base text-muted-foreground">
-                      ({reviewStats.totalReviews})
-                    </span>
-                  )}
-                </CardTitle>
-                <div className="flex items-center gap-3">
-                  {reviewStats && reviewStats.averageRating > 0 && (
-                    <div className="flex items-center gap-2 rounded-lg bg-primary/10 px-4 py-2">
-                      <Star className="size-5 fill-primary text-primary" />
-                      <span className="font-bold text-lg">
-                        {reviewStats.averageRating.toFixed(1)}
-                      </span>
-                    </div>
-                  )}
-                  {completedReservation && (
-                    <Button asChild size="sm" variant="outline">
-                      <Link href={`/trips/review/${completedReservation._id}`}>
-                        <Star className="mr-2 size-4" />
-                        {hasUserReviewed ? "Edit Review" : "Write Review"}
-                      </Link>
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {reviews && reviews.length > 0 ? (
-                <div className="space-y-6">
-                  {reviews.map((review) => {
-                    const isUserReview = review.reviewerId === user?.id
-                    return (
-                      <div
-                        className="rounded-lg border bg-muted/30 p-4 transition-colors hover:bg-muted/50"
-                        key={review._id}
-                      >
-                        <div className="mb-3 flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="mb-1 flex items-center gap-2">
-                              {review.reviewer?._id ? (
-                                <Link
-                                  className="font-semibold transition-colors hover:text-primary"
-                                  href={`/r/${review.reviewer._id}`}
-                                >
-                                  {review.reviewer?.name || "Anonymous"}
-                                </Link>
-                              ) : (
-                                <p className="font-semibold">
-                                  {review.reviewer?.name || "Anonymous"}
-                                </p>
-                              )}
-                              <div className="flex items-center gap-1">
-                                {Array.from({ length: 5 }).map((_, i) => (
-                                  <Star
-                                    className={cn(
-                                      "size-4",
-                                      i < review.rating
-                                        ? "fill-primary text-primary"
-                                        : "text-muted-foreground"
-                                    )}
-                                    key={i}
-                                  />
-                                ))}
-                              </div>
-                            </div>
-                            <p className="text-muted-foreground text-sm">
-                              {new Date(review.createdAt).toLocaleDateString("en-US", {
-                                year: "numeric",
-                                month: "long",
-                                day: "numeric",
-                              })}
-                              {review.updatedAt && review.updatedAt !== review.createdAt && (
-                                <span className="ml-2 text-xs">(edited)</span>
-                              )}
-                            </p>
-                          </div>
-                          {isUserReview && review.reservation && (
-                            <Link href={`/trips/review/${review.reservation._id}`}>
-                              <Button className="gap-2" size="sm" variant="ghost">
-                                <Edit className="size-4" />
-                                Edit
-                              </Button>
-                            </Link>
-                          )}
-                        </div>
-                        {review.title && (
-                          <p className="mb-2 font-semibold text-lg">{review.title}</p>
-                        )}
-                        {review.review && (
-                          <p className="text-muted-foreground leading-relaxed">{review.review}</p>
-                        )}
+            {/* Amenities Card */}
+            {vehicle.amenities && vehicle.amenities.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Check className="size-5 text-primary" />
+                    Amenities & Features
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {vehicle.amenities.map((amenity: string) => (
+                      <div className="flex items-center gap-2" key={amenity}>
+                        <Check className="size-4 shrink-0 text-primary" />
+                        <span className="text-sm">{amenity}</span>
                       </div>
-                    )
-                  })}
-                </div>
-              ) : (
-                <div className="py-12 text-center">
-                  <Star className="mx-auto mb-4 size-12 text-muted-foreground/30" />
-                  <p className="mb-2 font-semibold text-lg">No reviews yet</p>
-                  <p className="mb-4 text-muted-foreground">
-                    {completedReservation
-                      ? "Share your experience with this vehicle!"
-                      : "Be the first to review this vehicle!"}
-                  </p>
-                  {completedReservation && (
-                    <Button asChild variant="outline">
-                      <Link href={`/trips/review/${completedReservation._id}`}>
-                        <Star className="mr-2 size-4" />
-                        {hasUserReviewed ? "Edit Review" : "Write Review"}
-                      </Link>
-                    </Button>
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="lg:col-span-1">
-          <div className="sticky top-20 space-y-6">
-            <Card className="border-2">
-              <CardHeader className="border-b">
-                <div className="flex items-center justify-between">
-                  <CardTitle>Book this vehicle</CardTitle>
-                  <div className="text-right">
-                    <div className="flex items-baseline gap-1">
-                      <span className="bg-gradient-to-r from-primary to-primary/70 bg-clip-text font-bold text-2xl text-transparent">
-                        ${vehicle.dailyRate.toLocaleString()}
-                      </span>
-                      <span className="text-muted-foreground text-sm">/day</span>
-                    </div>
+                    ))}
                   </div>
-                </div>
-              </CardHeader>
-              <CardContent className="p-6">
-                <div className="space-y-4">
-                  <p className="text-center text-muted-foreground">
-                    Select your dates and add-ons on the checkout page
-                  </p>
-                  <Button
-                    className="w-full"
-                    onClick={() => {
-                      const checkoutUrl = startDate && endDate
-                        ? `/checkout?vehicleId=${vehicle._id}&startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`
-                        : `/checkout?vehicleId=${vehicle._id}`
-                      router.push(checkoutUrl)
-                    }}
-                    size="lg"
-                  >
-                    Reserve Now
-                  </Button>
-                  <p className="text-center text-muted-foreground text-xs">
-                    You won't be charged until checkout
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            )}
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Shield className="size-5 text-primary" />
-                  Host Information
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <Link className="block" href={`/r/${vehicle.owner?._id}`}>
-                    <div className="flex items-center gap-4 transition-opacity hover:opacity-80">
-                      <Avatar className="size-16">
-                        <AvatarImage src={host.avatar} />
-                        <AvatarFallback>{host.name[0]?.toUpperCase() || "U"}</AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-semibold transition-colors hover:text-primary">
-                            {host.name}
-                          </h3>
-                          {host.verified && (
-                            <Badge className="bg-green-500" variant="default">
-                              <Shield className="mr-1 size-3" />
-                              Verified
-                            </Badge>
-                          )}
-                        </div>
-                        <p className="text-muted-foreground text-sm">
-                          {host.memberSince && `Member since ${host.memberSince}`}
-                          {host.memberSince && host.tripsCompleted > 0 && " • "}
-                          {host.tripsCompleted > 0 && `${host.tripsCompleted} trips`}
-                          {!host.memberSince && host.tripsCompleted === 0 && "New member"}
+            {/* Track Information Card */}
+            {vehicle.track && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Route className="size-5 text-primary" />
+                    Track Information
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div>
+                      <h3 className="mb-2 font-semibold text-lg">{vehicle.track.name}</h3>
+                      {vehicle.track.description && (
+                        <p className="text-muted-foreground leading-relaxed">
+                          {vehicle.track.description}
                         </p>
-                      </div>
+                      )}
                     </div>
-                  </Link>
-                  {vehicle.ownerId !== user?.id && (
-                    <Button
-                      className="w-full"
-                      disabled={isCreatingConversation}
-                      onClick={handleMessageHost}
-                      variant="outline"
-                    >
-                      <MessageSquare className="mr-2 size-4" />
-                      {isCreatingConversation ? "Loading..." : "Message Host"}
-                    </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <MapPin className="size-4" />
+                      <span>{vehicle.track.location}</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Share2 className="size-5 text-primary" />
-                  Share Listing
-                </CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <Star className="size-5 text-primary" />
+                    Reviews
+                    {reviewStats && reviewStats.totalReviews > 0 && (
+                      <span className="ml-2 font-normal text-base text-muted-foreground">
+                        ({reviewStats.totalReviews})
+                      </span>
+                    )}
+                  </CardTitle>
+                  <div className="flex items-center gap-3">
+                    {reviewStats && reviewStats.averageRating > 0 && (
+                      <div className="flex items-center gap-2 rounded-lg bg-primary/10 px-4 py-2">
+                        <Star className="size-5 fill-primary text-primary" />
+                        <span className="font-bold text-lg">
+                          {reviewStats.averageRating.toFixed(1)}
+                        </span>
+                      </div>
+                    )}
+                    {completedReservation && (
+                      <Button asChild size="sm" variant="outline">
+                        <Link href={`/trips/review/${completedReservation._id}`}>
+                          <Star className="mr-2 size-4" />
+                          {hasUserReviewed ? "Edit Review" : "Write Review"}
+                        </Link>
+                      </Button>
+                    )}
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-2 gap-2">
-                  <Button
-                    className="w-full"
-                    onClick={() => handleShare("copy_link")}
-                    size="sm"
-                    variant="outline"
-                  >
-                    <Share2 className="mr-2 size-4" />
-                    Copy Link
-                  </Button>
-                  <Button
-                    className="w-full"
-                    onClick={() => handleShare("facebook")}
-                    size="sm"
-                    variant="outline"
-                  >
-                    Facebook
-                  </Button>
-                  <Button
-                    className="w-full"
-                    onClick={() => handleShare("twitter")}
-                    size="sm"
-                    variant="outline"
-                  >
-                    Twitter
-                  </Button>
-                  <Button
-                    className="w-full"
-                    onClick={() => handleShare("linkedin")}
-                    size="sm"
-                    variant="outline"
-                  >
-                    LinkedIn
-                  </Button>
-                </div>
+                {reviews && reviews.length > 0 ? (
+                  <div className="space-y-6">
+                    {reviews.map((review: any) => {
+                      const isUserReview = review.reviewerId === user?.id
+                      return (
+                        <div
+                          className="rounded-lg border bg-muted/30 p-4 transition-colors hover:bg-muted/50"
+                          key={review._id}
+                        >
+                          <div className="mb-3 flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="mb-1 flex items-center gap-2">
+                                {review.reviewer?._id ? (
+                                  <Link
+                                    className="font-semibold transition-colors hover:text-primary"
+                                    href={`/r/${review.reviewer._id}`}
+                                  >
+                                    {review.reviewer?.name || "Anonymous"}
+                                  </Link>
+                                ) : (
+                                  <p className="font-semibold">
+                                    {review.reviewer?.name || "Anonymous"}
+                                  </p>
+                                )}
+                                <div className="flex items-center gap-1">
+                                  {Array.from({ length: 5 }).map((_, i) => (
+                                    <Star
+                                      className={cn(
+                                        "size-4",
+                                        i < review.rating
+                                          ? "fill-primary text-primary"
+                                          : "text-muted-foreground"
+                                      )}
+                                      key={i}
+                                    />
+                                  ))}
+                                </div>
+                              </div>
+                              <p className="text-muted-foreground text-sm">
+                                {new Date(review.createdAt).toLocaleDateString("en-US", {
+                                  year: "numeric",
+                                  month: "long",
+                                  day: "numeric",
+                                })}
+                                {review.updatedAt && review.updatedAt !== review.createdAt && (
+                                  <span className="ml-2 text-xs">(edited)</span>
+                                )}
+                              </p>
+                            </div>
+                            {isUserReview && review.reservation && (
+                              <Link href={`/trips/review/${review.reservation._id}`}>
+                                <Button className="gap-2" size="sm" variant="ghost">
+                                  <Edit className="size-4" />
+                                  Edit
+                                </Button>
+                              </Link>
+                            )}
+                          </div>
+                          {review.title && (
+                            <p className="mb-2 font-semibold text-lg">{review.title}</p>
+                          )}
+                          {review.review && (
+                            <p className="text-muted-foreground leading-relaxed">{review.review}</p>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <div className="py-12 text-center">
+                    <Star className="mx-auto mb-4 size-12 text-muted-foreground/30" />
+                    <p className="mb-2 font-semibold text-lg">No reviews yet</p>
+                    <p className="mb-4 text-muted-foreground">
+                      {completedReservation
+                        ? "Share your experience with this vehicle!"
+                        : "Be the first to review this vehicle!"}
+                    </p>
+                    {completedReservation && (
+                      <Button asChild variant="outline">
+                        <Link href={`/trips/review/${completedReservation._id}`}>
+                          <Star className="mr-2 size-4" />
+                          {hasUserReviewed ? "Edit Review" : "Write Review"}
+                        </Link>
+                      </Button>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
+
+          <div className="lg:col-span-1">
+            <div className="sticky top-20 space-y-6">
+              <Card className="border-2">
+                <CardHeader className="border-b">
+                  <div className="flex items-center justify-between">
+                    <CardTitle>Book this vehicle</CardTitle>
+                    <div className="text-right">
+                      <div className="flex items-baseline gap-1">
+                        <span className="bg-gradient-to-r from-primary to-primary/70 bg-clip-text font-bold text-2xl text-transparent">
+                          ${vehicle.dailyRate.toLocaleString()}
+                        </span>
+                        <span className="text-muted-foreground text-sm">/day</span>
+                      </div>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-6">
+                  <div className="space-y-4">
+                    <p className="text-center text-muted-foreground">
+                      Select your dates and add-ons on the checkout page
+                    </p>
+                    <Button
+                      className="w-full"
+                      onClick={() => {
+                        const checkoutUrl =
+                          startDate && endDate
+                            ? `/checkout?vehicleId=${vehicle._id}&startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`
+                            : `/checkout?vehicleId=${vehicle._id}`
+                        router.push(checkoutUrl)
+                      }}
+                      size="lg"
+                    >
+                      Reserve Now
+                    </Button>
+                    <p className="text-center text-muted-foreground text-xs">
+                      You won't be charged until checkout
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Shield className="size-5 text-primary" />
+                    Host Information
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <Link className="block" href={`/r/${vehicle.owner?._id}`}>
+                      <div className="flex items-center gap-4 transition-opacity hover:opacity-80">
+                        <Avatar className="size-16">
+                          <AvatarImage src={host.avatar} />
+                          <AvatarFallback>{host.name[0]?.toUpperCase() || "U"}</AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-semibold transition-colors hover:text-primary">
+                              {host.name}
+                            </h3>
+                            {host.verified && (
+                              <Badge className="bg-green-500" variant="default">
+                                <Shield className="mr-1 size-3" />
+                                Verified
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-muted-foreground text-sm">
+                            {host.memberSince && `Member since ${host.memberSince}`}
+                            {host.memberSince && host.tripsCompleted > 0 && " • "}
+                            {host.tripsCompleted > 0 && `${host.tripsCompleted} trips`}
+                            {!host.memberSince && host.tripsCompleted === 0 && "New member"}
+                          </p>
+                        </div>
+                      </div>
+                    </Link>
+                    {vehicle.ownerId !== user?.id && (
+                      <Button
+                        className="w-full"
+                        disabled={isCreatingConversation}
+                        onClick={handleMessageHost}
+                        variant="outline"
+                      >
+                        <MessageSquare className="mr-2 size-4" />
+                        {isCreatingConversation ? "Loading..." : "Message Host"}
+                      </Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Share2 className="size-5 text-primary" />
+                    Share Listing
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      className="w-full"
+                      onClick={() => handleShare("copy_link")}
+                      size="sm"
+                      variant="outline"
+                    >
+                      <Share2 className="mr-2 size-4" />
+                      Copy Link
+                    </Button>
+                    <Button
+                      className="w-full"
+                      onClick={() => handleShare("facebook")}
+                      size="sm"
+                      variant="outline"
+                    >
+                      Facebook
+                    </Button>
+                    <Button
+                      className="w-full"
+                      onClick={() => handleShare("twitter")}
+                      size="sm"
+                      variant="outline"
+                    >
+                      Twitter
+                    </Button>
+                    <Button
+                      className="w-full"
+                      onClick={() => handleShare("linkedin")}
+                      size="sm"
+                      variant="outline"
+                    >
+                      LinkedIn
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
         </div>
-      </div>
 
-      {/* Login Dialog */}
-      <Dialog onOpenChange={setShowLoginDialog} open={showLoginDialog}>
-        <DialogContent className="border-0 bg-white/95 p-0 shadow-2xl backdrop-blur sm:max-w-md dark:bg-gray-900/95">
-          <Card className="border-0 shadow-none">
-            <CardContent className="p-8">
-              {/* Header */}
-              <div className="mb-6 text-center">
-                <div className="mb-4 flex items-center justify-center gap-2">
-                  <Car className="size-8 text-[#EF1C25]" />
-                  <span className="font-bold text-2xl text-foreground">Renegade Rentals</span>
+        {/* Login Dialog */}
+        <Dialog onOpenChange={setShowLoginDialog} open={showLoginDialog}>
+          <DialogContent className="border-0 bg-white/95 p-0 shadow-2xl backdrop-blur sm:max-w-md dark:bg-gray-900/95">
+            <Card className="border-0 shadow-none">
+              <CardContent className="p-8">
+                {/* Header */}
+                <div className="mb-6 text-center">
+                  <div className="mb-4 flex items-center justify-center gap-2">
+                    <Car className="size-8 text-[#EF1C25]" />
+                    <span className="font-bold text-2xl text-foreground">Renegade Rentals</span>
+                  </div>
+                  <h2 className="mb-2 font-bold text-2xl text-foreground">Sign In Required</h2>
+                  <p className="text-muted-foreground">
+                    Please sign in to save your favorite vehicles and access them anytime.
+                  </p>
                 </div>
-                <h2 className="mb-2 font-bold text-2xl text-foreground">Sign In Required</h2>
-                <p className="text-muted-foreground">
-                  Please sign in to save your favorite vehicles and access them anytime.
-                </p>
-              </div>
 
-              {/* Action buttons */}
-              <div className="space-y-3">
-                <Button
-                  className="w-full bg-[#EF1C25] text-white hover:bg-[#EF1C25]/90"
-                  onClick={handleLogin}
-                  size="lg"
-                >
-                  <LogIn className="mr-2 size-4" />
-                  Sign In
-                </Button>
+                {/* Action buttons */}
+                <div className="space-y-3">
+                  <Button
+                    className="w-full bg-[#EF1C25] text-white hover:bg-[#EF1C25]/90"
+                    onClick={handleLogin}
+                    size="lg"
+                  >
+                    <LogIn className="mr-2 size-4" />
+                    Sign In
+                  </Button>
 
-                <Button
-                  className="w-full border-border hover:bg-muted"
-                  onClick={() => {
-                    setShowLoginDialog(false)
-                    router.push("/sign-up")
-                  }}
-                  size="lg"
-                  variant="outline"
-                >
-                  <UserPlus className="mr-2 size-4" />
-                  Create Account
-                </Button>
-              </div>
+                  <Button
+                    className="w-full border-border hover:bg-muted"
+                    onClick={() => {
+                      setShowLoginDialog(false)
+                      router.push("/sign-up")
+                    }}
+                    size="lg"
+                    variant="outline"
+                  >
+                    <UserPlus className="mr-2 size-4" />
+                    Create Account
+                  </Button>
+                </div>
 
-              {/* Additional info */}
-              <div className="mt-6 text-center">
-                <p className="text-muted-foreground text-sm">
-                  Join thousands of racing enthusiasts
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </DialogContent>
-      </Dialog>
-    </div>
+                {/* Additional info */}
+                <div className="mt-6 text-center">
+                  <p className="text-muted-foreground text-sm">
+                    Join thousands of racing enthusiasts
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </>
   )
 }
 

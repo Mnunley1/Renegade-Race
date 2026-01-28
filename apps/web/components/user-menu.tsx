@@ -69,7 +69,7 @@ export function UserMenu() {
               )}
             </Avatar>
             {unreadCount !== undefined && unreadCount > 0 && (
-              <span className="absolute -right-1 -top-1 flex min-w-[1.25rem] items-center justify-center rounded-full bg-primary px-1 py-0.5 text-primary-foreground text-xs font-semibold leading-none">
+              <span className="-right-1 -top-1 absolute flex min-w-[1.25rem] items-center justify-center rounded-full bg-primary px-1 py-0.5 font-semibold text-primary-foreground text-xs leading-none">
                 {unreadCount > 99 ? "99+" : unreadCount}
               </span>
             )}
@@ -118,12 +118,15 @@ export function UserMenu() {
                   </DropdownMenuItem>
                 ) : onboardingStatus.status === "in_progress" ? (
                   <DropdownMenuItem asChild>
-                    <Link className="flex items-center justify-between text-sm" href="/host/onboarding">
+                    <Link
+                      className="flex items-center justify-between text-sm"
+                      href="/host/onboarding"
+                    >
                       <span className="flex items-center">
                         <Car className="mr-3 size-4 shrink-0" />
                         <span>Continue Setup</span>
                       </span>
-                      <span className="ml-2 shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-amber-700 text-xs font-medium dark:bg-amber-900/30 dark:text-amber-400">
+                      <span className="ml-2 shrink-0 rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-700 text-xs dark:bg-amber-900/30 dark:text-amber-400">
                         In Progress
                       </span>
                     </Link>

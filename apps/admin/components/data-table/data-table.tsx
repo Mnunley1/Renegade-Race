@@ -30,11 +30,7 @@ export interface DataTableProps<T> {
 type SortDirection = "asc" | "desc" | null
 
 function Skeleton({ className }: { className?: string }) {
-  return (
-    <div
-      className={`animate-pulse rounded-md bg-muted ${className ?? ""}`}
-    />
-  )
+  return <div className={`animate-pulse rounded-md bg-muted ${className ?? ""}`} />
 }
 
 export function DataTable<T>({
@@ -55,7 +51,7 @@ export function DataTable<T>({
   const visibleColumns = columns.filter((col) => !col.hidden)
 
   const sortedData = useMemo(() => {
-    if (!sortKey || !sortDirection) return data
+    if (!(sortKey && sortDirection)) return data
     const column = columns.find((c) => c.key === sortKey)
     if (!column?.sortValue) return data
 
@@ -105,7 +101,7 @@ export function DataTable<T>({
       {toolbar}
       {selectedIds.size > 0 && bulkActions && (
         <div className="flex items-center gap-2 rounded-md border bg-muted/50 p-2">
-          <span className="text-sm font-medium">{selectedIds.size} selected</span>
+          <span className="font-medium text-sm">{selectedIds.size} selected</span>
           <div className="flex items-center gap-2">{bulkActions}</div>
         </div>
       )}
@@ -116,10 +112,7 @@ export function DataTable<T>({
               <tr className="border-b bg-muted/50">
                 {onSelectionChange && (
                   <th className="w-12 p-3">
-                    <Checkbox
-                      checked={allSelected}
-                      onCheckedChange={toggleAll}
-                    />
+                    <Checkbox checked={allSelected} onCheckedChange={toggleAll} />
                   </th>
                 )}
                 {visibleColumns.map((col) => (
@@ -186,10 +179,7 @@ export function DataTable<T>({
                     >
                       {onSelectionChange && (
                         <td className="p-3">
-                          <Checkbox
-                            checked={selected}
-                            onCheckedChange={() => toggleRow(id)}
-                          />
+                          <Checkbox checked={selected} onCheckedChange={() => toggleRow(id)} />
                         </td>
                       )}
                       {visibleColumns.map((col) => (

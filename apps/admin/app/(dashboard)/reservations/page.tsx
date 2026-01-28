@@ -24,14 +24,7 @@ import {
 import { Badge } from "@workspace/ui/components/badge"
 import { Input } from "@workspace/ui/components/input"
 import { Checkbox } from "@workspace/ui/components/checkbox"
-import {
-  Calendar,
-  ArrowRight,
-  Search,
-  XCircle,
-  Loader2,
-  Eye,
-} from "lucide-react"
+import { Calendar, Search, XCircle, Loader2, Eye } from "lucide-react"
 import { toast } from "sonner"
 import { Pagination } from "@/components/pagination"
 import { handleErrorWithContext } from "@/lib/error-handler"
@@ -61,7 +54,7 @@ export default function ReservationsPage() {
   })
 
   const reservations = result?.reservations || []
-  const hasMore = result?.hasMore || false
+  const hasMore = result?.hasMore
 
   const cancelReservation = useMutation(api.admin.cancelReservationAsAdmin)
   const [processingId, setProcessingId] = useState<Id<"reservations"> | null>(null)
@@ -76,9 +69,7 @@ export default function ReservationsPage() {
 
   const handleCancel = async (reservationId: Id<"reservations">) => {
     if (
-      !confirm(
-        "Are you sure you want to cancel this reservation? This action cannot be undone."
-      )
+      !confirm("Are you sure you want to cancel this reservation? This action cannot be undone.")
     ) {
       return
     }
@@ -99,7 +90,7 @@ export default function ReservationsPage() {
     if (selectedIds.size === reservations.length) {
       setSelectedIds(new Set())
     } else {
-      setSelectedIds(new Set(reservations.map((r) => r._id)))
+      setSelectedIds(new Set(reservations.map((r: any) => r._id)))
     }
   }
 
@@ -125,7 +116,11 @@ export default function ReservationsPage() {
       case "pending":
         return <Badge variant="default">Pending</Badge>
       case "confirmed":
-        return <Badge variant="default" className="bg-green-600">Confirmed</Badge>
+        return (
+          <Badge variant="default" className="bg-green-600">
+            Confirmed
+          </Badge>
+        )
       case "completed":
         return <Badge variant="secondary">Completed</Badge>
       case "cancelled":
@@ -137,21 +132,19 @@ export default function ReservationsPage() {
     }
   }
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-US", {
+  const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat("en-US", {
       style: "currency",
       currency: "USD",
       minimumFractionDigits: 2,
     }).format(amount / 100)
-  }
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
+  const formatDate = (dateString: string) =>
+    new Date(dateString).toLocaleDateString("en-US", {
       year: "numeric",
       month: "short",
       day: "numeric",
     })
-  }
 
   const totalPages = Math.ceil((reservations.length || 0) / 50) || 1
 
@@ -167,9 +160,7 @@ export default function ReservationsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="font-bold text-3xl">Reservations Management</h1>
-        <p className="text-muted-foreground mt-2">
-          View and manage all platform reservations
-        </p>
+        <p className="mt-2 text-muted-foreground">View and manage all platform reservations</p>
       </div>
 
       <Card>
@@ -185,7 +176,7 @@ export default function ReservationsPage() {
             <div className="flex gap-2">
               <DateRangeFilter dateRange={dateRange} onDateRangeChange={setDateRange} />
               <div className="relative">
-                <Search className="absolute left-2 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Search className="-translate-y-1/2 absolute top-1/2 left-2 size-4 text-muted-foreground" />
                 <Input
                   className="w-64 pl-8"
                   placeholder="Search reservations..."
@@ -217,9 +208,7 @@ export default function ReservationsPage() {
         <CardContent>
           {selectedIds.size > 0 && (
             <div className="mb-4 flex items-center justify-between rounded-lg border bg-muted p-3">
-              <span className="text-sm font-medium">
-                {selectedIds.size} item(s) selected
-              </span>
+              <span className="font-medium text-sm">{selectedIds.size} item(s) selected</span>
               <div className="flex gap-2">
                 <Button
                   variant="destructive"
@@ -247,11 +236,7 @@ export default function ReservationsPage() {
                 >
                   Cancel Selected
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setSelectedIds(new Set())}
-                >
+                <Button variant="outline" size="sm" onClick={() => setSelectedIds(new Set())}>
                   Clear Selection
                 </Button>
               </div>
@@ -268,15 +253,14 @@ export default function ReservationsPage() {
                   />
                   <span className="text-muted-foreground text-sm">Select all</span>
                 </div>
-                {reservations.map((reservation) => {
+                {reservations.map((reservation: any) => {
                   const isProcessing = processingId === reservation._id
                   const isSelected = selectedIds.has(reservation._id)
                   const primaryImage =
-                    reservation.vehicle?.images?.find((img) => img.isPrimary) ||
+                    reservation.vehicle?.images?.find((img: any) => img.isPrimary) ||
                     reservation.vehicle?.images?.[0]
                   const canCancel =
-                    reservation.status !== "cancelled" &&
-                    reservation.status !== "completed"
+                    reservation.status !== "cancelled" && reservation.status !== "completed"
 
                   return (
                     <Card key={reservation._id} className="overflow-hidden">
@@ -288,7 +272,7 @@ export default function ReservationsPage() {
                               onCheckedChange={() => handleSelectOne(reservation._id)}
                             />
                           </div>
-                          <div className="flex gap-6 flex-1">
+                          <div className="flex flex-1 gap-6">
                             {primaryImage && (
                               <div className="flex-shrink-0">
                                 <img
@@ -308,7 +292,7 @@ export default function ReservationsPage() {
                                       {reservation.vehicle?.model}
                                     </h3>
                                   </div>
-                                  <p className="text-muted-foreground mt-1">
+                                  <p className="mt-1 text-muted-foreground">
                                     Reservation ID: {reservation._id}
                                   </p>
                                 </div>
@@ -346,7 +330,8 @@ export default function ReservationsPage() {
                                 <div className="space-y-2">
                                   <div>
                                     <p className="text-muted-foreground text-sm">
-                                      <strong>Renter:</strong> {reservation.renter?.name || "Unknown"}
+                                      <strong>Renter:</strong>{" "}
+                                      {reservation.renter?.name || "Unknown"}
                                     </p>
                                     <p className="text-muted-foreground text-sm">
                                       {reservation.renter?.email || "N/A"}
@@ -366,8 +351,8 @@ export default function ReservationsPage() {
                                     <Calendar className="size-4 text-muted-foreground" />
                                     <div>
                                       <p className="text-muted-foreground text-sm">
-                                        <strong>Dates:</strong> {formatDate(reservation.startDate)} -{" "}
-                                        {formatDate(reservation.endDate)}
+                                        <strong>Dates:</strong> {formatDate(reservation.startDate)}{" "}
+                                        - {formatDate(reservation.endDate)}
                                       </p>
                                       <p className="text-muted-foreground text-sm">
                                         {reservation.totalDays} day(s)
@@ -393,7 +378,10 @@ export default function ReservationsPage() {
                                   <p className="text-muted-foreground text-sm">
                                     <strong>Add-ons:</strong>{" "}
                                     {reservation.addOns
-                                      .map((addon) => `${addon.name} (${formatCurrency(addon.price)})`)
+                                      .map(
+                                        (addon: any) =>
+                                          `${addon.name} (${formatCurrency(addon.price)})`
+                                      )
                                       .join(", ")}
                                   </p>
                                 </div>

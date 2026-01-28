@@ -85,7 +85,7 @@ function MotorsportsContent() {
     if (!driversData) {
       return []
     }
-    return driversData.map((driver) => ({
+    return driversData.map((driver: any) => ({
       id: driver._id as string,
       name: driver.user?.name || "Unknown Driver",
       avatarUrl: driver.avatarUrl || driver.user?.avatarUrl,
@@ -106,7 +106,7 @@ function MotorsportsContent() {
     if (!teamsData) {
       return []
     }
-    return teamsData.map((team) => ({
+    return teamsData.map((team: any) => ({
       id: team._id as string,
       name: team.name,
       logoUrl: team.logoUrl,
@@ -125,8 +125,8 @@ function MotorsportsContent() {
   // Get unique locations for filter dropdown
   const uniqueLocations = useMemo(() => {
     const locations = new Set<string>()
-    allDrivers.forEach((driver) => locations.add(driver.location))
-    allTeams.forEach((team) => locations.add(team.location))
+    allDrivers.forEach((driver: any) => locations.add(driver.location))
+    allTeams.forEach((team: any) => locations.add(team.location))
     return Array.from(locations).sort()
   }, [allDrivers, allTeams])
 
@@ -138,13 +138,13 @@ function MotorsportsContent() {
     if (debouncedSearchQuery.trim()) {
       const query = debouncedSearchQuery.toLowerCase()
       filtered = filtered.filter(
-        (driver) =>
+        (driver: any) =>
           driver.name.toLowerCase().includes(query) ||
           driver.location.toLowerCase().includes(query) ||
           driver.bio?.toLowerCase().includes(query) ||
           driver.headline?.toLowerCase().includes(query) ||
-          driver.preferredCategories.some((cat) => cat.toLowerCase().includes(query)) ||
-          driver.licenses.some((license) => license.toLowerCase().includes(query))
+          driver.preferredCategories.some((cat: string) => cat.toLowerCase().includes(query)) ||
+          driver.licenses.some((license: string) => license.toLowerCase().includes(query))
       )
     }
 
@@ -159,7 +159,7 @@ function MotorsportsContent() {
     if (debouncedSearchQuery.trim()) {
       const query = debouncedSearchQuery.toLowerCase()
       filtered = filtered.filter(
-        (team) =>
+        (team: any) =>
           team.name.toLowerCase().includes(query) ||
           team.location.toLowerCase().includes(query) ||
           team.description?.toString().toLowerCase().includes(query) ||
@@ -171,8 +171,8 @@ function MotorsportsContent() {
 
     // Min seats filter
     if (minSeatsFilter !== "all") {
-      const minSeats = parseInt(minSeatsFilter, 10)
-      filtered = filtered.filter((team) => team.availableSeats >= minSeats)
+      const minSeats = Number.parseInt(minSeatsFilter, 10)
+      filtered = filtered.filter((team: any) => team.availableSeats >= minSeats)
     }
 
     return filtered
@@ -221,7 +221,7 @@ function MotorsportsContent() {
             <div className="grid gap-8 md:grid-cols-2 md:items-center">
               <div className="space-y-6">
                 <div className="flex items-center gap-3">
-                  <Badge className="px-4 py-1.5 text-sm font-semibold shadow-sm">
+                  <Badge className="px-4 py-1.5 font-semibold text-sm shadow-sm">
                     <Flag className="mr-1.5 inline size-4" />
                     Motorsports Network
                   </Badge>
@@ -240,10 +240,10 @@ function MotorsportsContent() {
                       Racing Teams
                     </span>
                   </h1>
-                  <p className="text-lg leading-relaxed text-muted-foreground md:text-xl">
-                    Find your perfect match and accelerate your racing career in real-world racing or
-                    sim racing. Join the premier platform connecting talented drivers with professional
-                    racing teams.
+                  <p className="text-lg text-muted-foreground leading-relaxed md:text-xl">
+                    Find your perfect match and accelerate your racing career in real-world racing
+                    or sim racing. Join the premier platform connecting talented drivers with
+                    professional racing teams.
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-3 pt-2">
@@ -271,9 +271,9 @@ function MotorsportsContent() {
                     src="/images/christian-palazzolo-UF0QX-zaNXc-unsplash.jpg"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
-                  <div className="absolute bottom-4 left-4 right-4">
+                  <div className="absolute right-4 bottom-4 left-4">
                     <div className="rounded-lg bg-background/90 p-3 backdrop-blur-sm">
-                      <p className="font-semibold text-sm text-foreground">
+                      <p className="font-semibold text-foreground text-sm">
                         Join thousands of drivers and teams connecting on Renegade Motorsports
                       </p>
                     </div>
@@ -290,7 +290,7 @@ function MotorsportsContent() {
         <div className="flex flex-col gap-2 sm:flex-row">
           {activeTab === "drivers" && userDriverProfile && userDriverProfile.length > 0 ? (
             <Button asChild variant="outline">
-              <Link href={`/motorsports/drivers/${userDriverProfile[0]._id}`}>
+              <Link href={`/motorsports/drivers/${userDriverProfile[0]!._id}`}>
                 <Settings className="mr-2 size-4" />
                 Manage Profile
               </Link>
@@ -352,8 +352,8 @@ function MotorsportsContent() {
           </CardHeader>
           <CardContent>
             <p className="text-muted-foreground text-sm">
-              Create your profile, browse opportunities, and connect to take your racing to the
-              next level.
+              Create your profile, browse opportunities, and connect to take your racing to the next
+              level.
             </p>
           </CardContent>
         </Card>
@@ -363,16 +363,16 @@ function MotorsportsContent() {
       <div className="mb-6 space-y-4">
         {/* Search Bar */}
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Search className="-translate-y-1/2 absolute top-1/2 left-3 size-4 text-muted-foreground" />
           <Input
-            className="pl-10 pr-4"
+            className="pr-4 pl-10"
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={`Search ${activeTab === "drivers" ? "drivers" : "teams"} by name, location, specialties...`}
             value={searchQuery}
           />
           {searchQuery && (
             <Button
-              className="absolute right-2 top-1/2 -translate-y-1/2"
+              className="-translate-y-1/2 absolute top-1/2 right-2"
               onClick={() => setSearchQuery("")}
               size="sm"
               variant="ghost"
@@ -513,8 +513,7 @@ function MotorsportsContent() {
             )}
             {debouncedSearchQuery && (
               <Badge className="gap-1" variant="secondary">
-                <Search className="size-3" />
-                "{debouncedSearchQuery}"
+                <Search className="size-3" />"{debouncedSearchQuery}"
                 <button
                   className="ml-1 rounded-full hover:bg-muted"
                   onClick={() => setSearchQuery("")}
@@ -595,7 +594,7 @@ function MotorsportsContent() {
             }
             return (
               <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-                {teams.map((team) => (
+                {teams.map((team: any) => (
                   <TeamCard key={team.id} {...team} />
                 ))}
               </div>
@@ -645,7 +644,7 @@ function MotorsportsContent() {
             }
             return (
               <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-                {drivers.map((driver) => (
+                {drivers.map((driver: any) => (
                   <DriverCard key={driver.id} {...driver} />
                 ))}
               </div>
