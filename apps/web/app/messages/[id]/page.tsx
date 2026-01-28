@@ -1,7 +1,7 @@
 "use client"
 
 import { useUser } from "@clerk/nextjs"
-import type { Id } from "@workspace/backend/convex/_generated/dataModel"
+import type { Id } from "@/lib/convex"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardHeader } from "@workspace/ui/components/card"
 import {
@@ -178,7 +178,6 @@ function ChatPageContent() {
       }).catch((error) => {
         handleErrorWithContext(error, {
           action: "mark conversation as read",
-          showToast: false,
         })
         // Silently fail - marking as read shouldn't break the page
       })
@@ -444,7 +443,6 @@ function ChatPageContent() {
       setIsNavigatingAway(false)
       handleErrorWithContext(error, {
         action: "delete conversation",
-        showToast: false,
       })
       setDeleteError("Failed to delete conversation. Please try again.")
     } finally {
@@ -573,7 +571,7 @@ function ChatPageContent() {
               </div>
             ) : messages && messages.length > 0 ? (
               <div className="space-y-4">
-                {messages.map((message) => (
+                {messages.map((message: any) => (
                   <div
                     className={cn(
                       "group flex items-start gap-2",
@@ -749,7 +747,7 @@ function ChatPageContent() {
                   <div className="flex-1">
                     <p className="mb-1 text-muted-foreground text-xs">Replying to:</p>
                     <p className="truncate text-foreground text-sm">
-                      {messages?.find((m) => m._id === replyingToMessage)?.content}
+                      {messages?.find((m: any) => m._id === replyingToMessage)?.content}
                     </p>
                   </div>
                   <Button

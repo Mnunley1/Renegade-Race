@@ -2,7 +2,6 @@
 
 import { useQuery, useMutation } from "convex/react"
 import { useState, useMemo } from "react"
-import Link from "next/link"
 import { api } from "@/lib/convex"
 import { Button } from "@workspace/ui/components/button"
 import {
@@ -22,15 +21,7 @@ import {
 import { Badge } from "@workspace/ui/components/badge"
 import { Input } from "@workspace/ui/components/input"
 import { Checkbox } from "@workspace/ui/components/checkbox"
-import {
-  Star,
-  Search,
-  Trash2,
-  Eye,
-  EyeOff,
-  CheckCircle,
-  Loader2,
-} from "lucide-react"
+import { Star, Search, Trash2, Eye, EyeOff, CheckCircle, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { handleErrorWithContext } from "@/lib/error-handler"
 import { Pagination } from "@/components/pagination"
@@ -53,7 +44,7 @@ export default function ReviewsPage() {
   })
 
   const reviews = result?.reviews || []
-  const hasMore = result?.hasMore || false
+  const hasMore = result?.hasMore
 
   const deleteReview = useMutation(api.admin.deleteReviewAsAdmin)
   const toggleVisibility = useMutation(api.admin.toggleReviewVisibility)
@@ -90,11 +81,14 @@ export default function ReviewsPage() {
     }
   }
 
-  const handleToggleVisibility = async (reviewId: Id<"rentalReviews">, currentVisibility: boolean) => {
+  const handleToggleVisibility = async (
+    reviewId: Id<"rentalReviews">,
+    currentVisibility: boolean
+  ) => {
     setProcessingId(reviewId)
     try {
       await toggleVisibility({ reviewId, isPublic: !currentVisibility })
-      toast.success(`Review ${!currentVisibility ? "published" : "hidden"} successfully`)
+      toast.success(`Review ${currentVisibility ? "hidden" : "published"} successfully`)
     } catch (error) {
       handleErrorWithContext(error, { action: "toggle visibility", entity: "review" })
     } finally {
@@ -175,7 +169,7 @@ export default function ReviewsPage() {
     if (selectedIds.size === reviews.length) {
       setSelectedIds(new Set())
     } else {
-      setSelectedIds(new Set(reviews.map((r) => r._id)))
+      setSelectedIds(new Set(reviews.map((r: any) => r._id)))
     }
   }
 
@@ -194,21 +188,19 @@ export default function ReviewsPage() {
     setCursor(undefined)
   }
 
-  const renderStars = (rating: number) => {
-    return (
-      <div className="flex items-center gap-1">
-        {[1, 2, 3, 4, 5].map((star) => (
-          <Star
-            key={star}
-            className={`size-4 ${
-              star <= rating ? "fill-yellow-400 text-yellow-400" : "text-gray-300"
-            }`}
-          />
-        ))}
-        <span className="ml-1 text-sm font-medium">{rating}</span>
-      </div>
-    )
-  }
+  const renderStars = (rating: number) => (
+    <div className="flex items-center gap-1">
+      {[1, 2, 3, 4, 5].map((star) => (
+        <Star
+          key={star}
+          className={`size-4 ${
+            star <= rating ? "fill-yellow-400 text-yellow-400" : "text-gray-300"
+          }`}
+        />
+      ))}
+      <span className="ml-1 font-medium text-sm">{rating}</span>
+    </div>
+  )
 
   const totalPages = Math.ceil((reviews.length || 0) / 50) || 1
 
@@ -224,9 +216,7 @@ export default function ReviewsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="font-bold text-3xl">Reviews Management</h1>
-        <p className="text-muted-foreground mt-2">
-          Moderate and manage platform reviews
-        </p>
+        <p className="mt-2 text-muted-foreground">Moderate and manage platform reviews</p>
       </div>
 
       <Card>
@@ -241,7 +231,7 @@ export default function ReviewsPage() {
             </div>
             <div className="flex gap-2">
               <div className="relative">
-                <Search className="absolute left-2 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Search className="-translate-y-1/2 absolute top-1/2 left-2 size-4 text-muted-foreground" />
                 <Input
                   className="w-64 pl-8"
                   placeholder="Search reviews..."
@@ -265,7 +255,13 @@ export default function ReviewsPage() {
                 </SelectContent>
               </Select>
               <Select
-                value={isModeratedFilter === undefined ? "all" : isModeratedFilter ? "moderated" : "unmoderated"}
+                value={
+                  isModeratedFilter === undefined
+                    ? "all"
+                    : isModeratedFilter
+                      ? "moderated"
+                      : "unmoderated"
+                }
                 onValueChange={(value) => {
                   setIsModeratedFilter(value === "all" ? undefined : value === "moderated")
                 }}
@@ -285,9 +281,7 @@ export default function ReviewsPage() {
         <CardContent>
           {selectedIds.size > 0 && (
             <div className="mb-4 flex items-center justify-between rounded-lg border bg-muted p-3">
-              <span className="text-sm font-medium">
-                {selectedIds.size} review(s) selected
-              </span>
+              <span className="font-medium text-sm">{selectedIds.size} review(s) selected</span>
               <div className="flex gap-2">
                 <Button
                   variant="outline"
@@ -333,11 +327,7 @@ export default function ReviewsPage() {
                   )}
                   Delete Selected
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setSelectedIds(new Set())}
-                >
+                <Button variant="outline" size="sm" onClick={() => setSelectedIds(new Set())}>
                   Clear Selection
                 </Button>
               </div>
@@ -354,7 +344,7 @@ export default function ReviewsPage() {
                   />
                   <span className="text-muted-foreground text-sm">Select all</span>
                 </div>
-                {reviews.map((review) => {
+                {reviews.map((review: any) => {
                   const isProcessing = processingId === review._id
                   const isSelected = selectedIds.has(review._id)
 
@@ -368,7 +358,7 @@ export default function ReviewsPage() {
                               onCheckedChange={() => handleSelectOne(review._id)}
                             />
                           </div>
-                          <div className="flex items-start justify-between flex-1">
+                          <div className="flex flex-1 items-start justify-between">
                             <div className="flex-1 space-y-4">
                               <div className="flex items-start gap-4">
                                 <div className="flex-1">
@@ -376,7 +366,7 @@ export default function ReviewsPage() {
                                     {getStatusBadge(review)}
                                     <h3 className="font-bold text-lg">{review.title}</h3>
                                   </div>
-                                  <p className="text-muted-foreground mt-1 line-clamp-2">
+                                  <p className="mt-1 line-clamp-2 text-muted-foreground">
                                     {review.review}
                                   </p>
                                   <div className="mt-2">{renderStars(review.rating)}</div>
@@ -417,11 +407,11 @@ export default function ReviewsPage() {
 
                               {review.photos && review.photos.length > 0 && (
                                 <div>
-                                  <p className="text-muted-foreground text-sm mb-2">
+                                  <p className="mb-2 text-muted-foreground text-sm">
                                     <strong>Photos:</strong> {review.photos.length}
                                   </p>
                                   <div className="flex gap-2">
-                                    {review.photos.slice(0, 3).map((photo, idx) => (
+                                    {review.photos.slice(0, 3).map((photo: string, idx: number) => (
                                       <img
                                         key={idx}
                                         src={photo}
@@ -433,7 +423,7 @@ export default function ReviewsPage() {
                                 </div>
                               )}
                             </div>
-                            <div className="flex flex-col gap-2 ml-4">
+                            <div className="ml-4 flex flex-col gap-2">
                               {!review.isModerated && (
                                 <Button
                                   onClick={() => handleMarkModerated(review._id)}
@@ -527,8 +517,16 @@ export default function ReviewsPage() {
       return <Badge variant="secondary">Hidden</Badge>
     }
     if (!review.isModerated) {
-      return <Badge variant="default" className="bg-yellow-600">Unmoderated</Badge>
+      return (
+        <Badge variant="default" className="bg-yellow-600">
+          Unmoderated
+        </Badge>
+      )
     }
-    return <Badge variant="default" className="bg-green-600">Public</Badge>
+    return (
+      <Badge variant="default" className="bg-green-600">
+        Public
+      </Badge>
+    )
   }
 }

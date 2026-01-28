@@ -1,90 +1,150 @@
-import type { WebhookEvent } from '@clerk/backend';
-import { httpRouter } from 'convex/server';
-import Stripe from 'stripe';
-import { Webhook } from 'svix';
-import { api, internal, components } from './_generated/api';
-import { httpAction } from './_generated/server';
-import { resendComponent } from './emails';
-import { registerRoutes } from '@convex-dev/stripe';
-// TODO: Uncomment after installing @convex-dev/rate-limiter
-// import { rateLimiter } from './rateLimiter';
+// @ts-expect-error - @clerk/backend module resolution issue
+import type { WebhookEvent } from "@clerk/backend"
+import { httpRouter } from "convex/server"
+import Stripe from "stripe"
+import { Webhook } from "svix"
+import { api, internal, components } from "./_generated/api"
+import { httpAction } from "./_generated/server"
+import { resendComponent } from "./emails"
+import { registerRoutes } from "@convex-dev/stripe"
+import { rateLimiter } from "./rateLimiter"
 
 // Helper function to get Stripe instance
 function getStripe(): Stripe {
-  const secretKey = process.env.STRIPE_SECRET_KEY;
+  const secretKey = process.env.STRIPE_SECRET_KEY
   if (!secretKey) {
-    throw new Error('STRIPE_SECRET_KEY environment variable is not set');
+    throw new Error("STRIPE_SECRET_KEY environment variable is not set")
   }
   return new Stripe(secretKey, {
-    apiVersion: '2025-08-27.basil',
-  });
+    apiVersion: "2025-08-27.basil",
+  })
 }
 
-const http = httpRouter();
+const http = httpRouter()
 
 // Register Stripe component webhook routes with custom event handlers
 registerRoutes(http, components.stripe, {
-  webhookPath: '/stripe/webhook',
+  webhookPath: "/stripe/webhook",
   events: {
     // Custom handler for payment_intent.succeeded
-    'payment_intent.succeeded': async (ctx, event: Stripe.PaymentIntentSucceededEvent) => {
-      const paymentIntent = event.data.object;
-      
+    "payment_intent.succeeded": async (ctx, event: Stripe.PaymentIntentSucceededEvent) => {
+      const paymentIntent = event.data.object
+
       // Find payment by Stripe payment intent ID
       const payment = await ctx.runQuery(api.stripe.findPaymentByStripeIntent, {
         stripePaymentIntentId: paymentIntent.id,
-      });
+      })
 
       if (payment) {
         // Update your custom payment record
         await ctx.runMutation(api.stripe.handlePaymentSuccess, {
           paymentId: payment._id,
           stripeChargeId: paymentIntent.latest_charge as string,
-        });
+        })
       }
     },
 
     // Custom handler for payment_intent.payment_failed
-    'payment_intent.payment_failed': async (ctx, event: Stripe.PaymentIntentPaymentFailedEvent) => {
-      const paymentIntent = event.data.object;
-      
+    "payment_intent.payment_failed": async (ctx, event: Stripe.PaymentIntentPaymentFailedEvent) => {
+      const paymentIntent = event.data.object
+
       const payment = await ctx.runQuery(api.stripe.findPaymentByStripeIntent, {
         stripePaymentIntentId: paymentIntent.id,
-      });
+      })
 
       if (payment) {
         await ctx.runMutation(api.stripe.handlePaymentFailure, {
           paymentId: payment._id,
           failureReason: paymentIntent.last_payment_error?.message,
-        });
+        })
       }
     },
 
     // Handle charge.dispute.created
-    'charge.dispute.created': async (ctx, event: Stripe.ChargeDisputeCreatedEvent) => {
-      const charge = event.data.object;
-      const paymentIntentId = charge.payment_intent as string;
-      
-      if (paymentIntentId) {
-        const payment = await ctx.runQuery(api.stripe.findPaymentByStripeIntent, {
-          stripePaymentIntentId: paymentIntentId,
-        });
+    "charge.dispute.created": async (ctx, event: Stripe.ChargeDisputeCreatedEvent) => {
+      const dispute = event.data.object
+      const paymentIntentId = dispute.payment_intent as string
 
-        if (payment) {
-          // You can add dispute handling logic here
-        }
+      if (paymentIntentId) {
+        await ctx.runMutation(api.stripe.handleDisputeCreated, {
+          stripePaymentIntentId: paymentIntentId,
+          disputeId: dispute.id,
+          disputeReason: dispute.reason || undefined,
+          disputeAmount: dispute.amount,
+        })
+      }
+    },
+
+    // Handle charge.refunded
+    "charge.refunded": async (ctx, event: Stripe.ChargeRefundedEvent) => {
+      const charge = event.data.object
+      const paymentIntentId = charge.payment_intent as string
+
+      if (paymentIntentId && charge.amount_refunded > 0) {
+        await ctx.runMutation(api.stripe.handleChargeRefunded, {
+          stripePaymentIntentId: paymentIntentId,
+          refundAmount: charge.amount_refunded,
+          refundId: charge.refunds?.data[0]?.id || "unknown",
+        })
+      }
+    },
+
+    // Handle transfer.failed
+    // @ts-expect-error - StripeEventHandlers type doesn't include transfer.failed
+    "transfer.failed": async (ctx, event: Stripe.TransferUpdatedEvent) => {
+      const transfer = event.data.object
+
+      await ctx.runMutation(api.stripe.handleTransferFailed, {
+        stripeTransferId: transfer.id,
+        failureReason: (transfer as unknown as { failure_message?: string }).failure_message,
+      })
+    },
+
+    // Handle payout.failed
+    "payout.failed": async (ctx, event: Stripe.PayoutFailedEvent) => {
+      const payout = event.data.object
+
+      await ctx.runMutation(api.stripe.handlePayoutFailed, {
+        stripeAccountId: (payout.destination as string) || "",
+        payoutId: payout.id,
+        failureReason: payout.failure_message || undefined,
+      })
+    },
+
+    // Handle payment_intent.canceled
+    "payment_intent.canceled": async (ctx, event: Stripe.PaymentIntentCanceledEvent) => {
+      const paymentIntent = event.data.object
+
+      await ctx.runMutation(api.stripe.handlePaymentCanceled, {
+        stripePaymentIntentId: paymentIntent.id,
+      })
+    },
+
+    // Handle account.application.deauthorized (Connect account disconnected)
+    "account.application.deauthorized": async (
+      ctx,
+      event: Stripe.AccountApplicationDeauthorizedEvent
+    ) => {
+      const application = event.data.object
+      // The account ID is in the event's account field for connected accounts
+      const accountId = event.account
+
+      if (accountId) {
+        await ctx.runMutation(api.stripe.handleAccountDeauthorized, {
+          stripeAccountId: accountId,
+        })
       }
     },
 
     // Handle checkout.session.completed
-    'checkout.session.completed': async (ctx, event: Stripe.CheckoutSessionCompletedEvent) => {
-      const session = event.data.object;
-      const paymentIntentId = session.payment_intent as string;
-      
+    "checkout.session.completed": async (ctx, event: Stripe.CheckoutSessionCompletedEvent) => {
+      const session = event.data.object
+      const paymentIntentId = session.payment_intent as string
+
       if (paymentIntentId) {
         const payment = await ctx.runQuery(api.stripe.findPaymentByStripeIntent, {
           stripePaymentIntentId: paymentIntentId,
-        });
+        })
 
         if (payment) {
           // Payment success is already handled by payment_intent.succeeded
@@ -94,120 +154,121 @@ registerRoutes(http, components.stripe, {
     },
 
     // Handle account.updated - updates Stripe Connect account status
-    'account.updated': async (ctx, event: Stripe.AccountUpdatedEvent) => {
-      const account = event.data.object;
-      
+    "account.updated": async (ctx, event: Stripe.AccountUpdatedEvent) => {
+      const account = event.data.object
+
       // Only process Connect accounts (Express accounts)
-      if (account.type !== 'express') {
-        return;
+      if (account.type !== "express") {
+        return
       }
 
       // Find user by Stripe account ID
       const user = await ctx.runQuery(api.users.getByStripeAccountId, {
         stripeAccountId: account.id,
-      });
+      })
 
       if (!user) {
-        return;
+        return
       }
 
       // Determine account status based on Stripe account state
-      let status: "pending" | "enabled" | "restricted" | "disabled";
+      let status: "pending" | "enabled" | "restricted" | "disabled"
 
       // Check if account is disabled
       if (account.details_submitted === false || !account.charges_enabled) {
-        status = "pending";
+        status = "pending"
       } else if (account.payouts_enabled === false) {
         // Account can accept charges but not payouts yet
-        status = "pending";
+        status = "pending"
       } else if (account.charges_enabled && account.payouts_enabled && account.details_submitted) {
         // Check for blocking restrictions (currently_due, past_due, or disabled_reason)
         // Note: eventually_due requirements are normal and don't block functionality
-        const hasBlockingRestrictions = 
+        const hasBlockingRestrictions =
           (account.requirements?.currently_due && account.requirements.currently_due.length > 0) ||
           (account.requirements?.past_due && account.requirements.past_due.length > 0) ||
-          (account.requirements?.disabled_reason !== null && account.requirements?.disabled_reason !== undefined);
+          (account.requirements?.disabled_reason !== null &&
+            account.requirements?.disabled_reason !== undefined)
 
         if (hasBlockingRestrictions) {
-          status = "restricted";
+          status = "restricted"
         } else {
           // Account is fully enabled - charges and payouts enabled, details submitted
           // eventually_due requirements are normal and don't affect enabled status
-          status = "enabled";
+          status = "enabled"
         }
       } else {
-        status = "pending";
+        status = "pending"
       }
 
       // Update the status in Convex
       await ctx.runMutation(internal.users.updateStripeAccountStatus, {
         stripeAccountId: account.id,
         status,
-      });
+      })
     },
   },
-});
+})
 
 // Add this route to your http router (after the Stripe route)
 http.route({
-  path: '/clerk-users-webhook',
-  method: 'POST',
+  path: "/clerk-users-webhook",
+  method: "POST",
   handler: httpAction(async (ctx, request) => {
     // Rate limit webhook endpoints: 100 requests per minute per IP
-    // TODO: Uncomment after installing @convex-dev/rate-limiter
-    // const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-    //            request.headers.get('x-real-ip') ||
-    //            'unknown';
-    // 
-    // const rateLimitStatus = await rateLimiter.limit(ctx, "webhookEndpoint", {
-    //   key: ip,
-    // });
-    // 
-    // if (!rateLimitStatus.ok) {
-    //   return new Response('Too many requests', { 
-    //     status: 429,
-    //     headers: {
-    //       'Retry-After': Math.ceil((rateLimitStatus.retryAfter - Date.now()) / 1000).toString(),
-    //     },
-    //   });
-    // }
+    const ip =
+      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      request.headers.get("x-real-ip") ||
+      "unknown"
 
-    const event = await validateRequest(request);
+    const rateLimitStatus = await rateLimiter.limit(ctx, "webhookEndpoint", {
+      key: ip,
+    })
+
+    if (!rateLimitStatus.ok) {
+      return new Response("Too many requests", {
+        status: 429,
+        headers: {
+          "Retry-After": Math.ceil((rateLimitStatus.retryAfter - Date.now()) / 1000).toString(),
+        },
+      })
+    }
+
+    const event = await validateRequest(request)
     if (!event) {
-      return new Response('Error occured', { status: 400 });
+      return new Response("Error occured", { status: 400 })
     }
     switch (event.type) {
-      case 'user.created': // intentional fallthrough
-      case 'user.updated':
+      case "user.created": // intentional fallthrough
+      case "user.updated":
         await ctx.runMutation(internal.users.upsertFromClerk, {
           data: event.data,
-        });
-        break;
+        })
+        break
 
-      case 'user.deleted': {
-        const clerkUserId = event.data.id!;
-        await ctx.runMutation(internal.users.deleteFromClerk, { clerkUserId });
-        break;
+      case "user.deleted": {
+        const clerkUserId = event.data.id!
+        await ctx.runMutation(internal.users.deleteFromClerk, { clerkUserId })
+        break
       }
       default:
         // Ignored Clerk webhook event
-        break;
+        break
     }
 
-    return new Response(null, { status: 200 });
+    return new Response(null, { status: 200 })
   }),
-});
+})
 
 async function validateRequest(req: Request): Promise<WebhookEvent | null> {
-  const payloadString = await req.text();
+  const payloadString = await req.text()
   const svixHeaders = {
-    'svix-id': req.headers.get('svix-id')!,
-    'svix-timestamp': req.headers.get('svix-timestamp')!,
-    'svix-signature': req.headers.get('svix-signature')!,
-  };
-  const wh = new Webhook(process.env.CLERK_WEBHOOK_SECRET!);
+    "svix-id": req.headers.get("svix-id")!,
+    "svix-timestamp": req.headers.get("svix-timestamp")!,
+    "svix-signature": req.headers.get("svix-signature")!,
+  }
+  const wh = new Webhook(process.env.CLERK_WEBHOOK_SECRET!)
   try {
-    return wh.verify(payloadString, svixHeaders) as unknown as WebhookEvent;
+    return wh.verify(payloadString, svixHeaders) as unknown as WebhookEvent
   } catch (error) {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { logError } = require("./logger")
@@ -218,30 +279,30 @@ async function validateRequest(req: Request): Promise<WebhookEvent | null> {
 
 // Resend webhook for email status tracking
 http.route({
-  path: '/resend-webhook',
-  method: 'POST',
+  path: "/resend-webhook",
+  method: "POST",
   handler: httpAction(async (ctx, req) => {
     // Rate limit webhook endpoints: 100 requests per minute per IP
-    // TODO: Uncomment after installing @convex-dev/rate-limiter
-    // const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-    //            req.headers.get('x-real-ip') ||
-    //            'unknown';
-    // 
-    // const rateLimitStatus = await rateLimiter.limit(ctx, "webhookEndpoint", {
-    //   key: ip,
-    // });
-    // 
-    // if (!rateLimitStatus.ok) {
-    //   return new Response('Too many requests', { 
-    //     status: 429,
-    //     headers: {
-    //       'Retry-After': Math.ceil((rateLimitStatus.retryAfter - Date.now()) / 1000).toString(),
-    //     },
-    //   });
-    // }
+    const ip =
+      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      req.headers.get("x-real-ip") ||
+      "unknown"
 
-    return await resendComponent.handleResendEventWebhook(ctx, req);
+    const rateLimitStatus = await rateLimiter.limit(ctx, "webhookEndpoint", {
+      key: ip,
+    })
+
+    if (!rateLimitStatus.ok) {
+      return new Response("Too many requests", {
+        status: 429,
+        headers: {
+          "Retry-After": Math.ceil((rateLimitStatus.retryAfter - Date.now()) / 1000).toString(),
+        },
+      })
+    }
+
+    return await resendComponent.handleResendEventWebhook(ctx, req)
   }),
-});
+})
 
-export default http;
+export default http

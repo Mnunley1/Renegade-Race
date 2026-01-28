@@ -6,13 +6,7 @@ import { useState } from "react"
 import Link from "next/link"
 import { api } from "@/lib/convex"
 import { Button } from "@workspace/ui/components/button"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@workspace/ui/components/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Badge } from "@workspace/ui/components/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
 import {
@@ -24,7 +18,6 @@ import {
   Calendar,
   Star,
   MapPin,
-  DollarSign,
   User,
 } from "lucide-react"
 import { toast } from "sonner"
@@ -48,7 +41,7 @@ export default function VehicleDetailPage() {
     setIsProcessing(true)
     try {
       await suspendVehicle({ vehicleId, isActive: !isActive })
-      toast.success(`Vehicle ${!isActive ? "activated" : "suspended"} successfully`)
+      toast.success(`Vehicle ${isActive ? "suspended" : "activated"} successfully`)
     } catch (error) {
       handleErrorWithContext(error, { action: "suspend vehicle", entity: "vehicle" })
     } finally {
@@ -64,7 +57,11 @@ export default function VehicleDetailPage() {
       case "pending":
         return <Badge variant="default">Pending</Badge>
       case "approved":
-        return <Badge variant="default" className="bg-green-600">Approved</Badge>
+        return (
+          <Badge variant="default" className="bg-green-600">
+            Approved
+          </Badge>
+        )
       case "rejected":
         return <Badge variant="destructive">Rejected</Badge>
       default:
@@ -72,38 +69,34 @@ export default function VehicleDetailPage() {
     }
   }
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-US", {
+  const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat("en-US", {
       style: "currency",
       currency: "USD",
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(amount / 100)
-  }
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
+  const formatDate = (dateString: string) =>
+    new Date(dateString).toLocaleDateString("en-US", {
       year: "numeric",
       month: "short",
       day: "numeric",
     })
-  }
 
-  const renderStars = (rating: number) => {
-    return (
-      <div className="flex items-center gap-1">
-        {[1, 2, 3, 4, 5].map((star) => (
-          <Star
-            key={star}
-            className={`size-4 ${
-              star <= rating ? "fill-yellow-400 text-yellow-400" : "text-gray-300"
-            }`}
-          />
-        ))}
-        <span className="ml-1 text-sm font-medium">{rating}</span>
-      </div>
-    )
-  }
+  const renderStars = (rating: number) => (
+    <div className="flex items-center gap-1">
+      {[1, 2, 3, 4, 5].map((star) => (
+        <Star
+          key={star}
+          className={`size-4 ${
+            star <= rating ? "fill-yellow-400 text-yellow-400" : "text-gray-300"
+          }`}
+        />
+      ))}
+      <span className="ml-1 font-medium text-sm">{rating}</span>
+    </div>
+  )
 
   if (vehicle === undefined || reservations === undefined || reviews === undefined) {
     return (
@@ -131,10 +124,10 @@ export default function VehicleDetailPage() {
     )
   }
 
-  const primaryImage = vehicle.images?.find((img) => img.isPrimary) || vehicle.images?.[0]
+  const primaryImage = vehicle.images?.find((img: any) => img.isPrimary) || vehicle.images?.[0]
   const averageRating =
     reviews && reviews.length > 0
-      ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
+      ? reviews.reduce((sum: number, r: any) => sum + r.rating, 0) / reviews.length
       : 0
 
   return (
@@ -150,11 +143,11 @@ export default function VehicleDetailPage() {
           <h1 className="font-bold text-3xl">
             {vehicle.year} {vehicle.make} {vehicle.model}
           </h1>
-          <p className="text-muted-foreground mt-2">Vehicle ID: {vehicle._id}</p>
+          <p className="mt-2 text-muted-foreground">Vehicle ID: {vehicle._id}</p>
         </div>
         <div className="flex items-center gap-4">
-          {getStatusBadge(vehicle.status, vehicle.isActive)}
-          {vehicle.status === "approved" && (
+          {getStatusBadge((vehicle as any).status, vehicle.isActive)}
+          {(vehicle as any).status === "approved" && (
             <Button
               onClick={() => handleSuspend(vehicle.isActive !== false)}
               disabled={isProcessing}
@@ -189,16 +182,14 @@ export default function VehicleDetailPage() {
           </CardHeader>
           <CardContent>
             <div className="grid gap-4 md:grid-cols-3">
-              {vehicle.images.map((image, idx) => (
+              {vehicle.images.map((image: any, idx: number) => (
                 <div key={image._id} className="relative">
                   <img
                     src={image.detailUrl || image.cardUrl || image.imageUrl}
                     alt={`${vehicle.make} ${vehicle.model} - Image ${idx + 1}`}
                     className="h-48 w-full rounded-lg object-cover"
                   />
-                  {image.isPrimary && (
-                    <Badge className="absolute top-2 right-2">Primary</Badge>
-                  )}
+                  {image.isPrimary && <Badge className="absolute top-2 right-2">Primary</Badge>}
                 </div>
               ))}
             </div>
@@ -209,9 +200,7 @@ export default function VehicleDetailPage() {
       <Tabs defaultValue="details" className="space-y-4">
         <TabsList>
           <TabsTrigger value="details">Details</TabsTrigger>
-          <TabsTrigger value="reservations">
-            Reservations ({reservations?.length || 0})
-          </TabsTrigger>
+          <TabsTrigger value="reservations">Reservations ({reservations?.length || 0})</TabsTrigger>
           <TabsTrigger value="reviews">Reviews ({reviews?.length || 0})</TabsTrigger>
         </TabsList>
 
@@ -295,9 +284,9 @@ export default function VehicleDetailPage() {
                 </div>
                 {vehicle.amenities && vehicle.amenities.length > 0 && (
                   <div>
-                    <p className="text-muted-foreground text-sm mb-2">Amenities</p>
+                    <p className="mb-2 text-muted-foreground text-sm">Amenities</p>
                     <div className="flex flex-wrap gap-2">
-                      {vehicle.amenities.map((amenity, idx) => (
+                      {vehicle.amenities.map((amenity: string, idx: number) => (
                         <Badge key={idx} variant="outline">
                           {amenity}
                         </Badge>
@@ -319,13 +308,9 @@ export default function VehicleDetailPage() {
               <CardContent className="space-y-4">
                 <div>
                   <p className="font-medium">{vehicle.owner?.name || "Unknown"}</p>
-                  <p className="text-muted-foreground text-sm">
-                    {vehicle.owner?.email || "N/A"}
-                  </p>
+                  <p className="text-muted-foreground text-sm">{vehicle.owner?.email || "N/A"}</p>
                   {vehicle.owner?.phone && (
-                    <p className="text-muted-foreground text-sm">
-                      Phone: {vehicle.owner.phone}
-                    </p>
+                    <p className="text-muted-foreground text-sm">Phone: {vehicle.owner.phone}</p>
                   )}
                 </div>
                 {vehicle.owner?.rating && (
@@ -359,9 +344,7 @@ export default function VehicleDetailPage() {
                 )}
                 <div>
                   <p className="text-muted-foreground text-sm">Created</p>
-                  <p className="font-medium">
-                    {new Date(vehicle.createdAt).toLocaleDateString()}
-                  </p>
+                  <p className="font-medium">{new Date(vehicle.createdAt).toLocaleDateString()}</p>
                 </div>
               </CardContent>
             </Card>
@@ -371,12 +354,12 @@ export default function VehicleDetailPage() {
         <TabsContent value="reservations" className="space-y-4">
           {reservations && reservations.length > 0 ? (
             <div className="space-y-4">
-              {reservations.map((reservation) => (
+              {reservations.map((reservation: any) => (
                 <Card key={reservation._id}>
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
+                        <div className="mb-2 flex items-center gap-2">
                           {getStatusBadge(reservation.status)}
                           <Link href={`/reservations/${reservation._id}`}>
                             <Button variant="link" className="h-auto p-0">
@@ -384,7 +367,7 @@ export default function VehicleDetailPage() {
                             </Button>
                           </Link>
                         </div>
-                        <div className="grid gap-2 md:grid-cols-2 text-sm">
+                        <div className="grid gap-2 text-sm md:grid-cols-2">
                           <div>
                             <p className="text-muted-foreground">
                               <strong>Renter:</strong> {reservation.renter?.name || "Unknown"}
@@ -422,7 +405,7 @@ export default function VehicleDetailPage() {
         <TabsContent value="reviews" className="space-y-4">
           {reviews && reviews.length > 0 ? (
             <div className="space-y-4">
-              {reviews.map((review) => (
+              {reviews.map((review: any) => (
                 <Card key={review._id}>
                   <CardContent className="p-4">
                     <div className="space-y-3">
@@ -443,8 +426,7 @@ export default function VehicleDetailPage() {
                           <strong>By:</strong> {review.reviewer?.name || "Unknown"}
                         </span>
                         <span>
-                          <strong>Date:</strong>{" "}
-                          {new Date(review.createdAt).toLocaleDateString()}
+                          <strong>Date:</strong> {new Date(review.createdAt).toLocaleDateString()}
                         </span>
                       </div>
                     </div>

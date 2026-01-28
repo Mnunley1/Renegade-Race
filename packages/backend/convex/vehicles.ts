@@ -1,8 +1,9 @@
 import { v } from "convex/values"
 import { action, internalMutation, mutation, query } from "./_generated/server"
-import { internal } from "./_generated/api"
+import { api, internal } from "./_generated/api"
 import { calculateDistance } from "./geocoding"
 import { imagePresets, r2 } from "./r2"
+import { checkAdmin } from "./admin"
 
 // Get all active and approved vehicles with optimized images
 export const getAllWithOptimizedImages = query({
@@ -22,11 +23,13 @@ export const getAllWithOptimizedImages = query({
       vehicles = await ctx.db
         .query("vehicles")
         .withIndex("by_track", (q) => q.eq("trackId", trackId))
-        .filter((q) => q.and(
-          q.eq(q.field("isActive"), true),
-          q.eq(q.field("isApproved"), true),
-          q.eq(q.field("deletedAt"), undefined)
-        ))
+        .filter((q) =>
+          q.and(
+            q.eq(q.field("isActive"), true),
+            q.eq(q.field("isApproved"), true),
+            q.eq(q.field("deletedAt"), undefined)
+          )
+        )
         .order("desc")
         .take(limit)
     } else {
@@ -103,7 +106,7 @@ export const searchWithAvailability = query({
   },
   handler: async (ctx, args) => {
     // Normalize empty strings, null, or undefined to undefined for date filtering
-    const startDate = 
+    const startDate =
       typeof args.startDate === "string" && args.startDate.trim() !== ""
         ? args.startDate.trim()
         : undefined
@@ -127,11 +130,13 @@ export const searchWithAvailability = query({
       vehiclesQuery = ctx.db
         .query("vehicles")
         .withIndex("by_track", (q) => q.eq("trackId", trackId))
-        .filter((q) => q.and(
-          q.eq(q.field("isActive"), true),
-          q.eq(q.field("isApproved"), true),
-          q.eq(q.field("deletedAt"), undefined)
-        ))
+        .filter((q) =>
+          q.and(
+            q.eq(q.field("isActive"), true),
+            q.eq(q.field("isApproved"), true),
+            q.eq(q.field("deletedAt"), undefined)
+          )
+        )
     }
 
     // Get more vehicles initially to account for filtering
@@ -304,8 +309,8 @@ export const searchWithAvailability = query({
           b.address.longitude
         )
 
-      return distanceA - distanceB
-    })
+        return distanceA - distanceB
+      })
     }
 
     return finalVehicles
@@ -330,11 +335,13 @@ export const getAll = query({
       vehicles = await ctx.db
         .query("vehicles")
         .withIndex("by_track", (q) => q.eq("trackId", trackId))
-        .filter((q) => q.and(
-          q.eq(q.field("isActive"), true),
-          q.eq(q.field("isApproved"), true),
-          q.eq(q.field("deletedAt"), undefined)
-        ))
+        .filter((q) =>
+          q.and(
+            q.eq(q.field("isActive"), true),
+            q.eq(q.field("isApproved"), true),
+            q.eq(q.field("deletedAt"), undefined)
+          )
+        )
         .order("desc")
         .take(limit)
     } else {
@@ -618,7 +625,7 @@ export const createVehicleWithImages = mutation({
 
     // Schedule geocoding action if address provided
     if (args.address) {
-      await ctx.scheduler.runAfter(0, internal.vehicles.geocodeVehicleAddress, {
+      await ctx.scheduler.runAfter(0, api.vehicles.geocodeVehicleAddress, {
         vehicleId,
         address: args.address,
       })
@@ -757,13 +764,13 @@ export const update = mutation({
     }
 
     // Check if address changed and needs geocoding
-    const addressChanged = args.address && (
-      !vehicle.address ||
-      vehicle.address.street !== args.address.street ||
-      vehicle.address.city !== args.address.city ||
-      vehicle.address.state !== args.address.state ||
-      vehicle.address.zipCode !== args.address.zipCode
-    )
+    const addressChanged =
+      args.address &&
+      (!vehicle.address ||
+        vehicle.address.street !== args.address.street ||
+        vehicle.address.city !== args.address.city ||
+        vehicle.address.state !== args.address.state ||
+        vehicle.address.zipCode !== args.address.zipCode)
 
     const { id, ...updateData } = args
     void id // Exclude id from updateData
@@ -776,7 +783,7 @@ export const update = mutation({
 
     // Schedule geocoding action if address changed
     if (addressChanged && args.address) {
-      await ctx.scheduler.runAfter(0, internal.vehicles.geocodeVehicleAddress, {
+      await ctx.scheduler.runAfter(0, api.vehicles.geocodeVehicleAddress, {
         vehicleId: args.id,
         address: args.address,
       })
@@ -795,7 +802,7 @@ export const updateVehicleCoordinates = internalMutation({
   },
   handler: async (ctx, args) => {
     const vehicle = await ctx.db.get(args.vehicleId)
-    if (!vehicle || !vehicle.address) {
+    if (!(vehicle && vehicle.address)) {
       return
     }
 
@@ -823,9 +830,9 @@ export const geocodeVehicleAddress = action({
   },
   handler: async (ctx, args) => {
     const { geocodeAddress } = await import("./geocoding")
-    
+
     const result = await geocodeAddress(args.address)
-    
+
     if (result) {
       // Update the vehicle with coordinates
       await ctx.runMutation(internal.vehicles.updateVehicleCoordinates, {
@@ -862,7 +869,7 @@ export const canDelete = query({
     const blockers: string[] = []
 
     // Check for active or upcoming reservations (pending or confirmed)
-    const today = new Date().toISOString().split("T")[0]
+    const today = new Date().toISOString().split("T")[0] as string
     const activeReservations = await ctx.db
       .query("reservations")
       .withIndex("by_vehicle", (q) => q.eq("vehicleId", args.id))
@@ -881,19 +888,16 @@ export const canDelete = query({
         blockers.push(`${pendingCount} pending reservation${pendingCount > 1 ? "s" : ""}`)
       }
       if (confirmedCount > 0) {
-        blockers.push(`${confirmedCount} confirmed/upcoming reservation${confirmedCount > 1 ? "s" : ""}`)
+        blockers.push(
+          `${confirmedCount} confirmed/upcoming reservation${confirmedCount > 1 ? "s" : ""}`
+        )
       }
     }
 
     // Check for open disputes
     const openDisputes = await ctx.db
       .query("disputes")
-      .filter((q) =>
-        q.and(
-          q.eq(q.field("vehicleId"), args.id),
-          q.eq(q.field("status"), "open")
-        )
-      )
+      .filter((q) => q.and(q.eq(q.field("vehicleId"), args.id), q.eq(q.field("status"), "open")))
       .collect()
 
     if (openDisputes.length > 0) {
@@ -912,10 +916,7 @@ export const canDelete = query({
       const pendingPayments = await ctx.db
         .query("payments")
         .filter((q) =>
-          q.or(
-            q.eq(q.field("status"), "pending"),
-            q.eq(q.field("status"), "processing")
-          )
+          q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "processing"))
         )
         .collect()
 
@@ -925,7 +926,9 @@ export const canDelete = query({
       )
 
       if (vehiclePendingPayments.length > 0) {
-        blockers.push(`${vehiclePendingPayments.length} pending payment${vehiclePendingPayments.length > 1 ? "s" : ""}`)
+        blockers.push(
+          `${vehiclePendingPayments.length} pending payment${vehiclePendingPayments.length > 1 ? "s" : ""}`
+        )
       }
     }
 
@@ -964,7 +967,7 @@ export const remove = mutation({
     }
 
     // Check for active or upcoming reservations (pending or confirmed)
-    const today = new Date().toISOString().split("T")[0]
+    const today = new Date().toISOString().split("T")[0] as string
     const activeReservations = await ctx.db
       .query("reservations")
       .withIndex("by_vehicle", (q) => q.eq("vehicleId", args.id))
@@ -985,12 +988,7 @@ export const remove = mutation({
     // Check for open disputes
     const openDisputes = await ctx.db
       .query("disputes")
-      .filter((q) =>
-        q.and(
-          q.eq(q.field("vehicleId"), args.id),
-          q.eq(q.field("status"), "open")
-        )
-      )
+      .filter((q) => q.and(q.eq(q.field("vehicleId"), args.id), q.eq(q.field("status"), "open")))
       .collect()
 
     if (openDisputes.length > 0) {
@@ -1011,10 +1009,7 @@ export const remove = mutation({
       const pendingPayments = await ctx.db
         .query("payments")
         .filter((q) =>
-          q.or(
-            q.eq(q.field("status"), "pending"),
-            q.eq(q.field("status"), "processing")
-          )
+          q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "processing"))
         )
         .collect()
 
@@ -1206,6 +1201,7 @@ export const updateImage = mutation({
 
 // Get all tracks
 export const getTracks = query({
+  args: {},
   handler: async (ctx) =>
     await ctx.db
       .query("tracks")
@@ -1213,27 +1209,6 @@ export const getTracks = query({
       .order("asc")
       .collect(),
 })
-
-// Helper function to check if user is admin via Clerk metadata
-async function checkAdmin(ctx: any) {
-  const identity = await ctx.auth.getUserIdentity()
-  if (!identity) {
-    throw new Error("Not authenticated")
-  }
-
-  // When session token is configured with { "metadata": "{{user.public_metadata}}" },
-  // the metadata is available in identity.metadata
-  const role =
-    (identity as any).metadata?.role || // From session token (recommended)
-    (identity as any).publicMetadata?.role || // Direct from Clerk
-    (identity as any).orgRole
-
-  if (role !== "admin") {
-    throw new Error("Admin access required")
-  }
-
-  return identity
-}
 
 // Admin function to approve a vehicle
 export const approveVehicle = mutation({

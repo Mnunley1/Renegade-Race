@@ -1,7 +1,7 @@
 "use client"
 
 import { useUser } from "@clerk/nextjs"
-import type { Id } from "@workspace/backend/convex/_generated/dataModel"
+import type { Id } from "@/lib/convex"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent } from "@workspace/ui/components/card"
 import { Separator } from "@workspace/ui/components/separator"
@@ -26,11 +26,12 @@ export default function TripsPage() {
     if (!reservationsData) return []
     const today = new Date().toISOString().split("T")[0]
     return reservationsData
-      .filter((res) => res.status === "confirmed" && res.endDate >= today)
-      .map((res) => {
+      .filter((res: any) => res.status === "confirmed" && res.endDate >= (today ?? ""))
+      .map((res: any) => {
         const vehicle = res.vehicle
         if (!vehicle) return null
-        const primaryImage = vehicle.images?.find((img) => img.isPrimary) || vehicle.images?.[0]
+        const primaryImage =
+          vehicle.images?.find((img: any) => img.isPrimary) || vehicle.images?.[0]
         return {
           reservationId: res._id,
           vehicleId: vehicle._id,
@@ -77,12 +78,14 @@ export default function TripsPage() {
     const today = new Date().toISOString().split("T")[0]
     return reservationsData
       .filter(
-        (res) => res.status === "completed" || (res.endDate < today && res.status === "confirmed")
+        (res: any) =>
+          res.status === "completed" || (res.endDate < (today ?? "") && res.status === "confirmed")
       )
-      .map((res) => {
+      .map((res: any) => {
         const vehicle = res.vehicle
         if (!vehicle) return null
-        const primaryImage = vehicle.images?.find((img) => img.isPrimary) || vehicle.images?.[0]
+        const primaryImage =
+          vehicle.images?.find((img: any) => img.isPrimary) || vehicle.images?.[0]
         return {
           reservationId: res._id,
           vehicleId: vehicle._id,

@@ -51,8 +51,8 @@ export function DataTableToolbar({
   return (
     <div className="flex flex-wrap items-center gap-2">
       {onSearchChange && (
-        <div className="relative flex-1 min-w-[200px] max-w-sm">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <div className="relative min-w-[200px] max-w-sm flex-1">
+          <Search className="-translate-y-1/2 absolute top-1/2 left-3 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder={searchPlaceholder}
             value={search ?? ""}
@@ -62,7 +62,7 @@ export function DataTableToolbar({
           {search && (
             <button
               onClick={() => onSearchChange("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              className="-translate-y-1/2 absolute top-1/2 right-3 text-muted-foreground hover:text-foreground"
             >
               <X className="h-3.5 w-3.5" />
             </button>

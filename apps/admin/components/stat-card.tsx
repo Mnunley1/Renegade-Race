@@ -17,15 +17,21 @@ export function StatCard({ label, value, trend, sparklineData, icon }: StatCardP
     <Card>
       <CardContent className="p-6">
         <div className="flex items-center justify-between">
-          <p className="text-sm font-medium text-muted-foreground">{label}</p>
+          <p className="font-medium text-muted-foreground text-sm">{label}</p>
           {icon}
         </div>
         <div className="mt-2 flex items-end justify-between">
           <div>
-            <p className="text-2xl font-bold">{value}</p>
+            <p className="font-bold text-2xl">{value}</p>
             {trend && (
-              <div className={`mt-1 flex items-center gap-1 text-xs ${trend.isPositive ? "text-emerald-600" : "text-red-600"}`}>
-                {trend.isPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+              <div
+                className={`mt-1 flex items-center gap-1 text-xs ${trend.isPositive ? "text-emerald-600" : "text-red-600"}`}
+              >
+                {trend.isPositive ? (
+                  <TrendingUp className="h-3 w-3" />
+                ) : (
+                  <TrendingDown className="h-3 w-3" />
+                )}
                 <span>{Math.abs(trend.value)}% from last period</span>
               </div>
             )}

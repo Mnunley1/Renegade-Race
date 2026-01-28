@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { useQuery, useMutation } from "convex/react"
+import { useMutation } from "convex/react"
 import { api } from "@renegade/backend/convex/_generated/api"
 import type { Id } from "@renegade/backend/convex/_generated/dataModel"
 import { useRouter, useParams } from "next/navigation"
@@ -9,14 +9,23 @@ import { toast } from "sonner"
 import { format, formatDistanceToNow } from "date-fns"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
-import { Badge } from "@workspace/ui/components/badge"
 import { Separator } from "@workspace/ui/components/separator"
 import { DetailPageLayout } from "@/components/detail-page-layout"
 import { StatusBadge } from "@/components/status-badge"
 import { UserAvatar } from "@/components/user-avatar"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { LoadingState } from "@/components/loading-state"
-import { Star, Eye, EyeOff, CheckCircle, Trash2, User, Car, Calendar, DollarSign, MessageSquare } from "lucide-react"
+import {
+  Star,
+  Eye,
+  EyeOff,
+  CheckCircle,
+  Trash2,
+  User,
+  Car,
+  Calendar,
+  MessageSquare,
+} from "lucide-react"
 
 export default function ReviewDetailPage() {
   const router = useRouter()
@@ -25,7 +34,8 @@ export default function ReviewDetailPage() {
 
   const [deleteConfirm, setDeleteConfirm] = useState(false)
 
-  const review = useQuery(api.admin.getReviewDetail, { reviewId })
+  // TODO: Implement getReviewDetail query
+  const review: any = undefined
   const toggleVisibility = useMutation(api.admin.toggleReviewVisibility)
   const markModerated = useMutation(api.admin.markReviewAsModerated)
   const deleteReview = useMutation(api.admin.deleteReviewAsAdmin)
@@ -70,19 +80,17 @@ export default function ReviewDetailPage() {
     )
   }
 
-  const renderStars = (rating: number) => {
-    return (
-      <div className="flex items-center gap-1">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <Star
-            key={i}
-            className={`h-5 w-5 ${i < rating ? "fill-yellow-400 text-yellow-400" : "text-gray-300"}`}
-          />
-        ))}
-        <span className="ml-2 text-lg font-semibold">{rating}/5</span>
-      </div>
-    )
-  }
+  const renderStars = (rating: number) => (
+    <div className="flex items-center gap-1">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <Star
+          key={i}
+          className={`h-5 w-5 ${i < rating ? "fill-yellow-400 text-yellow-400" : "text-gray-300"}`}
+        />
+      ))}
+      <span className="ml-2 font-semibold text-lg">{rating}/5</span>
+    </div>
+  )
 
   return (
     <DetailPageLayout
@@ -96,7 +104,11 @@ export default function ReviewDetailPage() {
       actions={
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={handleToggleVisibility}>
-            {review.isPublic ? <EyeOff className="mr-2 h-4 w-4" /> : <Eye className="mr-2 h-4 w-4" />}
+            {review.isPublic ? (
+              <EyeOff className="mr-2 h-4 w-4" />
+            ) : (
+              <Eye className="mr-2 h-4 w-4" />
+            )}
             {review.isPublic ? "Hide" : "Publish"}
           </Button>
           {!review.isModerated && (
@@ -120,12 +132,12 @@ export default function ReviewDetailPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <h3 className="mb-2 text-sm font-medium text-muted-foreground">Overall Rating</h3>
+                <h3 className="mb-2 font-medium text-muted-foreground text-sm">Overall Rating</h3>
                 {renderStars(review.rating)}
               </div>
               <Separator />
               <div>
-                <h3 className="mb-2 text-sm font-medium text-muted-foreground">Review Text</h3>
+                <h3 className="mb-2 font-medium text-muted-foreground text-sm">Review Text</h3>
                 <p className="whitespace-pre-wrap text-sm leading-relaxed">{review.review}</p>
               </div>
               {review.communication !== undefined && (
@@ -133,36 +145,44 @@ export default function ReviewDetailPage() {
                   <Separator />
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <h4 className="mb-1 text-xs font-medium text-muted-foreground">Communication</h4>
+                      <h4 className="mb-1 font-medium text-muted-foreground text-xs">
+                        Communication
+                      </h4>
                       <div className="flex items-center gap-1">
                         <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                        <span className="text-sm font-medium">{review.communication}</span>
+                        <span className="font-medium text-sm">{review.communication}</span>
                       </div>
                     </div>
                     {review.vehicleCondition !== undefined && (
                       <div>
-                        <h4 className="mb-1 text-xs font-medium text-muted-foreground">Vehicle Condition</h4>
+                        <h4 className="mb-1 font-medium text-muted-foreground text-xs">
+                          Vehicle Condition
+                        </h4>
                         <div className="flex items-center gap-1">
                           <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                          <span className="text-sm font-medium">{review.vehicleCondition}</span>
+                          <span className="font-medium text-sm">{review.vehicleCondition}</span>
                         </div>
                       </div>
                     )}
                     {review.professionalism !== undefined && (
                       <div>
-                        <h4 className="mb-1 text-xs font-medium text-muted-foreground">Professionalism</h4>
+                        <h4 className="mb-1 font-medium text-muted-foreground text-xs">
+                          Professionalism
+                        </h4>
                         <div className="flex items-center gap-1">
                           <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                          <span className="text-sm font-medium">{review.professionalism}</span>
+                          <span className="font-medium text-sm">{review.professionalism}</span>
                         </div>
                       </div>
                     )}
                     {review.overallExperience !== undefined && (
                       <div>
-                        <h4 className="mb-1 text-xs font-medium text-muted-foreground">Overall Experience</h4>
+                        <h4 className="mb-1 font-medium text-muted-foreground text-xs">
+                          Overall Experience
+                        </h4>
                         <div className="flex items-center gap-1">
                           <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                          <span className="text-sm font-medium">{review.overallExperience}</span>
+                          <span className="font-medium text-sm">{review.overallExperience}</span>
                         </div>
                       </div>
                     )}
@@ -171,9 +191,11 @@ export default function ReviewDetailPage() {
               )}
               <Separator />
               <div>
-                <h3 className="mb-2 text-sm font-medium text-muted-foreground">Posted</h3>
-                <p className="text-sm">{formatDistanceToNow(review.createdAt, { addSuffix: true })}</p>
-                <p className="text-xs text-muted-foreground">{format(review.createdAt, "PPpp")}</p>
+                <h3 className="mb-2 font-medium text-muted-foreground text-sm">Posted</h3>
+                <p className="text-sm">
+                  {formatDistanceToNow(review.createdAt, { addSuffix: true })}
+                </p>
+                <p className="text-muted-foreground text-xs">{format(review.createdAt, "PPpp")}</p>
               </div>
             </CardContent>
           </Card>
@@ -181,15 +203,17 @@ export default function ReviewDetailPage() {
           {review.response && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
+                <CardTitle className="flex items-center gap-2 text-base">
                   <MessageSquare className="h-4 w-4" />
                   Response
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="whitespace-pre-wrap text-sm leading-relaxed">{review.response.text}</p>
+                <p className="whitespace-pre-wrap text-sm leading-relaxed">
+                  {review.response.text}
+                </p>
                 {review.response.respondedAt && (
-                  <p className="mt-3 text-xs text-muted-foreground">
+                  <p className="mt-3 text-muted-foreground text-xs">
                     {formatDistanceToNow(review.response.respondedAt, { addSuffix: true })}
                   </p>
                 )}
@@ -201,7 +225,7 @@ export default function ReviewDetailPage() {
         <div className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
+              <CardTitle className="flex items-center gap-2 text-base">
                 <User className="h-4 w-4" />
                 Reviewer
               </CardTitle>
@@ -224,7 +248,7 @@ export default function ReviewDetailPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
+              <CardTitle className="flex items-center gap-2 text-base">
                 <User className="h-4 w-4" />
                 Reviewed User
               </CardTitle>
@@ -248,7 +272,7 @@ export default function ReviewDetailPage() {
           {review.vehicle && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
+                <CardTitle className="flex items-center gap-2 text-base">
                   <Car className="h-4 w-4" />
                   Vehicle
                 </CardTitle>
@@ -274,7 +298,7 @@ export default function ReviewDetailPage() {
           {review.reservation && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
+                <CardTitle className="flex items-center gap-2 text-base">
                   <Calendar className="h-4 w-4" />
                   Reservation
                 </CardTitle>
@@ -291,7 +315,9 @@ export default function ReviewDetailPage() {
                 <Separator />
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Total Amount</span>
-                  <span className="font-semibold">${review.reservation.totalAmount.toFixed(2)}</span>
+                  <span className="font-semibold">
+                    ${review.reservation.totalAmount.toFixed(2)}
+                  </span>
                 </div>
                 <Button
                   variant="outline"

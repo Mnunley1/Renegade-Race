@@ -9,14 +9,14 @@
  * HTML entity map for escaping special characters
  */
 const HTML_ENTITIES: Record<string, string> = {
-  '&': '&amp;',
-  '<': '&lt;',
-  '>': '&gt;',
-  '"': '&quot;',
-  "'": '&#x27;',
-  '/': '&#x2F;',
-  '`': '&#x60;',
-  '=': '&#x3D;',
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&#x27;",
+  "/": "&#x2F;",
+  "`": "&#x60;",
+  "=": "&#x3D;",
 }
 
 /**
@@ -26,8 +26,8 @@ const HTML_ENTITIES: Record<string, string> = {
  * @returns The sanitized string with HTML entities escaped
  */
 export function escapeHtml(input: string): string {
-  if (typeof input !== 'string') {
-    return ''
+  if (typeof input !== "string") {
+    return ""
   }
   return input.replace(/[&<>"'`=/]/g, (char) => HTML_ENTITIES[char] || char)
 }
@@ -43,8 +43,8 @@ export function escapeHtml(input: string): string {
  * @returns The sanitized string
  */
 export function sanitizeText(input: string, maxLength?: number): string {
-  if (typeof input !== 'string') {
-    return ''
+  if (typeof input !== "string") {
+    return ""
   }
 
   let sanitized = escapeHtml(input.trim())
@@ -64,7 +64,7 @@ export function sanitizeText(input: string, maxLength?: number): string {
  * @returns The sanitized message
  */
 export function sanitizeMessage(input: string): string {
-  return sanitizeText(input, 10000) // 10k character limit for messages
+  return sanitizeText(input, 10_000) // 10k character limit for messages
 }
 
 /**

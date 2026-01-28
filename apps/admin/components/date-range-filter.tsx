@@ -2,11 +2,7 @@
 
 import { Button } from "@workspace/ui/components/button"
 import { Calendar } from "@workspace/ui/components/calendar"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@workspace/ui/components/popover"
+import { Popover, PopoverContent, PopoverTrigger } from "@workspace/ui/components/popover"
 import { cn } from "@workspace/ui/lib/utils"
 import { format } from "date-fns"
 import { CalendarIcon, X } from "lucide-react"
@@ -18,11 +14,7 @@ interface DateRangeFilterProps {
   className?: string
 }
 
-export function DateRangeFilter({
-  dateRange,
-  onDateRangeChange,
-  className,
-}: DateRangeFilterProps) {
+export function DateRangeFilter({ dateRange, onDateRangeChange, className }: DateRangeFilterProps) {
   return (
     <div className={cn("flex items-center gap-2", className)}>
       <Popover>
@@ -38,8 +30,7 @@ export function DateRangeFilter({
             {dateRange?.from ? (
               dateRange.to ? (
                 <>
-                  {format(dateRange.from, "LLL dd, y")} -{" "}
-                  {format(dateRange.to, "LLL dd, y")}
+                  {format(dateRange.from, "LLL dd, y")} - {format(dateRange.to, "LLL dd, y")}
                 </>
               ) : (
                 format(dateRange.from, "LLL dd, y")
@@ -61,11 +52,7 @@ export function DateRangeFilter({
         </PopoverContent>
       </Popover>
       {dateRange && (dateRange.from || dateRange.to) && (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => onDateRangeChange(undefined)}
-        >
+        <Button variant="ghost" size="sm" onClick={() => onDateRangeChange(undefined)}>
           <X className="size-4" />
         </Button>
       )}

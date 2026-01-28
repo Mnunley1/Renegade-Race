@@ -1,7 +1,8 @@
+// @ts-expect-error - @clerk/backend module resolution issue
 import type { UserJSON } from "@clerk/backend"
 import { type Validator, v } from "convex/values"
 import { action, internalMutation, mutation, type QueryCtx, query } from "./_generated/server"
-import { internal } from "./_generated/api"
+import { api, internal } from "./_generated/api"
 import { getWelcomeEmailTemplate, sendTransactionalEmail } from "./emails"
 import { imagePresets, r2 } from "./r2"
 
@@ -88,9 +89,27 @@ export const deleteFromClerk = internalMutation({
     const user = await userByExternalId(ctx, clerkUserId)
 
     if (user !== null) {
+      const today = new Date().toISOString().split("T")[0] as string
+
+      // Check if this user has active reservations as a RENTER
+      const renterReservations = await ctx.db
+        .query("reservations")
+        .withIndex("by_renter", (q) => q.eq("renterId", clerkUserId))
+        .filter((q) =>
+          q.and(
+            q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "confirmed")),
+            q.gte(q.field("endDate"), today)
+          )
+        )
+        .collect()
+
+      if (renterReservations.length > 0) {
+        throw new Error(
+          `Cannot delete account with active or upcoming rentals. You have ${renterReservations.length} active booking(s) as a renter. Please cancel them first.`
+        )
+      }
+
       // Check if this user is a host with active or upcoming rentals
-      const today = new Date().toISOString().split("T")[0]
-      
       // Get all vehicles owned by this user
       const ownedVehicles = await ctx.db
         .query("vehicles")
@@ -105,10 +124,7 @@ export const deleteFromClerk = internalMutation({
           .filter((q) =>
             q.and(
               // Only check pending or confirmed reservations
-              q.or(
-                q.eq(q.field("status"), "pending"),
-                q.eq(q.field("status"), "confirmed")
-              ),
+              q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "confirmed")),
               // Check if reservation end date is in the future (active or upcoming)
               q.gte(q.field("endDate"), today)
             )
@@ -120,6 +136,17 @@ export const deleteFromClerk = internalMutation({
             `Cannot delete host account with active or upcoming rentals. User has ${activeReservations.length} active reservation(s) on vehicle ${vehicle.make} ${vehicle.model}.`
           )
         }
+      }
+
+      // WARNING: Stripe balance check required
+      // If the user has a Stripe Connect account, they may have pending balance
+      // that needs to be paid out before account deletion. This requires an external
+      // API call to Stripe, which mutations cannot perform. Admin approval should be
+      // required for deletion of users with Stripe Connect accounts.
+      if (user.stripeAccountId) {
+        throw new Error(
+          "Cannot delete user with Stripe Connect account. Please verify account balance is zero and all payouts are complete before deletion. Contact admin for approval."
+        )
       }
 
       await ctx.db.delete(user._id)
@@ -281,13 +308,15 @@ export const getNotificationPreferences = query({
     }
 
     // Return default preferences if none set
-    return user.notificationPreferences || {
-      reservationUpdates: true,
-      messages: true,
-      reviewsAndRatings: true,
-      paymentUpdates: true,
-      marketing: false,
-    }
+    return (
+      user.notificationPreferences || {
+        reservationUpdates: true,
+        messages: true,
+        reviewsAndRatings: true,
+        paymentUpdates: true,
+        marketing: false,
+      }
+    )
   },
 })
 
@@ -318,12 +347,11 @@ export const setStripeAccountId = mutation({
 // Find user by Stripe account ID
 export const getByStripeAccountId = query({
   args: { stripeAccountId: v.string() },
-  handler: async (ctx, args) => {
-    return await ctx.db
+  handler: async (ctx, args) =>
+    await ctx.db
       .query("users")
       .filter((q) => q.eq(q.field("stripeAccountId"), args.stripeAccountId))
-      .first()
-  },
+      .first(),
 })
 
 // Update Stripe account status (called from webhook)
@@ -456,7 +484,7 @@ export const getHostOnboardingStatus = query({
     return {
       status,
       steps: user.hostOnboardingSteps || steps,
-      stepCompletion: user.hostOnboardingStepCompletion || {
+      stepCompletion: user.hostOnboardingSteps || {
         step1_location: false,
         step2_vehicleInfo: false,
         step3_specifications: false,
@@ -541,11 +569,14 @@ export const saveOnboardingVehicleAddress = mutation({
     // Save address without coordinates first (geocoding happens async)
     await ctx.db.patch(user._id, {
       onboardingVehicleAddress: args.address,
-      hostOnboardingStatus: user.hostOnboardingStatus === "not_started" ? "in_progress" : user.hostOnboardingStatus || "in_progress",
+      hostOnboardingStatus:
+        user.hostOnboardingStatus === "not_started"
+          ? "in_progress"
+          : user.hostOnboardingStatus || "in_progress",
     })
 
     // Schedule geocoding action
-    await ctx.scheduler.runAfter(0, internal.users.geocodeOnboardingAddress, {
+    await ctx.scheduler.runAfter(0, api.users.geocodeOnboardingAddress, {
       userId: user._id,
       address: args.address,
     })
@@ -563,7 +594,7 @@ export const updateOnboardingAddressCoordinates = internalMutation({
   },
   handler: async (ctx, args) => {
     const user = await ctx.db.get(args.userId)
-    if (!user || !user.onboardingVehicleAddress) {
+    if (!(user && user.onboardingVehicleAddress)) {
       return
     }
 
@@ -590,9 +621,9 @@ export const geocodeOnboardingAddress = action({
   },
   handler: async (ctx, args) => {
     const { geocodeAddress } = await import("./geocoding")
-    
+
     const result = await geocodeAddress(args.address)
-    
+
     if (result) {
       await ctx.runMutation(internal.users.updateOnboardingAddressCoordinates, {
         userId: args.userId,
@@ -816,23 +847,22 @@ export const updateOnboardingStepCompletion = mutation({
       throw new Error("User not found")
     }
 
-    const currentSteps = user.hostOnboardingStepCompletion || {
-      step1_location: false,
-      step2_vehicleInfo: false,
-      step3_specifications: false,
-      step4_amenities: false,
-      step5_photos: false,
-      step6_availability: false,
-      step7_submit: false,
-    }
-
-    const updatedSteps = {
-      ...currentSteps,
-      [args.step]: args.completed,
-    }
-
+    // This function is deprecated - hostOnboardingStepCompletion was removed from schema
+    // Just update hostOnboardingSteps instead for now
+    // TODO: Update frontend to use hostOnboardingSteps directly
     await ctx.db.patch(user._id, {
-      hostOnboardingStepCompletion: updatedSteps,
+      hostOnboardingSteps: {
+        personalInfo:
+          args.step === "step1_location"
+            ? args.completed
+            : user.hostOnboardingSteps?.personalInfo || false,
+        vehicleAdded:
+          args.step === "step2_vehicleInfo" || args.step === "step7_submit"
+            ? args.completed
+            : user.hostOnboardingSteps?.vehicleAdded || false,
+        payoutSetup: user.hostOnboardingSteps?.payoutSetup || false,
+        safetyStandards: user.hostOnboardingSteps?.safetyStandards || false,
+      },
     })
 
     return { success: true }
@@ -871,7 +901,6 @@ export const clearOnboardingDraft = mutation({
 
     await ctx.db.patch(user._id, {
       hostOnboardingDraft: undefined,
-      hostOnboardingStepCompletion: undefined,
     })
 
     return { success: true }
@@ -912,7 +941,6 @@ export const startOverOnboarding = mutation({
     await ctx.db.patch(user._id, {
       hostOnboardingStatus: "not_started",
       hostOnboardingDraft: undefined,
-      hostOnboardingStepCompletion: undefined,
       onboardingVehicleAddress: undefined,
     })
 

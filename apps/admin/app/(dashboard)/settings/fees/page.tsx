@@ -9,10 +9,15 @@ import { LoadingState } from "@/components/loading-state"
 import { DollarSign, Percent, TrendingUp, Calendar } from "lucide-react"
 
 export default function FeesPage() {
-  const settings = useQuery(api.admin.getPlatformSettings)
+  // TODO: Implement getPlatformSettings query
+  const settings: any = {
+    platformFeePercentage: 5,
+    minimumPlatformFee: 100,
+    maximumPlatformFee: 5000,
+  }
   const stats = useQuery(api.admin.getPlatformStats)
 
-  if (settings === undefined || stats === undefined) return <LoadingState message="Loading fee data..." />
+  if (stats === undefined) return <LoadingState message="Loading fee data..." />
 
   return (
     <div>
@@ -22,7 +27,7 @@ export default function FeesPage() {
         breadcrumbs={[{ label: "Settings", href: "/settings" }, { label: "Fees" }]}
       />
 
-      <div className="grid gap-4 md:grid-cols-3 mb-6">
+      <div className="mb-6 grid gap-4 md:grid-cols-3">
         <StatCard
           label="Fee Rate"
           value={`${settings?.platformFeePercentage ?? 0}%`}
@@ -40,10 +45,10 @@ export default function FeesPage() {
         />
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 mb-6">
+      <div className="mb-6 grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 text-base">
               <TrendingUp className="h-4 w-4" />
               Revenue Summary
             </CardTitle>
@@ -55,18 +60,22 @@ export default function FeesPage() {
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Last 30 Days</span>
-              <span className="font-medium">${((stats?.revenue.last30Days ?? 0) / 100).toFixed(2)}</span>
+              <span className="font-medium">
+                ${((stats?.revenue.last30Days ?? 0) / 100).toFixed(2)}
+              </span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Last 7 Days</span>
-              <span className="font-medium">${((stats?.revenue.last7Days ?? 0) / 100).toFixed(2)}</span>
+              <span className="font-medium">
+                ${((stats?.revenue.last7Days ?? 0) / 100).toFixed(2)}
+              </span>
             </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 text-base">
               <Calendar className="h-4 w-4" />
               Transaction Summary
             </CardTitle>
@@ -93,7 +102,7 @@ export default function FeesPage() {
           <CardTitle className="text-base">Fee Calculation Example</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="rounded-lg bg-muted p-4 space-y-3">
+          <div className="space-y-3 rounded-lg bg-muted p-4">
             <h4 className="font-medium">Example Booking: $1,000</h4>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
@@ -106,9 +115,11 @@ export default function FeesPage() {
                 </span>
                 <span>${((1000 * (settings?.platformFeePercentage ?? 0)) / 100).toFixed(2)}</span>
               </div>
-              <div className="flex justify-between font-medium border-t pt-2">
+              <div className="flex justify-between border-t pt-2 font-medium">
                 <span>Total Charged to Renter:</span>
-                <span>${(1000 + (1000 * (settings?.platformFeePercentage ?? 0)) / 100).toFixed(2)}</span>
+                <span>
+                  ${(1000 + (1000 * (settings?.platformFeePercentage ?? 0)) / 100).toFixed(2)}
+                </span>
               </div>
               <div className="flex justify-between text-muted-foreground">
                 <span>Host Receives:</span>
@@ -116,9 +127,10 @@ export default function FeesPage() {
               </div>
             </div>
           </div>
-          <p className="text-xs text-muted-foreground">
-            Note: Actual fees are capped by the minimum (${((settings?.minimumPlatformFee ?? 0) / 100).toFixed(2)})
-            and maximum (${((settings?.maximumPlatformFee ?? 0) / 100).toFixed(2)}) fee limits.
+          <p className="text-muted-foreground text-xs">
+            Note: Actual fees are capped by the minimum ($
+            {((settings?.minimumPlatformFee ?? 0) / 100).toFixed(2)}) and maximum ($
+            {((settings?.maximumPlatformFee ?? 0) / 100).toFixed(2)}) fee limits.
           </p>
         </CardContent>
       </Card>

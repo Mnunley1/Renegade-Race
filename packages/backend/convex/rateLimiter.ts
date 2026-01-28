@@ -12,7 +12,7 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
   // ============================================
   // Critical Operations (Strict Limits)
   // ============================================
-  
+
   // Reservation creation: 10 per hour per user (prevents spam bookings)
   createReservation: {
     kind: "token bucket",
@@ -40,7 +40,7 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
   // ============================================
   // Communication Operations
   // ============================================
-  
+
   // Message sending: 20 per minute per user (allows conversation flow)
   sendMessage: {
     kind: "token bucket",
@@ -60,7 +60,7 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
   // ============================================
   // Content Creation Operations
   // ============================================
-  
+
   // Vehicle creation: 5 per hour per user (prevents spam listings)
   createVehicle: {
     kind: "token bucket",
@@ -96,7 +96,7 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
   // ============================================
   // HTTP Webhook Endpoints (IP-based)
   // ============================================
-  
+
   // Webhook endpoints: 100 per minute per IP (for Stripe, Clerk, Resend)
   webhookEndpoint: {
     kind: "fixed window",
@@ -108,7 +108,7 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
   // ============================================
   // Authentication & Security
   // ============================================
-  
+
   // Failed login attempts: 10 per hour per IP (prevents brute force)
   failedLoginAttempts: {
     kind: "token bucket",

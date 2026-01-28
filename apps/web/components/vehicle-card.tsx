@@ -61,11 +61,12 @@ export function VehicleCard({
   // Get date range from URL params
   const startDate = searchParams.get("startDate")
   const endDate = searchParams.get("endDate")
-  
+
   // Build URL with date params if they exist
-  const vehicleUrl = startDate && endDate
-    ? `/vehicles/${id}?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`
-    : `/vehicles/${id}`
+  const vehicleUrl =
+    startDate && endDate
+      ? `/vehicles/${id}?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`
+      : `/vehicles/${id}`
 
   // Check if vehicle is favorited
   const isFavorite = useQuery(
@@ -124,7 +125,7 @@ export function VehicleCard({
     <Link className="block h-full" href={vehicleUrl}>
       <Card
         className={cn(
-          "group relative flex h-full cursor-pointer flex-col overflow-hidden border border-border/50 bg-card transition-all duration-300 hover:border-primary/30 hover:shadow-xl hover:shadow-primary/5",
+          "group relative flex h-full cursor-pointer flex-col overflow-hidden border border-border/50 bg-card transition-all duration-300 hover:border-primary/30 hover:shadow-primary/5 hover:shadow-xl",
           className
         )}
         {...props}
@@ -132,7 +133,12 @@ export function VehicleCard({
         {/* Image Section */}
         <div className="relative aspect-[4/3] w-full shrink-0 overflow-hidden bg-muted">
           {imageKey || image ? (
-            <ImageKitProvider urlEndpoint={process.env.NEXT_PUBLIC_IMAGEKIT_URL_ENDPOINT || "https://ik.imagekit.io/renegaderace"}>
+            <ImageKitProvider
+              urlEndpoint={
+                process.env.NEXT_PUBLIC_IMAGEKIT_URL_ENDPOINT ||
+                "https://ik.imagekit.io/renegaderace"
+              }
+            >
               <Image
                 alt={name}
                 className="object-cover transition-transform duration-500 group-hover:scale-105"
@@ -159,7 +165,10 @@ export function VehicleCard({
               </Badge>
             )}
             {horsepower && horsepower > 0 && (
-              <Badge variant="secondary" className="border-0 bg-primary/90 text-primary-foreground text-xs backdrop-blur-sm hover:bg-primary/90">
+              <Badge
+                variant="secondary"
+                className="border-0 bg-primary/90 text-primary-foreground text-xs backdrop-blur-sm hover:bg-primary/90"
+              >
                 <Gauge className="mr-1 size-3" />
                 {horsepower} HP
               </Badge>
@@ -168,7 +177,7 @@ export function VehicleCard({
 
           {/* Favorite Button */}
           <Button
-            className="absolute top-3 right-3 z-10 size-9 rounded-full bg-white/90 shadow-lg backdrop-blur-sm transition-all hover:bg-white hover:scale-110"
+            className="absolute top-3 right-3 z-10 size-9 rounded-full bg-white/90 shadow-lg backdrop-blur-sm transition-all hover:scale-110 hover:bg-white"
             onClick={handleFavoriteClick}
             size="icon"
             variant="ghost"
@@ -177,7 +186,7 @@ export function VehicleCard({
               className={cn(
                 "size-5 transition-all",
                 isFavorite === true
-                  ? "fill-red-500 text-red-500 scale-110"
+                  ? "scale-110 fill-red-500 text-red-500"
                   : "text-gray-600 group-hover:text-red-500"
               )}
             />
@@ -186,9 +195,7 @@ export function VehicleCard({
           {/* Price Tag - Bottom of Image */}
           <div className="absolute bottom-3 left-3 z-10">
             <div className="flex items-baseline gap-1 rounded-lg bg-white/95 px-3 py-1.5 shadow-lg backdrop-blur-sm">
-              <span className="font-bold text-lg text-gray-900">
-                ${pricePerDay}
-              </span>
+              <span className="font-bold text-gray-900 text-lg">${pricePerDay}</span>
               <span className="text-gray-600 text-xs">/day</span>
             </div>
           </div>

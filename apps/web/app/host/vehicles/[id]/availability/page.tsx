@@ -2,7 +2,13 @@
 
 import { Button } from "@workspace/ui/components/button"
 import { Calendar } from "@workspace/ui/components/calendar"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@workspace/ui/components/card"
 import { Checkbox } from "@workspace/ui/components/checkbox"
 import {
   Dialog,
@@ -24,7 +30,15 @@ import {
 import { Textarea } from "@workspace/ui/components/textarea"
 import { useMutation, useQuery } from "convex/react"
 import { format } from "date-fns"
-import { ArrowLeft, Calendar as CalendarIcon, Edit, Info, Loader2, Settings, XCircle } from "lucide-react"
+import {
+  ArrowLeft,
+  Calendar as CalendarIcon,
+  Edit,
+  Info,
+  Loader2,
+  Settings,
+  XCircle,
+} from "lucide-react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useEffect, useMemo, useState } from "react"
@@ -105,29 +119,29 @@ export default function HostVehicleAvailabilityPage() {
       setAdvanceNotice(vehicle.advanceNotice || "1-day")
       setMinTripDuration(vehicle.minTripDuration || "1-day")
       setMaxTripDuration(vehicle.maxTripDuration || "3-weeks")
-      setRequireWeekendMin(vehicle.requireWeekendMin || false)
+      setRequireWeekendMin((vehicle as any).requireWeekendMin)
     }
   }, [vehicle, editSettingsDialogOpen])
 
   // Helper function to parse YYYY-MM-DD string to local Date (avoids timezone issues)
   const parseDateString = (dateString: string): Date => {
-    const [year, month, day] = dateString.split("-").map(Number)
-    return new Date(year, month - 1, day)
+    const [year, month, day] = dateString.split("-").map(Number) as [number, number, number]
+    return new Date(year, (month ?? 1) - 1, day)
   }
 
   // Get blocked dates for calendar
   const blockedDates = useMemo(() => {
     if (!calendarData?.availability) return []
     return calendarData.availability
-      .filter((a) => !a.isAvailable)
-      .map((a) => parseDateString(a.date))
+      .filter((a: any) => !a.isAvailable)
+      .map((a: any) => parseDateString(a.date))
   }, [calendarData])
 
   // Get reserved dates for calendar
   const reservedDates = useMemo(() => {
     if (!calendarData?.reservations) return []
     const reserved: Date[] = []
-    calendarData.reservations.forEach((res) => {
+    calendarData.reservations.forEach((res: any) => {
       const start = parseDateString(res.startDate)
       const end = parseDateString(res.endDate)
       for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
@@ -149,7 +163,7 @@ export default function HostVehicleAvailabilityPage() {
     const monthEnd = new Date(year, month + 1, 0)
     monthEnd.setHours(23, 59, 59, 999)
 
-    const blockedInMonth = blockedDates.filter((d) => {
+    const blockedInMonth = blockedDates.filter((d: Date) => {
       const date = new Date(d)
       date.setHours(0, 0, 0, 0)
       return date >= monthStart && date <= monthEnd
@@ -266,7 +280,7 @@ export default function HostVehicleAvailabilityPage() {
           vehicleId: vehicle._id,
           date: dateString,
           reason: blockReason || undefined,
-          price: priceOverride ? Math.round(parseFloat(priceOverride) * 100) : undefined,
+          price: priceOverride ? Math.round(Number.parseFloat(priceOverride) * 100) : undefined,
         })
         toast.success("Date blocked")
       }
@@ -383,7 +397,9 @@ export default function HostVehicleAvailabilityPage() {
           startDate,
           endDate,
           reason: rangeBlockReason || undefined,
-          price: rangePriceOverride ? Math.round(parseFloat(rangePriceOverride) * 100) : undefined,
+          price: rangePriceOverride
+            ? Math.round(Number.parseFloat(rangePriceOverride) * 100)
+            : undefined,
         })
         toast.success("Date range blocked")
       }
@@ -401,7 +417,7 @@ export default function HostVehicleAvailabilityPage() {
     // Normalize both dates to midnight for accurate comparison
     const normalizedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate())
     const dateString = format(normalizedDate, "yyyy-MM-dd")
-    return blockedDates.some((d) => {
+    return blockedDates.some((d: Date) => {
       const normalizedD = new Date(d.getFullYear(), d.getMonth(), d.getDate())
       return format(normalizedD, "yyyy-MM-dd") === dateString
     })
@@ -464,11 +480,7 @@ export default function HostVehicleAvailabilityPage() {
               <Settings className="size-5 text-muted-foreground" />
               <CardTitle>Availability Settings</CardTitle>
             </div>
-            <Button
-              onClick={() => setEditSettingsDialogOpen(true)}
-              size="sm"
-              variant="outline"
-            >
+            <Button onClick={() => setEditSettingsDialogOpen(true)} size="sm" variant="outline">
               <Edit className="mr-2 size-4" />
               Edit Settings
             </Button>
@@ -513,8 +525,8 @@ export default function HostVehicleAvailabilityPage() {
           <div className="mt-4 flex items-start gap-2 rounded-lg bg-muted/50 p-3">
             <Info className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
             <p className="text-muted-foreground text-xs">
-              These settings apply to all bookings. You can override pricing for specific dates
-              when blocking them.
+              These settings apply to all bookings. You can override pricing for specific dates when
+              blocking them.
             </p>
           </div>
         </CardContent>
@@ -706,7 +718,7 @@ export default function HostVehicleAvailabilityPage() {
               <div className="space-y-2">
                 <Label htmlFor="priceOverride">Price Override (Optional)</Label>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                  <span className="-translate-y-1/2 absolute top-1/2 left-3 text-muted-foreground">
                     $
                   </span>
                   <Input
@@ -771,7 +783,7 @@ export default function HostVehicleAvailabilityPage() {
               <div className="space-y-2">
                 <Label htmlFor="rangePriceOverride">Price Override (Optional)</Label>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                  <span className="-translate-y-1/2 absolute top-1/2 left-3 text-muted-foreground">
                     $
                   </span>
                   <Input
@@ -907,10 +919,7 @@ export default function HostVehicleAvailabilityPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button
-              onClick={() => setEditSettingsDialogOpen(false)}
-              variant="outline"
-            >
+            <Button onClick={() => setEditSettingsDialogOpen(false)} variant="outline">
               Cancel
             </Button>
             <Button

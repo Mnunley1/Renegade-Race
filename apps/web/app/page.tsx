@@ -24,7 +24,7 @@ export default function HomePage() {
   // Fetch vehicle stats for featured vehicles
   const featuredVehicleIds = useMemo(() => {
     if (!vehiclesData) return []
-    return vehiclesData.slice(0, 6).map((v) => v._id as Id<"vehicles">)
+    return vehiclesData.slice(0, 6).map((v: any) => v._id as Id<"vehicles">)
   }, [vehiclesData])
 
   const featuredVehicleStats = useQuery(
@@ -34,18 +34,17 @@ export default function HomePage() {
 
   const featuredVehicles = useMemo(() => {
     if (!vehiclesData) return []
-    return vehiclesData.slice(0, 6).map((vehicle) => {
-      const primaryImage = vehicle.images?.find((img) => img.isPrimary) || vehicle.images?.[0]
+    return vehiclesData.slice(0, 6).map((vehicle: any) => {
+      const primaryImage = vehicle.images?.find((img: any) => img.isPrimary) || vehicle.images?.[0]
       const stats = featuredVehicleStats?.[vehicle._id]
-      
+
       // Build location string from vehicle address (city, state) or fall back to track location
       const locationParts = []
       if (vehicle.address?.city) locationParts.push(vehicle.address.city)
       if (vehicle.address?.state) locationParts.push(vehicle.address.state)
-      const location = locationParts.length > 0 
-        ? locationParts.join(", ") 
-        : vehicle.track?.location || ""
-      
+      const location =
+        locationParts.length > 0 ? locationParts.join(", ") : vehicle.track?.location || ""
+
       return {
         id: vehicle._id,
         image: primaryImage?.cardUrl ?? "",
@@ -258,7 +257,7 @@ export default function HomePage() {
               </div>
             ) : (
               <div className="grid auto-rows-fr gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {featuredVehicles.slice(0, 3).map((vehicle) => (
+                {featuredVehicles.slice(0, 3).map((vehicle: any) => (
                   <VehicleCard key={vehicle.id} {...vehicle} />
                 ))}
               </div>

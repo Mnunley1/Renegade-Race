@@ -61,24 +61,15 @@ export function Footer() {
               © {new Date().getFullYear()} Renegade. All rights reserved.
             </p>
             <div className="flex items-center gap-4 text-muted-foreground text-sm">
-              <Link
-                className="transition-colors hover:text-foreground"
-                href="/privacy"
-              >
+              <Link className="transition-colors hover:text-foreground" href="/privacy">
                 Privacy Policy
               </Link>
               <span>•</span>
-              <Link
-                className="transition-colors hover:text-foreground"
-                href="/terms"
-              >
+              <Link className="transition-colors hover:text-foreground" href="/terms">
                 Terms of Service
               </Link>
               <span>•</span>
-              <Link
-                className="transition-colors hover:text-foreground"
-                href="/cookie-preferences"
-              >
+              <Link className="transition-colors hover:text-foreground" href="/cookie-preferences">
                 Cookie Preferences
               </Link>
             </div>

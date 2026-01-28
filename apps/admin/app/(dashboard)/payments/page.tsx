@@ -56,7 +56,7 @@ export default function PaymentsPage() {
   })
 
   const payments = result?.payments || []
-  const hasMore = result?.hasMore || false
+  const hasMore = result?.hasMore
 
   // Reset to page 1 when filters change
   useMemo(() => {
@@ -106,26 +106,25 @@ export default function PaymentsPage() {
     }
   }
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-US", {
+  const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat("en-US", {
       style: "currency",
       currency: "USD",
       minimumFractionDigits: 2,
     }).format(amount / 100)
-  }
 
   // Calculate totals
   const totalRevenue = payments
-    .filter((p) => p.status === "succeeded")
-    .reduce((sum, p) => sum + (p.amount || 0), 0)
+    .filter((p: any) => p.status === "succeeded")
+    .reduce((sum: number, p: any) => sum + (p.amount || 0), 0)
 
   const totalRefunded = payments
-    .filter((p) => p.status === "refunded")
-    .reduce((sum, p) => sum + (p.amount || 0), 0)
+    .filter((p: any) => p.status === "refunded")
+    .reduce((sum: number, p: any) => sum + (p.amount || 0), 0)
 
   const pendingAmount = payments
-    .filter((p) => p.status === "pending")
-    .reduce((sum, p) => sum + (p.amount || 0), 0)
+    .filter((p: any) => p.status === "pending")
+    .reduce((sum: number, p: any) => sum + (p.amount || 0), 0)
 
   const totalPages = Math.ceil((payments.length || 0) / 50) || 1
 
@@ -141,9 +140,7 @@ export default function PaymentsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="font-bold text-3xl">Payments & Transactions</h1>
-        <p className="text-muted-foreground mt-2">
-          View and monitor all platform payments
-        </p>
+        <p className="mt-2 text-muted-foreground">View and monitor all platform payments</p>
       </div>
 
       {/* Summary Cards */}
@@ -155,8 +152,8 @@ export default function PaymentsPage() {
           </CardHeader>
           <CardContent>
             <div className="font-bold text-2xl">{formatCurrency(totalRevenue)}</div>
-            <p className="text-muted-foreground text-xs mt-1">
-              {payments.filter((p) => p.status === "succeeded").length} successful transactions
+            <p className="mt-1 text-muted-foreground text-xs">
+              {payments.filter((p: any) => p.status === "succeeded").length} successful transactions
             </p>
           </CardContent>
         </Card>
@@ -168,8 +165,8 @@ export default function PaymentsPage() {
           </CardHeader>
           <CardContent>
             <div className="font-bold text-2xl">{formatCurrency(totalRefunded)}</div>
-            <p className="text-muted-foreground text-xs mt-1">
-              {payments.filter((p) => p.status === "refunded").length} refunded transactions
+            <p className="mt-1 text-muted-foreground text-xs">
+              {payments.filter((p: any) => p.status === "refunded").length} refunded transactions
             </p>
           </CardContent>
         </Card>
@@ -181,8 +178,8 @@ export default function PaymentsPage() {
           </CardHeader>
           <CardContent>
             <div className="font-bold text-2xl">{formatCurrency(pendingAmount)}</div>
-            <p className="text-muted-foreground text-xs mt-1">
-              {payments.filter((p) => p.status === "pending").length} pending transactions
+            <p className="mt-1 text-muted-foreground text-xs">
+              {payments.filter((p: any) => p.status === "pending").length} pending transactions
             </p>
           </CardContent>
         </Card>
@@ -201,7 +198,7 @@ export default function PaymentsPage() {
             <div className="flex gap-2">
               <DateRangeFilter dateRange={dateRange} onDateRangeChange={setDateRange} />
               <div className="relative">
-                <Search className="absolute left-2 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Search className="-translate-y-1/2 absolute top-1/2 left-2 size-4 text-muted-foreground" />
                 <Input
                   className="w-64 pl-8"
                   placeholder="Search payments..."
@@ -233,21 +230,17 @@ export default function PaymentsPage() {
           {payments && payments.length > 0 ? (
             <>
               <div className="space-y-4">
-                {payments.map((payment) => {
+                {payments.map((payment: any) => {
                   const primaryImage =
                     payment.vehicle?.images?.find((img: any) => img.isPrimary) ||
                     payment.vehicle?.images?.[0]
 
                   return (
-                    <Link
-                      key={payment._id}
-                      href={`/payments/${payment._id}`}
-                      className="block"
-                    >
+                    <Link key={payment._id} href={`/payments/${payment._id}`} className="block">
                       <Card className="transition-colors hover:bg-accent">
                         <CardContent className="p-4">
                           <div className="flex items-start justify-between">
-                            <div className="flex gap-4 flex-1">
+                            <div className="flex flex-1 gap-4">
                               {primaryImage && (
                                 <div className="flex-shrink-0">
                                   <img
@@ -264,7 +257,7 @@ export default function PaymentsPage() {
                                     {formatCurrency(payment.amount || 0)}
                                   </span>
                                 </div>
-                                <div className="grid gap-2 md:grid-cols-2 text-sm">
+                                <div className="grid gap-2 text-sm md:grid-cols-2">
                                   <div>
                                     <p className="text-muted-foreground">
                                       <strong>Renter:</strong> {payment.renter?.name || "Unknown"}

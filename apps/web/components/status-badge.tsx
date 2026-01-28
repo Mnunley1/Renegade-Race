@@ -5,28 +5,28 @@ import { cn } from "@workspace/ui/lib/utils"
 const statusConfig = {
   pending: {
     icon: Clock,
-    variant: "warning" as const,
-    label: "Pending"
+    variant: "secondary" as const,
+    label: "Pending",
   },
   confirmed: {
     icon: CheckCircle2,
-    variant: "success" as const,
-    label: "Confirmed"
+    variant: "default" as const,
+    label: "Confirmed",
   },
   completed: {
     icon: CheckCircle2,
     variant: "secondary" as const,
-    label: "Completed"
+    label: "Completed",
   },
   cancelled: {
     icon: XCircle,
     variant: "destructive" as const,
-    label: "Cancelled"
+    label: "Cancelled",
   },
   declined: {
     icon: XCircle,
     variant: "destructive" as const,
-    label: "Declined"
+    label: "Declined",
   },
 } as const
 

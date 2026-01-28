@@ -126,10 +126,10 @@ export default function HostVehiclesListPage() {
         </Card>
       ) : (
         <div className="space-y-4">
-          {vehicles.map((vehicle) => {
+          {vehicles.map((vehicle: any) => {
             // Get the primary image r2Key for ImageKit
             const primaryImageKey =
-              vehicle.images?.find((img) => img.isPrimary)?.r2Key ||
+              vehicle.images?.find((img: any) => img.isPrimary)?.r2Key ||
               vehicle.images?.[0]?.r2Key ||
               null
 
@@ -141,7 +141,12 @@ export default function HostVehiclesListPage() {
                   {/* Vehicle Image */}
                   <div className="relative flex h-48 w-full shrink-0 items-center justify-center overflow-hidden bg-muted md:h-auto md:w-64">
                     {hasValidImage ? (
-                      <ImageKitProvider urlEndpoint={process.env.NEXT_PUBLIC_IMAGEKIT_URL_ENDPOINT || "https://ik.imagekit.io/renegaderace"}>
+                      <ImageKitProvider
+                        urlEndpoint={
+                          process.env.NEXT_PUBLIC_IMAGEKIT_URL_ENDPOINT ||
+                          "https://ik.imagekit.io/renegaderace"
+                        }
+                      >
                         <Image
                           alt={`${vehicle.year} ${vehicle.make} ${vehicle.model}`}
                           className="size-full object-cover"

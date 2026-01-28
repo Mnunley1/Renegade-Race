@@ -1,99 +1,94 @@
-"use client";
+"use client"
 
-import { useQuery } from "convex/react";
-import { api } from "@renegade/backend/convex/_generated/api";
-import { useState, useMemo } from "react";
-import { Button } from "@workspace/ui/components/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card";
-import { Input } from "@workspace/ui/components/input";
-import { PageHeader } from "@/components/page-header";
-import { DataTable } from "@/components/data-table";
-import { exportToCSV } from "@/components/data-table";
-import { StatusBadge } from "@/components/status-badge";
-import { UserAvatar } from "@/components/user-avatar";
-import { LoadingState } from "@/components/loading-state";
-import { StatCard } from "@/components/stat-card";
-import { EmptyState } from "@/components/empty-state";
-import { useRouter } from "next/navigation";
-import {
-  Users,
-  CheckCircle,
-  Clock,
-  DollarSign,
-  Download,
-  Search,
-  ExternalLink
-} from "lucide-react";
-import type { Column } from "@/components/data-table";
+import { useQuery } from "convex/react"
+import { api } from "@renegade/backend/convex/_generated/api"
+import { useState, useMemo } from "react"
+import { Button } from "@workspace/ui/components/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
+import { Input } from "@workspace/ui/components/input"
+import { PageHeader } from "@/components/page-header"
+import { DataTable } from "@/components/data-table"
+import { exportToCSV } from "@/components/data-table"
+import { StatusBadge } from "@/components/status-badge"
+import { UserAvatar } from "@/components/user-avatar"
+import { LoadingState } from "@/components/loading-state"
+import { StatCard } from "@/components/stat-card"
+import { EmptyState } from "@/components/empty-state"
+import { useRouter } from "next/navigation"
+import { Users, CheckCircle, Clock, DollarSign, Download, Search, ExternalLink } from "lucide-react"
+import type { Column } from "@/components/data-table"
 
 export default function PayoutsPage() {
-  const router = useRouter();
-  const [search, setSearch] = useState("");
+  const router = useRouter()
+  const [search, setSearch] = useState("")
 
   const summary = useQuery(api.admin.getHostPayoutSummary, {
     limit: 100,
-  });
+  })
 
-  const hosts = summary ?? [];
+  const hosts = summary ?? []
 
   const filteredHosts = useMemo(() => {
-    if (!search) return hosts;
+    if (!search) return hosts
 
-    const searchLower = search.toLowerCase();
-    return hosts.filter((h: { user?: { name?: string; email?: string; stripeAccountId?: string } }) => {
-      const name = h.user?.name?.toLowerCase() || "";
-      const email = h.user?.email?.toLowerCase() || "";
-      const stripeId = h.user?.stripeAccountId?.toLowerCase() || "";
+    const searchLower = search.toLowerCase()
+    return hosts.filter(
+      (h: { user?: { name?: string; email?: string; stripeAccountId?: string } }) => {
+        const name = h.user?.name?.toLowerCase() || ""
+        const email = h.user?.email?.toLowerCase() || ""
+        const stripeId = h.user?.stripeAccountId?.toLowerCase() || ""
 
-      return (
-        name.includes(searchLower) ||
-        email.includes(searchLower) ||
-        stripeId.includes(searchLower)
-      );
-    });
-  }, [hosts, search]);
+        return (
+          name.includes(searchLower) ||
+          email.includes(searchLower) ||
+          stripeId.includes(searchLower)
+        )
+      }
+    )
+  }, [hosts, search])
 
   const stats = useMemo(() => {
-    const totalHosts = hosts.length;
+    const totalHosts = hosts.length
     const activeStripeAccounts = hosts.filter(
       (h: { stripeStatus: string }) => h.stripeStatus === "enabled"
-    ).length;
+    ).length
     const pendingSetup = hosts.filter(
-      (h: { stripeStatus: string; user?: { stripeAccountId?: string } }) => h.stripeStatus === "pending" || !h.user?.stripeAccountId
-    ).length;
-    const totalPaidOut = hosts.reduce((sum: number, h: { totalEarnings: number }) => sum + h.totalEarnings, 0);
+      (h: { stripeStatus: string; user?: { stripeAccountId?: string } }) =>
+        h.stripeStatus === "pending" || !h.user?.stripeAccountId
+    ).length
+    const totalPaidOut = hosts.reduce(
+      (sum: number, h: { totalEarnings: number }) => sum + h.totalEarnings,
+      0
+    )
 
     return {
       totalHosts,
       activeStripeAccounts,
       pendingSetup,
       totalPaidOut,
-    };
-  }, [hosts]);
+    }
+  }, [hosts])
 
-  const columns: Column<typeof hosts[0]>[] = [
+  const columns: Column<(typeof hosts)[0]>[] = [
     {
       key: "host",
       header: "Host",
       sortable: true,
       sortValue: (row) => row.user?.name || "",
       cell: (row) => {
-        if (!row.user) return <span className="text-muted-foreground">N/A</span>;
+        if (!row.user) return <span className="text-muted-foreground">N/A</span>
         return (
           <div className="flex items-center gap-2">
-            <UserAvatar
-              name={row.user.name}
-              email={row.user.email}
-            />
+            <UserAvatar name={row.user.name} email={row.user.email} />
             <Button
               variant="link"
-              className="p-0 h-auto"
+              className="h-auto p-0"
               onClick={() => router.push(`/users/${row.user!._id}`)}
             >
               <ExternalLink className="h-3 w-3" />
             </Button>
           </div>
-        );
+        )
       },
     },
     {
@@ -125,19 +120,14 @@ export default function PayoutsPage() {
       key: "stripeAccountId",
       header: "Stripe Account ID",
       cell: (row) => {
-        const stripeId = row.user?.stripeAccountId;
+        const stripeId = row.user?.stripeAccountId
         if (!stripeId) {
-          return <span className="text-muted-foreground text-sm">Not connected</span>;
+          return <span className="text-muted-foreground text-sm">Not connected</span>
         }
         return (
           <div className="flex items-center gap-2">
             <span className="font-mono text-xs">{stripeId.slice(0, 16)}...</span>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 w-6 p-0"
-              asChild
-            >
+            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" asChild>
               <a
                 href={`https://dashboard.stripe.com/connect/accounts/${stripeId}`}
                 target="_blank"
@@ -147,26 +137,38 @@ export default function PayoutsPage() {
               </a>
             </Button>
           </div>
-        );
+        )
       },
     },
-  ];
+  ]
 
   const handleExport = () => {
-    type HostType = typeof filteredHosts[0];
+    type HostType = (typeof filteredHosts)[0]
     const exportColumns = [
       { key: "host", header: "Host", value: (h: HostType) => h.user?.name || "N/A" },
       { key: "email", header: "Email", value: (h: HostType) => h.user?.email || "N/A" },
-      { key: "totalEarnings", header: "Total Earnings", value: (h: HostType) => (h.totalEarnings / 100).toFixed(2) },
-      { key: "completedPayouts", header: "Completed Payouts", value: (h: HostType) => h.payoutCount },
+      {
+        key: "totalEarnings",
+        header: "Total Earnings",
+        value: (h: HostType) => (h.totalEarnings / 100).toFixed(2),
+      },
+      {
+        key: "completedPayouts",
+        header: "Completed Payouts",
+        value: (h: HostType) => h.payoutCount,
+      },
       { key: "stripeStatus", header: "Stripe Status", value: (h: HostType) => h.stripeStatus },
-      { key: "stripeAccountId", header: "Stripe Account ID", value: (h: HostType) => h.user?.stripeAccountId || "Not connected" },
-    ];
-    exportToCSV(filteredHosts, exportColumns, `host-payouts-${Date.now()}`);
-  };
+      {
+        key: "stripeAccountId",
+        header: "Stripe Account ID",
+        value: (h: HostType) => h.user?.stripeAccountId || "Not connected",
+      },
+    ]
+    exportToCSV(filteredHosts, exportColumns, `host-payouts-${Date.now()}`)
+  }
 
   if (!summary) {
-    return <LoadingState />;
+    return <LoadingState />
   }
 
   return (
@@ -206,9 +208,9 @@ export default function PayoutsPage() {
         <CardContent>
           <div className="space-y-4">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              <div className="flex-1 max-w-md">
+              <div className="max-w-md flex-1">
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Search className="-translate-y-1/2 absolute top-1/2 left-3 h-4 w-4 text-muted-foreground" />
                   <Input
                     placeholder="Search by host name, email, or Stripe ID..."
                     value={search}
@@ -218,7 +220,7 @@ export default function PayoutsPage() {
                 </div>
               </div>
               <Button onClick={handleExport} variant="outline">
-                <Download className="h-4 w-4 mr-2" />
+                <Download className="mr-2 h-4 w-4" />
                 Export CSV
               </Button>
             </div>
@@ -228,17 +230,19 @@ export default function PayoutsPage() {
                 icon={Users}
                 title="No hosts found"
                 description={
-                  search
-                    ? "Try adjusting your search criteria"
-                    : "No hosts with earnings yet"
+                  search ? "Try adjusting your search criteria" : "No hosts with earnings yet"
                 }
               />
             ) : (
-              <DataTable columns={columns} data={filteredHosts} getRowId={(row) => row.user?._id ?? row.totalEarnings.toString()} />
+              <DataTable
+                columns={columns}
+                data={filteredHosts}
+                getRowId={(row) => row.user?._id ?? row.totalEarnings.toString()}
+              />
             )}
           </div>
         </CardContent>
       </Card>
     </div>
-  );
+  )
 }

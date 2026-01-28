@@ -1,9 +1,9 @@
 #!/usr/bin/env tsx
 /**
  * Clerk User Creation Script
- * 
+ *
  * Creates Clerk user accounts from Adalo user data
- * 
+ *
  * Usage:
  *   CLERK_SECRET_KEY=your-key tsx scripts/create-clerk-users.ts --users-file adalo-users.json --output mapping.json
  */
@@ -21,10 +21,7 @@ type AdaloUser = {
 
 type UserMapping = Record<string, string> // Adalo User ID -> Clerk User ID
 
-async function createClerkUsers(
-  clerk: ClerkClient,
-  users: AdaloUser[]
-): Promise<UserMapping> {
+async function createClerkUsers(clerk: ClerkClient, users: AdaloUser[]): Promise<UserMapping> {
   const mapping: UserMapping = {}
   const errors: Array<{ user: AdaloUser; error: string }> = []
 
@@ -55,9 +52,7 @@ async function createClerkUsers(
       if (existingUsers.data.length > 0) {
         const existingUser = existingUsers.data[0]
         mapping[user.id] = existingUser.id
-        console.log(
-          `${progress} ✅ User exists: ${user.email} (${existingUser.id})`
-        )
+        console.log(`${progress} ✅ User exists: ${user.email} (${existingUser.id})`)
         continue
       }
 
@@ -76,28 +71,23 @@ async function createClerkUsers(
       })
 
       mapping[user.id] = clerkUser.id
-      console.log(
-        `${progress} ✅ Created: ${user.email} → ${clerkUser.id}`
-      )
+      console.log(`${progress} ✅ Created: ${user.email} → ${clerkUser.id}`)
 
       // Rate limiting - Clerk has rate limits
       await sleep(200) // 200ms delay between requests
     } catch (error: any) {
-      const errorMessage =
-        error?.errors?.[0]?.message || error?.message || String(error)
-      console.error(
-        `${progress} ❌ Failed: ${user.email} - ${errorMessage}`
-      )
+      const errorMessage = error?.errors?.[0]?.message || error?.message || String(error)
+      console.error(`${progress} ❌ Failed: ${user.email} - ${errorMessage}`)
       errors.push({ user, error: errorMessage })
     }
   }
 
-  console.log(`\n📊 Summary:`)
+  console.log("\n📊 Summary:")
   console.log(`  ✅ Created/Found: ${Object.keys(mapping).length}`)
   console.log(`  ❌ Failed: ${errors.length}`)
 
   if (errors.length > 0) {
-    console.log(`\n❌ Errors:`)
+    console.log("\n❌ Errors:")
     errors.slice(0, 10).forEach(({ user, error }) => {
       console.log(`  - ${user.email}: ${error}`)
     })
@@ -119,21 +109,16 @@ async function main() {
   const outputIndex = args.indexOf("--output")
 
   if (usersFileIndex === -1 || args[usersFileIndex + 1] === undefined) {
-    console.error(
-      "Usage: tsx scripts/create-clerk-users.ts --users-file <file> [--output <file>]"
-    )
+    console.error("Usage: tsx scripts/create-clerk-users.ts --users-file <file> [--output <file>]")
     process.exit(1)
   }
 
   const usersFilePath = args[usersFileIndex + 1]
-  const outputPath =
-    outputIndex !== -1 ? args[outputIndex + 1] : "user-mapping.json"
+  const outputPath = outputIndex !== -1 ? args[outputIndex + 1] : "user-mapping.json"
 
   const clerkSecretKey = process.env.CLERK_SECRET_KEY
   if (!clerkSecretKey) {
-    console.error(
-      "Error: CLERK_SECRET_KEY environment variable is required"
-    )
+    console.error("Error: CLERK_SECRET_KEY environment variable is required")
     process.exit(1)
   }
 
@@ -141,13 +126,9 @@ async function main() {
 
   // Load users from file
   console.log("📂 Loading users from file...")
-  const usersData = JSON.parse(
-    fs.readFileSync(path.resolve(usersFilePath), "utf-8")
-  )
+  const usersData = JSON.parse(fs.readFileSync(path.resolve(usersFilePath), "utf-8"))
 
-  const users: AdaloUser[] = Array.isArray(usersData)
-    ? usersData
-    : usersData.users || []
+  const users: AdaloUser[] = Array.isArray(usersData) ? usersData : usersData.users || []
 
   console.log(`  Loaded ${users.length} users`)
 
@@ -157,12 +138,12 @@ async function main() {
   // Save mapping to file
   console.log(`\n💾 Saving mapping to ${outputPath}...`)
   fs.writeFileSync(outputPath, JSON.stringify(mapping, null, 2))
-  console.log(`  ✅ Mapping saved!`)
+  console.log("  ✅ Mapping saved!")
 
-  console.log(`\n✨ Done! Next steps:`)
+  console.log("\n✨ Done! Next steps:")
   console.log(`  1. Review the mapping file: ${outputPath}`)
-  console.log(`  2. Use this mapping file with the migration script`)
-  console.log(`  3. Send password reset emails to migrated users`)
+  console.log("  2. Use this mapping file with the migration script")
+  console.log("  3. Send password reset emails to migrated users")
 }
 
 if (require.main === module) {

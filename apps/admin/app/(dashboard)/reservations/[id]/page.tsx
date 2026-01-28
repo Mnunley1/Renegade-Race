@@ -6,13 +6,7 @@ import { useState } from "react"
 import Link from "next/link"
 import { api } from "@/lib/convex"
 import { Button } from "@workspace/ui/components/button"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@workspace/ui/components/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Badge } from "@workspace/ui/components/badge"
 import { ArrowLeft, XCircle, Loader2, Calendar, User, Car, DollarSign } from "lucide-react"
 import { toast } from "sonner"
@@ -29,9 +23,7 @@ export default function ReservationDetailPage() {
 
   const handleCancel = async () => {
     if (
-      !confirm(
-        "Are you sure you want to cancel this reservation? This action cannot be undone."
-      )
+      !confirm("Are you sure you want to cancel this reservation? This action cannot be undone.")
     ) {
       return
     }
@@ -53,7 +45,11 @@ export default function ReservationDetailPage() {
       case "pending":
         return <Badge variant="default">Pending</Badge>
       case "confirmed":
-        return <Badge variant="default" className="bg-green-600">Confirmed</Badge>
+        return (
+          <Badge variant="default" className="bg-green-600">
+            Confirmed
+          </Badge>
+        )
       case "completed":
         return <Badge variant="secondary">Completed</Badge>
       case "cancelled":
@@ -65,21 +61,19 @@ export default function ReservationDetailPage() {
     }
   }
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-US", {
+  const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat("en-US", {
       style: "currency",
       currency: "USD",
       minimumFractionDigits: 2,
     }).format(amount / 100)
-  }
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
+  const formatDate = (dateString: string) =>
+    new Date(dateString).toLocaleDateString("en-US", {
       year: "numeric",
       month: "long",
       day: "numeric",
     })
-  }
 
   if (reservation === undefined) {
     return (
@@ -107,11 +101,10 @@ export default function ReservationDetailPage() {
     )
   }
 
-  const canCancel =
-    reservation.status !== "cancelled" && reservation.status !== "completed"
+  const canCancel = reservation.status !== "cancelled" && reservation.status !== "completed"
   const primaryImage =
-    reservation.vehicle?.images?.find((img) => img.isPrimary) ||
-    reservation.vehicle?.images?.[0]
+    (reservation.vehicle as any)?.images?.find((img: any) => img.isPrimary) ||
+    (reservation.vehicle as any)?.images?.[0]
 
   return (
     <div className="space-y-6">
@@ -124,16 +117,12 @@ export default function ReservationDetailPage() {
             </Button>
           </Link>
           <h1 className="font-bold text-3xl">Reservation Details</h1>
-          <p className="text-muted-foreground mt-2">Reservation ID: {reservation._id}</p>
+          <p className="mt-2 text-muted-foreground">Reservation ID: {reservation._id}</p>
         </div>
         <div className="flex items-center gap-4">
           {getStatusBadge(reservation.status)}
           {canCancel && (
-            <Button
-              onClick={handleCancel}
-              disabled={isCancelling}
-              variant="destructive"
-            >
+            <Button onClick={handleCancel} disabled={isCancelling} variant="destructive">
               {isCancelling ? (
                 <>
                   <Loader2 className="mr-2 size-4 animate-spin" />
@@ -169,19 +158,16 @@ export default function ReservationDetailPage() {
             )}
             <div>
               <p className="font-semibold text-lg">
-                {reservation.vehicle?.year} {reservation.vehicle?.make}{" "}
-                {reservation.vehicle?.model}
+                {reservation.vehicle?.year} {reservation.vehicle?.make} {reservation.vehicle?.model}
               </p>
-              {reservation.vehicle?.track && (
+              {(reservation.vehicle as any)?.track && (
                 <p className="text-muted-foreground text-sm">
-                  Track: {reservation.vehicle.track.name}
+                  Track: {(reservation.vehicle as any).track.name}
                 </p>
               )}
             </div>
             {reservation.vehicle?.description && (
-              <p className="text-muted-foreground text-sm">
-                {reservation.vehicle.description}
-              </p>
+              <p className="text-muted-foreground text-sm">{reservation.vehicle.description}</p>
             )}
           </CardContent>
         </Card>
@@ -223,16 +209,12 @@ export default function ReservationDetailPage() {
             </div>
             <div>
               <p className="text-muted-foreground text-sm">Created</p>
-              <p className="font-medium">
-                {new Date(reservation.createdAt).toLocaleString()}
-              </p>
+              <p className="font-medium">{new Date(reservation.createdAt).toLocaleString()}</p>
             </div>
             {reservation.updatedAt && (
               <div>
                 <p className="text-muted-foreground text-sm">Last Updated</p>
-                <p className="font-medium">
-                  {new Date(reservation.updatedAt).toLocaleString()}
-                </p>
+                <p className="font-medium">{new Date(reservation.updatedAt).toLocaleString()}</p>
               </div>
             )}
           </CardContent>
@@ -249,13 +231,9 @@ export default function ReservationDetailPage() {
           <CardContent className="space-y-4">
             <div>
               <p className="font-medium">{reservation.renter?.name || "Unknown"}</p>
-              <p className="text-muted-foreground text-sm">
-                {reservation.renter?.email || "N/A"}
-              </p>
+              <p className="text-muted-foreground text-sm">{reservation.renter?.email || "N/A"}</p>
               {reservation.renter?.phone && (
-                <p className="text-muted-foreground text-sm">
-                  Phone: {reservation.renter.phone}
-                </p>
+                <p className="text-muted-foreground text-sm">Phone: {reservation.renter.phone}</p>
               )}
             </div>
             {reservation.renter?.rating && (
@@ -278,13 +256,9 @@ export default function ReservationDetailPage() {
           <CardContent className="space-y-4">
             <div>
               <p className="font-medium">{reservation.owner?.name || "Unknown"}</p>
-              <p className="text-muted-foreground text-sm">
-                {reservation.owner?.email || "N/A"}
-              </p>
+              <p className="text-muted-foreground text-sm">{reservation.owner?.email || "N/A"}</p>
               {reservation.owner?.phone && (
-                <p className="text-muted-foreground text-sm">
-                  Phone: {reservation.owner.phone}
-                </p>
+                <p className="text-muted-foreground text-sm">Phone: {reservation.owner.phone}</p>
               )}
             </div>
             {reservation.owner?.rating && (
@@ -309,9 +283,7 @@ export default function ReservationDetailPage() {
           <div className="grid gap-4 md:grid-cols-3">
             <div>
               <p className="text-muted-foreground text-sm">Daily Rate</p>
-              <p className="font-semibold text-lg">
-                {formatCurrency(reservation.dailyRate)}
-              </p>
+              <p className="font-semibold text-lg">{formatCurrency(reservation.dailyRate)}</p>
             </div>
             <div>
               <p className="text-muted-foreground text-sm">Total Days</p>
@@ -319,17 +291,15 @@ export default function ReservationDetailPage() {
             </div>
             <div>
               <p className="text-muted-foreground text-sm">Total Amount</p>
-              <p className="font-semibold text-lg">
-                {formatCurrency(reservation.totalAmount)}
-              </p>
+              <p className="font-semibold text-lg">{formatCurrency(reservation.totalAmount)}</p>
             </div>
           </div>
 
           {reservation.addOns && reservation.addOns.length > 0 && (
             <div>
-              <p className="text-muted-foreground text-sm mb-2">Add-ons</p>
+              <p className="mb-2 text-muted-foreground text-sm">Add-ons</p>
               <div className="space-y-2">
-                {reservation.addOns.map((addon, index) => (
+                {reservation.addOns.map((addon: any, index: number) => (
                   <div
                     key={index}
                     className="flex items-center justify-between rounded-lg border p-3"
@@ -337,9 +307,7 @@ export default function ReservationDetailPage() {
                     <div>
                       <p className="font-medium">{addon.name}</p>
                       {addon.description && (
-                        <p className="text-muted-foreground text-sm">
-                          {addon.description}
-                        </p>
+                        <p className="text-muted-foreground text-sm">{addon.description}</p>
                       )}
                     </div>
                     <p className="font-semibold">{formatCurrency(addon.price)}</p>

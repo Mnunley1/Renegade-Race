@@ -86,15 +86,15 @@ function VehiclesPageContent() {
   const getInitialState = () => {
     // Check if URL has any filter params
     const hasUrlParams = searchParams.toString().length > 0
-    
+
     // Parse location coordinates from URL
     const latParam = searchParams.get("lat")
     const lngParam = searchParams.get("lng")
     const hasLocation = latParam && lngParam
-    
+
     // If no URL params, try to restore from session storage
-    const storedFilters = !hasUrlParams ? getStoredFilters() : null
-    
+    const storedFilters = hasUrlParams ? null : getStoredFilters()
+
     return {
       viewMode: (searchParams.get("view") as "grid" | "list") || storedFilters?.viewMode || "grid",
       searchQuery: searchParams.get("q") || storedFilters?.searchQuery || "",
@@ -102,12 +102,14 @@ function VehiclesPageContent() {
       selectedTrack: searchParams.get("track") || storedFilters?.selectedTrack || "all",
       selectedMake: searchParams.get("make") || storedFilters?.selectedMake || "all",
       selectedModel: searchParams.get("model") || storedFilters?.selectedModel || "all",
-      selectedRaceCarClass: searchParams.get("class") || storedFilters?.selectedRaceCarClass || "all",
+      selectedRaceCarClass:
+        searchParams.get("class") || storedFilters?.selectedRaceCarClass || "all",
       selectedDriveType: searchParams.get("drive") || storedFilters?.selectedDriveType || "all",
       selectedPriceRange: searchParams.get("price") || storedFilters?.selectedPriceRange || "any",
       minHorsepower: searchParams.get("minHp") || storedFilters?.minHorsepower || "",
       maxHorsepower: searchParams.get("maxHp") || storedFilters?.maxHorsepower || "",
-      selectedTransmission: searchParams.get("transmission") || storedFilters?.selectedTransmission || "all",
+      selectedTransmission:
+        searchParams.get("transmission") || storedFilters?.selectedTransmission || "all",
       minYear: searchParams.get("minYear") || storedFilters?.minYear || "",
       maxYear: searchParams.get("maxYear") || storedFilters?.maxYear || "",
       minRating: searchParams.get("rating") || storedFilters?.minRating || "",
@@ -115,8 +117,8 @@ function VehiclesPageContent() {
       startDate: searchParams.get("startDate") || storedFilters?.startDate || "",
       endDate: searchParams.get("endDate") || storedFilters?.endDate || "",
       // Location-based search params
-      userLocation: hasLocation 
-        ? { lat: Number(latParam), lng: Number(lngParam) } 
+      userLocation: hasLocation
+        ? { lat: Number(latParam), lng: Number(lngParam) }
         : storedFilters?.userLocation || null,
       locationZipCode: searchParams.get("zip") || storedFilters?.locationZipCode || "",
       locationLabel: searchParams.get("locLabel") || storedFilters?.locationLabel || "",
@@ -217,7 +219,7 @@ function VehiclesPageContent() {
             setLocationError("Unable to get your location.")
         }
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
+      { enableHighAccuracy: true, timeout: 10_000, maximumAge: 300_000 }
     )
   }, [])
 
@@ -389,7 +391,7 @@ function VehiclesPageContent() {
           endDate: selectedDates.end || undefined,
           trackId:
             selectedTrack !== "all"
-              ? (tracksData.find((t) => t.name === selectedTrack)?._id as string | undefined)
+              ? (tracksData.find((t: any) => t.name === selectedTrack)?._id as any)
               : undefined,
           limit: 200, // Get more for client-side filtering
           // Location-based filtering (only apply if location set AND distance is not "All miles")
@@ -400,30 +402,28 @@ function VehiclesPageContent() {
       : "skip"
   )
 
-
   // Fetch vehicle stats for all vehicles
   const vehicleStats = useQuery(
     api.reviews.getVehicleStatsBatch,
     vehiclesData && vehiclesData.length > 0
-      ? { vehicleIds: vehiclesData.map((v) => v._id as Id<"vehicles">) }
+      ? { vehicleIds: vehiclesData.map((v: any) => v._id as Id<"vehicles">) }
       : "skip"
   )
 
   // Map vehicles to the format expected by VehicleCard
   const vehicles = useMemo(() => {
     if (!vehiclesData) return []
-    const mapped = vehiclesData.map((vehicle) => {
-      const primaryImage = vehicle.images?.find((img) => img.isPrimary) || vehicle.images?.[0]
+    const mapped = vehiclesData.map((vehicle: any) => {
+      const primaryImage = vehicle.images?.find((img: any) => img.isPrimary) || vehicle.images?.[0]
       const stats = vehicleStats?.[vehicle._id]
-      
+
       // Build location string from vehicle address (city, state) or fall back to track location
       const locationParts = []
       if (vehicle.address?.city) locationParts.push(vehicle.address.city)
       if (vehicle.address?.state) locationParts.push(vehicle.address.state)
-      const location = locationParts.length > 0 
-        ? locationParts.join(", ") 
-        : vehicle.track?.location || ""
-      
+      const location =
+        locationParts.length > 0 ? locationParts.join(", ") : vehicle.track?.location || ""
+
       return {
         id: vehicle._id,
         image: primaryImage?.cardUrl ?? "",
@@ -448,24 +448,27 @@ function VehiclesPageContent() {
 
   const tracks = useMemo(() => {
     if (!tracksData) return []
-    return tracksData.map((track) => ({
+    return tracksData.map((track: any) => ({
       id: track._id,
       name: track.name,
       location: track.location,
     }))
   }, [tracksData])
 
-  const makes = useMemo(() => Array.from(new Set(vehicles.map((v) => v.make))).sort(), [vehicles])
+  const makes = useMemo(
+    () => Array.from(new Set(vehicles.map((v: any) => v.make))).sort(),
+    [vehicles]
+  )
 
   const models = useMemo(() => {
     // Filter models based on selected make if one is selected
     const filteredVehicles =
-      selectedMake !== "all" ? vehicles.filter((v) => v.make === selectedMake) : vehicles
-    return Array.from(new Set(filteredVehicles.map((v) => v.model))).sort()
+      selectedMake !== "all" ? vehicles.filter((v: any) => v.make === selectedMake) : vehicles
+    return Array.from(new Set(filteredVehicles.map((v: any) => v.model))).sort()
   }, [vehicles, selectedMake])
 
   const driveTypes = useMemo(
-    () => Array.from(new Set(vehicles.map((v) => v.drivetrain).filter(Boolean))).sort(),
+    () => Array.from(new Set(vehicles.map((v: any) => v.drivetrain).filter(Boolean))).sort(),
     [vehicles]
   )
 
@@ -492,21 +495,23 @@ function VehiclesPageContent() {
     const suggestions: string[] = []
 
     // Get unique makes, models, tracks, locations
-    const makes = Array.from(new Set(vehicles.map((v) => v.make))).filter((make) =>
-      make.toLowerCase().includes(query)
+    const makes = Array.from(new Set(vehicles.map((v: any) => v.make))).filter((make: any) =>
+      (make as string).toLowerCase().includes(query)
     )
-    const models = Array.from(new Set(vehicles.map((v) => v.model))).filter((model) =>
-      model.toLowerCase().includes(query)
+    const models = Array.from(new Set(vehicles.map((v: any) => v.model))).filter((model: any) =>
+      (model as string).toLowerCase().includes(query)
     )
-    const tracks = Array.from(new Set(vehicles.map((v) => v.track).filter(Boolean))).filter(
-      (track) => track && track.toLowerCase().includes(query)
+    const tracks = Array.from(new Set(vehicles.map((v: any) => v.track).filter(Boolean))).filter(
+      (track: any) => track && (track as string).toLowerCase().includes(query)
     ) as string[]
-    const locations = Array.from(new Set(vehicles.map((v) => v.location).filter(Boolean))).filter(
-      (location) => location && location.toLowerCase().includes(query)
+    const locations = Array.from(
+      new Set(vehicles.map((v: any) => v.location).filter(Boolean))
+    ).filter(
+      (location: any) => location && (location as string).toLowerCase().includes(query)
     ) as string[]
 
-    suggestions.push(...makes.slice(0, 3))
-    suggestions.push(...models.slice(0, 3))
+    suggestions.push(...(makes as string[]).slice(0, 3))
+    suggestions.push(...(models as string[]).slice(0, 3))
     suggestions.push(...tracks.slice(0, 2))
     suggestions.push(...locations.slice(0, 2))
 
@@ -515,7 +520,7 @@ function VehiclesPageContent() {
 
   // Filter vehicles with enhanced search and filters
   const filteredVehicles = useMemo(() => {
-    let filtered = vehicles.filter((vehicle) => {
+    let filtered = vehicles.filter((vehicle: any) => {
       // Enhanced multi-field search
       if (debouncedSearchQuery) {
         const query = debouncedSearchQuery.toLowerCase()
@@ -589,7 +594,7 @@ function VehiclesPageContent() {
         } else {
           const [min, max] = selectedPriceRange
             .split("-")
-            .map((p) => Number.parseInt(p.replace(/\D/g, ""), 10))
+            .map((p: string) => Number.parseInt(p.replace(/\D/g, ""), 10))
           if (vehicle.pricePerDay < min || vehicle.pricePerDay > max) {
             return false
           }
@@ -873,7 +878,11 @@ function VehiclesPageContent() {
 
         <Card>
           <CardContent className="p-4 sm:p-6">
-            <Accordion className="w-full" defaultValue={["location", "track", "make", "price"]} type="multiple">
+            <Accordion
+              className="w-full"
+              defaultValue={["location", "track", "make", "price"]}
+              type="multiple"
+            >
               <AccordionItem value="location">
                 <AccordionTrigger className="font-medium text-xs sm:text-sm">
                   Location
@@ -926,14 +935,12 @@ function VehiclesPageContent() {
                         value={locationZipCode}
                       />
                       {isGeocodingZip && (
-                        <div className="absolute top-1/2 right-3 -translate-y-1/2">
+                        <div className="-translate-y-1/2 absolute top-1/2 right-3">
                           <Loader2 className="size-4 animate-spin text-muted-foreground" />
                         </div>
                       )}
                     </div>
-                    {locationError && (
-                      <p className="text-destructive text-xs">{locationError}</p>
-                    )}
+                    {locationError && <p className="text-destructive text-xs">{locationError}</p>}
                   </div>
 
                   {/* Use current location link */}
@@ -955,7 +962,8 @@ function VehiclesPageContent() {
                   {userLocation && locationLabel && (
                     <div className="flex items-center justify-between rounded-md bg-muted/50 px-3 py-2">
                       <span className="text-muted-foreground text-xs">
-                        Searching near: <span className="font-medium text-foreground">{locationLabel}</span>
+                        Searching near:{" "}
+                        <span className="font-medium text-foreground">{locationLabel}</span>
                       </span>
                       <button
                         className="text-muted-foreground hover:text-foreground"
@@ -982,7 +990,7 @@ function VehiclesPageContent() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All tracks</SelectItem>
-                      {tracks?.map((track) => (
+                      {tracks?.map((track: any) => (
                         <SelectItem key={track.id} value={track.name}>
                           {track.name}
                         </SelectItem>
@@ -1005,9 +1013,9 @@ function VehiclesPageContent() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All makes</SelectItem>
-                      {makes.map((make) => (
-                        <SelectItem key={make} value={make}>
-                          {make}
+                      {makes.map((make: any) => (
+                        <SelectItem key={make as string} value={make as string}>
+                          {make as string}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -1034,9 +1042,9 @@ function VehiclesPageContent() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All models</SelectItem>
-                      {models.map((model) => (
-                        <SelectItem key={model} value={model}>
-                          {model}
+                      {models.map((model: any) => (
+                        <SelectItem key={model as string} value={model as string}>
+                          {model as string}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -1099,7 +1107,7 @@ function VehiclesPageContent() {
                 </AccordionTrigger>
                 <AccordionContent className="space-y-3 pt-3 sm:space-y-4">
                   {(() => {
-                    const prices = vehicles.map((v) => v.pricePerDay).filter(Boolean)
+                    const prices = vehicles.map((v: any) => v.pricePerDay).filter(Boolean)
                     const minPrice = prices.length > 0 ? Math.min(...prices) : 0
                     const maxPrice = prices.length > 0 ? Math.max(...prices) : 5000
                     const currentMin = customPriceRange?.[0] ?? minPrice
@@ -1447,7 +1455,7 @@ function VehiclesPageContent() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All tracks</SelectItem>
-                        {tracks?.map((track) => (
+                        {tracks?.map((track: any) => (
                           <SelectItem key={track.id} value={track.name}>
                             {track.name}
                           </SelectItem>
@@ -1885,7 +1893,7 @@ function VehiclesPageContent() {
                         : "grid-cols-1"
                     )}
                   >
-                    {paginatedVehicles.map((vehicle) => (
+                    {paginatedVehicles.map((vehicle: any) => (
                       <VehicleCard
                         key={vehicle.id}
                         {...vehicle}

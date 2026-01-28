@@ -1,209 +1,219 @@
-import { v } from 'convex/values';
-import { mutation, query } from './_generated/server';
+import { v } from "convex/values"
+import { mutation, query } from "./_generated/server"
 
 // Get conversations for a user (as renter or owner)
 export const getByUser = query({
   args: {
     userId: v.string(),
-    role: v.union(v.literal('renter'), v.literal('owner')),
+    role: v.union(v.literal("renter"), v.literal("owner")),
   },
   handler: async (ctx, args) => {
-    const { userId, role } = args;
-
-    let conversationsQuery;
-    if (role === 'renter') {
-      conversationsQuery = ctx.db
-        .query('conversations')
-        .withIndex('by_renter_active', q =>
-          q.eq('renterId', userId).eq('isActive', true)
-        );
-    } else {
-      conversationsQuery = ctx.db
-        .query('conversations')
-        .withIndex('by_owner_active', q =>
-          q.eq('ownerId', userId).eq('isActive', true)
-        );
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) {
+      throw new Error("Not authenticated")
     }
 
-    const allConversations = await conversationsQuery.order('desc').collect();
+    // Verify the authenticated user matches the userId
+    if (identity.subject !== args.userId) {
+      throw new Error("Unauthorized: Cannot access other users' data")
+    }
+
+    const { userId, role } = args
+
+    let conversationsQuery
+    if (role === "renter") {
+      conversationsQuery = ctx.db
+        .query("conversations")
+        .withIndex("by_renter_active", (q) => q.eq("renterId", userId).eq("isActive", true))
+    } else {
+      conversationsQuery = ctx.db
+        .query("conversations")
+        .withIndex("by_owner_active", (q) => q.eq("ownerId", userId).eq("isActive", true))
+    }
+
+    const allConversations = await conversationsQuery.order("desc").collect()
 
     // Filter out conversations deleted by the current user
-    const conversations = allConversations.filter(conversation => {
-      if (role === 'renter') {
-        return conversation.deletedByRenter !== true;
-      } else {
-        return conversation.deletedByOwner !== true;
+    const conversations = allConversations.filter((conversation) => {
+      if (role === "renter") {
+        return conversation.deletedByRenter !== true
       }
-    });
+      return conversation.deletedByOwner !== true
+    })
 
     // Get vehicle and user details
     const conversationsWithDetails = await Promise.all(
-      conversations.map(async conversation => {
+      conversations.map(async (conversation) => {
         const [vehicle, renter, owner] = await Promise.all([
           ctx.db.get(conversation.vehicleId),
           ctx.db
-            .query('users')
-            .withIndex('by_external_id', q =>
-              q.eq('externalId', conversation.renterId)
-            )
+            .query("users")
+            .withIndex("by_external_id", (q) => q.eq("externalId", conversation.renterId))
             .first(),
           ctx.db
-            .query('users')
-            .withIndex('by_external_id', q =>
-              q.eq('externalId', conversation.ownerId)
-            )
+            .query("users")
+            .withIndex("by_external_id", (q) => q.eq("externalId", conversation.ownerId))
             .first(),
-        ]);
+        ])
 
         return {
           ...conversation,
           vehicle,
           renter,
           owner,
-        };
+        }
       })
-    );
+    )
 
-    return conversationsWithDetails;
+    return conversationsWithDetails
   },
-});
+})
 
 // Get a specific conversation by ID
 export const getById = query({
   args: {
-    conversationId: v.id('conversations'),
+    conversationId: v.id("conversations"),
     userId: v.string(),
   },
   handler: async (ctx, args) => {
-    const conversation = await ctx.db.get(args.conversationId);
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) {
+      throw new Error("Not authenticated")
+    }
+
+    // Verify the authenticated user matches the userId
+    if (identity.subject !== args.userId) {
+      throw new Error("Unauthorized: Cannot access other users' data")
+    }
+
+    const conversation = await ctx.db.get(args.conversationId)
     if (!conversation) {
-      throw new Error('Conversation not found');
+      throw new Error("Conversation not found")
     }
 
     // Ensure the user is part of the conversation
-    if (
-      conversation.renterId !== args.userId &&
-      conversation.ownerId !== args.userId
-    ) {
-      throw new Error('Not authorized to view this conversation');
+    if (conversation.renterId !== args.userId && conversation.ownerId !== args.userId) {
+      throw new Error("Not authorized to view this conversation")
     }
 
     // Check if the user has deleted this conversation
-    const isRenter = conversation.renterId === args.userId;
+    const isRenter = conversation.renterId === args.userId
     if (
       (isRenter && conversation.deletedByRenter === true) ||
       (!isRenter && conversation.deletedByOwner === true)
     ) {
-      throw new Error('Conversation not found');
+      throw new Error("Conversation not found")
     }
 
     const [vehicle, renter, owner] = await Promise.all([
       ctx.db.get(conversation.vehicleId),
       ctx.db
-        .query('users')
-        .withIndex('by_external_id', q =>
-          q.eq('externalId', conversation.renterId)
-        )
+        .query("users")
+        .withIndex("by_external_id", (q) => q.eq("externalId", conversation.renterId))
         .first(),
       ctx.db
-        .query('users')
-        .withIndex('by_external_id', q =>
-          q.eq('externalId', conversation.ownerId)
-        )
+        .query("users")
+        .withIndex("by_external_id", (q) => q.eq("externalId", conversation.ownerId))
         .first(),
-    ]);
+    ])
 
     return {
       ...conversation,
       vehicle,
       renter,
       owner,
-    };
+    }
   },
-});
+})
 
 // Get conversation by vehicle and participants
 export const getByVehicleAndParticipants = query({
   args: {
-    vehicleId: v.id('vehicles'),
+    vehicleId: v.id("vehicles"),
     renterId: v.string(),
     ownerId: v.string(),
   },
   handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) {
+      throw new Error("Not authenticated")
+    }
+
+    // Verify the authenticated user is either the renter or owner
+    if (identity.subject !== args.renterId && identity.subject !== args.ownerId) {
+      throw new Error("Unauthorized: Cannot access other users' data")
+    }
+
     const conversation = await ctx.db
-      .query('conversations')
-      .withIndex('by_participants', q =>
-        q.eq('renterId', args.renterId).eq('ownerId', args.ownerId)
+      .query("conversations")
+      .withIndex("by_participants", (q) =>
+        q.eq("renterId", args.renterId).eq("ownerId", args.ownerId)
       )
-      .filter(q => q.eq(q.field('vehicleId'), args.vehicleId))
-      .first();
+      .filter((q) => q.eq(q.field("vehicleId"), args.vehicleId))
+      .first()
 
     if (!conversation) {
-      return null;
+      return null
     }
 
     const [vehicle, renter, owner] = await Promise.all([
       ctx.db.get(conversation.vehicleId),
       ctx.db
-        .query('users')
-        .withIndex('by_external_id', q =>
-          q.eq('externalId', conversation.renterId)
-        )
+        .query("users")
+        .withIndex("by_external_id", (q) => q.eq("externalId", conversation.renterId))
         .first(),
       ctx.db
-        .query('users')
-        .withIndex('by_external_id', q =>
-          q.eq('externalId', conversation.ownerId)
-        )
+        .query("users")
+        .withIndex("by_external_id", (q) => q.eq("externalId", conversation.ownerId))
         .first(),
-    ]);
+    ])
 
     return {
       ...conversation,
       vehicle,
       renter,
       owner,
-    };
+    }
   },
-});
+})
 
 // Create a new conversation
 export const create = mutation({
   args: {
-    vehicleId: v.id('vehicles'),
+    vehicleId: v.id("vehicles"),
     renterId: v.string(),
     ownerId: v.string(),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await ctx.auth.getUserIdentity()
     if (!identity) {
-      throw new Error('Not authenticated');
+      throw new Error("Not authenticated")
     }
 
-    const userId = identity.subject;
+    const userId = identity.subject
 
     // Ensure the authenticated user is either the renter or owner
     if (userId !== args.renterId && userId !== args.ownerId) {
-      throw new Error('Not authorized to create this conversation');
+      throw new Error("Not authorized to create this conversation")
     }
 
     // Check if conversation already exists
     const existingConversation = await ctx.db
-      .query('conversations')
-      .withIndex('by_participants', q =>
-        q.eq('renterId', args.renterId).eq('ownerId', args.ownerId)
+      .query("conversations")
+      .withIndex("by_participants", (q) =>
+        q.eq("renterId", args.renterId).eq("ownerId", args.ownerId)
       )
-      .filter(q => q.eq(q.field('vehicleId'), args.vehicleId))
-      .first();
+      .filter((q) => q.eq(q.field("vehicleId"), args.vehicleId))
+      .first()
 
     if (existingConversation) {
-      return existingConversation._id;
+      return existingConversation._id
     }
 
-    const now = Date.now();
+    const now = Date.now()
 
     // Create the conversation as inactive - it will be activated when the first message is sent
-    const conversationId = await ctx.db.insert('conversations', {
+    const conversationId = await ctx.db.insert("conversations", {
       vehicleId: args.vehicleId,
       renterId: args.renterId,
       ownerId: args.ownerId,
@@ -213,35 +223,32 @@ export const create = mutation({
       isActive: false,
       createdAt: now,
       updatedAt: now,
-    });
+    })
 
-    return conversationId;
+    return conversationId
   },
-});
+})
 
 // Mark conversation as read
 export const markAsRead = mutation({
   args: {
-    conversationId: v.id('conversations'),
+    conversationId: v.id("conversations"),
     userId: v.string(),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await ctx.auth.getUserIdentity()
     if (!identity) {
-      throw new Error('Not authenticated');
+      throw new Error("Not authenticated")
     }
 
-    const conversation = await ctx.db.get(args.conversationId);
+    const conversation = await ctx.db.get(args.conversationId)
     if (!conversation) {
-      throw new Error('Conversation not found');
+      throw new Error("Conversation not found")
     }
 
     // Ensure the user is part of the conversation
-    if (
-      conversation.renterId !== args.userId &&
-      conversation.ownerId !== args.userId
-    ) {
-      throw new Error('Not authorized to mark this conversation as read');
+    if (conversation.renterId !== args.userId && conversation.ownerId !== args.userId) {
+      throw new Error("Not authorized to mark this conversation as read")
     }
 
     // Update unread count based on user role
@@ -249,114 +256,108 @@ export const markAsRead = mutation({
       await ctx.db.patch(args.conversationId, {
         updatedAt: Date.now(),
         unreadCountRenter: 0,
-      });
+      })
     } else {
       await ctx.db.patch(args.conversationId, {
         updatedAt: Date.now(),
         unreadCountOwner: 0,
-      });
+      })
     }
 
     // Mark all unread messages as read
     const unreadMessages = await ctx.db
-      .query('messages')
-      .withIndex('by_unread', q =>
-        q.eq('conversationId', args.conversationId).eq('isRead', false)
+      .query("messages")
+      .withIndex("by_unread", (q) =>
+        q.eq("conversationId", args.conversationId).eq("isRead", false)
       )
-      .filter(q => q.neq(q.field('senderId'), args.userId))
-      .collect();
+      .filter((q) => q.neq(q.field("senderId"), args.userId))
+      .collect()
 
     for (const message of unreadMessages) {
       await ctx.db.patch(message._id, {
         isRead: true,
         readAt: Date.now(),
-      });
+      })
     }
 
-    return args.conversationId;
+    return args.conversationId
   },
-});
+})
 
 // Archive conversation (soft delete)
 export const archive = mutation({
   args: {
-    conversationId: v.id('conversations'),
+    conversationId: v.id("conversations"),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await ctx.auth.getUserIdentity()
     if (!identity) {
-      throw new Error('Not authenticated');
+      throw new Error("Not authenticated")
     }
 
-    const conversation = await ctx.db.get(args.conversationId);
+    const conversation = await ctx.db.get(args.conversationId)
     if (!conversation) {
-      throw new Error('Conversation not found');
+      throw new Error("Conversation not found")
     }
 
     // Ensure the user is part of the conversation
-    if (
-      conversation.renterId !== identity.subject &&
-      conversation.ownerId !== identity.subject
-    ) {
-      throw new Error('Not authorized to archive this conversation');
+    if (conversation.renterId !== identity.subject && conversation.ownerId !== identity.subject) {
+      throw new Error("Not authorized to archive this conversation")
     }
 
     await ctx.db.patch(args.conversationId, {
       isActive: false,
       updatedAt: Date.now(),
-    });
+    })
 
-    return args.conversationId;
+    return args.conversationId
   },
-});
+})
 
 // Delete conversation (soft delete - per user)
 // Each user can hide the conversation from their view
 // The conversation is only hard deleted when both users delete it
 export const deleteConversation = mutation({
   args: {
-    conversationId: v.id('conversations'),
+    conversationId: v.id("conversations"),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await ctx.auth.getUserIdentity()
     if (!identity) {
-      throw new Error('Not authenticated');
+      throw new Error("Not authenticated")
     }
 
-    const conversation = await ctx.db.get(args.conversationId);
+    const conversation = await ctx.db.get(args.conversationId)
     if (!conversation) {
-      throw new Error('Conversation not found');
+      throw new Error("Conversation not found")
     }
 
     // Ensure the user is part of the conversation
-    if (
-      conversation.renterId !== identity.subject &&
-      conversation.ownerId !== identity.subject
-    ) {
-      throw new Error('Not authorized to delete this conversation');
+    if (conversation.renterId !== identity.subject && conversation.ownerId !== identity.subject) {
+      throw new Error("Not authorized to delete this conversation")
     }
 
-    const userId = identity.subject;
-    const isRenter = conversation.renterId === userId;
+    const userId = identity.subject
+    const isRenter = conversation.renterId === userId
     const updateData: {
-      updatedAt: number;
-      deletedByRenter?: boolean;
-      deletedByOwner?: boolean;
+      updatedAt: number
+      deletedByRenter?: boolean
+      deletedByOwner?: boolean
     } = {
       updatedAt: Date.now(),
-    };
+    }
 
     // Mark as deleted by the current user
     if (isRenter) {
-      updateData.deletedByRenter = true;
+      updateData.deletedByRenter = true
     } else {
-      updateData.deletedByOwner = true;
+      updateData.deletedByOwner = true
     }
 
-    await ctx.db.patch(args.conversationId, updateData);
+    await ctx.db.patch(args.conversationId, updateData)
 
     // Check if both users have deleted the conversation
-    const updatedConversation = await ctx.db.get(args.conversationId);
+    const updatedConversation = await ctx.db.get(args.conversationId)
     if (
       updatedConversation &&
       updatedConversation.deletedByRenter === true &&
@@ -364,23 +365,21 @@ export const deleteConversation = mutation({
     ) {
       // Both users have deleted - perform hard delete
       const messages = await ctx.db
-        .query('messages')
-        .withIndex('by_conversation', q =>
-          q.eq('conversationId', args.conversationId)
-        )
-        .collect();
+        .query("messages")
+        .withIndex("by_conversation", (q) => q.eq("conversationId", args.conversationId))
+        .collect()
 
       for (const message of messages) {
-        await ctx.db.delete(message._id);
+        await ctx.db.delete(message._id)
       }
 
       // Delete the conversation
-      await ctx.db.delete(args.conversationId);
+      await ctx.db.delete(args.conversationId)
     }
 
-    return args.conversationId;
+    return args.conversationId
   },
-});
+})
 
 // Host-specific conversation management functions
 
@@ -388,133 +387,131 @@ export const deleteConversation = mutation({
 export const getHostConversationsByVehicle = query({
   args: {
     hostId: v.string(),
-    vehicleId: v.id('vehicles'),
+    vehicleId: v.id("vehicles"),
   },
   handler: async (ctx, args) => {
-    const { hostId, vehicleId } = args;
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) {
+      throw new Error("Not authenticated")
+    }
+
+    // Verify the authenticated user matches the hostId
+    if (identity.subject !== args.hostId) {
+      throw new Error("Unauthorized: Cannot access other users' data")
+    }
+
+    const { hostId, vehicleId } = args
 
     // Get conversations for this vehicle where user is the owner
     const allConversations = await ctx.db
-      .query('conversations')
-      .withIndex('by_vehicle', q => q.eq('vehicleId', vehicleId))
-      .filter(q => q.eq(q.field('ownerId'), hostId))
-      .collect();
+      .query("conversations")
+      .withIndex("by_vehicle", (q) => q.eq("vehicleId", vehicleId))
+      .filter((q) => q.eq(q.field("ownerId"), hostId))
+      .collect()
 
     // Filter out conversations deleted by the host (owner)
     const conversations = allConversations.filter(
-      conversation => conversation.deletedByOwner !== true
-    );
+      (conversation) => conversation.deletedByOwner !== true
+    )
 
     // Get detailed information for each conversation
     const conversationsWithDetails = await Promise.all(
-      conversations.map(async conversation => {
+      conversations.map(async (conversation) => {
         const renter = await ctx.db
-          .query('users')
-          .withIndex('by_external_id', q =>
-            q.eq('externalId', conversation.renterId)
-          )
-          .first();
+          .query("users")
+          .withIndex("by_external_id", (q) => q.eq("externalId", conversation.renterId))
+          .first()
 
         return {
           ...conversation,
           renter,
-        };
+        }
       })
-    );
+    )
 
-    return conversationsWithDetails.sort(
-      (a, b) => b.lastMessageAt - a.lastMessageAt
-    );
+    return conversationsWithDetails.sort((a, b) => b.lastMessageAt - a.lastMessageAt)
   },
-});
+})
 
 // Get conversation analytics for a host
 export const getHostConversationAnalytics = query({
   args: {
     hostId: v.string(),
     timeRange: v.optional(
-      v.union(
-        v.literal('7d'),
-        v.literal('30d'),
-        v.literal('90d'),
-        v.literal('1y')
-      )
+      v.union(v.literal("7d"), v.literal("30d"), v.literal("90d"), v.literal("1y"))
     ),
   },
   handler: async (ctx, args) => {
-    const { hostId, timeRange = '30d' } = args;
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) {
+      throw new Error("Not authenticated")
+    }
+
+    // Verify the authenticated user matches the hostId
+    if (identity.subject !== args.hostId) {
+      throw new Error("Unauthorized: Cannot access other users' data")
+    }
+
+    const { hostId, timeRange = "30d" } = args
 
     // Calculate time threshold
-    const now = Date.now();
-    let timeThreshold = now;
+    const now = Date.now()
+    let timeThreshold = now
 
     switch (timeRange) {
-      case '7d':
-        timeThreshold = now - 7 * 24 * 60 * 60 * 1000;
-        break;
-      case '30d':
-        timeThreshold = now - 30 * 24 * 60 * 60 * 1000;
-        break;
-      case '90d':
-        timeThreshold = now - 90 * 24 * 60 * 60 * 1000;
-        break;
-      case '1y':
-        timeThreshold = now - 365 * 24 * 60 * 60 * 1000;
-        break;
+      case "7d":
+        timeThreshold = now - 7 * 24 * 60 * 60 * 1000
+        break
+      case "30d":
+        timeThreshold = now - 30 * 24 * 60 * 60 * 1000
+        break
+      case "90d":
+        timeThreshold = now - 90 * 24 * 60 * 60 * 1000
+        break
+      case "1y":
+        timeThreshold = now - 365 * 24 * 60 * 60 * 1000
+        break
     }
 
     // Get all conversations for this host
     const allConversations = await ctx.db
-      .query('conversations')
-      .withIndex('by_owner', q => q.eq('ownerId', hostId))
-      .collect();
+      .query("conversations")
+      .withIndex("by_owner", (q) => q.eq("ownerId", hostId))
+      .collect()
 
     // Filter out conversations deleted by the host (owner)
-    const conversations = allConversations.filter(
-      conv => conv.deletedByOwner !== true
-    );
+    const conversations = allConversations.filter((conv) => conv.deletedByOwner !== true)
 
     // Filter conversations by time range
-    const recentConversations = conversations.filter(
-      conv => conv.createdAt >= timeThreshold
-    );
+    const recentConversations = conversations.filter((conv) => conv.createdAt >= timeThreshold)
 
     // Calculate analytics
-    const totalConversations = recentConversations.length;
-    const activeConversations = recentConversations.filter(
-      conv => conv.isActive
-    ).length;
-    const archivedConversations = recentConversations.filter(
-      conv => !conv.isActive
-    ).length;
+    const totalConversations = recentConversations.length
+    const activeConversations = recentConversations.filter((conv) => conv.isActive).length
+    const archivedConversations = recentConversations.filter((conv) => !conv.isActive).length
 
     // Calculate response time metrics
-    let totalResponseTime = 0;
-    let responseCount = 0;
+    let totalResponseTime = 0
+    let responseCount = 0
 
     for (const conversation of recentConversations) {
       // Get messages in this conversation
       const messages = await ctx.db
-        .query('messages')
-        .withIndex('by_conversation_created', q =>
-          q.eq('conversationId', conversation._id)
-        )
-        .order('asc')
-        .collect();
+        .query("messages")
+        .withIndex("by_conversation_created", (q) => q.eq("conversationId", conversation._id))
+        .order("asc")
+        .collect()
 
       // Calculate response times
       for (let i = 0; i < messages.length - 1; i++) {
-        const currentMessage = messages[i];
-        const nextMessage = messages[i + 1];
+        const currentMessage = messages[i]!
+        const nextMessage = messages[i + 1]!
 
         // If current message is from renter and next is from host
-        if (
-          currentMessage.senderId !== hostId &&
-          nextMessage.senderId === hostId
-        ) {
-          const responseTime = nextMessage.createdAt - currentMessage.createdAt;
-          totalResponseTime += responseTime;
-          responseCount++;
+        if (currentMessage.senderId !== hostId && nextMessage.senderId === hostId) {
+          const responseTime = nextMessage.createdAt - currentMessage.createdAt
+          totalResponseTime += responseTime
+          responseCount++
         }
       }
     }
@@ -522,7 +519,7 @@ export const getHostConversationAnalytics = query({
     const averageResponseTime =
       responseCount > 0
         ? Math.round(totalResponseTime / responseCount / (1000 * 60)) // Convert to minutes
-        : 0;
+        : 0
 
     return {
       totalConversations,
@@ -531,108 +528,106 @@ export const getHostConversationAnalytics = query({
       averageResponseTimeMinutes: averageResponseTime,
       responseCount,
       timeRange,
-    };
+    }
   },
-});
+})
 
 // Bulk operations for host conversations
 export const bulkHostConversationActions = mutation({
   args: {
     hostId: v.string(),
-    conversationIds: v.array(v.id('conversations')),
+    conversationIds: v.array(v.id("conversations")),
     action: v.union(
-      v.literal('archive'),
-      v.literal('unarchive'),
-      v.literal('mark_read'),
-      v.literal('delete')
+      v.literal("archive"),
+      v.literal("unarchive"),
+      v.literal("mark_read"),
+      v.literal("delete")
     ),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await ctx.auth.getUserIdentity()
     if (!identity) {
-      throw new Error('Not authenticated');
+      throw new Error("Not authenticated")
     }
 
-    const { hostId, conversationIds, action } = args;
+    const { hostId, conversationIds, action } = args
 
     // Verify the authenticated user is the host
     if (identity.subject !== hostId) {
-      throw new Error('Not authorized to perform this action');
+      throw new Error("Not authorized to perform this action")
     }
 
-    const processedConversations: string[] = [];
+    const processedConversations: string[] = []
 
     for (const conversationId of conversationIds) {
-      const conversation = await ctx.db.get(conversationId);
-      if (!conversation) continue;
+      const conversation = await ctx.db.get(conversationId)
+      if (!conversation) continue
 
       // Verify this conversation belongs to the host (either as owner or renter)
       if (conversation.ownerId !== hostId && conversation.renterId !== hostId) {
-        throw new Error(
-          'Not authorized to perform this action on this conversation'
-        );
+        throw new Error("Not authorized to perform this action on this conversation")
       }
 
       switch (action) {
-        case 'archive':
+        case "archive":
           await ctx.db.patch(conversationId, {
             isActive: false,
             updatedAt: Date.now(),
-          });
-          break;
+          })
+          break
 
-        case 'unarchive':
+        case "unarchive":
           await ctx.db.patch(conversationId, {
             isActive: true,
             updatedAt: Date.now(),
-          });
-          break;
+          })
+          break
 
-        case 'mark_read': {
+        case "mark_read": {
           // Mark all unread messages as read
           const unreadMessages = await ctx.db
-            .query('messages')
-            .withIndex('by_unread', q =>
-              q.eq('conversationId', conversationId).eq('isRead', false)
+            .query("messages")
+            .withIndex("by_unread", (q) =>
+              q.eq("conversationId", conversationId).eq("isRead", false)
             )
-            .filter(q => q.neq(q.field('senderId'), hostId))
-            .collect();
+            .filter((q) => q.neq(q.field("senderId"), hostId))
+            .collect()
 
           for (const message of unreadMessages) {
             await ctx.db.patch(message._id, {
               isRead: true,
               readAt: Date.now(),
-            });
+            })
           }
 
           await ctx.db.patch(conversationId, {
             unreadCountOwner: 0,
             updatedAt: Date.now(),
-          });
-          break;
+          })
+          break
         }
 
-        case 'delete': {
+        case "delete": {
           // Soft delete - mark as deleted by the host
-          const isRenter = conversation.renterId === hostId;
+          const isRenter = conversation.renterId === hostId
           const updateData: {
-            updatedAt: number;
-            deletedByRenter?: boolean;
-            deletedByOwner?: boolean;
+            updatedAt: number
+            deletedByRenter?: boolean
+            deletedByOwner?: boolean
           } = {
             updatedAt: Date.now(),
-          };
-
-          if (isRenter) {
-            updateData.deletedByRenter = true;
-          } else {
-            updateData.deletedByOwner = true;
           }
 
-          await ctx.db.patch(conversationId, updateData);
+          if (isRenter) {
+            updateData.deletedByRenter = true
+          } else {
+            updateData.deletedByOwner = true
+          }
+
+          await ctx.db.patch(conversationId, updateData)
 
           // Check if both users have deleted - if so, hard delete
-          const updatedConversation = await ctx.db.get(conversationId);
+          const updatedConversation = await ctx.db.get(conversationId)
           if (
             updatedConversation &&
             updatedConversation.deletedByRenter === true &&
@@ -640,30 +635,28 @@ export const bulkHostConversationActions = mutation({
           ) {
             // Both users have deleted - perform hard delete
             const messages = await ctx.db
-              .query('messages')
-              .withIndex('by_conversation', q =>
-                q.eq('conversationId', conversationId)
-              )
-              .collect();
+              .query("messages")
+              .withIndex("by_conversation", (q) => q.eq("conversationId", conversationId))
+              .collect()
 
             for (const message of messages) {
-              await ctx.db.delete(message._id);
+              await ctx.db.delete(message._id)
             }
 
             // Delete the conversation
-            await ctx.db.delete(conversationId);
+            await ctx.db.delete(conversationId)
           }
-          break;
+          break
         }
       }
 
-      processedConversations.push(conversationId);
+      processedConversations.push(conversationId)
     }
 
     return {
       action,
       processedCount: processedConversations.length,
       conversationIds: processedConversations,
-    };
+    }
   },
-});
+})

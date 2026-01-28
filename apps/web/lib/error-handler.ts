@@ -124,13 +124,16 @@ export function getErrorType(error: unknown): ErrorType {
  * Handles errors with user-friendly messages and optional logging
  */
 export function handleError(error: unknown, options: ErrorHandlerOptions = {}): string {
-  const { fallbackMessage = "Something went wrong. Please try again.", showToast = true, logError = true } =
-    options
+  const {
+    fallbackMessage = "Something went wrong. Please try again.",
+    showToast = true,
+    logError = true,
+  } = options
 
   // Log error for debugging
   if (logError) {
     console.error("Error:", error)
-    
+
     // Send to Sentry in production
     if (process.env.NODE_ENV === "production" && process.env.NEXT_PUBLIC_SENTRY_DSN) {
       Sentry.captureException(error)
@@ -161,7 +164,7 @@ export function handleErrorWithContext(
 ): string {
   const errorType = getErrorType(error)
   const customMessage = context.customMessages?.[errorType]
-  
+
   // Send to Sentry with context in production
   if (process.env.NODE_ENV === "production" && process.env.NEXT_PUBLIC_SENTRY_DSN) {
     Sentry.captureException(error, {

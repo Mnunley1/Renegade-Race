@@ -11,8 +11,13 @@ interface UserAvatarProps {
 
 export function UserAvatar({ name, email, role, size = "md", showInfo = true }: UserAvatarProps) {
   const initials = name
-    ? name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)
-    : email?.[0]?.toUpperCase() ?? "?"
+    ? name
+        .split(" ")
+        .map((n) => n[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2)
+    : (email?.[0]?.toUpperCase() ?? "?")
 
   const sizeClasses = {
     sm: "h-8 w-8 text-xs",
@@ -28,10 +33,14 @@ export function UserAvatar({ name, email, role, size = "md", showInfo = true }: 
       {showInfo && (
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <p className="truncate text-sm font-medium">{name ?? "Unknown"}</p>
-            {role && <Badge variant="outline" className="text-[10px] px-1.5 py-0">{role}</Badge>}
+            <p className="truncate font-medium text-sm">{name ?? "Unknown"}</p>
+            {role && (
+              <Badge variant="outline" className="px-1.5 py-0 text-[10px]">
+                {role}
+              </Badge>
+            )}
           </div>
-          {email && <p className="truncate text-xs text-muted-foreground">{email}</p>}
+          {email && <p className="truncate text-muted-foreground text-xs">{email}</p>}
         </div>
       )}
     </div>
