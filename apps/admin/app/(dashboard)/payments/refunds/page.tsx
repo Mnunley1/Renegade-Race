@@ -1,65 +1,65 @@
-"use client";
+"use client"
 
-import { useQuery } from "convex/react";
-import { api } from "@renegade/backend/convex/_generated/api";
-import { useState, useMemo } from "react";
-import { format, formatDistanceToNow } from "date-fns";
-import { Button } from "@workspace/ui/components/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card";
-import { Input } from "@workspace/ui/components/input";
-import { PageHeader } from "@/components/page-header";
-import { DataTable } from "@/components/data-table";
-import { exportToCSV } from "@/components/data-table";
-import { StatusBadge } from "@/components/status-badge";
-import { UserAvatar } from "@/components/user-avatar";
-import { LoadingState } from "@/components/loading-state";
-import { EmptyState } from "@/components/empty-state";
-import { useRouter } from "next/navigation";
-import { Download, RefreshCcw, Search } from "lucide-react";
-import type { Column } from "@/components/data-table";
+import { useQuery } from "convex/react"
+import { api } from "@renegade/backend/convex/_generated/api"
+import { useState, useMemo } from "react"
+import { format, formatDistanceToNow } from "date-fns"
+import { Button } from "@workspace/ui/components/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
+import { Input } from "@workspace/ui/components/input"
+import { PageHeader } from "@/components/page-header"
+import { DataTable } from "@/components/data-table"
+import { exportToCSV } from "@/components/data-table"
+import { StatusBadge } from "@/components/status-badge"
+import { UserAvatar } from "@/components/user-avatar"
+import { LoadingState } from "@/components/loading-state"
+import { EmptyState } from "@/components/empty-state"
+import { useRouter } from "next/navigation"
+import { Download, RefreshCcw, Search } from "lucide-react"
+import type { Column } from "@/components/data-table"
 
 export default function RefundsPage() {
-  const router = useRouter();
-  const [search, setSearch] = useState("");
+  const router = useRouter()
+  const [search, setSearch] = useState("")
 
   const result = useQuery(api.admin.getAllPayments, {
     limit: 500,
-  });
+  })
 
   const refundedPayments = useMemo(() => {
-    const payments = result?.payments ?? [];
+    const payments = result?.payments ?? []
     return payments.filter(
       (p: { status: string; refundAmount?: number }) => p.status === "refunded" || p.refundAmount
-    );
-  }, [result]);
+    )
+  }, [result])
 
   const filteredPayments = useMemo(() => {
-    if (!search) return refundedPayments;
+    if (!search) return refundedPayments
 
-    const searchLower = search.toLowerCase();
+    const searchLower = search.toLowerCase()
     return refundedPayments.filter((p: any) => {
-      const renterName = p.renter?.name?.toLowerCase() || "";
-      const ownerName = p.owner?.name?.toLowerCase() || "";
-      const reason = p.refundReason?.toLowerCase() || "";
-      const id = p._id.toLowerCase();
+      const renterName = p.renter?.name?.toLowerCase() || ""
+      const ownerName = p.owner?.name?.toLowerCase() || ""
+      const reason = p.refundReason?.toLowerCase() || ""
+      const id = p._id.toLowerCase()
 
       return (
         renterName.includes(searchLower) ||
         ownerName.includes(searchLower) ||
         reason.includes(searchLower) ||
         id.includes(searchLower)
-      );
-    });
-  }, [refundedPayments, search]);
+      )
+    })
+  }, [refundedPayments, search])
 
-  const columns: Column<typeof refundedPayments[0]>[] = [
+  const columns: Column<(typeof refundedPayments)[0]>[] = [
     {
       key: "id",
       header: "Payment ID",
       cell: (row) => (
         <Button
           variant="link"
-          className="p-0 h-auto font-mono text-sm"
+          className="h-auto p-0 font-mono text-sm"
           onClick={() => router.push(`/payments/${row._id}`)}
         >
           {row._id.slice(0, 8)}
@@ -72,8 +72,8 @@ export default function RefundsPage() {
       sortable: true,
       sortValue: (row) => row.renter?.name || "",
       cell: (row) => {
-        if (!row.renter) return <span className="text-muted-foreground">N/A</span>;
-        return <UserAvatar name={row.renter.name} email={row.renter.email} />;
+        if (!row.renter) return <span className="text-muted-foreground">N/A</span>
+        return <UserAvatar name={row.renter.name} email={row.renter.email} />
       },
     },
     {
@@ -82,8 +82,8 @@ export default function RefundsPage() {
       sortable: true,
       sortValue: (row) => row.owner?.name || "",
       cell: (row) => {
-        if (!row.owner) return <span className="text-muted-foreground">N/A</span>;
-        return <UserAvatar name={row.owner.name} email={row.owner.email} />;
+        if (!row.owner) return <span className="text-muted-foreground">N/A</span>
+        return <UserAvatar name={row.owner.name} email={row.owner.email} />
       },
     },
     {
@@ -99,24 +99,22 @@ export default function RefundsPage() {
       sortable: true,
       sortValue: (row) => row.refundAmount || 0,
       cell: (row) => {
-        if (!row.refundAmount) return <span className="text-muted-foreground">N/A</span>;
+        if (!row.refundAmount) return <span className="text-muted-foreground">N/A</span>
         return (
-          <span className="font-semibold text-red-600">
-            ${(row.refundAmount / 100).toFixed(2)}
-          </span>
-        );
+          <span className="font-semibold text-red-600">${(row.refundAmount / 100).toFixed(2)}</span>
+        )
       },
     },
     {
       key: "refundReason",
       header: "Reason",
       cell: (row) => {
-        if (!row.refundReason) return <span className="text-muted-foreground">N/A</span>;
+        if (!row.refundReason) return <span className="text-muted-foreground">N/A</span>
         return (
-          <span className="text-sm max-w-xs truncate block" title={row.refundReason}>
+          <span className="block max-w-xs truncate text-sm" title={row.refundReason}>
             {row.refundReason}
           </span>
-        );
+        )
       },
     },
     {
@@ -130,62 +128,75 @@ export default function RefundsPage() {
       sortable: true,
       sortValue: (row) => row.createdAt,
       cell: (row) => (
-        <span className="text-sm text-muted-foreground">
+        <span className="text-muted-foreground text-sm">
           {formatDistanceToNow(new Date(row.createdAt), { addSuffix: true })}
         </span>
       ),
     },
-  ];
+  ]
 
   const handleExport = () => {
-    type PaymentType = typeof filteredPayments[0];
+    type PaymentType = (typeof filteredPayments)[0]
     const exportColumns = [
       { key: "id", header: "Payment ID", value: (p: PaymentType) => String(p._id) },
       { key: "renter", header: "Renter", value: (p: PaymentType) => p.renter?.name || "N/A" },
       { key: "owner", header: "Owner", value: (p: PaymentType) => p.owner?.name || "N/A" },
-      { key: "originalAmount", header: "Original Amount", value: (p: PaymentType) => (p.amount / 100).toFixed(2) },
-      { key: "refundAmount", header: "Refund Amount", value: (p: PaymentType) => p.refundAmount ? (p.refundAmount / 100).toFixed(2) : "N/A" },
-      { key: "reason", header: "Reason", value: (p: PaymentType) => (p as { refundReason?: string }).refundReason || "N/A" },
+      {
+        key: "originalAmount",
+        header: "Original Amount",
+        value: (p: PaymentType) => (p.amount / 100).toFixed(2),
+      },
+      {
+        key: "refundAmount",
+        header: "Refund Amount",
+        value: (p: PaymentType) => (p.refundAmount ? (p.refundAmount / 100).toFixed(2) : "N/A"),
+      },
+      {
+        key: "reason",
+        header: "Reason",
+        value: (p: PaymentType) => (p as { refundReason?: string }).refundReason || "N/A",
+      },
       { key: "status", header: "Status", value: (p: PaymentType) => p.status },
-      { key: "date", header: "Date", value: (p: PaymentType) => format(new Date(p.createdAt), "yyyy-MM-dd HH:mm") },
-    ];
-    exportToCSV(filteredPayments, exportColumns, `refunds-${Date.now()}`);
-  };
+      {
+        key: "date",
+        header: "Date",
+        value: (p: PaymentType) => format(new Date(p.createdAt), "yyyy-MM-dd HH:mm"),
+      },
+    ]
+    exportToCSV(filteredPayments, exportColumns, `refunds-${Date.now()}`)
+  }
 
   if (!result) {
-    return <LoadingState />;
+    return <LoadingState />
   }
 
   const totalRefundedAmount = refundedPayments.reduce(
     (sum: number, p: { refundAmount?: number }) => sum + (p.refundAmount || 0),
     0
-  );
+  )
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Refunds"
-        description="View refund history and process new refunds"
-      />
+      <PageHeader title="Refunds" description="View refund history and process new refunds" />
 
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Refunds</CardTitle>
+            <CardTitle className="font-medium text-sm">Total Refunds</CardTitle>
             <RefreshCcw className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{refundedPayments.length}</div>
+            <div className="font-bold text-2xl">{refundedPayments.length}</div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Refunded</CardTitle>
+            <CardTitle className="font-medium text-sm">Total Refunded</CardTitle>
             <RefreshCcw className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">
+            <div className="font-bold text-2xl text-red-600">
               ${(totalRefundedAmount / 100).toFixed(2)}
             </div>
           </CardContent>
@@ -193,11 +204,11 @@ export default function RefundsPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Average Refund</CardTitle>
+            <CardTitle className="font-medium text-sm">Average Refund</CardTitle>
             <RefreshCcw className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="font-bold text-2xl">
               $
               {refundedPayments.length > 0
                 ? (totalRefundedAmount / 100 / refundedPayments.length).toFixed(2)
@@ -214,9 +225,9 @@ export default function RefundsPage() {
         <CardContent>
           <div className="space-y-4">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              <div className="flex-1 max-w-md">
+              <div className="max-w-md flex-1">
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Search className="-translate-y-1/2 absolute top-1/2 left-3 h-4 w-4 text-muted-foreground" />
                   <Input
                     placeholder="Search refunds..."
                     value={search}
@@ -226,7 +237,7 @@ export default function RefundsPage() {
                 </div>
               </div>
               <Button onClick={handleExport} variant="outline">
-                <Download className="h-4 w-4 mr-2" />
+                <Download className="mr-2 h-4 w-4" />
                 Export CSV
               </Button>
             </div>
@@ -248,5 +259,5 @@ export default function RefundsPage() {
         </CardContent>
       </Card>
     </div>
-  );
+  )
 }

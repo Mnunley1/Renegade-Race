@@ -1,12 +1,12 @@
-"use client";
+"use client"
 
-import { useQuery } from "convex/react";
-import { api } from "@renegade/backend/convex/_generated/api";
-import { PageHeader } from "@/components/page-header";
-import { StatCard } from "@/components/stat-card";
-import { ChartWrapper } from "@/components/chart-wrapper";
-import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card";
-import { LoadingState } from "@/components/loading-state";
+import { useQuery } from "convex/react"
+import { api } from "@renegade/backend/convex/_generated/api"
+import { PageHeader } from "@/components/page-header"
+import { StatCard } from "@/components/stat-card"
+import { ChartWrapper } from "@/components/chart-wrapper"
+import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
+import { LoadingState } from "@/components/loading-state"
 import {
   AreaChart,
   Area,
@@ -18,65 +18,65 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
-} from "recharts";
-import { DollarSign, TrendingUp, CreditCard } from "lucide-react";
-import { useState } from "react";
-import { format } from "date-fns";
+} from "recharts"
+import { DollarSign, TrendingUp, CreditCard } from "lucide-react"
+import { useState } from "react"
+import { format } from "date-fns"
 
-function getDateRange(
-  range: "7d" | "30d" | "90d" | "ytd"
-): { startDate: string; endDate: string } {
-  const now = new Date();
-  const end = now.toISOString().split("T")[0]!;
-  let start: Date;
+function getDateRange(range: "7d" | "30d" | "90d" | "ytd"): { startDate: string; endDate: string } {
+  const now = new Date()
+  const end = now.toISOString().split("T")[0]!
+  let start: Date
   switch (range) {
     case "7d":
-      start = new Date(now.getTime() - 7 * 86400000);
-      break;
+      start = new Date(now.getTime() - 7 * 86_400_000)
+      break
     case "30d":
-      start = new Date(now.getTime() - 30 * 86400000);
-      break;
+      start = new Date(now.getTime() - 30 * 86_400_000)
+      break
     case "90d":
-      start = new Date(now.getTime() - 90 * 86400000);
-      break;
+      start = new Date(now.getTime() - 90 * 86_400_000)
+      break
     case "ytd":
-      start = new Date(now.getFullYear(), 0, 1);
-      break;
+      start = new Date(now.getFullYear(), 0, 1)
+      break
   }
-  return { startDate: start.toISOString().split("T")[0]!, endDate: end };
+  return { startDate: start.toISOString().split("T")[0]!, endDate: end }
 }
 
 export default function RevenueAnalyticsPage() {
-  const [granularity, setGranularity] = useState<"daily" | "weekly" | "monthly">("daily");
-  const [dateRange, setDateRange] = useState<"7d" | "30d" | "90d" | "ytd">("30d");
+  const [granularity, setGranularity] = useState<"daily" | "weekly" | "monthly">("daily")
+  const [dateRange, setDateRange] = useState<"7d" | "30d" | "90d" | "ytd">("30d")
 
-  const stats = useQuery(api.admin.getPlatformStats);
-  const dateParams = getDateRange(dateRange);
+  const stats = useQuery(api.admin.getPlatformStats)
+  const dateParams = getDateRange(dateRange)
   const revenueData = useQuery(api.admin.getRevenueTimeSeries, {
     granularity,
-    startDate: dateParams.startDate,
-    endDate: dateParams.endDate,
-  });
+    ...dateParams,
+  })
 
-  if (!stats || !revenueData) {
-    return <LoadingState message="Loading revenue analytics..." />;
+  if (!(stats && revenueData)) {
+    return <LoadingState message="Loading revenue analytics..." />
   }
 
-  const totalRevenue = stats.revenue.total / 100;
-  const totalPlatformFees = revenueData.reduce((sum: number, d: { platformFees: number }) => sum + d.platformFees, 0) / 100;
-  const totalBookings = stats.reservations.total;
-  const avgBookingValue = totalBookings > 0 ? totalRevenue / totalBookings : 0;
+  const totalRevenue = stats.revenue.total / 100
+  const totalPlatformFees =
+    revenueData.reduce((sum: number, d: { platformFees: number }) => sum + d.platformFees, 0) / 100
+  const totalBookings = stats.reservations.total
+  const avgBookingValue = totalBookings > 0 ? totalRevenue / totalBookings : 0
 
-  const chartData = revenueData.map((d: { date: string; grossRevenue: number; platformFees: number }) => ({
-    date: format(new Date(d.date), "MMM dd"),
-    "Gross Revenue": d.grossRevenue / 100,
-    "Platform Fees": d.platformFees / 100,
-  }));
+  const chartData = revenueData.map(
+    (d: { date: string; grossRevenue: number; platformFees: number }) => ({
+      date: format(new Date(d.date), "MMM dd"),
+      "Gross Revenue": d.grossRevenue / 100,
+      "Platform Fees": d.platformFees / 100,
+    })
+  )
 
   const barChartData = revenueData.slice(-14).map((d: { date: string; grossRevenue: number }) => ({
     date: format(new Date(d.date), "MMM dd"),
     Revenue: d.grossRevenue / 100,
-  }));
+  }))
 
   return (
     <div className="space-y-8">
@@ -120,13 +120,15 @@ export default function RevenueAnalyticsPage() {
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="date" />
             <YAxis
-              tickFormatter={(value) =>
+              tickFormatter={(value: number) =>
                 `$${value.toLocaleString("en-US", { minimumFractionDigits: 0 })}`
               }
             />
             <Tooltip
-              formatter={(value: number) =>
-                `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+              formatter={(value: number | string | undefined) =>
+                typeof value === "number"
+                  ? `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                  : value
               }
             />
             <Legend />
@@ -160,13 +162,15 @@ export default function RevenueAnalyticsPage() {
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="date" />
               <YAxis
-                tickFormatter={(value) =>
+                tickFormatter={(value: number) =>
                   `$${value.toLocaleString("en-US", { minimumFractionDigits: 0 })}`
                 }
               />
               <Tooltip
-                formatter={(value: number) =>
-                  `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                formatter={(value: number | string | undefined) =>
+                  typeof value === "number"
+                    ? `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                    : value
                 }
               />
               <Bar dataKey="Revenue" fill="#3b82f6" />
@@ -175,5 +179,5 @@ export default function RevenueAnalyticsPage() {
         </CardContent>
       </Card>
     </div>
-  );
+  )
 }

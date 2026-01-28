@@ -50,7 +50,7 @@ import { use, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
-import type { Id } from "../../../../packages/backend/convex/_generated/dataModel"
+import type { Id } from "@/lib/convex"
 
 type DriverDetailPageProps = {
   params: Promise<{
@@ -58,14 +58,14 @@ type DriverDetailPageProps = {
   }>
 }
 
-const experienceColors = {
+const experienceColors: Record<string, string> = {
   beginner: "bg-green-500/10 text-green-600 dark:text-green-400",
   intermediate: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
   advanced: "bg-purple-500/10 text-purple-600 dark:text-purple-600",
   professional: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400",
 }
 
-const experienceLabels = {
+const experienceLabels: Record<string, string> = {
   beginner: "Beginner",
   intermediate: "Intermediate",
   advanced: "Advanced",
@@ -130,10 +130,10 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
   const firstTeamConnection = useQuery(
     api.teamDriverConnections.checkConnection,
     userTeams && userTeams.length > 0 && profileId
-      ? { teamId: userTeams[0]._id, driverProfileId: profileId }
+      ? { teamId: userTeams[0]!._id, driverProfileId: profileId }
       : "skip"
   )
-  const hasAcceptedConnection = firstTeamConnection?.status === "accepted"
+  const hasAcceptedConnection = (firstTeamConnection as any)?.status === "accepted"
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -288,7 +288,7 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
                 <h3 className="mb-3 font-semibold text-lg">Licenses</h3>
                 <div className="flex flex-wrap gap-2">
                   {driverProfile.licenses.length > 0 ? (
-                    driverProfile.licenses.map((license) => (
+                    driverProfile.licenses.map((license: string) => (
                       <Badge className="px-3 py-1 text-sm" key={license} variant="outline">
                         {license}
                       </Badge>
@@ -305,7 +305,7 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
                 <h3 className="mb-3 font-semibold text-lg">Preferred Categories</h3>
                 <div className="flex flex-wrap gap-2">
                   {driverProfile.preferredCategories.length > 0 ? (
-                    driverProfile.preferredCategories.map((category) => (
+                    driverProfile.preferredCategories.map((category: string) => (
                       <Badge className="px-3 py-1 text-sm" key={category} variant="secondary">
                         <Star className="mr-1 size-3" />
                         {category}
@@ -323,7 +323,7 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
                 <h3 className="mb-3 font-semibold text-lg">Availability</h3>
                 <div className="flex flex-wrap gap-2">
                   {driverProfile.availability.length > 0 ? (
-                    driverProfile.availability.map((availability) => {
+                    driverProfile.availability.map((availability: string) => {
                       const availabilityLabels: Record<string, string> = {
                         "single-race": "Single Race",
                         "multi-race": "Multi-Race",
@@ -365,7 +365,7 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
                               Platforms
                             </p>
                             <div className="flex flex-wrap gap-2">
-                              {driverProfile.simRacingPlatforms.map((platform) => (
+                              {driverProfile.simRacingPlatforms.map((platform: string) => (
                                 <Badge
                                   className="px-3 py-1 text-sm"
                                   key={platform}
@@ -450,7 +450,7 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
                           className="w-full"
                           onClick={() => {
                             if (userTeams.length === 1) {
-                              setSelectedTeamId(userTeams[0]._id)
+                              setSelectedTeamId(userTeams[0]!._id)
                               setShowConnectionDialog(true)
                             } else {
                               setShowConnectionDialog(true)
@@ -628,7 +628,7 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
                     <SelectValue placeholder="Select a team..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {userTeams.map((team) => (
+                    {userTeams.map((team: { _id: string; name: string }) => (
                       <SelectItem key={team._id} value={team._id}>
                         {team.name}
                       </SelectItem>
@@ -672,7 +672,7 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
                   return
                 }
 
-                const teamId = selectedTeamId || userTeams[0]._id
+                const teamId = selectedTeamId || userTeams[0]!._id
                 setIsRequestingConnection(true)
 
                 try {

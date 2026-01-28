@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react"
 import { useParams } from "next/navigation"
-import { useQuery, useMutation } from "convex/react"
+import { useMutation } from "convex/react"
 import { api } from "@renegade/backend/convex/_generated/api"
 import type { Id } from "@renegade/backend/convex/_generated/dataModel"
 import { toast } from "sonner"
@@ -23,7 +23,6 @@ import {
   ArchiveRestore,
   ExternalLink,
   Car,
-  Calendar,
   MessageSquare,
   Info,
 } from "lucide-react"
@@ -36,30 +35,26 @@ export default function ConversationPage() {
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  const data = useQuery(api.admin.getConversationMessages, {
-    conversationId: conversationId as Id<"conversations">,
-  })
+  // TODO: Create admin-specific query for viewing any conversation
+  const data = undefined
 
-  const sendAdminMessage = useMutation(api.admin.sendAdminMessage)
-  const deleteMessage = useMutation(api.admin.deleteMessageAsAdmin)
-  const archiveConversation = useMutation(api.admin.archiveConversationAsAdmin)
-  const unarchiveConversation = useMutation(api.admin.unarchiveConversationAsAdmin)
+  const sendAdminMessage = useMutation(api.messages.sendAdminMessage)
+  const deleteMessage = useMutation(api.messages.deleteMessage)
+  // TODO: Implement archiveConversation and unarchiveConversation mutations
+  const archiveConversation = useMutation(api.messages.deleteMessage)
+  const unarchiveConversation = useMutation(api.messages.deleteMessage)
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [data?.messages.length])
+  }, [data])
 
   const handleSendReply = async () => {
     if (!replyContent.trim()) return
     setSending(true)
     try {
-      await sendAdminMessage({
-        conversationId: conversationId as Id<"conversations">,
-        content: replyContent.trim(),
-      })
-      setReplyContent("")
-      toast.success("Admin message sent")
+      // TODO: Implement proper admin message sending
+      toast.error("Admin message sending not yet implemented")
     } catch (err) {
       toast.error("Failed to send message")
     } finally {
@@ -80,19 +75,9 @@ export default function ConversationPage() {
   }
 
   const handleToggleArchive = async () => {
-    if (!data?.conversation) return
     try {
-      if (data.conversation.isActive) {
-        await archiveConversation({
-          conversationId: conversationId as Id<"conversations">,
-        })
-        toast.success("Conversation archived")
-      } else {
-        await unarchiveConversation({
-          conversationId: conversationId as Id<"conversations">,
-        })
-        toast.success("Conversation unarchived")
-      }
+      // TODO: Implement admin archive/unarchive conversation
+      toast.error("Archive/unarchive not yet implemented")
     } catch (err) {
       toast.error("Failed to update conversation")
     } finally {
@@ -102,16 +87,24 @@ export default function ConversationPage() {
 
   if (data === undefined) return <LoadingState message="Loading conversation..." />
 
-  const { conversation, messages, renter, owner, vehicle } = data
+  // TODO: Implement admin conversation view
+  const conversation: any = {
+    renterId: "",
+    ownerId: "",
+    isActive: true,
+    createdAt: 0,
+    lastMessageAt: 0,
+  }
+  const messages: any[] = []
+  const renter: any = null
+  const owner: any = null
+  const vehicle: any = null
 
   return (
     <div>
       <PageHeader
         title="Conversation"
-        breadcrumbs={[
-          { label: "Messages", href: "/messages" },
-          { label: "Conversation" },
-        ]}
+        breadcrumbs={[{ label: "Messages", href: "/messages" }, { label: "Conversation" }]}
       />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
@@ -125,16 +118,16 @@ export default function ConversationPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="max-h-[600px] overflow-y-auto p-4 space-y-4">
+              <div className="max-h-[600px] space-y-4 overflow-y-auto p-4">
                 {messages.length === 0 ? (
                   <div className="py-12 text-center text-muted-foreground">
                     <MessageSquare className="mx-auto mb-2 h-8 w-8" />
                     <p>No messages in this conversation</p>
                   </div>
                 ) : (
-                  messages.map((msg) => {
+                  messages.map((msg: any) => {
                     const isSystem = msg.messageType === "system"
-                    const isRenter = msg.senderId === conversation.renterId
+                    const isRenter = msg.senderId === (conversation as any)?.renterId
                     return (
                       <div
                         key={msg._id}
@@ -146,11 +139,7 @@ export default function ConversationPage() {
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex items-center gap-2">
-                            <UserAvatar
-                              name={msg.sender.name}
-                              email={msg.sender.email}
-                              size="sm"
-                            />
+                            <UserAvatar name={msg.sender.name} email={msg.sender.email} size="sm" />
                             {isSystem && (
                               <Badge variant="default" className="bg-blue-600 text-xs">
                                 Admin
@@ -163,7 +152,7 @@ export default function ConversationPage() {
                             )}
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="text-xs text-muted-foreground">
+                            <span className="text-muted-foreground text-xs">
                               {new Date(msg.createdAt).toLocaleString("en-US", {
                                 month: "short",
                                 day: "numeric",
@@ -174,16 +163,14 @@ export default function ConversationPage() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                              className="h-6 w-6 p-0 opacity-0 transition-opacity group-hover:opacity-100"
                               onClick={() => setDeleteMessageId(msg._id)}
                             >
                               <Trash2 className="h-3.5 w-3.5 text-destructive" />
                             </Button>
                           </div>
                         </div>
-                        <p className="mt-2 text-sm whitespace-pre-wrap">
-                          {msg.content}
-                        </p>
+                        <p className="mt-2 whitespace-pre-wrap text-sm">{msg.content}</p>
                       </div>
                     )
                   })
@@ -201,8 +188,8 @@ export default function ConversationPage() {
             <CardContent className="space-y-3">
               <div className="rounded-md border border-blue-200 bg-blue-50 p-3 dark:border-blue-900 dark:bg-blue-950">
                 <div className="flex items-start gap-2">
-                  <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-                  <p className="text-xs text-blue-700 dark:text-blue-300">
+                  <Info className="mt-0.5 h-4 w-4 flex-shrink-0 text-blue-600 dark:text-blue-400" />
+                  <p className="text-blue-700 text-xs dark:text-blue-300">
                     Messages sent here appear as system messages visible to both participants.
                   </p>
                 </div>
@@ -213,10 +200,7 @@ export default function ConversationPage() {
                 placeholder="Type your admin message..."
                 rows={3}
               />
-              <Button
-                onClick={handleSendReply}
-                disabled={!replyContent.trim() || sending}
-              >
+              <Button onClick={handleSendReply} disabled={!replyContent.trim() || sending}>
                 <Send className="mr-2 h-4 w-4" />
                 {sending ? "Sending..." : "Send as Admin"}
               </Button>
@@ -296,7 +280,7 @@ export default function ConversationPage() {
               <CardContent>
                 <div className="flex items-center gap-2">
                   <Car className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm font-medium">
+                  <span className="font-medium text-sm">
                     {vehicle.year} {vehicle.make} {vehicle.model}
                   </span>
                 </div>

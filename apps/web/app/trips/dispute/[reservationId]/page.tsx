@@ -35,14 +35,8 @@ export default function DisputeCreationPage() {
   const [requestedResolution, setRequestedResolution] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const {
-    photos,
-    setPhotos,
-    isUploading,
-    fileInputRef,
-    handlePhotoUpload,
-    handleRemovePhoto,
-  } = usePhotoUpload()
+  const { photos, setPhotos, isUploading, fileInputRef, handlePhotoUpload, handleRemovePhoto } =
+    usePhotoUpload()
 
   // Fetch reservation and completion data
   const reservation = useQuery(
@@ -98,7 +92,6 @@ export default function DisputeCreationPage() {
       setIsSubmitting(false)
     }
   }
-
 
   if (!reservation) {
     return (
@@ -262,7 +255,7 @@ export default function DisputeCreationPage() {
                       src={getImageKitUrl(photoKey, { width: 96, height: 96, quality: 80 })}
                     />
                     <button
-                      className="absolute right-1 top-1 rounded-full bg-destructive p-1 opacity-0 transition-opacity group-hover:opacity-100"
+                      className="absolute top-1 right-1 rounded-full bg-destructive p-1 opacity-0 transition-opacity group-hover:opacity-100"
                       onClick={() => handleRemovePhoto(index)}
                       type="button"
                     >

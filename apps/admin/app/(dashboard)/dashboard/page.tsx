@@ -1,14 +1,9 @@
 "use client"
 
+import type React from "react"
 import { useQuery } from "convex/react"
 import { api } from "@/lib/convex"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@workspace/ui/components/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import {
   Users,
   Car,
@@ -33,14 +28,13 @@ export default function DashboardPage() {
     )
   }
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-US", {
+  const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat("en-US", {
       style: "currency",
       currency: "USD",
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(amount / 100)
-  }
 
   const statCards = [
     {
@@ -64,7 +58,8 @@ export default function DashboardPage() {
       value: stats.reservations.total.toLocaleString(),
       description: `${stats.reservations.confirmed} confirmed, ${stats.reservations.pending} pending`,
       icon: Calendar,
-      trend: stats.reservations.recent > 0 ? `+${stats.reservations.recent} in last 30 days` : undefined,
+      trend:
+        stats.reservations.recent > 0 ? `+${stats.reservations.recent} in last 30 days` : undefined,
       color: "text-purple-600",
     },
     {
@@ -72,32 +67,41 @@ export default function DashboardPage() {
       value: formatCurrency(stats.revenue.total),
       description: `${formatCurrency(stats.revenue.last30Days)} in last 30 days`,
       icon: DollarSign,
-      trend: stats.revenue.last7Days > 0 ? `${formatCurrency(stats.revenue.last7Days)} in last 7 days` : undefined,
+      trend:
+        stats.revenue.last7Days > 0
+          ? `${formatCurrency(stats.revenue.last7Days)} in last 7 days`
+          : undefined,
       color: "text-emerald-600",
     },
   ]
 
-  const alertCards = [
+  const alertCards: Array<{
+    title: string
+    value: number
+    description: string
+    icon: React.ComponentType<{ className?: string }>
+    variant: "default" | "destructive" | "outline" | "secondary"
+  }> = [
     {
       title: "Open Disputes",
       value: stats.disputes.open,
       description: `${stats.disputes.resolved} resolved`,
       icon: Shield,
-      variant: stats.disputes.open > 0 ? "destructive" : "default" as const,
+      variant: stats.disputes.open > 0 ? "destructive" : "default",
     },
     {
       title: "Pending Vehicles",
       value: stats.vehicles.pending,
       description: "Awaiting approval",
       icon: Car,
-      variant: stats.vehicles.pending > 0 ? "default" : "secondary" as const,
+      variant: stats.vehicles.pending > 0 ? "default" : "secondary",
     },
     {
       title: "Pending Reservations",
       value: stats.reservations.pending,
       description: "Awaiting owner approval",
       icon: Calendar,
-      variant: stats.reservations.pending > 0 ? "default" : "secondary" as const,
+      variant: stats.reservations.pending > 0 ? "default" : "secondary",
     },
   ]
 
@@ -105,9 +109,7 @@ export default function DashboardPage() {
     <div className="space-y-6">
       <div>
         <h1 className="font-bold text-3xl">Admin Dashboard</h1>
-        <p className="text-muted-foreground mt-2">
-          Platform overview and statistics
-        </p>
+        <p className="mt-2 text-muted-foreground">Platform overview and statistics</p>
       </div>
 
       {/* Main Statistics */}
@@ -120,11 +122,9 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="font-bold text-2xl">{stat.value}</div>
-              <p className="text-muted-foreground text-xs mt-1">
-                {stat.description}
-              </p>
+              <p className="mt-1 text-muted-foreground text-xs">{stat.description}</p>
               {stat.trend && (
-                <div className="flex items-center gap-1 mt-2">
+                <div className="mt-2 flex items-center gap-1">
                   <TrendingUp className="size-3 text-muted-foreground" />
                   <span className="text-muted-foreground text-xs">{stat.trend}</span>
                 </div>
@@ -145,16 +145,14 @@ export default function DashboardPage() {
             <CardContent>
               <div className="flex items-center gap-2">
                 <div className="font-bold text-2xl">{alert.value}</div>
-                {alert.value > 0 && (
+                {alert.value > 0 && alert.variant !== "secondary" && (
                   <Badge variant={alert.variant} className="text-xs">
                     <AlertCircle className="mr-1 size-3" />
                     Action Required
                   </Badge>
                 )}
               </div>
-              <p className="text-muted-foreground text-xs mt-1">
-                {alert.description}
-              </p>
+              <p className="mt-1 text-muted-foreground text-xs">{alert.description}</p>
             </CardContent>
           </Card>
         ))}
@@ -168,8 +166,10 @@ export default function DashboardPage() {
             <Calendar className="size-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="font-bold text-2xl">{stats.reservations.completed.toLocaleString()}</div>
-            <p className="text-muted-foreground text-xs mt-1">
+            <div className="font-bold text-2xl">
+              {stats.reservations.completed.toLocaleString()}
+            </div>
+            <p className="mt-1 text-muted-foreground text-xs">
               {stats.reservations.cancelled} cancelled
             </p>
           </CardContent>
@@ -182,7 +182,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="font-bold text-2xl">{stats.reviews.total.toLocaleString()}</div>
-            <p className="text-muted-foreground text-xs mt-1">
+            <p className="mt-1 text-muted-foreground text-xs">
               {stats.reviews.public} public reviews
             </p>
           </CardContent>
@@ -195,9 +195,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="font-bold text-2xl">{stats.tracks.active.toLocaleString()}</div>
-            <p className="text-muted-foreground text-xs mt-1">
-              {stats.tracks.total} total tracks
-            </p>
+            <p className="mt-1 text-muted-foreground text-xs">{stats.tracks.total} total tracks</p>
           </CardContent>
         </Card>
 
@@ -208,7 +206,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="font-bold text-2xl">{stats.disputes.total.toLocaleString()}</div>
-            <p className="text-muted-foreground text-xs mt-1">
+            <p className="mt-1 text-muted-foreground text-xs">
               {stats.disputes.open} open, {stats.disputes.resolved} resolved
             </p>
           </CardContent>

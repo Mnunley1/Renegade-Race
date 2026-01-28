@@ -23,12 +23,12 @@ export default function MessagesPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [messageContent, setMessageContent] = useState("")
   const [vehicleId, setVehicleId] = useState("")
-  
-  const users = useQuery(api.admin.getAllUsers, { limit: 100, search: searchQuery })
+
+  const usersData = useQuery(api.admin.getAllUsers, { limit: 100, search: searchQuery })
   const sendAdminMessage = useMutation(api.messages.sendAdminMessage)
   const [isSending, setIsSending] = useState(false)
 
-  const filteredUsers = users?.filter((user) => {
+  const filteredUsers = usersData?.users?.filter((user: any) => {
     if (!searchQuery) return true
     const query = searchQuery.toLowerCase()
     return (
@@ -38,10 +38,10 @@ export default function MessagesPage() {
     )
   })
 
-  const selectedUser = users?.find((u) => u.externalId === selectedUserId)
+  const selectedUser = usersData?.users?.find((u: any) => u.externalId === selectedUserId)
 
   const handleSendMessage = async () => {
-    if (!selectedUserId || !messageContent.trim()) {
+    if (!(selectedUserId && messageContent.trim())) {
       toast.error("Please select a user and enter a message")
       return
     }
@@ -67,9 +67,7 @@ export default function MessagesPage() {
     <div className="space-y-6">
       <div>
         <h1 className="font-bold text-3xl">Direct Messages</h1>
-        <p className="text-muted-foreground mt-2">
-          Send direct messages to users
-        </p>
+        <p className="mt-2 text-muted-foreground">Send direct messages to users</p>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
@@ -80,7 +78,7 @@ export default function MessagesPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="relative">
-              <Search className="absolute left-2 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Search className="-translate-y-1/2 absolute top-1/2 left-2 size-4 text-muted-foreground" />
               <Input
                 className="pl-8"
                 placeholder="Search users..."
@@ -91,7 +89,7 @@ export default function MessagesPage() {
 
             {filteredUsers && filteredUsers.length > 0 ? (
               <div className="max-h-96 space-y-2 overflow-y-auto">
-                {filteredUsers.map((user) => (
+                {filteredUsers.map((user: any) => (
                   <button
                     key={user._id}
                     type="button"
@@ -142,9 +140,8 @@ export default function MessagesPage() {
                     onChange={(e) => setVehicleId(e.target.value)}
                     placeholder="Leave empty for general message"
                   />
-                  <p className="text-muted-foreground mt-1 text-xs">
-                    If provided, message will be added to the conversation for
-                    that vehicle
+                  <p className="mt-1 text-muted-foreground text-xs">
+                    If provided, message will be added to the conversation for that vehicle
                   </p>
                 </div>
 
@@ -191,4 +188,3 @@ export default function MessagesPage() {
     </div>
   )
 }
-

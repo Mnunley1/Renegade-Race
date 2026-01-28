@@ -11,7 +11,7 @@ import Link from "next/link"
 import { use } from "react"
 import { TeamApplicationForm } from "@/components/team-application-form"
 import { api } from "@/lib/convex"
-import type { Id } from "../../../../packages/backend/convex/_generated/dataModel"
+import type { Id } from "@/lib/convex"
 
 type TeamDetailPageProps = {
   params: Promise<{
@@ -98,7 +98,7 @@ export default function TeamDetailPage({ params }: TeamDetailPageProps) {
                   <div>
                     <h3 className="mb-3 font-semibold text-lg">Specialties</h3>
                     <div className="flex flex-wrap gap-2">
-                      {team.specialties.map((specialty) => (
+                      {team.specialties.map((specialty: string) => (
                         <Badge className="px-3 py-1 text-sm" key={specialty}>
                           {specialty}
                         </Badge>
@@ -113,7 +113,7 @@ export default function TeamDetailPage({ params }: TeamDetailPageProps) {
                 <div>
                   <h3 className="mb-3 font-semibold text-lg">Requirements</h3>
                   <ul className="space-y-2">
-                    {team.requirements.map((requirement) => (
+                    {team.requirements.map((requirement: string) => (
                       <li
                         className="flex items-start gap-2 text-muted-foreground"
                         key={`requirement-${requirement}`}

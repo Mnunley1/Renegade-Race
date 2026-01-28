@@ -1,38 +1,148 @@
 /**
  * Centralized logging utility for Convex backend functions
- * Handles error logging with Sentry integration
+ *
+ * Note: Convex runs in a V8 runtime where packages like Sentry don't work.
+ * Instead, use structured logging that can be picked up by Convex's log viewer
+ * or sent to an external service via HTTP actions if needed.
  */
 
-// Note: Sentry is imported dynamically to avoid issues in Convex environment
-// Convex functions run in a serverless environment where some packages may not be available
+export type LogLevel = "debug" | "info" | "warn" | "error"
+
+interface LogEntry {
+  level: LogLevel
+  message: string
+  context?: string
+  timestamp: string
+  error?: {
+    name: string
+    message: string
+    stack?: string
+  }
+  metadata?: Record<string, unknown>
+}
+
+/**
+ * Creates a structured log entry
+ */
+function createLogEntry(
+  level: LogLevel,
+  message: string,
+  options?: {
+    context?: string
+    error?: unknown
+    metadata?: Record<string, unknown>
+  }
+): LogEntry {
+  const entry: LogEntry = {
+    level,
+    message,
+    timestamp: new Date().toISOString(),
+  }
+
+  if (options?.context) {
+    entry.context = options.context
+  }
+
+  if (options?.error) {
+    if (options.error instanceof Error) {
+      entry.error = {
+        name: options.error.name,
+        message: options.error.message,
+        stack: options.error.stack,
+      }
+    } else {
+      entry.error = {
+        name: "UnknownError",
+        message: String(options.error),
+      }
+    }
+  }
+
+  if (options?.metadata) {
+    entry.metadata = options.metadata
+  }
+
+  return entry
+}
+
+/**
+ * Logs a debug message
+ */
+export function logDebug(message: string, metadata?: Record<string, unknown>): void {
+  const entry = createLogEntry("debug", message, { metadata })
+  console.debug(JSON.stringify(entry))
+}
+
+/**
+ * Logs an info message
+ */
+export function logInfo(message: string, metadata?: Record<string, unknown>): void {
+  const entry = createLogEntry("info", message, { metadata })
+  console.info(JSON.stringify(entry))
+}
+
+/**
+ * Logs a warning message
+ */
+export function logWarn(message: string, metadata?: Record<string, unknown>): void {
+  const entry = createLogEntry("warn", message, { metadata })
+  console.warn(JSON.stringify(entry))
+}
 
 /**
  * Logs an error with optional context
- * Sends to Sentry in production if available
+ * Compatible with existing code that uses logError(error, context)
  */
-export function logError(error: unknown, context?: string): void {
+export function logError(
+  error: unknown,
+  context?: string,
+  metadata?: Record<string, unknown>
+): void {
   const errorMessage = error instanceof Error ? error.message : String(error)
   const logMessage = context ? `${context}: ${errorMessage}` : errorMessage
 
-  // Log to console in all environments for debugging
-  console.error(logMessage, error)
+  const entry = createLogEntry("error", logMessage, { context, error, metadata })
 
-  // Try to send to Sentry in production (if available)
-  // Note: Sentry may not be available in Convex environment
-  if (process.env.NODE_ENV === "production") {
-    try {
-      // Dynamic import to avoid issues if Sentry is not available
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const Sentry = require("@sentry/nextjs")
-      if (Sentry && typeof Sentry.captureException === "function") {
-        Sentry.captureException(error, {
-          extra: {
-            context,
-          },
-        })
-      }
-    } catch {
-      // Sentry not available or failed to import - continue without it
-    }
-  }
+  // Log structured entry for log aggregation
+  console.error(JSON.stringify(entry))
+}
+
+/**
+ * Creates a correlation ID for tracing requests across functions
+ */
+export function createCorrelationId(): string {
+  return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+}
+
+/**
+ * Logs a function invocation start with correlation ID
+ */
+export function logFunctionStart(
+  functionName: string,
+  correlationId: string,
+  metadata?: Record<string, unknown>
+): void {
+  logInfo(`Function started: ${functionName}`, {
+    correlationId,
+    functionName,
+    ...metadata,
+  })
+}
+
+/**
+ * Logs a function invocation end with duration
+ */
+export function logFunctionEnd(
+  functionName: string,
+  correlationId: string,
+  startTime: number,
+  metadata?: Record<string, unknown>
+): void {
+  const duration = Date.now() - startTime
+  logInfo(`Function completed: ${functionName}`, {
+    correlationId,
+    functionName,
+    durationMs: duration,
+    ...metadata,
+  })
 }

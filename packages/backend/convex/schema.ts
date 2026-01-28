@@ -12,8 +12,10 @@ export default defineSchema({
     totalRentals: v.optional(v.number()),
     memberSince: v.optional(v.string()),
     profileImageR2Key: v.optional(v.string()), // R2 object key for profile image
+    profileImage: v.optional(v.string()), // ImageKit or legacy URL for profile image
     isHost: v.optional(v.boolean()),
     isBanned: v.optional(v.boolean()),
+    userType: v.optional(v.union(v.literal("driver"), v.literal("team"), v.literal("both"))),
     // Stripe Connect fields
     stripeAccountId: v.optional(v.string()),
     stripeAccountStatus: v.optional(
@@ -123,7 +125,9 @@ export default defineSchema({
         ),
       })
     ),
-  }).index("by_external_id", ["externalId"]),
+  })
+    .index("by_external_id", ["externalId"])
+    .index("by_stripe_account", ["stripeAccountId"]),
 
   tracks: defineTable({
     name: v.string(),
@@ -634,6 +638,10 @@ export default defineSchema({
     stripeTransferId: v.optional(v.string()), // For Connect transfers
     stripeAccountId: v.optional(v.string()), // Owner's Connect account ID
     refundAmount: v.optional(v.number()),
+    refundPercentage: v.optional(v.number()), // Percentage of original amount refunded (0-100)
+    refundPolicy: v.optional(
+      v.union(v.literal("full"), v.literal("partial"), v.literal("none"), v.literal("custom"))
+    ),
     refundReason: v.optional(v.string()),
     failureReason: v.optional(v.string()),
     metadata: v.optional(
@@ -653,7 +661,8 @@ export default defineSchema({
     .index("by_status", ["status"])
     .index("by_stripe_payment_intent", ["stripePaymentIntentId"])
     .index("by_stripe_checkout_session", ["stripeCheckoutSessionId"])
-    .index("by_stripe_customer", ["stripeCustomerId"]),
+    .index("by_stripe_customer", ["stripeCustomerId"])
+    .index("by_owner_status", ["ownerId", "status"]),
 
   // Disputes table
   disputes: defineTable({
@@ -702,6 +711,28 @@ export default defineSchema({
     .index("by_owner", ["ownerId"])
     .index("by_status", ["status"])
     .index("by_created_by", ["createdBy"]),
+
+  // Audit logs for tracking state changes
+  auditLogs: defineTable({
+    entityType: v.union(
+      v.literal("reservation"),
+      v.literal("payment"),
+      v.literal("user"),
+      v.literal("vehicle"),
+      v.literal("dispute")
+    ),
+    entityId: v.string(), // ID of the entity being changed
+    action: v.string(), // e.g., "status_change", "create", "update", "delete"
+    userId: v.optional(v.string()), // User who performed the action (null for system actions)
+    previousState: v.optional(v.any()), // Previous state snapshot
+    newState: v.optional(v.any()), // New state snapshot
+    metadata: v.optional(v.any()), // Additional context
+    timestamp: v.number(),
+  })
+    .index("by_entity", ["entityType", "entityId"])
+    .index("by_user", ["userId"])
+    .index("by_timestamp", ["timestamp"])
+    .index("by_action", ["action"]),
 
   // Platform settings for fees and configuration
   platformSettings: defineTable({

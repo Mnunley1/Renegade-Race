@@ -21,11 +21,7 @@ interface SpinnerProps extends VariantProps<typeof spinnerVariants> {
 
 export function Spinner({ size, className }: SpinnerProps) {
   return (
-    <div
-      className={cn(spinnerVariants({ size }), className)}
-      role="status"
-      aria-label="Loading"
-    >
+    <div className={cn(spinnerVariants({ size }), className)} role="status" aria-label="Loading">
       <span className="sr-only">Loading...</span>
     </div>
   )

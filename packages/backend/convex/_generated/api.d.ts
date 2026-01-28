@@ -9,7 +9,9 @@
  */
 
 import type * as admin from "../admin.js";
+import type * as auditLog from "../auditLog.js";
 import type * as availability from "../availability.js";
+import type * as config from "../config.js";
 import type * as conversations from "../conversations.js";
 import type * as crons from "../crons.js";
 import type * as dateUtils from "../dateUtils.js";
@@ -58,7 +60,9 @@ import type {
  */
 declare const fullApi: ApiFromModules<{
   admin: typeof admin;
+  auditLog: typeof auditLog;
   availability: typeof availability;
+  config: typeof config;
   conversations: typeof conversations;
   crons: typeof crons;
   dateUtils: typeof dateUtils;

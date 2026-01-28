@@ -21,7 +21,7 @@ export default function ResetPasswordPage() {
         </p>
       </div>
 
-      <Card className="border-2 shadow-xl bg-card">
+      <Card className="border-2 bg-card shadow-xl">
         <CardHeader className="pb-4 sm:pb-6">
           <div className="mb-4">
             <Link
@@ -40,7 +40,9 @@ export default function ResetPasswordPage() {
         <CardContent className="pb-4 sm:pb-6">
           <form className="space-y-4 sm:space-y-6">
             <div className="space-y-1.5 sm:space-y-2">
-              <Label htmlFor="email" className="text-sm">Email address</Label>
+              <Label htmlFor="email" className="text-sm">
+                Email address
+              </Label>
               <div className="relative">
                 <Mail className="-translate-y-1/2 absolute top-1/2 left-3 size-4 text-muted-foreground" />
                 <Input

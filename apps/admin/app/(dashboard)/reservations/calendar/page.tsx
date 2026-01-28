@@ -37,10 +37,7 @@ export default function ReservationCalendarPage() {
 
   const reservationsByDay = useMemo(() => {
     if (!result?.reservations) return {}
-    const map: Record<
-      string,
-      { confirmed: number; pending: number; completed: number }
-    > = {}
+    const map: Record<string, { confirmed: number; pending: number; completed: number }> = {}
 
     for (const res of result.reservations) {
       try {
@@ -51,8 +48,7 @@ export default function ReservationCalendarPage() {
         for (const day of daysInRange) {
           if (!isSameMonth(day, currentMonth)) continue
           const key = format(day, "yyyy-MM-dd")
-          if (!map[key])
-            map[key] = { confirmed: 0, pending: 0, completed: 0 }
+          if (!map[key]) map[key] = { confirmed: 0, pending: 0, completed: 0 }
           if (res.status === "confirmed") map[key].confirmed++
           else if (res.status === "pending") map[key].pending++
           else if (res.status === "completed") map[key].completed++
@@ -64,15 +60,11 @@ export default function ReservationCalendarPage() {
     return map
   }, [result?.reservations, currentMonth])
 
-  if (result === undefined)
-    return <LoadingState message="Loading calendar..." />
+  if (result === undefined) return <LoadingState message="Loading calendar..." />
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Reservation Calendar"
-        description="Monthly view of all reservations"
-      />
+      <PageHeader title="Reservation Calendar" description="Monthly view of all reservations" />
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0">
           <CardTitle>{format(currentMonth, "MMMM yyyy")}</CardTitle>
@@ -84,11 +76,7 @@ export default function ReservationCalendarPage() {
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentMonth(new Date())}
-            >
+            <Button variant="outline" size="sm" onClick={() => setCurrentMonth(new Date())}>
               Today
             </Button>
             <Button
@@ -116,7 +104,7 @@ export default function ReservationCalendarPage() {
             {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
               <div
                 key={d}
-                className="bg-background p-2 text-center text-xs font-medium text-muted-foreground"
+                className="bg-background p-2 text-center font-medium text-muted-foreground text-xs"
               >
                 {d}
               </div>

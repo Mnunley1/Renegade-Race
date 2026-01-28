@@ -46,7 +46,6 @@ interface TripCardProps extends ComponentProps<"div"> {
   addOns?: Array<{ name: string; price: number; description?: string }>
 }
 
-
 function formatDate(dateString: string): string {
   return formatDateForDisplay(dateString)
 }
@@ -54,7 +53,7 @@ function formatDate(dateString: string): string {
 function formatTime(timeString?: string): string {
   if (!timeString) return ""
   const [hours, minutes] = timeString.split(":")
-  const hour = Number.parseInt(hours, 10)
+  const hour = Number.parseInt(hours ?? "0", 10)
   const period = hour >= 12 ? "PM" : "AM"
   const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour
   return `${displayHour}:${minutes} ${period}`
@@ -85,18 +84,18 @@ function calculateRefundTier(startDate: string): {
       policy: "full",
       refundAmount: (total) => total,
     }
-  } else if (daysUntilStart >= 2) {
+  }
+  if (daysUntilStart >= 2) {
     return {
       percentage: 50,
       policy: "partial",
       refundAmount: (total) => Math.round(total * 0.5),
     }
-  } else {
-    return {
-      percentage: 0,
-      policy: "none",
-      refundAmount: () => 0,
-    }
+  }
+  return {
+    percentage: 0,
+    policy: "none",
+    refundAmount: () => 0,
   }
 }
 
@@ -140,9 +139,7 @@ export function TripCard({
       toast.success("Reservation cancelled successfully")
       setIsDialogOpen(false)
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to cancel reservation"
-      )
+      toast.error(error instanceof Error ? error.message : "Failed to cancel reservation")
     } finally {
       setIsCancelling(false)
     }
@@ -303,14 +300,14 @@ export function TripCard({
                         {/* Refund Information */}
                         {refundTier && (
                           <div className="rounded-lg border bg-muted/50 p-4">
-                            <div className="font-medium text-foreground text-sm">
-                              Refund Policy
-                            </div>
+                            <div className="font-medium text-foreground text-sm">Refund Policy</div>
                             <div className="mt-2 space-y-1 text-sm">
                               {refundTier.policy === "full" && (
                                 <>
                                   <p className="text-green-600 dark:text-green-400">
-                                    You will receive a <span className="font-semibold">full refund</span> of ${refundTier.refundAmount(totalAmount).toLocaleString()}.
+                                    You will receive a{" "}
+                                    <span className="font-semibold">full refund</span> of $
+                                    {refundTier.refundAmount(totalAmount).toLocaleString()}.
                                   </p>
                                   <p className="text-muted-foreground text-xs">
                                     7+ days before your trip start date.
@@ -320,7 +317,9 @@ export function TripCard({
                               {refundTier.policy === "partial" && (
                                 <>
                                   <p className="text-yellow-600 dark:text-yellow-400">
-                                    You will receive a <span className="font-semibold">50% refund</span> of ${refundTier.refundAmount(totalAmount).toLocaleString()}.
+                                    You will receive a{" "}
+                                    <span className="font-semibold">50% refund</span> of $
+                                    {refundTier.refundAmount(totalAmount).toLocaleString()}.
                                   </p>
                                   <p className="text-muted-foreground text-xs">
                                     2-7 days before your trip start date.
@@ -348,9 +347,7 @@ export function TripCard({
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
-                    <AlertDialogCancel disabled={isCancelling}>
-                      Keep Reservation
-                    </AlertDialogCancel>
+                    <AlertDialogCancel disabled={isCancelling}>Keep Reservation</AlertDialogCancel>
                     <AlertDialogAction
                       onClick={handleCancel}
                       disabled={isCancelling}

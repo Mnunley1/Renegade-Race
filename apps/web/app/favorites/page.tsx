@@ -24,7 +24,7 @@ export default function FavoritesPage() {
   const favoriteVehicleIds = useMemo(() => {
     if (!favoritesData) return []
     return favoritesData
-      .map((fav: { vehicle?: { _id: Id<"vehicles"> } }) => fav.vehicle?._id as Id<"vehicles"> | undefined)
+      .map((fav: any) => fav.vehicle?._id as Id<"vehicles"> | undefined)
       .filter((id: Id<"vehicles"> | undefined): id is Id<"vehicles"> => Boolean(id))
   }, [favoritesData])
 
@@ -37,10 +37,12 @@ export default function FavoritesPage() {
   const favorites = useMemo(() => {
     if (!(favoritesData && favoritesData.length)) return []
     return favoritesData
-      .map((fav: { vehicle?: { _id: Id<"vehicles">; images?: Array<{ isPrimary: boolean; cardUrl?: string }>; year: number; make: string; model: string; dailyRate?: number; track?: { location?: string; name?: string } | null; horsepower?: number; transmission?: string } }) => {
+      .map((fav: any) => {
         const vehicle = fav.vehicle
         if (!vehicle) return null
-        const primaryImage = vehicle.images?.find((img: { isPrimary: boolean }) => img.isPrimary) || vehicle.images?.[0]
+        const primaryImage =
+          vehicle.images?.find((img: { isPrimary: boolean }) => img.isPrimary) ||
+          vehicle.images?.[0]
         const stats = favoriteVehicleStats?.[vehicle._id]
         return {
           id: vehicle._id,

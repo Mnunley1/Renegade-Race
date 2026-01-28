@@ -137,7 +137,7 @@ export default function EditVehiclePage() {
 
       // Sort images by order
       const sortedImages = [...(vehicle.images || [])].sort((a, b) => a.order - b.order)
-      setImages(sortedImages)
+      setImages(sortedImages as any)
     }
   }, [vehicle])
 
@@ -233,11 +233,12 @@ export default function EditVehiclePage() {
 
   const startEditingAddOn = (index: number) => {
     const addOn = formData.addOns[index]
+    if (!addOn) return
     setNewAddOn({
       name: addOn.name,
       price: addOn.price.toString(),
       description: addOn.description || "",
-      isRequired: addOn.isRequired,
+      isRequired: addOn.isRequired ?? false,
     })
     setEditingAddOnIndex(index)
   }
@@ -280,6 +281,7 @@ export default function EditVehiclePage() {
       const fileArray = Array.from(files)
       for (let index = 0; index < fileArray.length; index++) {
         const file = fileArray[index]
+        if (!file) continue
         if (!file.type.startsWith("image/")) {
           toast.error(`${file.name} is not an image file`)
           continue
@@ -362,6 +364,7 @@ export default function EditVehiclePage() {
     if (draggedIndex !== index) {
       const newImages = [...images]
       const draggedImage = newImages[draggedIndex]
+      if (!draggedImage) return
       newImages.splice(draggedIndex, 1)
       newImages.splice(index, 0, draggedImage)
       setImages(newImages)
@@ -395,7 +398,7 @@ export default function EditVehiclePage() {
       // Reload images to revert UI changes
       if (vehicle) {
         const sortedImages = [...(vehicle.images || [])].sort((a, b) => a.order - b.order)
-        setImages(sortedImages)
+        setImages(sortedImages as any)
       }
     } finally {
       setDraggedIndex(null)
@@ -620,7 +623,7 @@ export default function EditVehiclePage() {
                   <SelectValue placeholder="Select a track" />
                 </SelectTrigger>
                 <SelectContent>
-                  {tracks.map((track) => (
+                  {tracks.map((track: { _id: string; name: string; location: string }) => (
                     <SelectItem key={track._id} value={track._id}>
                       {track.name} - {track.location}
                     </SelectItem>

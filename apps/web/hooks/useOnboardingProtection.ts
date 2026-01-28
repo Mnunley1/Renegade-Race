@@ -91,4 +91,3 @@ export function useOnboardingProtection({ enabled }: UseOnboardingProtectionOpti
     checkNavigation,
   }
 }
-

@@ -35,11 +35,7 @@ import {
 } from "@/lib/constants"
 
 // Combine real-world and sim-racing categories for team specialties
-const COMMON_SPECIALTIES = [
-  ...REAL_WORLD_CATEGORIES,
-  "Cup Series",
-  ...SIM_RACING_CATEGORIES,
-]
+const COMMON_SPECIALTIES = [...REAL_WORLD_CATEGORIES, "Cup Series", ...SIM_RACING_CATEGORIES]
 
 export default function CreateTeamProfilePage() {
   const router = useRouter()
@@ -134,13 +130,13 @@ export default function CreateTeamProfilePage() {
       const field = name.split(".")[1]
       setFormData({
         ...formData,
-        contactInfo: { ...formData.contactInfo, [field]: value },
+        contactInfo: { ...formData.contactInfo, [field as string]: value },
       })
     } else if (name.startsWith("socialLinks.")) {
       const field = name.split(".")[1]
       setFormData({
         ...formData,
-        socialLinks: { ...formData.socialLinks, [field]: value },
+        socialLinks: { ...formData.socialLinks, [field as string]: value },
       })
     } else if (name === "availableSeats") {
       setFormData({ ...formData, [name]: Number.parseInt(value, 10) || 0 })

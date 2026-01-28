@@ -26,9 +26,7 @@ export function ActivityTimeline({ items }: ActivityTimelineProps) {
               <div className={`rounded-full p-1.5 ${item.iconColor ?? "bg-muted"}`}>
                 <Icon className="h-3.5 w-3.5 text-muted-foreground" />
               </div>
-              {index < items.length - 1 && (
-                <div className="w-px flex-1 bg-border" />
-              )}
+              {index < items.length - 1 && <div className="w-px flex-1 bg-border" />}
             </div>
             <div className="flex-1 pb-4">
               {item.href ? (
@@ -38,7 +36,7 @@ export function ActivityTimeline({ items }: ActivityTimelineProps) {
               ) : (
                 <p className="text-sm">{item.description}</p>
               )}
-              <p className="mt-0.5 text-xs text-muted-foreground">
+              <p className="mt-0.5 text-muted-foreground text-xs">
                 {formatDistanceToNow(item.timestamp, { addSuffix: true })}
               </p>
             </div>

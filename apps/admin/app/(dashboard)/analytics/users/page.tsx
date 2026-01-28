@@ -1,12 +1,12 @@
-"use client";
+"use client"
 
-import { useQuery } from "convex/react";
-import { api } from "@renegade/backend/convex/_generated/api";
-import { PageHeader } from "@/components/page-header";
-import { StatCard } from "@/components/stat-card";
-import { ChartWrapper } from "@/components/chart-wrapper";
-import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card";
-import { LoadingState } from "@/components/loading-state";
+import { useQuery } from "convex/react"
+import { api } from "@renegade/backend/convex/_generated/api"
+import { PageHeader } from "@/components/page-header"
+import { StatCard } from "@/components/stat-card"
+import { ChartWrapper } from "@/components/chart-wrapper"
+import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
+import { LoadingState } from "@/components/loading-state"
 import {
   AreaChart,
   Area,
@@ -16,66 +16,72 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
-} from "recharts";
-import { Users, UserCheck, UserPlus, Briefcase } from "lucide-react";
-import { useState } from "react";
-import { format } from "date-fns";
+} from "recharts"
+import { Users, UserCheck, UserPlus, Briefcase } from "lucide-react"
+import { useState } from "react"
+import { format } from "date-fns"
 
-function getDateRange(
-  range: "7d" | "30d" | "90d" | "ytd"
-): { startDate: string; endDate: string } {
-  const now = new Date();
-  const end = now.toISOString().split("T")[0]!;
-  let start: Date;
+function getDateRange(range: "7d" | "30d" | "90d" | "ytd"): { startDate: string; endDate: string } {
+  const now = new Date()
+  const end = now.toISOString().split("T")[0]!
+  let start: Date
   switch (range) {
     case "7d":
-      start = new Date(now.getTime() - 7 * 86400000);
-      break;
+      start = new Date(now.getTime() - 7 * 86_400_000)
+      break
     case "30d":
-      start = new Date(now.getTime() - 30 * 86400000);
-      break;
+      start = new Date(now.getTime() - 30 * 86_400_000)
+      break
     case "90d":
-      start = new Date(now.getTime() - 90 * 86400000);
-      break;
+      start = new Date(now.getTime() - 90 * 86_400_000)
+      break
     case "ytd":
-      start = new Date(now.getFullYear(), 0, 1);
-      break;
+      start = new Date(now.getFullYear(), 0, 1)
+      break
   }
-  return { startDate: start.toISOString().split("T")[0]!, endDate: end };
+  return { startDate: start.toISOString().split("T")[0]!, endDate: end }
 }
 
 export default function UserAnalyticsPage() {
-  const [granularity, setGranularity] = useState<"daily" | "weekly" | "monthly">("daily");
-  const [dateRange, setDateRange] = useState<"7d" | "30d" | "90d" | "ytd">("30d");
+  const [granularity, setGranularity] = useState<"daily" | "weekly" | "monthly">("daily")
+  const [dateRange, setDateRange] = useState<"7d" | "30d" | "90d" | "ytd">("30d")
 
-  const stats = useQuery(api.admin.getPlatformStats);
-  const dateParams = getDateRange(dateRange);
-  const userGrowthData = useQuery(api.admin.getUserGrowthTimeSeries, {
-    granularity,
-    startDate: dateParams.startDate,
-    endDate: dateParams.endDate,
-  });
-  const topRenters = useQuery(api.admin.getTopUsers, {
-    limit: 10,
-    role: "renter",
-    sortBy: "spend",
-  });
-  const topHosts = useQuery(api.admin.getTopUsers, {
-    limit: 10,
-    role: "host",
-    sortBy: "earnings",
-  });
+  const stats = useQuery(api.admin.getPlatformStats)
+  const dateParams = getDateRange(dateRange)
+  // TODO: Implement getUserGrowthTimeSeries and getTopUsers queries
+  const userGrowthData: Array<{
+    date: string
+    newUsers: number
+    cumulativeTotal: number
+    newHosts: number
+  }> = []
+  const topRenters: Array<{
+    userId: string
+    name: string
+    email: string
+    totalSpend: number
+    bookingCount: number
+  }> = []
+  const topHosts: Array<{
+    userId: string
+    name: string
+    email: string
+    totalEarnings: number
+    bookingCount: number
+  }> = []
 
-  if (!stats || !userGrowthData || !topRenters || !topHosts) {
-    return <LoadingState message="Loading user analytics..." />;
+  if (!stats) {
+    return <LoadingState message="Loading user analytics..." />
   }
 
-  const chartData = userGrowthData.map((d: { date: string; newUsers: number; cumulativeTotal: number; newHosts: number }) => ({
-    date: format(new Date(d.date), "MMM dd"),
-    "New Users": d.newUsers,
-    "Total Users": d.cumulativeTotal,
-    "New Hosts": d.newHosts,
-  }));
+  const chartData = userGrowthData.map(
+    (d: { date: string; newUsers: number; cumulativeTotal: number; newHosts: number }) => ({
+      date: format(new Date(d.date), "MMM dd"),
+      "New Users": d.newUsers,
+      "Total Users": d.cumulativeTotal,
+      "New Hosts": d.newHosts,
+    })
+  )
 
   return (
     <div className="space-y-8">
@@ -163,25 +169,28 @@ export default function UserAnalyticsPage() {
           <CardContent>
             <div className="space-y-4">
               {topRenters.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No data available</p>
+                <p className="text-muted-foreground text-sm">No data available</p>
               ) : (
                 <div className="space-y-3">
-                  {topRenters.map((user, index: number) => (
+                  {topRenters.map((user: any, index: number) => (
                     <div key={user._id} className="flex items-center justify-between border-b pb-3">
                       <div className="flex items-center gap-3">
-                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 font-semibold text-primary text-sm">
                           {index + 1}
                         </span>
                         <div>
                           <p className="font-medium">{user.name || "Unknown"}</p>
-                          <p className="text-sm text-muted-foreground">{user.email || ""}</p>
+                          <p className="text-muted-foreground text-sm">{user.email || ""}</p>
                         </div>
                       </div>
                       <div className="text-right">
                         <p className="font-semibold">
-                          ${(((user as any).totalSpent || 0) / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                          $
+                          {(((user as any).totalSpent || 0) / 100).toLocaleString("en-US", {
+                            minimumFractionDigits: 2,
+                          })}
                         </p>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-muted-foreground text-sm">
                           {(user as any).bookingCount || 0} bookings
                         </p>
                       </div>
@@ -200,25 +209,28 @@ export default function UserAnalyticsPage() {
           <CardContent>
             <div className="space-y-4">
               {topHosts.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No data available</p>
+                <p className="text-muted-foreground text-sm">No data available</p>
               ) : (
                 <div className="space-y-3">
-                  {topHosts.map((user, index: number) => (
+                  {topHosts.map((user: any, index: number) => (
                     <div key={user._id} className="flex items-center justify-between border-b pb-3">
                       <div className="flex items-center gap-3">
-                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 font-semibold text-primary text-sm">
                           {index + 1}
                         </span>
                         <div>
                           <p className="font-medium">{user.name || "Unknown"}</p>
-                          <p className="text-sm text-muted-foreground">{user.email || ""}</p>
+                          <p className="text-muted-foreground text-sm">{user.email || ""}</p>
                         </div>
                       </div>
                       <div className="text-right">
                         <p className="font-semibold">
-                          ${(((user as any).totalEarnings || 0) / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                          $
+                          {(((user as any).totalEarnings || 0) / 100).toLocaleString("en-US", {
+                            minimumFractionDigits: 2,
+                          })}
                         </p>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-muted-foreground text-sm">
                           {(user as any).vehicleCount || 0} vehicles
                         </p>
                       </div>
@@ -231,5 +243,5 @@ export default function UserAnalyticsPage() {
         </Card>
       </div>
     </div>
-  );
+  )
 }

@@ -6,13 +6,7 @@ import { useState } from "react"
 import Link from "next/link"
 import { api } from "@/lib/convex"
 import { Button } from "@workspace/ui/components/button"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@workspace/ui/components/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Badge } from "@workspace/ui/components/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
 import {
@@ -24,7 +18,6 @@ import {
   Calendar,
   Star,
   Car,
-  DollarSign,
   Shield,
   Mail,
   Phone,
@@ -39,7 +32,7 @@ export default function UserDetailPage() {
   const router = useRouter()
   const userId = params.id as Id<"users">
   const allUsers = useQuery(api.admin.getAllUsers, { limit: 1000 })
-  const user = allUsers?.find((u) => u._id === userId)
+  const user: any = allUsers?.users?.find((u: any) => u._id === userId)
   const userDetail = useQuery(api.admin.getUserDetail, { userId })
   const renterReservations = useQuery(
     api.reservations.getByUser,
@@ -55,7 +48,7 @@ export default function UserDetailPage() {
   )
   const reviewsGiven = useQuery(
     api.reviews.getByUser,
-    user?.externalId ? { userId: user.externalId } : "skip"
+    user?.externalId ? { userId: user.externalId, role: "reviewer" as const } : "skip"
   )
   const banUser = useMutation(api.admin.banUser)
   const unbanUser = useMutation(api.admin.unbanUser)
@@ -89,37 +82,33 @@ export default function UserDetailPage() {
     }
   }
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-US", {
+  const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat("en-US", {
       style: "currency",
       currency: "USD",
       minimumFractionDigits: 2,
     }).format(amount / 100)
-  }
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
+  const formatDate = (dateString: string) =>
+    new Date(dateString).toLocaleDateString("en-US", {
       year: "numeric",
       month: "short",
       day: "numeric",
     })
-  }
 
-  const renderStars = (rating: number) => {
-    return (
-      <div className="flex items-center gap-1">
-        {[1, 2, 3, 4, 5].map((star) => (
-          <Star
-            key={star}
-            className={`size-4 ${
-              star <= rating ? "fill-yellow-400 text-yellow-400" : "text-gray-300"
-            }`}
-          />
-        ))}
-        <span className="ml-1 text-sm font-medium">{rating}</span>
-      </div>
-    )
-  }
+  const renderStars = (rating: number) => (
+    <div className="flex items-center gap-1">
+      {[1, 2, 3, 4, 5].map((star) => (
+        <Star
+          key={star}
+          className={`size-4 ${
+            star <= rating ? "fill-yellow-400 text-yellow-400" : "text-gray-300"
+          }`}
+        />
+      ))}
+      <span className="ml-1 font-medium text-sm">{rating}</span>
+    </div>
+  )
 
   if (allUsers === undefined || userDetail === undefined) {
     return (
@@ -160,7 +149,7 @@ export default function UserDetailPage() {
             </Button>
           </Link>
           <h1 className="font-bold text-3xl">{user.name}</h1>
-          <p className="text-muted-foreground mt-2">User ID: {user._id}</p>
+          <p className="mt-2 text-muted-foreground">User ID: {user._id}</p>
         </div>
         <div className="flex items-center gap-4">
           {isBanned && <Badge variant="destructive">Banned</Badge>}
@@ -206,7 +195,7 @@ export default function UserDetailPage() {
           </CardHeader>
           <CardContent>
             <div className="font-bold text-2xl">{userDetail.totalReservations}</div>
-            <p className="text-muted-foreground text-xs mt-1">
+            <p className="mt-1 text-muted-foreground text-xs">
               {userDetail.renterReservations} as renter, {userDetail.ownerReservations} as owner
             </p>
           </CardContent>
@@ -219,7 +208,7 @@ export default function UserDetailPage() {
           </CardHeader>
           <CardContent>
             <div className="font-bold text-2xl">{userDetail.vehicles}</div>
-            <p className="text-muted-foreground text-xs mt-1">Owned vehicles</p>
+            <p className="mt-1 text-muted-foreground text-xs">Owned vehicles</p>
           </CardContent>
         </Card>
 
@@ -232,7 +221,7 @@ export default function UserDetailPage() {
             <div className="font-bold text-2xl">
               {userDetail.reviewsGiven + userDetail.reviewsReceived}
             </div>
-            <p className="text-muted-foreground text-xs mt-1">
+            <p className="mt-1 text-muted-foreground text-xs">
               {userDetail.reviewsGiven} given, {userDetail.reviewsReceived} received
             </p>
           </CardContent>
@@ -245,7 +234,7 @@ export default function UserDetailPage() {
           </CardHeader>
           <CardContent>
             <div className="font-bold text-2xl">{userDetail.disputes}</div>
-            <p className="text-muted-foreground text-xs mt-1">Involved in</p>
+            <p className="mt-1 text-muted-foreground text-xs">Involved in</p>
           </CardContent>
         </Card>
       </div>
@@ -357,9 +346,7 @@ export default function UserDetailPage() {
                 )}
                 <div>
                   <p className="text-muted-foreground text-sm">Account Created</p>
-                  <p className="font-medium">
-                    {new Date(user.createdAt).toLocaleDateString()}
-                  </p>
+                  <p className="font-medium">{new Date(user.createdAt).toLocaleDateString()}</p>
                 </div>
               </CardContent>
             </Card>
@@ -370,12 +357,12 @@ export default function UserDetailPage() {
           {renterReservations && renterReservations.length > 0 && (
             <div className="space-y-4">
               <h3 className="font-semibold">As Renter</h3>
-              {renterReservations.map((reservation) => (
+              {renterReservations.map((reservation: any) => (
                 <Card key={reservation._id}>
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
+                        <div className="mb-2 flex items-center gap-2">
                           <Badge variant="outline">{reservation.status}</Badge>
                           <Link href={`/reservations/${reservation._id}`}>
                             <Button variant="link" className="h-auto p-0">
@@ -383,7 +370,7 @@ export default function UserDetailPage() {
                             </Button>
                           </Link>
                         </div>
-                        <div className="grid gap-2 md:grid-cols-2 text-sm">
+                        <div className="grid gap-2 text-sm md:grid-cols-2">
                           <div>
                             <p className="text-muted-foreground">
                               <strong>Vehicle:</strong> {reservation.vehicle?.year}{" "}
@@ -413,13 +400,13 @@ export default function UserDetailPage() {
 
           {ownerReservations && ownerReservations.length > 0 && (
             <div className="space-y-4">
-              <h3 className="font-semibold mt-6">As Owner</h3>
-              {ownerReservations.map((reservation) => (
+              <h3 className="mt-6 font-semibold">As Owner</h3>
+              {ownerReservations.map((reservation: any) => (
                 <Card key={reservation._id}>
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
+                        <div className="mb-2 flex items-center gap-2">
                           <Badge variant="outline">{reservation.status}</Badge>
                           <Link href={`/reservations/${reservation._id}`}>
                             <Button variant="link" className="h-auto p-0">
@@ -427,7 +414,7 @@ export default function UserDetailPage() {
                             </Button>
                           </Link>
                         </div>
-                        <div className="grid gap-2 md:grid-cols-2 text-sm">
+                        <div className="grid gap-2 text-sm md:grid-cols-2">
                           <div>
                             <p className="text-muted-foreground">
                               <strong>Vehicle:</strong> {reservation.vehicle?.year}{" "}
@@ -469,9 +456,9 @@ export default function UserDetailPage() {
         <TabsContent value="vehicles" className="space-y-4">
           {vehicles && vehicles.length > 0 ? (
             <div className="space-y-4">
-              {vehicles.map((vehicle) => {
+              {vehicles.map((vehicle: any) => {
                 const primaryImage =
-                  vehicle.images?.find((img) => img.isPrimary) || vehicle.images?.[0]
+                  vehicle.images?.find((img: any) => img.isPrimary) || vehicle.images?.[0]
                 return (
                   <Card key={vehicle._id}>
                     <CardContent className="p-4">
@@ -486,7 +473,7 @@ export default function UserDetailPage() {
                           </div>
                         )}
                         <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
+                          <div className="mb-2 flex items-center gap-2">
                             <Badge variant="outline">{vehicle.status}</Badge>
                             <Link href={`/vehicles/${vehicle._id}`}>
                               <Button variant="link" className="h-auto p-0">
@@ -521,7 +508,7 @@ export default function UserDetailPage() {
           {reviewsGiven && reviewsGiven.length > 0 ? (
             <div className="space-y-4">
               <h3 className="font-semibold">Reviews Given</h3>
-              {reviewsGiven.map((review) => (
+              {reviewsGiven.map((review: any) => (
                 <Card key={review._id}>
                   <CardContent className="p-4">
                     <div className="space-y-2">
@@ -542,8 +529,7 @@ export default function UserDetailPage() {
                           <strong>Reviewed:</strong> {review.reviewed?.name || "Unknown"}
                         </span>
                         <span>
-                          <strong>Date:</strong>{" "}
-                          {new Date(review.createdAt).toLocaleDateString()}
+                          <strong>Date:</strong> {new Date(review.createdAt).toLocaleDateString()}
                         </span>
                       </div>
                     </div>

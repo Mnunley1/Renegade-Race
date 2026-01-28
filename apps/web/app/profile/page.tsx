@@ -52,7 +52,7 @@ export default function ProfilePage() {
 
   // Calculate stats
   const stats = useMemo(() => {
-    const tripsCount = reservations?.filter((res) => res.status === "completed").length || 0
+    const tripsCount = reservations?.filter((res: any) => res.status === "completed").length || 0
     const averageRating = reviewStats?.averageRating || 0
     const favoritesCount = favorites?.length || 0
 

@@ -28,7 +28,18 @@ import { Label } from "@workspace/ui/components/label"
 import { Separator } from "@workspace/ui/components/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
 import { useAction, useMutation, useQuery } from "convex/react"
-import { ArrowLeft, Bell, CreditCard, Download, Loader2, Mail, Moon, Star, Sun, Trash2 } from "lucide-react"
+import {
+  ArrowLeft,
+  Bell,
+  CreditCard,
+  Download,
+  Loader2,
+  Mail,
+  Moon,
+  Star,
+  Sun,
+  Trash2,
+} from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useTheme } from "next-themes"
@@ -46,15 +57,18 @@ export default function SettingsPage() {
     api.users.getByExternalId,
     clerkUser?.id ? { externalId: clerkUser.id } : "skip"
   )
-  
+
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteConfirmText, setDeleteConfirmText] = useState("")
 
   // Notification preferences
-  const notificationPreferences = useQuery(api.users.getNotificationPreferences, clerkUser?.id ? {} : "skip")
+  const notificationPreferences = useQuery(
+    api.users.getNotificationPreferences,
+    clerkUser?.id ? {} : "skip"
+  )
   const updateNotificationPreferences = useMutation(api.users.updateNotificationPreferences)
-  
+
   const [notificationSettings, setNotificationSettings] = useState({
     reservationUpdates: true,
     messages: true,
@@ -96,7 +110,6 @@ export default function SettingsPage() {
       } catch (error) {
         handleErrorWithContext(error, {
           action: "load billing data",
-          showToast: false,
         })
       } finally {
         setIsLoadingPaymentMethods(false)
@@ -198,11 +211,7 @@ export default function SettingsPage() {
             <CardContent className="space-y-4">
               <div>
                 <Label htmlFor="name">Full Name</Label>
-                <Input
-                  defaultValue={clerkUser?.fullName || ""}
-                  id="name"
-                  readOnly
-                />
+                <Input defaultValue={clerkUser?.fullName || ""} id="name" readOnly />
                 <p className="mt-1 text-muted-foreground text-xs">
                   Name is managed through your authentication provider
                 </p>
@@ -286,7 +295,7 @@ export default function SettingsPage() {
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
-                  <p className="text-destructive text-sm font-medium">
+                  <p className="font-medium text-destructive text-sm">
                     Warning: This action is permanent and irreversible.
                   </p>
                   <ul className="mt-2 ml-4 list-disc space-y-1 text-destructive/80 text-sm">
@@ -495,7 +504,7 @@ export default function SettingsPage() {
                       <Mail className="size-5 text-primary" />
                     </div>
                     <div>
-                      <Label className="text-base font-semibold">Reservation Updates</Label>
+                      <Label className="font-semibold text-base">Reservation Updates</Label>
                       <p className="text-muted-foreground text-sm">
                         Get notified about reservation confirmations, cancellations, and changes
                       </p>
@@ -518,7 +527,7 @@ export default function SettingsPage() {
                       <Bell className="size-5 text-primary" />
                     </div>
                     <div>
-                      <Label className="text-base font-semibold">Messages</Label>
+                      <Label className="font-semibold text-base">Messages</Label>
                       <p className="text-muted-foreground text-sm">
                         Receive email notifications when you receive new messages
                       </p>
@@ -541,7 +550,7 @@ export default function SettingsPage() {
                       <Star className="size-5 text-primary" />
                     </div>
                     <div>
-                      <Label className="text-base font-semibold">Reviews & Ratings</Label>
+                      <Label className="font-semibold text-base">Reviews & Ratings</Label>
                       <p className="text-muted-foreground text-sm">
                         Get notified when you receive new reviews or ratings
                       </p>
@@ -564,7 +573,7 @@ export default function SettingsPage() {
                       <CreditCard className="size-5 text-primary" />
                     </div>
                     <div>
-                      <Label className="text-base font-semibold">Payment Updates</Label>
+                      <Label className="font-semibold text-base">Payment Updates</Label>
                       <p className="text-muted-foreground text-sm">
                         Receive notifications about payment confirmations and refunds
                       </p>
@@ -587,7 +596,7 @@ export default function SettingsPage() {
                       <Bell className="size-5 text-primary" />
                     </div>
                     <div>
-                      <Label className="text-base font-semibold">Marketing & Promotions</Label>
+                      <Label className="font-semibold text-base">Marketing & Promotions</Label>
                       <p className="text-muted-foreground text-sm">
                         Receive updates about new features, special offers, and platform news
                       </p>
@@ -608,7 +617,10 @@ export default function SettingsPage() {
               <Separator />
 
               <div className="flex justify-end">
-                <Button disabled={isSavingNotifications} onClick={handleSaveNotificationPreferences}>
+                <Button
+                  disabled={isSavingNotifications}
+                  onClick={handleSaveNotificationPreferences}
+                >
                   {isSavingNotifications ? (
                     <>
                       <Loader2 className="mr-2 size-4 animate-spin" />
@@ -621,7 +633,7 @@ export default function SettingsPage() {
               </div>
 
               <div className="rounded-lg border border-blue-500/50 bg-blue-500/10 p-4">
-                <p className="text-blue-900 dark:text-blue-100 text-sm">
+                <p className="text-blue-900 text-sm dark:text-blue-100">
                   <strong>Note:</strong> Critical notifications (like reservation confirmations and
                   payment receipts) cannot be disabled for security and legal reasons.
                 </p>

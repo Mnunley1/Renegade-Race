@@ -38,18 +38,18 @@ export function CookieConsentBanner() {
   return (
     <div
       className={cn(
-        "fixed bottom-0 left-0 right-0 z-50 animate-in slide-in-from-bottom duration-300",
-        "border-border border-t bg-background/95 backdrop-blur-sm shadow-lg"
+        "slide-in-from-bottom fixed right-0 bottom-0 left-0 z-50 animate-in duration-300",
+        "border-border border-t bg-background/95 shadow-lg backdrop-blur-sm"
       )}
       role="dialog"
       aria-label="Cookie consent"
       aria-modal="false"
     >
-      <Card className="border-0 rounded-none shadow-none">
+      <Card className="rounded-none border-0 shadow-none">
         <div className="container mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex-1 space-y-2">
-              <p className="text-sm text-foreground">
+              <p className="text-foreground text-sm">
                 We use cookies to enhance your experience, analyze site usage, and assist in our
                 error tracking efforts. By clicking "Accept", you consent to our use of cookies.{" "}
                 <Link
@@ -72,11 +72,7 @@ export function CookieConsentBanner() {
               >
                 Decline
               </Button>
-              <Button
-                size="sm"
-                onClick={handleAccept}
-                className="w-full sm:w-auto"
-              >
+              <Button size="sm" onClick={handleAccept} className="w-full sm:w-auto">
                 Accept
               </Button>
             </div>
