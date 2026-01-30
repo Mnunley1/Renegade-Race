@@ -213,11 +213,17 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
   if (driverProfile === null) {
     return (
       <div className="container mx-auto px-4 py-8">
-        <Link href="/motorsports/drivers">
-          <Button className="mb-6" variant="outline">
-            ← Back to Drivers
-          </Button>
-        </Link>
+        <nav className="mb-3 flex items-center gap-1.5 text-sm">
+          <Link
+            className="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
+            href="/motorsports/drivers"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Drivers
+          </Link>
+          <span className="text-muted-foreground/50">/</span>
+          <span className="truncate text-foreground">Not Found</span>
+        </nav>
         <div className="flex items-center justify-center py-20">
           <div className="text-center">
             <p className="mb-2 font-semibold text-lg">Driver Profile Not Found</p>
@@ -236,11 +242,17 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
   if (isHidden && !isOwner) {
     return (
       <div className="container mx-auto px-4 py-8">
-        <Link href="/motorsports/drivers">
-          <Button className="mb-6" variant="outline">
-            ← Back to Drivers
-          </Button>
-        </Link>
+        <nav className="mb-3 flex items-center gap-1.5 text-sm">
+          <Link
+            className="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
+            href="/motorsports/drivers"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Drivers
+          </Link>
+          <span className="text-muted-foreground/50">/</span>
+          <span className="truncate text-foreground">Not Found</span>
+        </nav>
         <div className="flex items-center justify-center py-20">
           <div className="text-center">
             <p className="mb-2 font-semibold text-lg">Driver Profile Not Found</p>
@@ -296,12 +308,17 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
 
   return (
     <div className="container mx-auto px-4 py-8 pb-20 lg:pb-8">
-      <Link href="/motorsports/drivers">
-        <Button className="mb-6" variant="outline">
-          <ArrowLeft className="mr-2 size-4" />
-          Back to Drivers
-        </Button>
-      </Link>
+      <nav className="mb-4 flex items-center gap-1.5 text-sm">
+        <Link
+          className="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
+          href="/motorsports/drivers"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          Drivers
+        </Link>
+        <span className="text-muted-foreground/50">/</span>
+        <span className="truncate text-foreground">{driverName}</span>
+      </nav>
 
       {isHidden && isOwner && (
         <div className="mb-6 flex items-center gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">

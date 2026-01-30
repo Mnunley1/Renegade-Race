@@ -29,8 +29,8 @@ import Link from "next/link"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { Suspense, useEffect, useMemo, useRef, useState } from "react"
 import { VehicleGallery } from "@/components/vehicle-gallery"
-import { api } from "@/lib/convex"
 import type { Id } from "@/lib/convex"
+import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 
 function VehicleDetailsPageContent() {
@@ -65,7 +65,9 @@ function VehicleDetailsPageContent() {
 
   // Check if user has already written a review for this vehicle
   const hasUserReviewed = useMemo(() => {
-    if (!(isSignedIn && user?.id && reviews)) return false
+    if (!(isSignedIn && user?.id && reviews)) {
+      return false
+    }
     return reviews.some((review: any) => review.reviewerId === user.id)
   }, [isSignedIn, user?.id, reviews])
 
@@ -134,7 +136,7 @@ function VehicleDetailsPageContent() {
     }
 
     // If vehicle or owner not loaded, wait
-    if (!(vehicle && vehicle.ownerId)) {
+    if (!vehicle?.ownerId) {
       return
     }
 
@@ -188,11 +190,13 @@ function VehicleDetailsPageContent() {
   // Reset tracking ref when vehicle ID changes (user navigates to different vehicle)
   useEffect(() => {
     hasTrackedView.current = false
-  }, [id])
+  }, [])
 
   // Handle share functionality
   const handleShare = async (platform: string) => {
-    if (!(vehicle && id)) return
+    if (!(vehicle && id)) {
+      return
+    }
 
     const url = typeof window !== "undefined" ? window.location.href : ""
     const title = `${vehicle.year} ${vehicle.make} ${vehicle.model}`
@@ -286,7 +290,7 @@ function VehicleDetailsPageContent() {
   return (
     <>
       <Head>
-        <link rel="canonical" href={`https://renegaderentals.com/vehicles/${id}`} />
+        <link href={`https://renegaderentals.com/vehicles/${id}`} rel="canonical" />
       </Head>
       <div className="container mx-auto px-4 py-8">
         <script

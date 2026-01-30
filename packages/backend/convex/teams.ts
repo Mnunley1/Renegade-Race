@@ -168,3 +168,32 @@ export const deleteTeam = mutation({
     return true
   },
 })
+
+export const getSimilar = query({
+  args: {
+    teamId: v.id("teams"),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const team = await ctx.db.get(args.teamId)
+    if (!team) return []
+
+    const allTeams = await ctx.db
+      .query("teams")
+      .filter((q) => q.and(q.neq(q.field("_id"), args.teamId), q.eq(q.field("isActive"), true)))
+      .take(50)
+
+    const scored = allTeams.map((t) => {
+      let score = 0
+      if (t.racingType === team.racingType) score += 2
+      if (t.location === team.location) score += 2
+      for (const spec of t.specialties) {
+        if (team.specialties.includes(spec)) score += 1
+      }
+      return { ...t, score }
+    })
+
+    scored.sort((a, b) => b.score - a.score)
+    return scored.slice(0, args.limit || 3).filter((t) => t.score > 0)
+  },
+})

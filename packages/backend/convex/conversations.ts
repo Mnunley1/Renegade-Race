@@ -45,7 +45,7 @@ export const getByUser = query({
     const conversationsWithDetails = await Promise.all(
       conversations.map(async (conversation) => {
         const [vehicle, renter, owner] = await Promise.all([
-          ctx.db.get(conversation.vehicleId),
+          conversation.vehicleId ? ctx.db.get(conversation.vehicleId) : null,
           ctx.db
             .query("users")
             .withIndex("by_external_id", (q) => q.eq("externalId", conversation.renterId))
@@ -56,11 +56,43 @@ export const getByUser = query({
             .first(),
         ])
 
+        // Get team/driver info for motorsports conversations
+        const team = conversation.teamId
+          ? await ctx.db.get(conversation.teamId)
+          : null
+        const driverProfile = conversation.driverProfileId
+          ? await ctx.db.get(conversation.driverProfileId)
+          : null
+
+        // Get reservation info if linked
+        let reservation: {
+          _id: string
+          status: string
+          startDate: string
+          endDate: string
+          totalAmount: number
+        } | null = null
+        if (conversation.reservationId) {
+          const res = await ctx.db.get(conversation.reservationId) as any
+          if (res) {
+            reservation = {
+              _id: String(res._id),
+              status: res.status,
+              startDate: res.startDate,
+              endDate: res.endDate,
+              totalAmount: res.totalAmount,
+            }
+          }
+        }
+
         return {
           ...conversation,
           vehicle,
           renter,
           owner,
+          team,
+          driverProfile,
+          reservation,
         }
       })
     )
@@ -132,7 +164,7 @@ export const getById = query({
     }
 
     const [vehicle, renter, owner] = await Promise.all([
-      ctx.db.get(conversation.vehicleId),
+      conversation.vehicleId ? ctx.db.get(conversation.vehicleId) : null,
       ctx.db
         .query("users")
         .withIndex("by_external_id", (q) => q.eq("externalId", conversation.renterId))
@@ -143,11 +175,42 @@ export const getById = query({
         .first(),
     ])
 
+    const team = conversation.teamId
+      ? await ctx.db.get(conversation.teamId)
+      : null
+    const driverProfile = conversation.driverProfileId
+      ? await ctx.db.get(conversation.driverProfileId)
+      : null
+
+    // Get reservation info if linked
+    let reservation: {
+      _id: string
+      status: string
+      startDate: string
+      endDate: string
+      totalAmount: number
+    } | null = null
+    if (conversation.reservationId) {
+      const res = await ctx.db.get(conversation.reservationId)
+      if (res) {
+        reservation = {
+          _id: res._id as string,
+          status: res.status,
+          startDate: res.startDate,
+          endDate: res.endDate,
+          totalAmount: res.totalAmount,
+        }
+      }
+    }
+
     return {
       ...conversation,
       vehicle,
       renter,
       owner,
+      team,
+      driverProfile,
+      reservation,
     }
   },
 })
@@ -183,7 +246,7 @@ export const getByVehicleAndParticipants = query({
     }
 
     const [vehicle, renter, owner] = await Promise.all([
-      ctx.db.get(conversation.vehicleId),
+      conversation.vehicleId ? ctx.db.get(conversation.vehicleId) : null,
       ctx.db
         .query("users")
         .withIndex("by_external_id", (q) => q.eq("externalId", conversation.renterId))
@@ -307,6 +370,59 @@ export const markAsRead = mutation({
     }
 
     return args.conversationId
+  },
+})
+
+// Create a motorsports conversation (team or driver messaging)
+export const createMotorsportsConversation = mutation({
+  args: {
+    participantId: v.string(),
+    conversationType: v.union(v.literal("team"), v.literal("driver")),
+    teamId: v.optional(v.id("teams")),
+    driverProfileId: v.optional(v.id("driverProfiles")),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) {
+      throw new Error("Not authenticated")
+    }
+
+    const userId = identity.subject
+    // Use consistent ordering: lower ID is renterId, higher is ownerId
+    const [renterId, ownerId] =
+      userId < args.participantId
+        ? [userId, args.participantId]
+        : [args.participantId, userId]
+
+    // Check for existing motorsports conversation between these users
+    const existing = await ctx.db
+      .query("conversations")
+      .withIndex("by_participants", (q) =>
+        q.eq("renterId", renterId).eq("ownerId", ownerId)
+      )
+      .filter((q) =>
+        q.eq(q.field("conversationType"), args.conversationType)
+      )
+      .first()
+
+    if (existing) {
+      return existing._id
+    }
+
+    const now = Date.now()
+    return await ctx.db.insert("conversations", {
+      renterId,
+      ownerId,
+      conversationType: args.conversationType,
+      teamId: args.teamId,
+      driverProfileId: args.driverProfileId,
+      lastMessageAt: now,
+      unreadCountRenter: 0,
+      unreadCountOwner: 0,
+      isActive: false,
+      createdAt: now,
+      updatedAt: now,
+    })
   },
 })
 
@@ -555,6 +671,50 @@ export const getHostConversationAnalytics = query({
       responseCount,
       timeRange,
     }
+  },
+})
+
+// Link conversation to reservation
+export const linkToReservation = mutation({
+  args: {
+    conversationId: v.id("conversations"),
+    reservationId: v.id("reservations"),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) {
+      throw new Error("Not authenticated")
+    }
+
+    const conversation = await ctx.db.get(args.conversationId)
+    if (!conversation) {
+      throw new Error("Conversation not found")
+    }
+
+    // Ensure the user is part of the conversation
+    if (conversation.renterId !== identity.subject && conversation.ownerId !== identity.subject) {
+      throw new Error("Not authorized to modify this conversation")
+    }
+
+    const reservation = await ctx.db.get(args.reservationId)
+    if (!reservation) {
+      throw new Error("Reservation not found")
+    }
+
+    // Verify the reservation participants match the conversation
+    if (
+      reservation.renterId !== conversation.renterId ||
+      reservation.ownerId !== conversation.ownerId
+    ) {
+      throw new Error("Reservation participants do not match conversation participants")
+    }
+
+    await ctx.db.patch(args.conversationId, {
+      reservationId: args.reservationId,
+      updatedAt: Date.now(),
+    })
+
+    return args.conversationId
   },
 })
 

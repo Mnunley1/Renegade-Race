@@ -15,7 +15,13 @@ export const createNotification = internalMutation({
       v.literal("payment_failed"),
       v.literal("dispute_update"),
       v.literal("review_received"),
-      v.literal("system")
+      v.literal("system"),
+      v.literal("team_application"),
+      v.literal("connection_request"),
+      v.literal("application_status_change"),
+      v.literal("endorsement_received"),
+      v.literal("team_event"),
+      v.literal("profile_view")
     ),
     title: v.string(),
     message: v.string(),
@@ -81,13 +87,8 @@ export const getUserNotifications = query({
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()
-    if (!identity) {
-      throw new Error("Not authenticated")
-    }
-
-    // Verify the authenticated user matches the userId
-    if (identity.subject !== args.userId) {
-      throw new Error("Unauthorized: Cannot access other users' data")
+    if (!identity || identity.subject !== args.userId) {
+      return []
     }
 
     const { userId, limit = 20 } = args
@@ -109,13 +110,8 @@ export const getUnreadCount = query({
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()
-    if (!identity) {
-      throw new Error("Not authenticated")
-    }
-
-    // Verify the authenticated user matches the userId
-    if (identity.subject !== args.userId) {
-      throw new Error("Unauthorized: Cannot access other users' data")
+    if (!identity || identity.subject !== args.userId) {
+      return 0
     }
 
     const { userId } = args

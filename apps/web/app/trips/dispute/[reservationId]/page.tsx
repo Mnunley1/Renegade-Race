@@ -122,14 +122,17 @@ export default function DisputeCreationPage() {
   if (isAlreadyDisputed) {
     return (
       <div className="container mx-auto max-w-4xl px-4 py-8">
-        <div className="mb-6">
-          <Link href="/trips/disputes">
-            <Button className="mb-6" variant="outline">
-              <ArrowLeft className="mr-2 size-4" />
-              Back to Disputes
-            </Button>
+        <nav className="mb-3 flex items-center gap-1.5 text-sm">
+          <Link
+            className="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
+            href="/trips/disputes"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Disputes
           </Link>
-        </div>
+          <span className="text-muted-foreground/50">/</span>
+          <span className="truncate text-foreground">Already Disputed</span>
+        </nav>
         <Card>
           <CardContent className="p-12 text-center">
             <AlertTriangle className="mx-auto mb-4 size-12 text-yellow-500" />
@@ -148,14 +151,17 @@ export default function DisputeCreationPage() {
 
   return (
     <div className="container mx-auto max-w-4xl px-4 py-8">
-      <div className="mb-6">
-        <Link href="/trips">
-          <Button className="mb-6" variant="outline">
-            <ArrowLeft className="mr-2 size-4" />
-            Back to Trips
-          </Button>
+      <nav className="mb-3 flex items-center gap-1.5 text-sm">
+        <Link
+          className="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
+          href="/trips"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          Trips
         </Link>
-      </div>
+        <span className="text-muted-foreground/50">/</span>
+        <span className="truncate text-foreground">Create Dispute</span>
+      </nav>
 
       <div className="mb-8">
         <div className="mb-2 flex items-center gap-2">
