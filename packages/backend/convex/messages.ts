@@ -105,6 +105,12 @@ export const send = mutation({
     content: v.string(),
     messageType: v.optional(v.union(v.literal("text"), v.literal("image"), v.literal("system"))),
     replyTo: v.optional(v.id("messages")),
+    attachments: v.optional(v.array(v.object({
+      type: v.union(v.literal("image"), v.literal("pdf")),
+      url: v.string(),
+      fileName: v.string(),
+      fileSize: v.number(),
+    }))),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()
@@ -187,6 +193,25 @@ export const send = mutation({
       }
     }
 
+    // Validate attachments if provided
+    if (args.attachments && args.attachments.length > 0) {
+      const MAX_ATTACHMENTS = 10
+      const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
+
+      if (args.attachments.length > MAX_ATTACHMENTS) {
+        throw new Error(`Cannot send more than ${MAX_ATTACHMENTS} attachments`)
+      }
+
+      for (const attachment of args.attachments) {
+        if (attachment.fileSize > MAX_FILE_SIZE) {
+          throw new Error(`File ${attachment.fileName} exceeds maximum size of 10MB`)
+        }
+        if (!attachment.url || !attachment.fileName) {
+          throw new Error("Invalid attachment data")
+        }
+      }
+    }
+
     // Create the message with sanitized content
     const messageId = await ctx.db.insert("messages", {
       conversationId,
@@ -194,6 +219,7 @@ export const send = mutation({
       content: sanitizeMessage(args.content),
       messageType: args.messageType || "text",
       replyTo: args.replyTo,
+      attachments: args.attachments,
       isRead: false,
       createdAt: now,
     })
@@ -383,13 +409,8 @@ export const getUnreadCount = query({
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()
-    if (!identity) {
-      throw new Error("Not authenticated")
-    }
-
-    // Verify the authenticated user matches the userId
-    if (identity.subject !== args.userId) {
-      throw new Error("Unauthorized: Cannot access other users' data")
+    if (!identity || identity.subject !== args.userId) {
+      return 0
     }
 
     const { userId } = args
@@ -526,7 +547,7 @@ export const getHostConversations = query({
     const conversationsWithDetails = await Promise.all(
       filteredConversations.map(async (conversation) => {
         const [vehicle, renter] = await Promise.all([
-          ctx.db.get(conversation.vehicleId),
+          conversation.vehicleId ? ctx.db.get(conversation.vehicleId) : null,
           ctx.db
             .query("users")
             .withIndex("by_external_id", (q) => q.eq("externalId", conversation.renterId))

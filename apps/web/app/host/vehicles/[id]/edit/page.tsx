@@ -460,14 +460,20 @@ export default function EditVehiclePage() {
 
   return (
     <div className="container mx-auto max-w-4xl px-4 py-8">
-      <div className="mb-8">
-        <Link href={`/host/vehicles/${vehicleId}`}>
-          <Button className="mb-6" variant="outline">
-            <ArrowLeft className="mr-2 size-4" />
-            Back to Vehicle
-          </Button>
+      <nav className="mb-3 flex items-center gap-1.5 text-sm">
+        <Link
+          className="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
+          href={`/host/vehicles/${vehicleId}`}
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          Vehicle
         </Link>
-        <h1 className="mt-4 font-bold text-3xl">Edit Vehicle</h1>
+        <span className="text-muted-foreground/50">/</span>
+        <span className="truncate text-foreground">Edit</span>
+      </nav>
+
+      <div className="mb-8">
+        <h1 className="font-bold text-3xl">Edit Vehicle</h1>
         <p className="mt-2 text-muted-foreground">Update your vehicle information</p>
       </div>
 

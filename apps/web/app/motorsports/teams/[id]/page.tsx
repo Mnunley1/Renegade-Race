@@ -155,12 +155,17 @@ export default function TeamDetailPage({ params }: TeamDetailPageProps) {
   if (team === null) {
     return (
       <div className="container mx-auto px-4 py-8">
-        <Link href="/motorsports/teams">
-          <Button className="mb-6" variant="outline">
-            <ArrowLeft className="mr-2 size-4" />
-            Back to Teams
-          </Button>
-        </Link>
+        <nav className="mb-3 flex items-center gap-1.5 text-sm">
+          <Link
+            className="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
+            href="/motorsports/teams"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Teams
+          </Link>
+          <span className="text-muted-foreground/50">/</span>
+          <span className="truncate text-foreground">Not Found</span>
+        </nav>
         <Card>
           <CardContent className="py-12 text-center">
             <p className="mb-4 font-semibold text-lg">Team not found</p>
@@ -181,12 +186,17 @@ export default function TeamDetailPage({ params }: TeamDetailPageProps) {
   if (isHidden && !isOwner) {
     return (
       <div className="container mx-auto px-4 py-8">
-        <Link href="/motorsports/teams">
-          <Button className="mb-6" variant="outline">
-            <ArrowLeft className="mr-2 size-4" />
-            Back to Teams
-          </Button>
-        </Link>
+        <nav className="mb-3 flex items-center gap-1.5 text-sm">
+          <Link
+            className="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
+            href="/motorsports/teams"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Teams
+          </Link>
+          <span className="text-muted-foreground/50">/</span>
+          <span className="truncate text-foreground">Not Found</span>
+        </nav>
         <Card>
           <CardContent className="py-12 text-center">
             <p className="mb-4 font-semibold text-lg">Team not found</p>
@@ -242,12 +252,17 @@ export default function TeamDetailPage({ params }: TeamDetailPageProps) {
 
   return (
     <div className="container mx-auto px-4 py-8 pb-20 lg:pb-8">
-      <Link href="/motorsports/teams">
-        <Button className="mb-6" variant="outline">
-          <ArrowLeft className="mr-2 size-4" />
-          Back to Teams
-        </Button>
-      </Link>
+      <nav className="mb-4 flex items-center gap-1.5 text-sm">
+        <Link
+          className="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
+          href="/motorsports/teams"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          Teams
+        </Link>
+        <span className="text-muted-foreground/50">/</span>
+        <span className="truncate text-foreground">{team.name}</span>
+      </nav>
 
       {isHidden && isOwner && (
         <div className="mb-6 flex items-center gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
