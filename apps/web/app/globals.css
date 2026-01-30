@@ -1,1 +1,5 @@
 @source "../**/*.{ts,tsx}";
+
+:root {
+  --brand: #ef1c25;
+}

@@ -15,10 +15,15 @@ import Link from "next/link"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 import { cn } from "@workspace/ui/lib/utils"
+import { formatTime } from "@/lib/format-time"
+import { UserAvatar } from "@/components/user-avatar"
+
+type FilterTab = "all" | "unread" | "archived"
 
 function MessagesPageContent() {
   const { user, isSignedIn } = useUser()
   const [searchQuery, setSearchQuery] = useState("")
+  const [filterTab, setFilterTab] = useState<FilterTab>("all")
   const searchParams = useSearchParams()
   const router = useRouter()
 
@@ -59,8 +64,21 @@ function MessagesPageContent() {
     (a, b) => b.lastMessageAt - a.lastMessageAt
   )
 
+  // Filter conversations based on filter tab
+  const tabFilteredConversations = conversations.filter((conversation) => {
+    const unreadCount =
+      user?.id === conversation.renterId
+        ? conversation.unreadCountRenter
+        : conversation.unreadCountOwner
+
+    if (filterTab === "unread") return unreadCount > 0
+    if (filterTab === "archived") return (conversation as any).isActive === false
+    // "all" = active non-deleted
+    return (conversation as any).isActive !== false
+  })
+
   // Filter conversations based on search query
-  const filteredConversations = conversations.filter((conversation) => {
+  const filteredConversations = tabFilteredConversations.filter((conversation) => {
     if (!searchQuery.trim()) return true
 
     const otherUser = user?.id === conversation.renterId ? conversation.owner : conversation.renter
@@ -70,7 +88,9 @@ function MessagesPageContent() {
       otherUser?.name?.toLowerCase().includes(searchLower) ||
       conversation.vehicle?.make?.toLowerCase().includes(searchLower) ||
       conversation.vehicle?.model?.toLowerCase().includes(searchLower) ||
-      conversation.lastMessageText?.toLowerCase().includes(searchLower)
+      conversation.lastMessageText?.toLowerCase().includes(searchLower) ||
+      (conversation as any).team?.name?.toLowerCase().includes(searchLower) ||
+      (conversation as any).driverProfile?.name?.toLowerCase().includes(searchLower)
     )
   })
 
@@ -112,94 +132,36 @@ function MessagesPageContent() {
     }
   }
 
-  const handleBulkArchive = async () => {
+  const handleBulkAction = async (action: "archive" | "delete" | "mark_read") => {
     if (selectedConversations.length === 0) return
-
     setIsPerformingBulkAction(true)
     try {
       await bulkConversationActions({
         hostId: user?.id || "",
         conversationIds: selectedConversations.map((id) => id as Id<"conversations">),
-        action: "archive",
+        action,
       })
       setSelectedConversations([])
       setIsBulkMode(false)
     } catch (error) {
       handleErrorWithContext(error, {
-        action: "archive conversations",
+        action: `${action} conversations`,
         customMessages: {
-          generic: "Failed to archive conversations. Please try again.",
+          generic: `Failed to ${action.replace("_", " ")} conversations. Please try again.`,
         },
       })
     } finally {
       setIsPerformingBulkAction(false)
     }
-  }
-
-  const handleBulkDelete = async () => {
-    if (selectedConversations.length === 0) return
-
-    setIsPerformingBulkAction(true)
-    try {
-      await bulkConversationActions({
-        hostId: user?.id || "",
-        conversationIds: selectedConversations.map((id) => id as Id<"conversations">),
-        action: "delete",
-      })
-      setSelectedConversations([])
-      setIsBulkMode(false)
-    } catch (error) {
-      handleErrorWithContext(error, {
-        action: "delete conversations",
-        customMessages: {
-          generic: "Failed to delete conversations. Please try again.",
-        },
-      })
-    } finally {
-      setIsPerformingBulkAction(false)
-    }
-  }
-
-  const handleBulkMarkRead = async () => {
-    if (selectedConversations.length === 0) return
-
-    setIsPerformingBulkAction(true)
-    try {
-      await bulkConversationActions({
-        hostId: user?.id || "",
-        conversationIds: selectedConversations.map((id) => id as Id<"conversations">),
-        action: "mark_read",
-      })
-      setSelectedConversations([])
-      setIsBulkMode(false)
-    } catch (error) {
-      handleErrorWithContext(error, {
-        action: "mark conversations as read",
-        customMessages: {
-          generic: "Failed to mark conversations as read. Please try again.",
-        },
-      })
-    } finally {
-      setIsPerformingBulkAction(false)
-    }
-  }
-
-  const formatTime = (timestamp: number) => {
-    const date = new Date(timestamp)
-    const now = new Date()
-    const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60)
-
-    if (diffInHours < 1) {
-      const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60))
-      return `${diffInMinutes}m ago`
-    }
-    if (diffInHours < 24) {
-      return `${Math.floor(diffInHours)}h ago`
-    }
-    return date.toLocaleDateString()
   }
 
   const isLoading = renterConversations === undefined || ownerConversations === undefined
+
+  const filterTabs: { label: string; value: FilterTab }[] = [
+    { label: "All", value: "all" },
+    { label: "Unread", value: "unread" },
+    { label: "Archived", value: "archived" },
+  ]
 
   return (
     <div className="bg-background">
@@ -211,7 +173,7 @@ function MessagesPageContent() {
           </p>
         </div>
 
-        <Card className="h-[calc(100vh-16rem)] max-h-[700px]">
+        <Card className="h-[calc(100dvh-16rem)] max-h-[700px]">
           <CardHeader>
             <div className="space-y-4">
               <div className="flex items-center justify-between">
@@ -253,7 +215,7 @@ function MessagesPageContent() {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={handleBulkMarkRead}
+                      onClick={() => handleBulkAction("mark_read")}
                       disabled={isPerformingBulkAction}
                     >
                       Mark Read
@@ -261,7 +223,7 @@ function MessagesPageContent() {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={handleBulkArchive}
+                      onClick={() => handleBulkAction("archive")}
                       disabled={isPerformingBulkAction}
                     >
                       Archive
@@ -269,7 +231,7 @@ function MessagesPageContent() {
                     <Button
                       size="sm"
                       variant="destructive"
-                      onClick={handleBulkDelete}
+                      onClick={() => handleBulkAction("delete")}
                       disabled={isPerformingBulkAction}
                     >
                       Delete
@@ -277,6 +239,25 @@ function MessagesPageContent() {
                   </div>
                 </div>
               )}
+
+              {/* Filter tabs */}
+              <div className="flex gap-4 border-b border-border">
+                {filterTabs.map((tab) => (
+                  <button
+                    key={tab.value}
+                    type="button"
+                    onClick={() => setFilterTab(tab.value)}
+                    className={cn(
+                      "pb-2 text-sm font-medium transition-colors",
+                      filterTab === tab.value
+                        ? "border-b-2 border-[#EF1C25] text-foreground"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
 
               <div className="relative">
                 <Search className="-translate-y-1/2 absolute top-1/2 left-3 h-4 w-4 transform text-muted-foreground" />
@@ -319,8 +300,17 @@ function MessagesPageContent() {
                   <p className="text-muted-foreground text-sm">
                     {searchQuery
                       ? "Try a different search term."
-                      : "Start a conversation by booking a vehicle or listing one."}
+                      : "Start a conversation by booking a vehicle, listing one, or connecting with drivers and teams."}
                   </p>
+                  {!searchQuery && (
+                    <Button
+                      variant="outline"
+                      className="mt-4"
+                      onClick={() => router.push("/vehicles")}
+                    >
+                      Browse Vehicles
+                    </Button>
+                  )}
                 </div>
               </div>
             ) : (
@@ -338,9 +328,11 @@ function MessagesPageContent() {
 
                   const conversationContent = (
                     <div className="flex items-start space-x-3">
-                      <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-[#EF1C25] font-medium text-white">
-                        {otherUser?.name?.[0]?.toUpperCase() || "U"}
-                      </div>
+                      <UserAvatar
+                        name={otherUser?.name || "Unknown"}
+                        imageUrl={(otherUser as any)?.imageUrl}
+                        size="md"
+                      />
                       <div className="min-w-0 flex-1">
                         <div className="mb-1 flex items-start justify-between">
                           <h4 className="truncate font-semibold text-foreground text-sm">
@@ -360,7 +352,11 @@ function MessagesPageContent() {
                         <p className="mb-1 truncate text-muted-foreground text-xs">
                           {conversation.vehicle
                             ? `${conversation.vehicle.year} ${conversation.vehicle.make} ${conversation.vehicle.model}`
-                            : "Vehicle conversation"}
+                            : (conversation as any).team
+                              ? `Team: ${(conversation as any).team.name}`
+                              : (conversation as any).driverProfile
+                                ? `Driver: ${(conversation as any).driverProfile?.name || "Driver conversation"}`
+                                : "Conversation"}
                         </p>
                         <p
                           className={cn(
@@ -377,25 +373,30 @@ function MessagesPageContent() {
                   )
 
                   return (
-                    <div
-                      key={conversation._id}
-                      className={cn(
-                        "w-full text-left transition-colors hover:bg-muted/50",
-                        isBulkMode ? "flex items-center space-x-3 p-4" : "p-4"
-                      )}
-                    >
-                      {isBulkMode && (
-                        <input
-                          type="checkbox"
-                          checked={selectedConversations.includes(conversation._id)}
-                          onChange={() => handleBulkSelect(conversation._id)}
-                          className="h-4 w-4 flex-shrink-0 rounded border-border text-[#EF1C25] focus:ring-[#EF1C25]"
-                        />
-                      )}
+                    <div key={conversation._id}>
                       {isBulkMode ? (
-                        <div className="flex-1">{conversationContent}</div>
+                        <div
+                          className={cn(
+                            "flex w-full items-center space-x-3 p-4 text-left transition-colors hover:bg-muted/50 active:bg-muted/70",
+                            unreadCount > 0 && "border-l-2 border-[#EF1C25] bg-[#EF1C25]/5"
+                          )}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedConversations.includes(conversation._id)}
+                            onChange={() => handleBulkSelect(conversation._id)}
+                            className="h-4 w-4 flex-shrink-0 rounded border-border text-[#EF1C25] focus:ring-[#EF1C25]"
+                          />
+                          <div className="flex-1">{conversationContent}</div>
+                        </div>
                       ) : (
-                        <Link href={`/messages/${conversation._id}`} className="w-full text-left">
+                        <Link
+                          href={`/messages/${conversation._id}`}
+                          className={cn(
+                            "block w-full p-4 text-left transition-colors hover:bg-muted/50 active:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                            unreadCount > 0 && "border-l-2 border-[#EF1C25] bg-[#EF1C25]/5"
+                          )}
+                        >
                           {conversationContent}
                         </Link>
                       )}
@@ -423,9 +424,22 @@ export default function MessagesPage() {
                 Manage your conversations and stay connected with other users.
               </p>
             </div>
-            <Card className="h-[calc(100vh-16rem)] max-h-[700px]">
+            <Card className="h-[calc(100dvh-16rem)] max-h-[700px]">
               <CardContent className="p-6">
-                <div className="text-center text-muted-foreground">Loading...</div>
+                <div className="space-y-3">
+                  {Array.from({ length: 5 }).map((_, index) => (
+                    <div
+                      key={index}
+                      className="flex animate-pulse items-center space-x-3 rounded-lg bg-muted p-3"
+                    >
+                      <div className="h-12 w-12 flex-shrink-0 rounded-full bg-muted-foreground/20" />
+                      <div className="flex-1 space-y-2">
+                        <div className="h-4 w-3/4 rounded bg-muted-foreground/20" />
+                        <div className="h-3 w-1/2 rounded bg-muted-foreground/20" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </CardContent>
             </Card>
           </div>

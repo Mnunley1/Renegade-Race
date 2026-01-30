@@ -22,7 +22,7 @@ type UnreadConversationInfo = {
   conversationId: string
   unreadCount: number
   lastMessageText?: string
-  vehicleId: string
+  vehicleId?: string
   otherUserId: string
 }
 
@@ -67,7 +67,7 @@ function buildUserUnreadMap(
     _id: Id<"conversations">
     renterId: string
     ownerId: string
-    vehicleId: Id<"vehicles">
+    vehicleId?: Id<"vehicles">
     unreadCountRenter?: number
     unreadCountOwner?: number
     lastMessageText?: string
@@ -115,7 +115,9 @@ function buildConversationDetails(ctx: MutationCtx, unreadConversations: UnreadC
         .withIndex("by_external_id", (q) => q.eq("externalId", conv.otherUserId))
         .first()
 
-      const vehicle = await ctx.db.get(conv.vehicleId as Id<"vehicles">)
+      const vehicle = conv.vehicleId
+        ? await ctx.db.get(conv.vehicleId as Id<"vehicles">)
+        : null
 
       return {
         senderName: otherUser?.name || "Unknown User",
