@@ -153,9 +153,9 @@ export function UserMenu() {
             </DropdownMenuItem>
             <DropdownMenuItem
               asChild
-              className={pathname === "/profile/settings" ? "bg-accent" : ""}
+              className={pathname === "/settings" ? "bg-accent" : ""}
             >
-              <Link className="flex items-center text-sm" href="/profile/settings">
+              <Link className="flex items-center text-sm" href="/settings">
                 <Settings className="mr-3 size-4" />
                 Account
               </Link>
