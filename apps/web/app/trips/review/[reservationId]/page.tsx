@@ -33,14 +33,8 @@ export default function ReviewSubmissionPage() {
   const [review, setReview] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const {
-    photos,
-    setPhotos,
-    isUploading,
-    fileInputRef,
-    handlePhotoUpload,
-    handleRemovePhoto,
-  } = usePhotoUpload()
+  const { photos, setPhotos, isUploading, fileInputRef, handlePhotoUpload, handleRemovePhoto } =
+    usePhotoUpload()
 
   // Fetch reservation and completion data
   const reservation = useQuery(
@@ -130,14 +124,15 @@ export default function ReviewSubmissionPage() {
         entity: "review",
         customMessages: {
           duplicate: "You have already submitted a review for this rental",
-          generic: existingReview ? "Failed to update review. Please try again." : "Failed to submit review. Please try again.",
+          generic: existingReview
+            ? "Failed to update review. Please try again."
+            : "Failed to submit review. Please try again.",
         },
       })
     } finally {
       setIsSubmitting(false)
     }
   }
-
 
   const StarRating = ({
     value,
@@ -198,14 +193,19 @@ export default function ReviewSubmissionPage() {
 
   return (
     <div className="container mx-auto max-w-4xl px-4 py-8">
-      <div className="mb-6">
-        <Link href="/trips">
-          <Button className="mb-6" variant="outline">
-            <ArrowLeft className="mr-2 size-4" />
-            Back to Trips
-          </Button>
+      <nav className="mb-3 flex items-center gap-1.5 text-sm">
+        <Link
+          className="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
+          href="/trips"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          Trips
         </Link>
-      </div>
+        <span className="text-muted-foreground/50">/</span>
+        <span className="truncate text-foreground">
+          {isEditing ? "Edit Review" : "Write Review"}
+        </span>
+      </nav>
 
       <div className="mb-8">
         <h1 className="mb-2 font-bold text-3xl">
@@ -311,7 +311,7 @@ export default function ReviewSubmissionPage() {
                       src={getImageKitUrl(photoKey, { width: 96, height: 96, quality: 80 })}
                     />
                     <button
-                      className="absolute right-1 top-1 rounded-full bg-destructive p-1 opacity-0 transition-opacity group-hover:opacity-100"
+                      className="absolute top-1 right-1 rounded-full bg-destructive p-1 opacity-0 transition-opacity group-hover:opacity-100"
                       onClick={() => handleRemovePhoto(index)}
                       type="button"
                     >

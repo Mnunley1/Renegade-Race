@@ -92,9 +92,7 @@ function StarRating({ rating, size = "sm" }: { rating: number; size?: "sm" | "md
           key={star}
           className={cn(
             sizeClasses[size],
-            star <= Math.round(rating)
-              ? "fill-amber-400 text-amber-400"
-              : "fill-muted text-muted"
+            star <= Math.round(rating) ? "fill-amber-400 text-amber-400" : "fill-muted text-muted"
           )}
         />
       ))}
@@ -125,6 +123,7 @@ function RatingBar({ rating, count, total }: { rating: number; count: number; to
 type UserData = {
   _id?: Id<"users">
   name?: string
+  email?: string
   profileImage?: string
   location?: string
   bio?: string
@@ -202,7 +201,7 @@ function ProfileHero({
                 </AvatarFallback>
               </Avatar>
               {userRating > 0 && (
-                <div className="-translate-x-1/2 absolute -bottom-2 left-1/2 flex items-center gap-1.5 rounded-full bg-white px-4 py-2 shadow-lg dark:bg-gray-900">
+                <div className="-translate-x-1/2 -bottom-2 absolute left-1/2 flex items-center gap-1.5 rounded-full bg-white px-4 py-2 shadow-lg dark:bg-gray-900">
                   <Star className="size-5 fill-amber-400 text-amber-400" />
                   <span className="font-bold text-lg">{userRating.toFixed(1)}</span>
                 </div>
@@ -564,7 +563,7 @@ export default function UserProfilePage() {
     if (!vehicles) {
       return []
     }
-    return vehicles.map((v) => v._id as Id<"vehicles">)
+    return vehicles.map((v: any) => v._id as Id<"vehicles">)
   }, [vehicles])
 
   const userVehicleStats = useQuery(
@@ -577,8 +576,8 @@ export default function UserProfilePage() {
     if (!vehicles) {
       return []
     }
-    return vehicles.map((vehicle) => {
-      const primaryImage = vehicle.images?.find((img) => img.isPrimary) || vehicle.images?.[0]
+    return vehicles.map((vehicle: any) => {
+      const primaryImage = vehicle.images?.find((img: any) => img.isPrimary) || vehicle.images?.[0]
       const stats = userVehicleStats?.[vehicle._id]
       return {
         id: vehicle._id,
@@ -717,7 +716,7 @@ export default function UserProfilePage() {
               <TabsContent className="mt-0" value="reviews">
                 {reviews && reviews.length > 0 ? (
                   <div className="space-y-4">
-                    {reviews.map((review) => (
+                    {reviews.map((review: any) => (
                       <ReviewCard
                         key={review._id}
                         firstName={firstName}

@@ -51,7 +51,10 @@ function CheckoutSuccessContent() {
 
   const vehicle = reservation.vehicle
   const primaryImage =
-    vehicle?.images?.find((img: { isPrimary: boolean; cardUrl?: string }) => img.isPrimary)?.cardUrl || vehicle?.images?.[0]?.cardUrl || ""
+    (vehicle as any)?.images?.find((img: { isPrimary: boolean; cardUrl?: string }) => img.isPrimary)
+      ?.cardUrl ||
+    (vehicle as any)?.images?.[0]?.cardUrl ||
+    ""
 
   return (
     <div className="container mx-auto max-w-4xl px-4 py-8">
@@ -82,10 +85,10 @@ function CheckoutSuccessContent() {
                     <h2 className="mb-2 font-bold text-2xl">
                       {vehicle.year} {vehicle.make} {vehicle.model}
                     </h2>
-                    {vehicle.location && (
+                    {(vehicle as any).location && (
                       <div className="mb-2 flex items-center gap-2 text-muted-foreground">
                         <MapPin className="size-4" />
-                        <span>{vehicle.location}</span>
+                        <span>{(vehicle as any).location}</span>
                       </div>
                     )}
                   </div>

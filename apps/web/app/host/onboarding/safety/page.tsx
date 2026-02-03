@@ -36,7 +36,7 @@ export default function SafetyPage() {
       return
     }
 
-    if (!draft?.vehicleData || !draft?.address) {
+    if (!(draft?.vehicleData && draft?.address)) {
       toast.error("Missing vehicle data. Please go back and complete previous steps.")
       return
     }
@@ -85,7 +85,6 @@ export default function SafetyPage() {
         images,
       })
 
-
       // Mark steps as complete
       await updateOnboardingStep({
         step: "vehicleAdded",
@@ -132,14 +131,12 @@ export default function SafetyPage() {
     )
   }
 
-  if (!draft?.vehicleData || !draft?.address) {
+  if (!(draft?.vehicleData && draft?.address)) {
     return (
       <div className="container mx-auto max-w-2xl px-4 py-4 md:py-16">
         <Card>
           <CardContent className="py-12 text-center">
-            <p className="mb-4 text-muted-foreground">
-              Please complete the previous steps first.
-            </p>
+            <p className="mb-4 text-muted-foreground">Please complete the previous steps first.</p>
           </CardContent>
         </Card>
       </div>
@@ -230,7 +227,10 @@ export default function SafetyPage() {
           </div>
 
           <div className="flex justify-end gap-4 pt-4">
-            <Button disabled={!(acknowledged && termsAccepted) || isSubmitting} onClick={handleSubmit}>
+            <Button
+              disabled={!(acknowledged && termsAccepted) || isSubmitting}
+              onClick={handleSubmit}
+            >
               {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 size-4 animate-spin" />
@@ -249,4 +249,3 @@ export default function SafetyPage() {
     </div>
   )
 }
-

@@ -55,11 +55,13 @@ export default function VehiclePage() {
       setFormData((prev) => ({
         ...prev,
         trackId: draft.vehicleData?.trackId || "",
-        make: draft.vehicleData.make || prev.make,
-        model: draft.vehicleData.model || prev.model,
-        year: draft.vehicleData.year || prev.year,
-        dailyRate: draft.vehicleData.dailyRate ? String(draft.vehicleData.dailyRate) : prev.dailyRate,
-        description: draft.vehicleData.description || prev.description,
+        make: draft.vehicleData?.make || prev.make,
+        model: draft.vehicleData?.model || prev.model,
+        year: draft.vehicleData?.year || prev.year,
+        dailyRate: draft.vehicleData?.dailyRate
+          ? String(draft.vehicleData.dailyRate)
+          : prev.dailyRate,
+        description: draft.vehicleData?.description || prev.description,
       }))
     }
     if (draft?.address) {
@@ -79,8 +81,7 @@ export default function VehiclePage() {
     const { name, value } = e.target
     setFormData({
       ...formData,
-      [name]:
-        name === "year" || name === "dailyRate" ? (value === "" ? "" : Number(value)) : value,
+      [name]: name === "year" || name === "dailyRate" ? (value === "" ? "" : Number(value)) : value,
     })
   }
 
@@ -91,8 +92,8 @@ export default function VehiclePage() {
     })
   }
 
-  const isFormValid = () => {
-    return !!(
+  const isFormValid = () =>
+    !!(
       formData.make &&
       formData.model &&
       formData.year &&
@@ -103,7 +104,6 @@ export default function VehiclePage() {
       formData.state &&
       formData.zipCode
     )
-  }
 
   const handleContinue = async () => {
     if (!isFormValid()) {
@@ -187,7 +187,7 @@ export default function VehiclePage() {
                 <SelectValue placeholder="Select a track (optional)" />
               </SelectTrigger>
               <SelectContent>
-                {tracks.map((track) => (
+                {tracks.map((track: { _id: string; name: string; location: string }) => (
                   <SelectItem key={track._id} value={track._id}>
                     {track.name} - {track.location}
                   </SelectItem>
@@ -342,4 +342,3 @@ export default function VehiclePage() {
     </div>
   )
 }
-

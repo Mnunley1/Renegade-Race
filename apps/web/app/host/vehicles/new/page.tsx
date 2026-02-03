@@ -94,7 +94,13 @@ export default function CreateVehiclePage() {
 
   // Step 3: Add-ons state
   const [addOns, setAddOns] = useState<
-    Array<{ name: string; price: number; description: string; isRequired: boolean; priceType: "daily" | "one-time" }>
+    Array<{
+      name: string
+      price: number
+      description: string
+      isRequired: boolean
+      priceType: "daily" | "one-time"
+    }>
   >([])
   const [newAddOn, setNewAddOn] = useState({
     name: "",
@@ -196,6 +202,7 @@ export default function CreateVehiclePage() {
       const imageKeys: string[] = []
       for (let index = 0; index < images.length; index++) {
         const img = images[index]
+        if (!img) continue
         try {
           if (index > 0) {
             await new Promise((resolve) => setTimeout(resolve, 500))
@@ -434,7 +441,7 @@ export default function CreateVehiclePage() {
                   <SelectValue placeholder="Select a track (optional)" />
                 </SelectTrigger>
                 <SelectContent>
-                  {tracks.map((track) => (
+                  {tracks.map((track: { _id: string; name: string; location: string }) => (
                     <SelectItem key={track._id} value={track._id}>
                       {track.name} - {track.location}
                     </SelectItem>
@@ -617,10 +624,7 @@ export default function CreateVehiclePage() {
             </div>
 
             <div className="flex justify-end gap-4 pt-4">
-              <Button
-                disabled={!isVehicleFormValid()}
-                onClick={handleVehicleContinue}
-              >
+              <Button disabled={!isVehicleFormValid()} onClick={handleVehicleContinue}>
                 Continue to Photos
                 <ArrowRight className="ml-2 size-4" />
               </Button>
@@ -722,9 +726,7 @@ export default function CreateVehiclePage() {
         <Card>
           <CardHeader>
             <CardTitle>Optional Add-ons</CardTitle>
-            <CardDescription>
-              Additional services or items renters can purchase
-            </CardDescription>
+            <CardDescription>Additional services or items renters can purchase</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="space-y-4">
@@ -741,7 +743,8 @@ export default function CreateVehiclePage() {
                           <p className="text-muted-foreground text-sm">{addOn.description}</p>
                         )}
                         <p className="font-semibold text-primary">
-                          ${addOn.price}{addOn.priceType === "daily" ? "/day" : " one-time"}
+                          ${addOn.price}
+                          {addOn.priceType === "daily" ? "/day" : " one-time"}
                         </p>
                       </div>
                       <Button
@@ -782,7 +785,9 @@ export default function CreateVehiclePage() {
                 <div className="space-y-2">
                   <Label htmlFor="addOnPriceType">Payment Type</Label>
                   <Select
-                    onValueChange={(value: "daily" | "one-time") => setNewAddOn((prev) => ({ ...prev, priceType: value }))}
+                    onValueChange={(value: "daily" | "one-time") =>
+                      setNewAddOn((prev) => ({ ...prev, priceType: value }))
+                    }
                     value={newAddOn.priceType}
                   >
                     <SelectTrigger id="addOnPriceType">
@@ -798,7 +803,9 @@ export default function CreateVehiclePage() {
                   <Label htmlFor="addOnDescription">Description (Optional)</Label>
                   <Input
                     id="addOnDescription"
-                    onChange={(e) => setNewAddOn((prev) => ({ ...prev, description: e.target.value }))}
+                    onChange={(e) =>
+                      setNewAddOn((prev) => ({ ...prev, description: e.target.value }))
+                    }
                     placeholder="Brief description of the add-on"
                     value={newAddOn.description}
                   />

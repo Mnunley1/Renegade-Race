@@ -27,7 +27,7 @@ export function TeamApplicationForm({ teamId }: TeamApplicationFormProps) {
 
   // Check if user has already applied to this team
   const hasApplied = Boolean(
-    existingApplications?.some((app) => app.teamId === teamId && app.status === "pending")
+    existingApplications?.some((app: any) => app.teamId === teamId && app.status === "pending")
   )
 
   // Check if user has a driver profile
@@ -161,5 +161,3 @@ export function TeamApplicationForm({ teamId }: TeamApplicationFormProps) {
     </Card>
   )
 }
-
-

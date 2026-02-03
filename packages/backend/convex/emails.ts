@@ -1,31 +1,10 @@
 import { Resend as ResendComponent } from "@convex-dev/resend"
 import { v } from "convex/values"
 import { Resend } from "resend"
-import { components } from "./_generated/api"
+import { components, internal } from "./_generated/api"
 import { type MutationCtx, mutation, query } from "./_generated/server"
-// TODO: Uncomment after installing @convex-dev/rate-limiter
-// import { rateLimiter } from "./rateLimiter"
-
-// Helper function to check if user is admin
-async function checkAdmin(ctx: any) {
-  const identity = await ctx.auth.getUserIdentity()
-  if (!identity) {
-    throw new Error("Not authenticated")
-  }
-
-  // When session token is configured with { "metadata": "{{user.public_metadata}}" },
-  // the metadata is available in identity.metadata
-  const role =
-    (identity as any).metadata?.role || // From session token (recommended)
-    (identity as any).publicMetadata?.role || // Direct from Clerk
-    (identity as any).orgRole
-
-  if (role !== "admin") {
-    throw new Error("Admin access required")
-  }
-
-  return identity
-}
+import { rateLimiter } from "./rateLimiter"
+import { checkAdmin } from "./admin"
 
 // Initialize Resend client (legacy - for sendMassEmail)
 function getResendClient() {
@@ -71,6 +50,19 @@ function isTestMode(): boolean {
 function getTestDomain(): string {
   // Library requires @resend.dev in test mode - use that and forward to custom domain
   return "resend.dev"
+}
+
+// Helper function to log email failures to audit log
+async function logEmailFailure(ctx: any, error: unknown, context: string) {
+  try {
+    await ctx.runMutation(internal.auditLog.create, {
+      entityType: "user",
+      action: "send_failed",
+      metadata: { error: String(error), context },
+    })
+  } catch {
+    // Don't fail the parent operation
+  }
 }
 
 // Helper function to get from email address
@@ -887,6 +879,10 @@ export async function sendTransactionalEmail(
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { logError } = require("./logger")
     logError(error, "Failed to send transactional email")
+
+    // Log to audit log for admin visibility
+    await logEmailFailure(ctx, error, `Transactional email to ${to}: ${template.subject}`)
+
     // Don't throw - email failures shouldn't break the main flow
     return null
   }
@@ -947,8 +943,8 @@ export const sendMassEmail = mutation({
 
     // Send emails using Resend
     // Resend supports batch sending, but we'll send individually for better error handling
-    const results = []
-    const errors = []
+    const results: Array<{ recipient: string; success: boolean; id: string | undefined }> = []
+    const errors: Array<{ recipient: string; error: string }> = []
 
     for (const recipient of recipients) {
       try {
@@ -1009,11 +1005,10 @@ export const sendContactFormEmail = mutation({
   },
   handler: async (ctx, args) => {
     // Rate limit: 5 emails per hour per email address (prevents spam)
-    // TODO: Uncomment after installing @convex-dev/rate-limiter
-    // await rateLimiter.limit(ctx, "sendEmail", {
-    //   key: args.email.toLowerCase(),
-    //   throws: true,
-    // })
+    await rateLimiter.limit(ctx, "sendEmail", {
+      key: args.email.toLowerCase(),
+      throws: true,
+    })
 
     // Use getSupportEmail() which handles test mode automatically
     const supportEmail = getSupportEmail()

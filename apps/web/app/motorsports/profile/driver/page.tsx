@@ -94,7 +94,7 @@ export default function CreateDriverProfilePage() {
   // Redirect to existing profile if user already has one
   useEffect(() => {
     if (existingProfile && existingProfile.length > 0) {
-      router.push(`/motorsports/drivers/${existingProfile[0]._id}`)
+      router.push(`/motorsports/drivers/${existingProfile[0]!._id}`)
     }
   }, [existingProfile, router])
 
@@ -577,11 +577,12 @@ export default function CreateDriverProfilePage() {
                       </button>
                     ))}
                   </div>
-                  {formData.preferredCategories.filter((cat) => REAL_WORLD_CATEGORIES.includes(cat))
-                    .length > 0 && (
+                  {formData.preferredCategories.filter((cat) =>
+                    REAL_WORLD_CATEGORIES.includes(cat as any)
+                  ).length > 0 && (
                     <div className="flex flex-wrap gap-2">
                       {formData.preferredCategories
-                        .filter((cat) => REAL_WORLD_CATEGORIES.includes(cat))
+                        .filter((cat) => REAL_WORLD_CATEGORIES.includes(cat as any))
                         .map((category) => (
                           <span
                             className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-1 text-primary text-xs"
@@ -721,11 +722,12 @@ export default function CreateDriverProfilePage() {
                       </button>
                     ))}
                   </div>
-                  {formData.preferredCategories.filter((cat) => SIM_RACING_CATEGORIES.includes(cat))
-                    .length > 0 && (
+                  {formData.preferredCategories.filter((cat) =>
+                    SIM_RACING_CATEGORIES.includes(cat as any)
+                  ).length > 0 && (
                     <div className="flex flex-wrap gap-2">
                       {formData.preferredCategories
-                        .filter((cat) => SIM_RACING_CATEGORIES.includes(cat))
+                        .filter((cat) => SIM_RACING_CATEGORIES.includes(cat as any))
                         .map((category) => (
                           <span
                             className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-1 text-primary text-xs"

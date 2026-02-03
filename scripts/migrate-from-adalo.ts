@@ -1,12 +1,12 @@
 #!/usr/bin/env tsx
 /**
  * Migration Runner Script
- * 
+ *
  * This script helps migrate data from Adalo to Convex
- * 
+ *
  * Usage:
  *   tsx scripts/migrate-from-adalo.ts --data-file adalo-export.json --user-mapping users.json
- * 
+ *
  * Or with environment variables:
  *   CONVEX_URL=your-url tsx scripts/migrate-from-adalo.ts --data-file adalo-export.json
  */
@@ -140,20 +140,17 @@ class MigrationRunner {
       console.log(`  Processing batch ${Math.floor(i / batchSize) + 1}...`)
 
       try {
-        const result = await this.client.mutation(
-          api.migrateAdalo.migrateUsersBatch,
-          { users: batch }
-        )
+        const result = await this.client.mutation(api.migrateAdalo.migrateUsersBatch, {
+          users: batch,
+        })
 
         this.stats.users.success += result.successCount
         this.stats.users.failed += result.errorCount
         this.stats.users.errors.push(...result.errors.map((e) => e.error))
 
-        console.log(
-          `    ✅ ${result.successCount} succeeded, ❌ ${result.errorCount} failed`
-        )
+        console.log(`    ✅ ${result.successCount} succeeded, ❌ ${result.errorCount} failed`)
       } catch (error) {
-        console.error(`    ❌ Batch failed:`, error)
+        console.error("    ❌ Batch failed:", error)
         this.stats.users.failed += batch.length
         this.stats.users.errors.push(String(error))
       }
@@ -178,14 +175,11 @@ class MigrationRunner {
       }
 
       try {
-        const vehicleId = await this.client.mutation(
-          api.migrateAdalo.migrateVehicle,
-          {
-            adaloVehicle: vehicle,
-            ownerClerkId,
-            trackName: vehicle.trackName,
-          }
-        )
+        const vehicleId = await this.client.mutation(api.migrateAdalo.migrateVehicle, {
+          adaloVehicle: vehicle,
+          ownerClerkId,
+          trackName: vehicle.trackName,
+        })
 
         this.vehicleMapping[vehicle.id] = vehicleId
         this.stats.vehicles.success++
@@ -193,9 +187,7 @@ class MigrationRunner {
       } catch (error) {
         console.error(`  ❌ Failed to migrate vehicle ${vehicle.id}:`, error)
         this.stats.vehicles.failed++
-        this.stats.vehicles.errors.push(
-          `Vehicle ${vehicle.id}: ${String(error)}`
-        )
+        this.stats.vehicles.errors.push(`Vehicle ${vehicle.id}: ${String(error)}`)
       }
 
       // Small delay to avoid rate limiting
@@ -203,9 +195,7 @@ class MigrationRunner {
     }
   }
 
-  async migrateReservations(
-    reservations: AdaloReservation[]
-  ): Promise<void> {
+  async migrateReservations(reservations: AdaloReservation[]): Promise<void> {
     console.log(`\n📅 Migrating ${reservations.length} reservations...`)
 
     for (const reservation of reservations) {
@@ -213,10 +203,8 @@ class MigrationRunner {
       const renterClerkId = this.userMapping[reservation.renterId]
       const ownerClerkId = this.userMapping[reservation.ownerId]
 
-      if (!vehicleConvexId || !renterClerkId || !ownerClerkId) {
-        console.log(
-          `  ⚠️  Skipping reservation ${reservation.id} - missing mappings`
-        )
+      if (!(vehicleConvexId && renterClerkId && ownerClerkId)) {
+        console.log(`  ⚠️  Skipping reservation ${reservation.id} - missing mappings`)
         this.stats.reservations.failed++
         this.stats.reservations.errors.push(
           `Reservation ${reservation.id}: Missing vehicle or user mappings`
@@ -235,14 +223,9 @@ class MigrationRunner {
         this.stats.reservations.success++
         console.log(`  ✅ Migrated reservation: ${reservation.id}`)
       } catch (error) {
-        console.error(
-          `  ❌ Failed to migrate reservation ${reservation.id}:`,
-          error
-        )
+        console.error(`  ❌ Failed to migrate reservation ${reservation.id}:`, error)
         this.stats.reservations.failed++
-        this.stats.reservations.errors.push(
-          `Reservation ${reservation.id}: ${String(error)}`
-        )
+        this.stats.reservations.errors.push(`Reservation ${reservation.id}: ${String(error)}`)
       }
 
       await this.sleep(500)
@@ -281,7 +264,9 @@ class MigrationRunner {
     console.log("=".repeat(60))
     console.log(`Users:      ✅ ${this.stats.users.success}  ❌ ${this.stats.users.failed}`)
     console.log(`Vehicles:   ✅ ${this.stats.vehicles.success}  ❌ ${this.stats.vehicles.failed}`)
-    console.log(`Reservations: ✅ ${this.stats.reservations.success}  ❌ ${this.stats.reservations.failed}`)
+    console.log(
+      `Reservations: ✅ ${this.stats.reservations.success}  ❌ ${this.stats.reservations.failed}`
+    )
     console.log(`Reviews:    ✅ ${this.stats.reviews.success}  ❌ ${this.stats.reviews.failed}`)
 
     if (
@@ -319,17 +304,15 @@ async function main() {
   const convexUrlIndex = args.indexOf("--convex-url")
 
   if (dataFileIndex === -1 || args[dataFileIndex + 1] === undefined) {
-    console.error("Usage: tsx scripts/migrate-from-adalo.ts --data-file <file> [--user-mapping <file>] [--convex-url <url>]")
+    console.error(
+      "Usage: tsx scripts/migrate-from-adalo.ts --data-file <file> [--user-mapping <file>] [--convex-url <url>]"
+    )
     process.exit(1)
   }
 
   const dataFilePath = args[dataFileIndex + 1]
-  const mappingFilePath =
-    mappingFileIndex !== -1 ? args[mappingFileIndex + 1] : undefined
-  const convexUrl =
-    convexUrlIndex !== -1
-      ? args[convexUrlIndex + 1]
-      : process.env.CONVEX_URL
+  const mappingFilePath = mappingFileIndex !== -1 ? args[mappingFileIndex + 1] : undefined
+  const convexUrl = convexUrlIndex !== -1 ? args[convexUrlIndex + 1] : process.env.CONVEX_URL
 
   if (!convexUrl) {
     console.error("Error: CONVEX_URL not provided (use --convex-url or set CONVEX_URL env var)")
@@ -338,15 +321,11 @@ async function main() {
 
   // Load data files
   console.log("📂 Loading data files...")
-  const adaloData: AdaloData = JSON.parse(
-    fs.readFileSync(path.resolve(dataFilePath), "utf-8")
-  )
+  const adaloData: AdaloData = JSON.parse(fs.readFileSync(path.resolve(dataFilePath), "utf-8"))
 
   let userMapping: UserMapping = {}
   if (mappingFilePath) {
-    userMapping = JSON.parse(
-      fs.readFileSync(path.resolve(mappingFilePath), "utf-8")
-    )
+    userMapping = JSON.parse(fs.readFileSync(path.resolve(mappingFilePath), "utf-8"))
   } else {
     console.log("⚠️  No user mapping file provided. Users will be skipped.")
   }

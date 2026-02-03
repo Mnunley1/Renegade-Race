@@ -33,9 +33,11 @@ export function getImageKitUrl(
   // ImageKit URL endpoint - set via: npx convex env set IMAGEKIT_URL_ENDPOINT https://ik.imagekit.io/your_id
   // ImageKit must be configured with your R2 bucket as an external S3-compatible origin
   const imageKitEndpoint = process.env.IMAGEKIT_URL_ENDPOINT
-  
+
   if (!imageKitEndpoint) {
-    console.warn(`[R2] IMAGEKIT_URL_ENDPOINT is not configured. Set it via: npx convex env set IMAGEKIT_URL_ENDPOINT https://ik.imagekit.io/your_id`)
+    console.warn(
+      "[R2] IMAGEKIT_URL_ENDPOINT is not configured. Set it via: npx convex env set IMAGEKIT_URL_ENDPOINT https://ik.imagekit.io/your_id"
+    )
     // Return a placeholder - won't work but helps with debugging
     return `/api/image/${key}`
   }
@@ -84,12 +86,15 @@ export const imagePresets = {
   hero: (key: string) =>
     getImageKitUrl(key, { width: 1920, height: 1080, quality: 75, format: "auto" }),
   original: (key: string) => getImageKitUrl(key, { quality: 90, format: "auto" }),
+  avatar: (key: string) =>
+    getImageKitUrl(key, { width: 200, height: 200, quality: 80, format: "auto", fit: "cover" }),
 }
 
 // R2 Client API with validation
 export const { generateUploadUrl, syncMetadata } = r2.clientApi({
   checkUpload: async (ctx, bucket) => {
     // Verify user is authenticated
+    // @ts-expect-error - GenericQueryCtx type mismatch with QueryCtx
     const user = await getCurrentUser(ctx)
     if (!user) {
       throw new Error("Not authenticated")
@@ -179,7 +184,7 @@ export const testR2Configuration = mutation({
         success: true,
         message: "R2 configuration appears to be working",
         testKey,
-        uploadUrl: uploadUrl.substring(0, 100) + "...", // Truncate for security
+        uploadUrl: (uploadUrl.url || String(uploadUrl)).substring(0, 100) + "...", // Truncate for security
       }
     } catch (error) {
       return {
@@ -190,6 +195,3 @@ export const testR2Configuration = mutation({
     }
   },
 })
-
-
-

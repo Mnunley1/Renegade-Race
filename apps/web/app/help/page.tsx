@@ -111,12 +111,62 @@ export default function HelpPage() {
         },
       ],
     },
+    {
+      category: "Cancellation & Refunds",
+      questions: [
+        {
+          question: "What is the cancellation policy?",
+          answer:
+            "Cancellation policies vary by listing and are set by the host. There are three types: Flexible (full refund up to 1 day before), Moderate (full refund up to 7 days before), and Strict (full refund up to 14 days before). Check the specific policy on each vehicle's listing page.",
+        },
+        {
+          question: "How do I cancel my reservation?",
+          answer:
+            "Go to your Trips page, select the reservation you want to cancel, and click 'Cancel Reservation'. Follow the prompts to complete the cancellation. Your refund amount will depend on the cancellation policy and how far in advance you cancel.",
+        },
+        {
+          question: "When will I receive my refund?",
+          answer:
+            "Refunds are processed back to your original payment method within 5-10 business days after the cancellation is confirmed. The exact timing may vary depending on your bank or credit card company.",
+        },
+        {
+          question: "What if the host cancels my reservation?",
+          answer:
+            "If a host cancels your confirmed reservation, you will receive a full refund regardless of the cancellation policy. We take host cancellations seriously and will help you find an alternative vehicle when possible.",
+        },
+      ],
+    },
+    {
+      category: "Account & Profile",
+      questions: [
+        {
+          question: "How do I update my profile information?",
+          answer:
+            "Go to your Profile page from the main menu. You can update your name, profile photo, bio, and contact information. Remember to save your changes before leaving the page.",
+        },
+        {
+          question: "Can I delete my account?",
+          answer:
+            "Yes, you can delete your account from the Profile Settings page. Note that you cannot delete your account if you have active reservations or pending payments. Once deleted, your account data will be permanently removed within 30 days.",
+        },
+        {
+          question: "How do I become a host if I already have a renter account?",
+          answer:
+            "Your existing account works for both renting and hosting. Simply visit the Host Dashboard and click 'List Your Vehicle' to start the host onboarding process. You'll need to complete identity verification and connect a bank account for payouts.",
+        },
+        {
+          question: "How do I manage my notification preferences?",
+          answer:
+            "Go to Profile Settings and click on the Notifications tab. You can customize which email and push notifications you receive for bookings, messages, payments, and promotional updates.",
+        },
+      ],
+    },
   ]
 
   return (
-    <div className="container mx-auto px-4 py-12">
+    <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
       <div className="mb-16 text-center">
-        <h1 className="mb-4 font-bold text-4xl md:text-5xl">Help Center</h1>
+        <h1 className="mb-4 font-bold text-3xl md:text-4xl lg:text-5xl">Help Center</h1>
         <p className="mx-auto max-w-2xl text-muted-foreground text-xl">
           Find answers to common questions and learn how to make the most of Renegade
         </p>
@@ -144,7 +194,7 @@ export default function HelpPage() {
       </div>
 
       {/* Contact CTA */}
-      <Card className="mt-16 border-2">
+      <Card className="mt-16 border bg-muted/30">
         <CardContent className="p-12 text-center">
           <h2 className="mb-4 font-bold text-2xl">Still need help?</h2>
           <p className="mb-6 text-muted-foreground">

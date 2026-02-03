@@ -81,11 +81,11 @@ export function DriverCard({
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <h3 className="font-bold text-2xl transition-colors group-hover:text-primary">
+                <h3 className="font-bold text-xl transition-colors group-hover:text-primary">
                   {name}
                 </h3>
-                <div className="mt-1.5 flex items-center gap-2 text-lg text-muted-foreground">
-                  <MapPin className="size-5" />
+                <div className="mt-1.5 flex items-center gap-2 text-sm text-muted-foreground">
+                  <MapPin className="size-4" />
                   <span className="truncate">{location}</span>
                 </div>
               </div>
