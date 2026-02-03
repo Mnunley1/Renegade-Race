@@ -1,43 +1,29 @@
 "use client"
 
 import { useUser } from "@clerk/nextjs"
-import type { Id } from "@workspace/backend/convex/_generated/dataModel"
+import type { Id } from "@/lib/convex"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardHeader } from "@workspace/ui/components/card"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@workspace/ui/components/dialog"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@workspace/ui/components/dropdown-menu"
-import { Input } from "@workspace/ui/components/input"
 import { cn } from "@workspace/ui/lib/utils"
 import { handleError, handleErrorWithContext } from "@/lib/error-handler"
 import { useMutation, useQuery } from "convex/react"
 import {
-  Archive,
+  AlertCircle,
+  ArrowDown,
   ArrowLeft,
-  Copy,
-  Edit,
+  Clock,
   MessageSquare,
-  MoreVertical,
-  Reply,
-  Send,
-  Trash2,
-  X,
+  RefreshCw,
 } from "lucide-react"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
-import { Suspense, useEffect, useMemo, useRef, useState } from "react"
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/lib/convex"
+import { ChatHeader } from "./chat-header"
+import { MessageList } from "./message-list"
+import { MessageInput } from "./message-input"
+import { ConfirmationDialogs } from "./confirmation-dialogs"
+import type { MessageData } from "./message-bubble"
 
 function ChatPageContent() {
   const { user, isSignedIn } = useUser()
@@ -49,10 +35,30 @@ function ChatPageContent() {
   const [newMessage, setNewMessage] = useState("")
   const [hoveredMessage, setHoveredMessage] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
+  const messageInputRef = useRef<HTMLInputElement>(null)
   // Track which conversation has been marked as read to prevent duplicate calls
   const markedAsReadRef = useRef<string | null>(null)
   // Track previous conversationId to detect actual changes
   const prevConversationIdRef = useRef<string | undefined>(undefined)
+
+  // Optimistic messages
+  const [optimisticMessages, setOptimisticMessages] = useState<Array<{
+    _id: string
+    content: string
+    senderId: string
+    createdAt: number
+    status: "sending" | "failed"
+    replyTo?: string
+  }>>([])
+
+  // Smart scroll state
+  const [isNearBottom, setIsNearBottom] = useState(true)
+  const [hasNewMessages, setHasNewMessages] = useState(false)
+  const prevMessagesLengthRef = useRef<number>(0)
+
+  const MESSAGE_MAX_LENGTH = 2000
+  const MESSAGE_WARN_THRESHOLD = 1800
 
   // Edit message states
   const [editingMessage, setEditingMessage] = useState<string | null>(null)
@@ -124,7 +130,7 @@ function ChatPageContent() {
   // Fetch vehicle details
   const vehicle = useQuery(
     api.vehicles.getById,
-    conversation ? { id: conversation.vehicleId as Id<"vehicles"> } : "skip"
+    conversation?.vehicleId ? { id: conversation.vehicleId as Id<"vehicles"> } : "skip"
   )
 
   // Fetch recipient user data for pending conversations
@@ -140,7 +146,7 @@ function ChatPageContent() {
   // Fetch vehicle data for pending conversations
   const pendingVehicle = useQuery(
     api.vehicles.getById,
-    pendingConversation ? { id: pendingConversation.vehicleId as Id<"vehicles"> } : "skip"
+    pendingConversation?.vehicleId ? { id: pendingConversation.vehicleId as Id<"vehicles"> } : "skip"
   )
 
   // Mutations
@@ -151,19 +157,36 @@ function ChatPageContent() {
   const archiveConversationMutation = useMutation(api.conversations.archive)
   const markAsRead = useMutation(api.messages.markConversationAsRead)
 
-  // Mark conversation as read when viewing - only once per conversation
-  // This prevents websocket reconnections by avoiding repeated mutation calls
+  // Mark conversation as read when viewing
+  // Reset markedAsReadRef when conversationId changes, messages.length changes, or tab regains visibility
   useEffect(() => {
-    // Reset ref only when conversationId actually changes (user navigates to different conversation)
     if (conversationId !== prevConversationIdRef.current) {
       markedAsReadRef.current = null
       prevConversationIdRef.current = conversationId
     }
+  }, [conversationId])
 
-    // Only mark as read if:
-    // 1. We have all required data
-    // 2. We haven't already marked this conversation as read
-    // 3. Messages have loaded (so we know the user is actually viewing)
+  // Reset mark-as-read when new messages arrive
+  useEffect(() => {
+    if (messages && messages.length !== prevMessagesLengthRef.current) {
+      prevMessagesLengthRef.current = messages.length
+      markedAsReadRef.current = null
+    }
+  }, [messages])
+
+  // Reset mark-as-read when tab regains visibility
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        markedAsReadRef.current = null
+      }
+    }
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange)
+  }, [])
+
+  // Actually mark as read
+  useEffect(() => {
     if (
       conversation &&
       user?.id &&
@@ -178,17 +201,52 @@ function ChatPageContent() {
       }).catch((error) => {
         handleErrorWithContext(error, {
           action: "mark conversation as read",
-          showToast: false,
         })
-        // Silently fail - marking as read shouldn't break the page
       })
     }
   }, [conversation, user?.id, conversationId, messages, markAsRead])
 
-  // Scroll to bottom when messages change
+  // Smart scroll: track if user is near bottom
+  const handleScroll = useCallback(() => {
+    const container = messagesContainerRef.current
+    if (!container) return
+    const threshold = 100
+    const distanceFromBottom =
+      container.scrollHeight - container.scrollTop - container.clientHeight
+    setIsNearBottom(distanceFromBottom <= threshold)
+    if (distanceFromBottom <= threshold) {
+      setHasNewMessages(false)
+    }
+  }, [])
+
+  // Smart scroll: auto-scroll or show pill when new messages arrive
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+    if (!messages) return
+    if (isNearBottom) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+    } else if (messages.length > 0) {
+      setHasNewMessages(true)
+    }
+  }, [messages, isNearBottom])
+
+  // Clear optimistic messages that now appear in real messages
+  useEffect(() => {
+    if (!messages || optimisticMessages.length === 0) return
+    setOptimisticMessages((prev) =>
+      prev.filter((opt) => {
+        if (opt.status === "failed") return true
+        return !messages.some(
+          (real: any) =>
+            real.content === opt.content && real.senderId === opt.senderId
+        )
+      })
+    )
   }, [messages])
+
+  const scrollToBottom = useCallback(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+    setHasNewMessages(false)
+  }, [])
 
   // Navigate away if conversation is deleted (query fails or returns null)
   useEffect(() => {
@@ -287,39 +345,65 @@ function ChatPageContent() {
   }
 
   const handleSendMessage = async () => {
-    if (!newMessage.trim()) return
+    const content = newMessage.trim()
+    if (!content) return
+    if (content.length > MESSAGE_MAX_LENGTH) return
+
+    const optimisticId = `optimistic-${Date.now()}-${Math.random()}`
+    const optimisticMsg = {
+      _id: optimisticId,
+      content,
+      senderId: user.id,
+      createdAt: Date.now(),
+      status: "sending" as const,
+      replyTo: replyingToMessage as string | undefined,
+    }
+
+    // Add optimistic message and clear input immediately
+    setOptimisticMessages((prev) => [...prev, optimisticMsg])
+    setNewMessage("")
+    const savedReplyTo = replyingToMessage
+    setReplyingToMessage(undefined)
+
+    // Return focus to input
+    messageInputRef.current?.focus()
+
+    // Scroll to bottom for own message
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+    }, 0)
 
     try {
       if (conversationId) {
-        // Send message to existing conversation
         await sendMessageMutation({
           conversationId: conversationId as Id<"conversations">,
-          content: newMessage.trim(),
-          replyTo: replyingToMessage,
+          content,
+          replyTo: savedReplyTo,
         })
       } else if (pendingConversation) {
-        // Create conversation and send first message
         const result = await sendMessageMutation({
           vehicleId: pendingConversation.vehicleId as Id<"vehicles">,
           renterId: pendingConversation.renterId,
           ownerId: pendingConversation.ownerId,
-          content: newMessage.trim(),
-          replyTo: replyingToMessage,
+          content,
+          replyTo: savedReplyTo,
         })
 
-        // Transition from pending to actual conversation
         if (result && result.conversationId) {
           setPendingConversation(null)
-          // Update URL to reflect the new conversation
           router.replace(`/messages/${result.conversationId}`)
         }
       } else {
-        // No conversation selected and no pending conversation
         return
       }
-      setNewMessage("")
-      setReplyingToMessage(undefined)
+      // Optimistic message will be cleared by the useEffect that watches real messages
     } catch (error) {
+      // Mark optimistic message as failed
+      setOptimisticMessages((prev) =>
+        prev.map((msg) =>
+          msg._id === optimisticId ? { ...msg, status: "failed" as const } : msg
+        )
+      )
       handleErrorWithContext(error, {
         action: "send message",
         customMessages: {
@@ -327,6 +411,40 @@ function ChatPageContent() {
         },
       })
     }
+  }
+
+  const handleRetryMessage = async (failedMsg: {
+    _id: string
+    content: string
+    replyTo?: string
+  }) => {
+    // Remove the failed message and re-send
+    setOptimisticMessages((prev) =>
+      prev.map((msg) =>
+        msg._id === failedMsg._id ? { ...msg, status: "sending" as const } : msg
+      )
+    )
+
+    try {
+      if (conversationId) {
+        await sendMessageMutation({
+          conversationId: conversationId as Id<"conversations">,
+          content: failedMsg.content,
+          replyTo: failedMsg.replyTo as Id<"messages"> | undefined,
+        })
+      }
+      // Will be cleaned up by the real-message sync effect
+    } catch {
+      setOptimisticMessages((prev) =>
+        prev.map((msg) =>
+          msg._id === failedMsg._id ? { ...msg, status: "failed" as const } : msg
+        )
+      )
+    }
+  }
+
+  const handleDismissFailedMessage = (msgId: string) => {
+    setOptimisticMessages((prev) => prev.filter((msg) => msg._id !== msgId))
   }
 
   const handleDeleteMessage = (messageId: string) => {
@@ -444,7 +562,6 @@ function ChatPageContent() {
       setIsNavigatingAway(false)
       handleErrorWithContext(error, {
         action: "delete conversation",
-        showToast: false,
       })
       setDeleteError("Failed to delete conversation. Please try again.")
     } finally {
@@ -479,413 +596,186 @@ function ChatPageContent() {
     }
   }
 
-  const formatTime = (timestamp: number) => {
-    const date = new Date(timestamp)
-    const now = new Date()
-    const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60)
-
-    if (diffInHours < 1) {
-      const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60))
-      return `${diffInMinutes}m ago`
-    }
-    if (diffInHours < 24) {
-      return `${Math.floor(diffInHours)}h ago`
-    }
-    return date.toLocaleDateString()
-  }
-
   return (
     <div className="bg-background py-6">
       <div className="mx-auto max-w-4xl px-6">
-        <Card className="flex h-[calc(100vh-12rem)] max-h-[800px] flex-col">
+        {/* Breadcrumb navigation — outside the card */}
+        <nav className="mb-3 flex items-center gap-1.5 text-sm">
+          <button
+            className="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
+            onClick={() => router.push("/messages")}
+            type="button"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Messages
+          </button>
+          <span className="text-muted-foreground/50">/</span>
+          <span className="truncate text-foreground">
+            {(pendingConversation ? recipientUser : otherUser)?.name || "Conversation"}
+          </span>
+        </nav>
+
+        <Card className="flex h-[calc(100dvh-14rem)] max-h-[800px] flex-col">
           {/* Header */}
-          <CardHeader className="border-b">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <Button className="mb-6" onClick={() => router.push("/messages")} variant="outline">
-                  <ArrowLeft className="mr-2 size-4" />
-                  Back to Messages
-                </Button>
-                <div className="flex items-center space-x-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#EF1C25] font-medium text-white">
-                    {(pendingConversation ? recipientUser : otherUser)?.name?.[0]?.toUpperCase() ||
-                      "U"}
-                  </div>
-                  <div>
-                    <h2 className="font-semibold text-foreground">
-                      {(pendingConversation ? recipientUser : otherUser)?.name || "Unknown User"}
-                    </h2>
-                    <p className="text-muted-foreground text-sm">
-                      {(pendingConversation ? pendingVehicle : vehicle)
-                        ? `${
-                            (pendingConversation ? pendingVehicle : vehicle)?.year
-                          } ${(pendingConversation ? pendingVehicle : vehicle)?.make} ${
-                            (pendingConversation ? pendingVehicle : vehicle)?.model
-                          }`
-                        : "Vehicle conversation"}
-                    </p>
-                  </div>
-                </div>
-              </div>
-              {!pendingConversation && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button size="sm" variant="ghost">
-                      <MoreVertical className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={handleArchiveConversation}>
-                      <Archive className="mr-2 h-4 w-4" />
-                      Archive Conversation
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      className="text-destructive"
-                      onClick={handleDeleteConversation}
-                    >
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Delete Conversation
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
-            </div>
+          <CardHeader className="border-b py-3">
+            <ChatHeader
+              isPending={!!pendingConversation}
+              onArchive={handleArchiveConversation}
+              onDelete={handleDeleteConversation}
+              participant={pendingConversation ? recipientUser : otherUser}
+              vehicle={pendingConversation ? pendingVehicle : vehicle}
+            />
           </CardHeader>
 
           {/* Messages */}
-          <CardContent className="flex-1 overflow-y-auto p-4">
-            {pendingConversation ? (
-              // Pending conversation - show recipient info
-              <div className="flex h-full items-center justify-center">
-                <div className="text-center">
-                  <MessageSquare className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
-                  <h3 className="mb-2 font-semibold text-foreground text-lg">
-                    Start a conversation
-                  </h3>
-                  <p className="mb-4 text-muted-foreground text-sm">
-                    Send your first message to {recipientUser?.name || "this user"} about the{" "}
-                    {pendingVehicle
-                      ? `${pendingVehicle.year} ${pendingVehicle.make} ${pendingVehicle.model}`
-                      : "vehicle"}
-                    .
-                  </p>
-                </div>
-              </div>
-            ) : messages && messages.length > 0 ? (
+          <CardContent
+            className="relative flex-1 overflow-y-auto p-4"
+            onScroll={handleScroll}
+            ref={messagesContainerRef}
+          >
+            <MessageList
+              canEditMessage={canEditMessage}
+              currentUserId={user.id}
+              editingMessage={editingMessage}
+              editMessageContent={editMessageContent}
+              isEditingMessage={isEditingMessage}
+              isPending={!!pendingConversation}
+              messages={messages as MessageData[] | undefined}
+              messagesEndRef={messagesEndRef}
+              onCancelEdit={handleCancelEdit}
+              onCopy={handleCopyMessage}
+              onDelete={handleDeleteMessage}
+              onEdit={handleEditMessage}
+              onEditContentChange={setEditMessageContent}
+              onReply={handleReplyToMessage}
+              onSaveEdit={handleSaveEdit}
+              pendingRecipientName={recipientUser?.name}
+              pendingVehicleLabel={
+                pendingVehicle
+                  ? `${pendingVehicle.year} ${pendingVehicle.make} ${pendingVehicle.model}`
+                  : undefined
+              }
+            />
+
+            {/* Optimistic messages */}
+            {!pendingConversation && optimisticMessages.length > 0 && (
               <div className="space-y-4">
-                {messages.map((message) => (
+                {optimisticMessages.map((msg) => (
                   <div
-                    className={cn(
-                      "group flex items-start gap-2",
-                      message.senderId === user.id ? "justify-end" : "justify-start"
-                    )}
-                    key={message._id}
-                    onMouseEnter={() => setHoveredMessage(message._id)}
-                    onMouseLeave={() => setHoveredMessage(null)}
+                    className="group flex items-start gap-2 justify-end"
+                    key={msg._id}
                   >
-                    {/* Message action menu for user's own messages - positioned to the left */}
-                    <div
-                      className={cn(
-                        "mt-1 overflow-hidden transition-all duration-200",
-                        message.senderId === user.id &&
-                          hoveredMessage === message._id &&
-                          editingMessage !== message._id
-                          ? "w-auto"
-                          : "w-0"
-                      )}
-                    >
-                      {message.senderId === user.id &&
-                        hoveredMessage === message._id &&
-                        editingMessage !== message._id && (
-                          <div className="flex gap-1 whitespace-nowrap">
-                            <Button
-                              className="h-6 w-6 p-0"
-                              onClick={() => handleCopyMessage(message.content)}
-                              size="sm"
-                              title="Copy message"
-                              variant="ghost"
-                            >
-                              <Copy className="h-3 w-3" />
-                            </Button>
-                            {canEditMessage(message) && (
-                              <Button
-                                className="h-6 w-6 p-0"
-                                onClick={() => handleEditMessage(message._id, message.content)}
-                                size="sm"
-                                title="Edit message"
-                                variant="ghost"
-                              >
-                                <Edit className="h-3 w-3" />
-                              </Button>
-                            )}
-                            <Button
-                              className="h-6 w-6 p-0 text-destructive hover:text-destructive"
-                              onClick={() => handleDeleteMessage(message._id)}
-                              size="sm"
-                              title="Delete message"
-                              variant="ghost"
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        )}
-                    </div>
                     <div className="relative max-w-xs lg:max-w-md">
-                      {editingMessage === message._id ? (
-                        <div
-                          className={cn(
-                            "rounded-lg p-3",
-                            message.senderId === user.id
-                              ? "bg-[#EF1C25] text-white"
-                              : "bg-muted text-foreground"
-                          )}
-                        >
-                          <Input
-                            className="mb-2"
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                              setEditMessageContent(e.target.value)
-                            }
-                            placeholder="Edit your message..."
-                            value={editMessageContent}
-                          />
-                          <div className="flex gap-2">
-                            <Button
-                              disabled={isEditingMessage || !editMessageContent.trim()}
-                              onClick={handleSaveEdit}
-                              size="sm"
+                      <div
+                        className={cn(
+                          "rounded-lg p-3 bg-[#EF1C25] text-white",
+                          msg.status === "sending" && "opacity-70",
+                          msg.status === "failed" && "opacity-80 ring-2 ring-destructive"
+                        )}
+                      >
+                        <p className="text-sm">{msg.content}</p>
+                      </div>
+                      <div className="mt-1 flex items-center gap-1.5 px-1">
+                        {msg.status === "sending" && (
+                          <span className="flex items-center gap-1 text-muted-foreground text-xs">
+                            <Clock className="h-3 w-3" />
+                            Sending
+                          </span>
+                        )}
+                        {msg.status === "failed" && (
+                          <span className="flex items-center gap-1 text-destructive text-xs">
+                            <AlertCircle className="h-3 w-3" />
+                            Failed
+                            <button
+                              aria-label="Retry sending message"
+                              className="ml-1 inline-flex items-center gap-0.5 text-destructive underline underline-offset-2 hover:text-destructive/80"
+                              onClick={() => handleRetryMessage(msg)}
+                              type="button"
                             >
-                              {isEditingMessage ? "Saving..." : "Save"}
-                            </Button>
-                            <Button
-                              disabled={isEditingMessage}
-                              onClick={handleCancelEdit}
-                              size="sm"
-                              variant="outline"
+                              <RefreshCw className="h-3 w-3" />
+                              Retry
+                            </button>
+                            <button
+                              aria-label="Dismiss failed message"
+                              className="ml-1 text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                              onClick={() => handleDismissFailedMessage(msg._id)}
+                              type="button"
                             >
-                              Cancel
-                            </Button>
-                          </div>
-                        </div>
-                      ) : (
-                        <>
-                          <div
-                            className={cn(
-                              "rounded-lg p-3",
-                              message.senderId === user.id
-                                ? "bg-[#EF1C25] text-white"
-                                : "bg-muted text-foreground"
-                            )}
-                          >
-                            {/* Show replied-to message if this is a reply */}
-                            {message.repliedToMessage && (
-                              <div
-                                className={cn(
-                                  "mb-2 truncate border-l-2 pb-2 pl-2 text-xs",
-                                  message.senderId === user.id
-                                    ? "border-white/30 text-white/80"
-                                    : "border-muted-foreground/30 text-muted-foreground"
-                                )}
-                              >
-                                <div className="font-medium">
-                                  {message.repliedToMessage.sender?.name || "Unknown"}
-                                </div>
-                                <div className="truncate">{message.repliedToMessage.content}</div>
-                              </div>
-                            )}
-                            <p className="text-sm">{message.content}</p>
-                          </div>
-                          <p className="mt-1 px-1 text-muted-foreground text-xs">
-                            {formatTime(message.createdAt)}
-                          </p>
-                        </>
-                      )}
-                    </div>
-                    {/* Reply button for other user's messages - positioned to the right */}
-                    <div
-                      className={cn(
-                        "mt-1 overflow-hidden transition-all duration-200",
-                        message.senderId !== user.id && hoveredMessage === message._id
-                          ? "w-auto"
-                          : "w-0"
-                      )}
-                    >
-                      {message.senderId !== user.id && hoveredMessage === message._id && (
-                        <div className="flex gap-1 whitespace-nowrap">
-                          <Button
-                            className="h-6 w-6 p-0"
-                            onClick={() => handleReplyToMessage(message)}
-                            size="sm"
-                            title="Reply to message"
-                            variant="ghost"
-                          >
-                            <Reply className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      )}
+                              Dismiss
+                            </button>
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}
-                <div ref={messagesEndRef} />
               </div>
-            ) : (
-              <div className="flex h-full items-center justify-center">
-                <div className="text-center">
-                  <MessageSquare className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
-                  <h3 className="mb-2 font-semibold text-foreground text-lg">No messages yet</h3>
-                  <p className="text-muted-foreground text-sm">
-                    Start the conversation by sending a message.
-                  </p>
-                </div>
+            )}
+
+            {/* Screen reader announcement for new messages */}
+            <div aria-live="polite" className="sr-only">
+              {messages && messages.length > 0 && messages[messages.length - 1]?.senderId !== user.id
+                ? `New message from ${otherUser?.name || "User"}: ${messages[messages.length - 1]?.content}`
+                : ""}
+            </div>
+
+            {/* New messages pill */}
+            {hasNewMessages && (
+              <div className="sticky bottom-2 flex justify-center">
+                <button
+                  aria-label="Scroll to new messages"
+                  className="flex items-center gap-1.5 rounded-full bg-foreground px-4 py-2 text-background text-sm font-medium shadow-lg transition-transform hover:scale-105"
+                  onClick={scrollToBottom}
+                  type="button"
+                >
+                  New messages
+                  <ArrowDown className="h-3.5 w-3.5" />
+                </button>
               </div>
             )}
           </CardContent>
 
           {/* Message Input */}
-          <div className="border-t p-4">
-            {/* Reply indicator */}
-            {replyingToMessage && (
-              <div className="mb-3 rounded-lg border-[#EF1C25] border-l-4 bg-muted p-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <p className="mb-1 text-muted-foreground text-xs">Replying to:</p>
-                    <p className="truncate text-foreground text-sm">
-                      {messages?.find((m) => m._id === replyingToMessage)?.content}
-                    </p>
-                  </div>
-                  <Button
-                    className="ml-2 h-6 w-6 p-0"
-                    onClick={handleCancelReply}
-                    size="sm"
-                    variant="ghost"
-                  >
-                    <X className="h-3 w-3" />
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            <div className="flex space-x-2">
-              <Input
-                className="flex-1"
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewMessage(e.target.value)}
-                onKeyPress={(e: React.KeyboardEvent<HTMLInputElement>) => {
-                  if (e.key === "Enter") {
-                    handleSendMessage()
-                  }
-                }}
-                placeholder={replyingToMessage ? "Type your reply..." : "Type a message..."}
-                value={newMessage}
-              />
-              <Button disabled={!newMessage.trim()} onClick={handleSendMessage} size="sm">
-                <Send className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
+          <MessageInput
+            inputRef={messageInputRef}
+            maxLength={MESSAGE_MAX_LENGTH}
+            onChange={setNewMessage}
+            onCancelReply={handleCancelReply}
+            onSend={handleSendMessage}
+            replyingTo={
+              replyingToMessage
+                ? { content: messages?.find((m: any) => m._id === replyingToMessage)?.content || "" }
+                : undefined
+            }
+            value={newMessage}
+            warnThreshold={MESSAGE_WARN_THRESHOLD}
+          />
         </Card>
       </div>
 
       {/* Confirmation Dialogs */}
-      <Dialog
-        onOpenChange={(open) => {
-          setShowDeleteMessageDialog(open)
-          if (!open) setDeleteError(null)
-        }}
-        open={showDeleteMessageDialog}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete Message</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete this message? This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          {deleteError && (
-            <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-destructive text-sm">
-              {deleteError}
-            </div>
-          )}
-          <DialogFooter>
-            <Button
-              onClick={() => {
-                setShowDeleteMessageDialog(false)
-                setDeleteError(null)
-              }}
-              variant="outline"
-            >
-              Cancel
-            </Button>
-            <Button
-              disabled={isDeletingMessage}
-              onClick={confirmDeleteMessage}
-              variant="destructive"
-            >
-              {isDeletingMessage ? "Deleting..." : "Delete"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        onOpenChange={(open) => {
+      <ConfirmationDialogs
+        deleteError={deleteError}
+        isArchivingConversation={isArchivingConversation}
+        isDeletingConversation={isDeletingConversation}
+        isDeletingMessage={isDeletingMessage}
+        onClearDeleteError={() => setDeleteError(null)}
+        onConfirmArchiveConversation={confirmArchiveConversation}
+        onConfirmDeleteConversation={confirmDeleteConversation}
+        onConfirmDeleteMessage={confirmDeleteMessage}
+        onShowArchiveConversationChange={setShowArchiveConversationDialog}
+        onShowDeleteConversationChange={(open) => {
           setShowDeleteConversationDialog(open)
           if (!open) setDeleteError(null)
         }}
-        open={showDeleteConversationDialog}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete Conversation</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete this conversation? This will remove it from your
-              messages list. The other participant will still be able to see the conversation. If
-              both participants delete the conversation, it will be permanently deleted.
-            </DialogDescription>
-          </DialogHeader>
-          {deleteError && (
-            <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-destructive text-sm">
-              {deleteError}
-            </div>
-          )}
-          <DialogFooter>
-            <Button
-              onClick={() => {
-                setShowDeleteConversationDialog(false)
-                setDeleteError(null)
-              }}
-              variant="outline"
-            >
-              Cancel
-            </Button>
-            <Button
-              disabled={isDeletingConversation}
-              onClick={confirmDeleteConversation}
-              variant="destructive"
-            >
-              {isDeletingConversation ? "Deleting..." : "Delete"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog onOpenChange={setShowArchiveConversationDialog} open={showArchiveConversationDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Archive Conversation</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to archive this conversation? You can unarchive it later from
-              your archived conversations.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button onClick={() => setShowArchiveConversationDialog(false)} variant="outline">
-              Cancel
-            </Button>
-            <Button disabled={isArchivingConversation} onClick={confirmArchiveConversation}>
-              {isArchivingConversation ? "Archiving..." : "Archive"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        onShowDeleteMessageChange={(open) => {
+          setShowDeleteMessageDialog(open)
+          if (!open) setDeleteError(null)
+        }}
+        showArchiveConversation={showArchiveConversationDialog}
+        showDeleteConversation={showDeleteConversationDialog}
+        showDeleteMessage={showDeleteMessageDialog}
+      />
     </div>
   )
 }

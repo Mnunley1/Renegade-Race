@@ -137,7 +137,7 @@ export default function EditVehiclePage() {
 
       // Sort images by order
       const sortedImages = [...(vehicle.images || [])].sort((a, b) => a.order - b.order)
-      setImages(sortedImages)
+      setImages(sortedImages as any)
     }
   }, [vehicle])
 
@@ -233,11 +233,12 @@ export default function EditVehiclePage() {
 
   const startEditingAddOn = (index: number) => {
     const addOn = formData.addOns[index]
+    if (!addOn) return
     setNewAddOn({
       name: addOn.name,
       price: addOn.price.toString(),
       description: addOn.description || "",
-      isRequired: addOn.isRequired,
+      isRequired: addOn.isRequired ?? false,
     })
     setEditingAddOnIndex(index)
   }
@@ -280,6 +281,7 @@ export default function EditVehiclePage() {
       const fileArray = Array.from(files)
       for (let index = 0; index < fileArray.length; index++) {
         const file = fileArray[index]
+        if (!file) continue
         if (!file.type.startsWith("image/")) {
           toast.error(`${file.name} is not an image file`)
           continue
@@ -362,6 +364,7 @@ export default function EditVehiclePage() {
     if (draggedIndex !== index) {
       const newImages = [...images]
       const draggedImage = newImages[draggedIndex]
+      if (!draggedImage) return
       newImages.splice(draggedIndex, 1)
       newImages.splice(index, 0, draggedImage)
       setImages(newImages)
@@ -395,7 +398,7 @@ export default function EditVehiclePage() {
       // Reload images to revert UI changes
       if (vehicle) {
         const sortedImages = [...(vehicle.images || [])].sort((a, b) => a.order - b.order)
-        setImages(sortedImages)
+        setImages(sortedImages as any)
       }
     } finally {
       setDraggedIndex(null)
@@ -457,14 +460,20 @@ export default function EditVehiclePage() {
 
   return (
     <div className="container mx-auto max-w-4xl px-4 py-8">
-      <div className="mb-8">
-        <Link href={`/host/vehicles/${vehicleId}`}>
-          <Button className="mb-6" variant="outline">
-            <ArrowLeft className="mr-2 size-4" />
-            Back to Vehicle
-          </Button>
+      <nav className="mb-3 flex items-center gap-1.5 text-sm">
+        <Link
+          className="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
+          href={`/host/vehicles/${vehicleId}`}
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          Vehicle
         </Link>
-        <h1 className="mt-4 font-bold text-3xl">Edit Vehicle</h1>
+        <span className="text-muted-foreground/50">/</span>
+        <span className="truncate text-foreground">Edit</span>
+      </nav>
+
+      <div className="mb-8">
+        <h1 className="font-bold text-3xl">Edit Vehicle</h1>
         <p className="mt-2 text-muted-foreground">Update your vehicle information</p>
       </div>
 
@@ -620,7 +629,7 @@ export default function EditVehiclePage() {
                   <SelectValue placeholder="Select a track" />
                 </SelectTrigger>
                 <SelectContent>
-                  {tracks.map((track) => (
+                  {tracks.map((track: { _id: string; name: string; location: string }) => (
                     <SelectItem key={track._id} value={track._id}>
                       {track.name} - {track.location}
                     </SelectItem>

@@ -4,7 +4,6 @@ import { useQuery } from "convex/react"
 import { useState } from "react"
 import Link from "next/link"
 import { api } from "@/lib/convex"
-import { Button } from "@workspace/ui/components/button"
 import {
   Card,
   CardContent,
@@ -20,9 +19,8 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select"
 import { Badge } from "@workspace/ui/components/badge"
-import { Shield, ArrowRight, Search } from "lucide-react"
+import { ArrowRight, Search } from "lucide-react"
 import { Input } from "@workspace/ui/components/input"
-import type { Id } from "@/lib/convex"
 
 export default function DisputesPage() {
   const [statusFilter, setStatusFilter] = useState<"open" | "resolved" | "closed" | undefined>(
@@ -34,7 +32,7 @@ export default function DisputesPage() {
     limit: 100,
   })
 
-  const filteredDisputes = disputes?.filter((dispute) => {
+  const filteredDisputes = disputes?.filter((dispute: any) => {
     if (!searchQuery) return true
     const query = searchQuery.toLowerCase()
     return (
@@ -70,9 +68,7 @@ export default function DisputesPage() {
     <div className="space-y-6">
       <div>
         <h1 className="font-bold text-3xl">Disputes Management</h1>
-        <p className="text-muted-foreground mt-2">
-          Manage and resolve rental disputes
-        </p>
+        <p className="mt-2 text-muted-foreground">Manage and resolve rental disputes</p>
       </div>
 
       <Card>
@@ -80,13 +76,11 @@ export default function DisputesPage() {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>All Disputes</CardTitle>
-              <CardDescription>
-                {filteredDisputes?.length || 0} dispute(s) found
-              </CardDescription>
+              <CardDescription>{filteredDisputes?.length || 0} dispute(s) found</CardDescription>
             </div>
             <div className="flex gap-2">
               <div className="relative">
-                <Search className="absolute left-2 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Search className="-translate-y-1/2 absolute top-1/2 left-2 size-4 text-muted-foreground" />
                 <Input
                   className="w-64 pl-8"
                   placeholder="Search disputes..."
@@ -116,12 +110,8 @@ export default function DisputesPage() {
         <CardContent>
           {filteredDisputes && filteredDisputes.length > 0 ? (
             <div className="space-y-4">
-              {filteredDisputes.map((dispute) => (
-                <Link
-                  key={dispute._id}
-                  href={`/disputes/${dispute._id}`}
-                  className="block"
-                >
+              {filteredDisputes.map((dispute: any) => (
+                <Link key={dispute._id} href={`/disputes/${dispute._id}`} className="block">
                   <Card className="transition-colors hover:bg-accent">
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between">
@@ -135,7 +125,7 @@ export default function DisputesPage() {
                           <p className="text-muted-foreground text-sm">
                             <strong>Reason:</strong> {dispute.reason}
                           </p>
-                          <p className="text-muted-foreground text-sm line-clamp-2">
+                          <p className="line-clamp-2 text-muted-foreground text-sm">
                             {dispute.description}
                           </p>
                           <div className="flex gap-4 text-muted-foreground text-xs">
@@ -159,13 +149,10 @@ export default function DisputesPage() {
               ))}
             </div>
           ) : (
-            <div className="py-12 text-center text-muted-foreground">
-              No disputes found
-            </div>
+            <div className="py-12 text-center text-muted-foreground">No disputes found</div>
           )}
         </CardContent>
       </Card>
     </div>
   )
 }
-

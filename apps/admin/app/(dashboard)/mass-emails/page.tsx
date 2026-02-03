@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select"
-import { Mail, Send, Loader2 } from "lucide-react"
+import { Send, Loader2 } from "lucide-react"
 import { api } from "@/lib/convex"
 import { toast } from "sonner"
 import { handleErrorWithContext } from "@/lib/error-handler"
@@ -35,8 +35,8 @@ export default function MassEmailsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
-    if (!subject.trim() || !htmlContent.trim()) {
+
+    if (!(subject.trim() && htmlContent.trim())) {
       toast.error("Please fill in all required fields")
       return
     }
@@ -44,9 +44,13 @@ export default function MassEmailsPage() {
     setIsSending(true)
 
     try {
-      const customEmails = recipientType === "custom" 
-        ? customRecipients.split(",").map(e => e.trim()).filter(Boolean)
-        : undefined
+      const customEmails =
+        recipientType === "custom"
+          ? customRecipients
+              .split(",")
+              .map((e) => e.trim())
+              .filter(Boolean)
+          : undefined
 
       const result = await sendMassEmail({
         recipientType,
@@ -55,10 +59,8 @@ export default function MassEmailsPage() {
         htmlContent,
       })
 
-      toast.success(
-        `Email sent successfully! ${result.successful} sent, ${result.failed} failed`
-      )
-      
+      toast.success(`Email sent successfully! ${result.successful} sent, ${result.failed} failed`)
+
       // Reset form
       setSubject("")
       setHtmlContent("")
@@ -74,17 +76,13 @@ export default function MassEmailsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="font-bold text-3xl">Mass Emails</h1>
-        <p className="text-muted-foreground mt-2">
-          Send emails to users, owners, or renters
-        </p>
+        <p className="mt-2 text-muted-foreground">Send emails to users, owners, or renters</p>
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle>Compose Email</CardTitle>
-          <CardDescription>
-            Select recipients and compose your email message
-          </CardDescription>
+          <CardDescription>Select recipients and compose your email message</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -110,9 +108,7 @@ export default function MassEmailsPage() {
 
             {recipientType === "custom" && (
               <div className="space-y-2">
-                <Label htmlFor="customRecipients">
-                  Email Addresses (comma-separated)
-                </Label>
+                <Label htmlFor="customRecipients">Email Addresses (comma-separated)</Label>
                 <Textarea
                   id="customRecipients"
                   value={customRecipients}
@@ -146,8 +142,7 @@ export default function MassEmailsPage() {
                 className="font-mono text-sm"
               />
               <p className="text-muted-foreground text-xs">
-                HTML content is supported. A plain text version will be
-                automatically generated.
+                HTML content is supported. A plain text version will be automatically generated.
               </p>
             </div>
 
@@ -170,4 +165,3 @@ export default function MassEmailsPage() {
     </div>
   )
 }
-

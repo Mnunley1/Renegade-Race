@@ -26,11 +26,7 @@ export function parseLocalDate(dateString: string): Date | null {
     const date = new Date(year, month, day)
 
     // Validate the date is correct (handles invalid dates like Feb 30)
-    if (
-      date.getFullYear() !== year ||
-      date.getMonth() !== month ||
-      date.getDate() !== day
-    ) {
+    if (date.getFullYear() !== year || date.getMonth() !== month || date.getDate() !== day) {
       return null
     }
 
@@ -62,14 +58,11 @@ export function formatDateToISO(date: Date): string {
  * @param endDateString - End date in YYYY-MM-DD format
  * @returns Number of days (inclusive, so same day = 1)
  */
-export function calculateDaysBetween(
-  startDateString: string,
-  endDateString: string
-): number {
+export function calculateDaysBetween(startDateString: string, endDateString: string): number {
   const start = parseLocalDate(startDateString)
   const end = parseLocalDate(endDateString)
 
-  if (!start || !end) return 0
+  if (!(start && end)) return 0
 
   // Set both to midnight local time for accurate calculation
   start.setHours(0, 0, 0, 0)
@@ -91,14 +84,11 @@ export function calculateDaysBetween(
  * @param endDateString - End date in YYYY-MM-DD format
  * @returns Array of date strings in YYYY-MM-DD format
  */
-export function generateDateRange(
-  startDateString: string,
-  endDateString: string
-): string[] {
+export function generateDateRange(startDateString: string, endDateString: string): string[] {
   const start = parseLocalDate(startDateString)
   const end = parseLocalDate(endDateString)
 
-  if (!start || !end) return []
+  if (!(start && end)) return []
 
   const dates: string[] = []
   const current = new Date(start)

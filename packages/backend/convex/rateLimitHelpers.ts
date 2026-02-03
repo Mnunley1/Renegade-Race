@@ -1,7 +1,6 @@
 import { v } from "convex/values"
-import { internalMutation, mutation } from "./_generated/server"
-// TODO: Uncomment after installing @convex-dev/rate-limiter
-// import { rateLimiter } from "./rateLimiter"
+import { internalMutation } from "./_generated/server"
+import { rateLimiter } from "./rateLimiter"
 
 /**
  * Helper mutation to check rate limits
@@ -14,12 +13,11 @@ export const checkRateLimit = internalMutation({
     throws: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    // TODO: Uncomment after installing @convex-dev/rate-limiter
-    // const status = await rateLimiter.limit(ctx, args.name as any, {
-    //   key: args.key,
-    //   throws: args.throws ?? false,
-    // })
-    // return status
-    return { ok: true, retryAfter: null }
+    // @ts-expect-error - RateLimiter type mismatch
+    const status = await rateLimiter.limit(ctx, args.name, {
+      key: args.key,
+      throws: args.throws ?? false,
+    })
+    return status
   },
 })
