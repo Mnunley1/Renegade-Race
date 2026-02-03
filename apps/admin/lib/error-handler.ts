@@ -123,8 +123,11 @@ export function getErrorType(error: unknown): ErrorType {
  * Handles errors with user-friendly messages and optional logging
  */
 export function handleError(error: unknown, options: ErrorHandlerOptions = {}): string {
-  const { fallbackMessage = "Something went wrong. Please try again.", showToast = true, logError = true } =
-    options
+  const {
+    fallbackMessage = "Something went wrong. Please try again.",
+    showToast = true,
+    logError = true,
+  } = options
 
   // Log error for debugging
   if (logError) {

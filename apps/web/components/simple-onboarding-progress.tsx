@@ -28,7 +28,7 @@ export function SimpleOnboardingProgress({ currentStep = 1 }: SimpleOnboardingPr
 
           return (
             <div className="flex flex-1 items-center" key={step.id}>
-              <div className="flex flex-col items-center w-full">
+              <div className="flex w-full flex-col items-center">
                 <div
                   className={`flex size-8 shrink-0 items-center justify-center rounded-full border-2 font-semibold transition-colors ${
                     isComplete
@@ -46,7 +46,7 @@ export function SimpleOnboardingProgress({ currentStep = 1 }: SimpleOnboardingPr
                 </div>
               </div>
               {index < SIMPLE_STEPS.length - 1 && (
-                <div className="relative flex items-center px-1 flex-1 mx-1">
+                <div className="relative mx-1 flex flex-1 items-center px-1">
                   <div
                     className={`h-0.5 w-full transition-colors ${
                       isComplete ? "bg-primary" : "bg-muted"
@@ -60,14 +60,14 @@ export function SimpleOnboardingProgress({ currentStep = 1 }: SimpleOnboardingPr
       </div>
 
       {/* Desktop: Full view with labels */}
-      <div className="hidden md:flex items-start">
+      <div className="hidden items-start md:flex">
         {SIMPLE_STEPS.map((step, index) => {
           const isComplete = index < currentStepIndex
           const isCurrent = index === currentStepIndex
 
           return (
             <div className="flex flex-1 items-start" key={step.id}>
-              <div className="flex flex-col items-center w-full">
+              <div className="flex w-full flex-col items-center">
                 <div
                   className={`flex size-10 shrink-0 items-center justify-center rounded-full border-2 font-semibold transition-colors ${
                     isComplete
@@ -83,7 +83,7 @@ export function SimpleOnboardingProgress({ currentStep = 1 }: SimpleOnboardingPr
                     <span className="text-sm">{index + 1}</span>
                   )}
                 </div>
-                <div className="mt-2 text-center w-full px-1">
+                <div className="mt-2 w-full px-1 text-center">
                   <p
                     className={`font-medium text-xs leading-tight ${
                       isCurrent || isComplete ? "text-foreground" : "text-muted-foreground"
@@ -109,11 +109,11 @@ export function SimpleOnboardingProgress({ currentStep = 1 }: SimpleOnboardingPr
 
       {/* Mobile: Show current step label below */}
       <div className="mt-3 text-center md:hidden">
-        <p className="font-medium text-sm text-foreground">
-          Step {currentStepIndex + 1} of {SIMPLE_STEPS.length}: {SIMPLE_STEPS[currentStepIndex]?.label}
+        <p className="font-medium text-foreground text-sm">
+          Step {currentStepIndex + 1} of {SIMPLE_STEPS.length}:{" "}
+          {SIMPLE_STEPS[currentStepIndex]?.label}
         </p>
       </div>
     </div>
   )
 }
-

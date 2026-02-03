@@ -54,7 +54,7 @@ export default function OnboardingLayout({ children }: { children: React.ReactNo
   return (
     <>
       <div className="container mx-auto max-w-2xl px-4 pt-4 md:pt-8">
-        <div className="mb-0 flex flex-col gap-1.5 md:mb-2 md:flex-row md:gap-3 md:items-center md:justify-between">
+        <div className="mb-0 flex flex-col gap-1.5 md:mb-2 md:flex-row md:items-center md:justify-between md:gap-3">
           <div className="flex-1">
             <SimpleOnboardingProgress currentStep={currentStep} />
           </div>
@@ -92,7 +92,12 @@ export default function OnboardingLayout({ children }: { children: React.ReactNo
             >
               Cancel
             </Button>
-            <Button disabled={isResetting} onClick={handleStartOver} type="button" variant="destructive">
+            <Button
+              disabled={isResetting}
+              onClick={handleStartOver}
+              type="button"
+              variant="destructive"
+            >
               {isResetting ? "Resetting..." : "Start Over"}
             </Button>
           </DialogFooter>
@@ -120,6 +125,3 @@ export default function OnboardingLayout({ children }: { children: React.ReactNo
     </>
   )
 }
-
-
-

@@ -83,9 +83,12 @@ export default function VerifyEmailPage() {
       const clerkError = err as ClerkError
       const errorMessage = clerkError?.errors?.[0]?.message || "Failed to resend code"
       handleError(err, { showToast: false, logError: true })
-      
+
       // Show helpful message if it's a rate limit or email issue
-      if (process.env.NODE_ENV === "development" && (errorMessage.includes("limit") || errorMessage.includes("email"))) {
+      if (
+        process.env.NODE_ENV === "development" &&
+        (errorMessage.includes("limit") || errorMessage.includes("email"))
+      ) {
         setError(
           `${errorMessage}. In development mode, Clerk has a limit of 100 emails per month. Try using a test email with +clerk_test (e.g., yourname+clerk_test@example.com) or check your spam folder.`
         )
@@ -118,7 +121,7 @@ export default function VerifyEmailPage() {
         </p>
       </div>
 
-      <Card className="border-2 shadow-xl bg-card">
+      <Card className="border-2 bg-card shadow-xl">
         <CardHeader className="pb-4 sm:pb-6">
           <CardTitle className="text-lg sm:text-xl">Enter verification code</CardTitle>
           <CardDescription className="text-xs sm:text-sm">
@@ -134,13 +137,15 @@ export default function VerifyEmailPage() {
             )}
 
             {resendSuccess && (
-              <div className="rounded-lg border border-green-500/50 bg-green-500/10 p-2 text-green-700 text-xs dark:text-green-400 sm:p-3 sm:text-sm">
+              <div className="rounded-lg border border-green-500/50 bg-green-500/10 p-2 text-green-700 text-xs sm:p-3 sm:text-sm dark:text-green-400">
                 Verification code sent! Please check your email.
               </div>
             )}
 
             <div className="space-y-1.5 sm:space-y-2">
-              <Label htmlFor="code" className="text-sm">Verification Code</Label>
+              <Label htmlFor="code" className="text-sm">
+                Verification Code
+              </Label>
               <div className="relative">
                 <Mail className="-translate-y-1/2 absolute top-1/2 left-3 size-4 text-muted-foreground" />
                 <Input
@@ -158,11 +163,12 @@ export default function VerifyEmailPage() {
               <p className="text-muted-foreground text-xs">
                 Enter the 6-digit code sent to your email
               </p>
-              {process.env.NODE_ENV === "development" && signUp.emailAddress?.includes("+clerk_test") && (
-                <p className="font-medium text-primary text-xs">
-                  Using test email? Use code: <span className="font-mono">424242</span>
-                </p>
-              )}
+              {process.env.NODE_ENV === "development" &&
+                signUp.emailAddress?.includes("+clerk_test") && (
+                  <p className="font-medium text-primary text-xs">
+                    Using test email? Use code: <span className="font-mono">424242</span>
+                  </p>
+                )}
             </div>
 
             <Button

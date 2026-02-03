@@ -59,9 +59,7 @@ export default function VehicleApprovalsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="font-bold text-3xl">Vehicle Approvals</h1>
-        <p className="text-muted-foreground mt-2">
-          Review and approve pending vehicle listings
-        </p>
+        <p className="mt-2 text-muted-foreground">Review and approve pending vehicle listings</p>
       </div>
 
       <Card>
@@ -74,9 +72,10 @@ export default function VehicleApprovalsPage() {
         <CardContent>
           {pendingVehicles && pendingVehicles.length > 0 ? (
             <div className="space-y-4">
-              {pendingVehicles.map((vehicle) => {
+              {pendingVehicles.map((vehicle: any) => {
                 const isProcessing = processingId === vehicle._id
-                const primaryImage = vehicle.images?.find((img) => img.isPrimary) || vehicle.images?.[0]
+                const primaryImage =
+                  vehicle.images?.find((img: any) => img.isPrimary) || vehicle.images?.[0]
 
                 return (
                   <Card key={vehicle._id} className="overflow-hidden">
@@ -99,7 +98,7 @@ export default function VehicleApprovalsPage() {
                               </h3>
                               <Badge variant="outline">Pending</Badge>
                             </div>
-                            <p className="text-muted-foreground mt-1">
+                            <p className="mt-1 text-muted-foreground">
                               Track: {vehicle.track?.name || "Unknown"} | Owner:{" "}
                               {vehicle.owner?.name || "Unknown"}
                             </p>
@@ -111,18 +110,15 @@ export default function VehicleApprovalsPage() {
                                 <strong>Daily Rate:</strong> ${vehicle.dailyRate}
                               </p>
                               <p className="text-muted-foreground text-sm">
-                                <strong>Horsepower:</strong>{" "}
-                                {vehicle.horsepower || "N/A"}
+                                <strong>Horsepower:</strong> {vehicle.horsepower || "N/A"}
                               </p>
                               <p className="text-muted-foreground text-sm">
-                                <strong>Transmission:</strong>{" "}
-                                {vehicle.transmission || "N/A"}
+                                <strong>Transmission:</strong> {vehicle.transmission || "N/A"}
                               </p>
                             </div>
                             <div>
                               <p className="text-muted-foreground text-sm">
-                                <strong>Drivetrain:</strong>{" "}
-                                {vehicle.drivetrain || "N/A"}
+                                <strong>Drivetrain:</strong> {vehicle.drivetrain || "N/A"}
                               </p>
                               <p className="text-muted-foreground text-sm">
                                 <strong>Engine:</strong> {vehicle.engineType || "N/A"}
@@ -139,7 +135,7 @@ export default function VehicleApprovalsPage() {
                               <p className="text-muted-foreground text-sm">
                                 <strong>Description:</strong>
                               </p>
-                              <p className="text-muted-foreground mt-1 text-sm line-clamp-3">
+                              <p className="mt-1 line-clamp-3 text-muted-foreground text-sm">
                                 {vehicle.description}
                               </p>
                             </div>
@@ -148,8 +144,7 @@ export default function VehicleApprovalsPage() {
                           {vehicle.amenities && vehicle.amenities.length > 0 && (
                             <div>
                               <p className="text-muted-foreground text-sm">
-                                <strong>Amenities:</strong>{" "}
-                                {vehicle.amenities.join(", ")}
+                                <strong>Amenities:</strong> {vehicle.amenities.join(", ")}
                               </p>
                             </div>
                           )}
@@ -210,4 +205,3 @@ export default function VehicleApprovalsPage() {
     </div>
   )
 }
-

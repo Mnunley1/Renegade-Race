@@ -14,7 +14,13 @@ import {
 } from "@workspace/ui/components/alert-dialog"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@workspace/ui/components/card"
 import { Separator } from "@workspace/ui/components/separator"
 import { useMutation, useQuery } from "convex/react"
 import {
@@ -78,21 +84,23 @@ export default function HostVehicleDetailPage() {
   // Filter reservations for this vehicle
   const vehicleReservations = useMemo(() => {
     if (!(allReservations && vehicle)) return []
-    return allReservations.filter((res) => res.vehicleId === vehicle._id)
+    return allReservations.filter((res: any) => res.vehicleId === vehicle._id)
   }, [allReservations, vehicle])
 
   // Separate reservations by status
-  const pendingReservations = useMemo(() => {
-    return vehicleReservations.filter((res) => res.status === "pending")
-  }, [vehicleReservations])
+  const pendingReservations = useMemo(
+    () => vehicleReservations.filter((res: any) => res.status === "pending"),
+    [vehicleReservations]
+  )
 
-  const confirmedReservations = useMemo(() => {
-    return vehicleReservations.filter((res) => res.status === "confirmed")
-  }, [vehicleReservations])
+  const confirmedReservations = useMemo(
+    () => vehicleReservations.filter((res: any) => res.status === "confirmed"),
+    [vehicleReservations]
+  )
 
   const upcomingReservations = useMemo(() => {
     const today = new Date().toISOString().split("T")[0]
-    return confirmedReservations.filter((res) => res.startDate >= today).slice(0, 3)
+    return confirmedReservations.filter((res: any) => res.startDate >= (today ?? "")).slice(0, 3)
   }, [confirmedReservations])
 
   // Calculate stats from reservations
@@ -108,8 +116,13 @@ export default function HostVehicleDetailPage() {
     }
 
     const totalBookings = vehicleReservations.length
-    const totalEarnings = vehicleReservations.reduce((sum, res) => sum + (res.totalAmount || 0), 0)
-    const completedTrips = vehicleReservations.filter((res) => res.status === "completed").length
+    const totalEarnings = vehicleReservations.reduce(
+      (sum: number, res: any) => sum + (res.totalAmount || 0),
+      0
+    )
+    const completedTrips = vehicleReservations.filter(
+      (res: any) => res.status === "completed"
+    ).length
     const pendingCount = pendingReservations.length
     const upcomingCount = upcomingReservations.length
 
@@ -125,7 +138,7 @@ export default function HostVehicleDetailPage() {
   // Extract r2Keys for the gallery - sort by order field set in edit page
   const galleryImages = useMemo(() => {
     if (!vehicle?.images || vehicle.images.length === 0) return []
-    
+
     // Sort images by order field (set via drag-and-drop in edit page)
     const sortedImages = [...vehicle.images].sort((a, b) => {
       // Use order field as primary sort
@@ -133,7 +146,7 @@ export default function HostVehicleDetailPage() {
       const orderB = b.order ?? Number.MAX_SAFE_INTEGER
       return orderA - orderB
     })
-    
+
     // Extract r2Keys, filtering out any without valid keys
     return sortedImages
       .filter((img) => img.r2Key && img.r2Key.trim() !== "")
@@ -269,53 +282,53 @@ export default function HostVehicleDetailPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="font-medium text-sm text-muted-foreground">
+              <CardTitle className="font-medium text-muted-foreground text-sm">
                 Total Earnings
               </CardTitle>
               <DollarSign className="size-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="font-bold text-2xl">${stats.totalEarnings.toLocaleString()}</div>
-              <p className="mt-1 text-xs text-muted-foreground">All-time revenue</p>
+              <p className="mt-1 text-muted-foreground text-xs">All-time revenue</p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="font-medium text-sm text-muted-foreground">
+              <CardTitle className="font-medium text-muted-foreground text-sm">
                 Total Bookings
               </CardTitle>
               <Users className="size-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="font-bold text-2xl">{stats.totalBookings}</div>
-              <p className="mt-1 text-xs text-muted-foreground">All reservations</p>
+              <p className="mt-1 text-muted-foreground text-xs">All reservations</p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="font-medium text-sm text-muted-foreground">
+              <CardTitle className="font-medium text-muted-foreground text-sm">
                 Pending Requests
               </CardTitle>
               <Clock className="size-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="font-bold text-2xl">{stats.pendingCount}</div>
-              <p className="mt-1 text-xs text-muted-foreground">Awaiting response</p>
+              <p className="mt-1 text-muted-foreground text-xs">Awaiting response</p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="font-medium text-sm text-muted-foreground">
+              <CardTitle className="font-medium text-muted-foreground text-sm">
                 Upcoming Trips
               </CardTitle>
               <CalendarIcon className="size-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="font-bold text-2xl">{stats.upcomingCount}</div>
-              <p className="mt-1 text-xs text-muted-foreground">Confirmed bookings</p>
+              <p className="mt-1 text-muted-foreground text-xs">Confirmed bookings</p>
             </CardContent>
           </Card>
         </div>
@@ -324,7 +337,7 @@ export default function HostVehicleDetailPage() {
       {/* Main Content Grid */}
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Left Column - Main Content */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="space-y-6 lg:col-span-2">
           {/* Pending Reservations - Priority */}
           {stats.pendingCount > 0 && (
             <Card className="border-yellow-200 bg-yellow-50/50 dark:border-yellow-900 dark:bg-yellow-950/20">
@@ -336,8 +349,8 @@ export default function HostVehicleDetailPage() {
                       Action Required
                     </CardTitle>
                     <CardDescription className="mt-1">
-                      {stats.pendingCount} booking {stats.pendingCount === 1 ? "request" : "requests"}{" "}
-                      waiting for your response
+                      {stats.pendingCount} booking{" "}
+                      {stats.pendingCount === 1 ? "request" : "requests"} waiting for your response
                     </CardDescription>
                   </div>
                   <Link href={`/host/reservations?status=pending&vehicleId=${vehicleId}`}>
@@ -350,18 +363,16 @@ export default function HostVehicleDetailPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {pendingReservations.slice(0, 3).map((reservation) => {
+                  {pendingReservations.slice(0, 3).map((reservation: any) => {
                     const renterName = reservation.renter?.name || "Guest"
                     return (
-                      <Link
-                        key={reservation._id}
-                        href={`/host/reservations/${reservation._id}`}
-                      >
+                      <Link key={reservation._id} href={`/host/reservations/${reservation._id}`}>
                         <div className="flex items-center justify-between rounded-lg border bg-background p-4 transition-colors hover:bg-muted/50">
-                          <div className="flex-1 min-w-0">
+                          <div className="min-w-0 flex-1">
                             <p className="font-semibold text-sm">{renterName}</p>
                             <p className="text-muted-foreground text-xs">
-                              {formatDate(reservation.startDate)} - {formatDate(reservation.endDate)}
+                              {formatDate(reservation.startDate)} -{" "}
+                              {formatDate(reservation.endDate)}
                             </p>
                             <p className="mt-1 font-semibold text-sm">
                               ${Math.round((reservation.totalAmount || 0) / 100).toLocaleString()}
@@ -385,7 +396,8 @@ export default function HostVehicleDetailPage() {
                   <div>
                     <CardTitle>Upcoming Reservations</CardTitle>
                     <CardDescription className="mt-1">
-                      Next {stats.upcomingCount} confirmed {stats.upcomingCount === 1 ? "booking" : "bookings"}
+                      Next {stats.upcomingCount} confirmed{" "}
+                      {stats.upcomingCount === 1 ? "booking" : "bookings"}
                     </CardDescription>
                   </div>
                   <Link href={`/host/reservations?vehicleId=${vehicleId}`}>
@@ -398,18 +410,16 @@ export default function HostVehicleDetailPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {upcomingReservations.map((reservation) => {
+                  {upcomingReservations.map((reservation: any) => {
                     const renterName = reservation.renter?.name || "Guest"
                     return (
-                      <Link
-                        key={reservation._id}
-                        href={`/host/reservations/${reservation._id}`}
-                      >
+                      <Link key={reservation._id} href={`/host/reservations/${reservation._id}`}>
                         <div className="flex items-center justify-between rounded-lg border p-4 transition-colors hover:bg-muted/50">
-                          <div className="flex-1 min-w-0">
+                          <div className="min-w-0 flex-1">
                             <p className="font-semibold text-sm">{renterName}</p>
                             <p className="text-muted-foreground text-xs">
-                              {formatDate(reservation.startDate)} - {formatDate(reservation.endDate)}
+                              {formatDate(reservation.startDate)} -{" "}
+                              {formatDate(reservation.endDate)}
                             </p>
                             <p className="mt-1 text-sm">
                               {reservation.totalDays} {reservation.totalDays === 1 ? "day" : "days"}
@@ -506,7 +516,7 @@ export default function HostVehicleDetailPage() {
                   <div>
                     <h3 className="mb-3 font-semibold text-lg">Amenities</h3>
                     <div className="flex flex-wrap gap-2">
-                      {vehicle.amenities.map((amenity) => (
+                      {vehicle.amenities.map((amenity: string) => (
                         <Badge key={amenity} variant="secondary">
                           {amenity}
                         </Badge>
@@ -522,7 +532,7 @@ export default function HostVehicleDetailPage() {
                   <div>
                     <h3 className="mb-3 font-semibold text-lg">Add-ons</h3>
                     <div className="space-y-2">
-                      {vehicle.addOns.map((addOn, index) => (
+                      {vehicle.addOns.map((addOn: any, index: number) => (
                         <div
                           className="flex items-center justify-between rounded-lg border p-3"
                           key={index}
@@ -533,7 +543,7 @@ export default function HostVehicleDetailPage() {
                               <p className="text-muted-foreground text-sm">{addOn.description}</p>
                             )}
                             {addOn.isRequired && (
-                              <Badge className="mt-1" variant="secondary" size="sm">
+                              <Badge className="mt-1" variant="secondary">
                                 Required
                               </Badge>
                             )}
@@ -590,9 +600,7 @@ export default function HostVehicleDetailPage() {
                   <Eye className="size-4 text-muted-foreground" />
                   <span className="text-muted-foreground text-sm">Views</span>
                 </div>
-                <span className="font-semibold">
-                  {analytics?.totalViews.toLocaleString() || 0}
-                </span>
+                <span className="font-semibold">{analytics?.totalViews.toLocaleString() || 0}</span>
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -627,7 +635,7 @@ export default function HostVehicleDetailPage() {
           {/* Danger Zone */}
           <Card className="border-destructive/50">
             <CardHeader className="pb-3">
-              <CardTitle className="text-destructive text-base">Danger Zone</CardTitle>
+              <CardTitle className="text-base text-destructive">Danger Zone</CardTitle>
             </CardHeader>
             <CardContent>
               <AlertDialog>
@@ -666,13 +674,10 @@ export default function HostVehicleDetailPage() {
                 </AlertDialogContent>
               </AlertDialog>
               {canDeleteResult && !canDeleteResult.canDelete && (
-                <p className="mt-2 text-muted-foreground text-xs">
-                  {canDeleteResult.reason}
-                </p>
+                <p className="mt-2 text-muted-foreground text-xs">{canDeleteResult.reason}</p>
               )}
             </CardContent>
           </Card>
-
         </div>
       </div>
     </div>
