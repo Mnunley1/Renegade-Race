@@ -3,10 +3,7 @@ import type { Id } from "./_generated/dataModel"
 import type { MutationCtx } from "./_generated/server"
 import { components, internal } from "./_generated/api"
 import { internalMutation } from "./_generated/server"
-import {
-  getUnreadMessagesDigestEmailTemplate,
-  resendComponent,
-} from "./emails"
+import { getUnreadMessagesDigestEmailTemplate, resendComponent } from "./emails"
 import { logError } from "./logger"
 
 // Initialize the Crons component
@@ -25,7 +22,7 @@ type UnreadConversationInfo = {
   conversationId: string
   unreadCount: number
   lastMessageText?: string
-  vehicleId: string
+  vehicleId?: string
   otherUserId: string
 }
 
@@ -70,7 +67,7 @@ function buildUserUnreadMap(
     _id: Id<"conversations">
     renterId: string
     ownerId: string
-    vehicleId: Id<"vehicles">
+    vehicleId?: Id<"vehicles">
     unreadCountRenter?: number
     unreadCountOwner?: number
     lastMessageText?: string
@@ -110,10 +107,7 @@ function buildUserUnreadMap(
 }
 
 // Build conversation details for email template
-function buildConversationDetails(
-  ctx: MutationCtx,
-  unreadConversations: UnreadConversationInfo[]
-) {
+function buildConversationDetails(ctx: MutationCtx, unreadConversations: UnreadConversationInfo[]) {
   return Promise.all(
     unreadConversations.map(async (conv) => {
       const otherUser = await ctx.db
@@ -121,7 +115,9 @@ function buildConversationDetails(
         .withIndex("by_external_id", (q) => q.eq("externalId", conv.otherUserId))
         .first()
 
-      const vehicle = await ctx.db.get(conv.vehicleId as Id<"vehicles">)
+      const vehicle = conv.vehicleId
+        ? await ctx.db.get(conv.vehicleId as Id<"vehicles">)
+        : null
 
       return {
         senderName: otherUser?.name || "Unknown User",
@@ -137,7 +133,11 @@ function buildConversationDetails(
 
 // Check if a user should receive a digest email
 function shouldSendDigest(
-  user: { email?: string; notificationPreferences?: { messages?: boolean }; lastMessageDigestAt?: number },
+  user: {
+    email?: string
+    notificationPreferences?: { messages?: boolean }
+    lastMessageDigestAt?: number
+  },
   now: number
 ): { send: boolean; reason?: "no_email" | "no_preference" | "recent_digest" } {
   if (!user.email) {
@@ -263,7 +263,7 @@ export const processUnreadMessageDigests = internalMutation({
  * Register the message digest cron job (idempotent).
  * Runs every 30 minutes to check for users with unread messages.
  */
-export const registerMessageDigestCron = internalMutation({
+export const registerMessageDigestCron: ReturnType<typeof internalMutation> = internalMutation({
   args: {},
   handler: async (ctx) => {
     const cronName = "message-digest"

@@ -78,7 +78,7 @@ export default function DisputesPage() {
         </Card>
       ) : (
         <div className="space-y-4">
-          {disputes.map((dispute) => {
+          {disputes.map((dispute: any) => {
             const vehicle = dispute.vehicle
             const reservation = dispute.reservation
             if (!(vehicle && reservation)) return null

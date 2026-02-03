@@ -2,7 +2,7 @@
 
 import { Suspense } from "react"
 import { useUser } from "@clerk/nextjs"
-import type { Id } from "@workspace/backend/convex/_generated/dataModel"
+import type { Id } from "@/lib/convex"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
@@ -15,10 +15,15 @@ import Link from "next/link"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 import { cn } from "@workspace/ui/lib/utils"
+import { formatTime } from "@/lib/format-time"
+import { UserAvatar } from "@/components/user-avatar"
+
+type FilterTab = "all" | "unread" | "archived"
 
 function MessagesPageContent() {
   const { user, isSignedIn } = useUser()
   const [searchQuery, setSearchQuery] = useState("")
+  const [filterTab, setFilterTab] = useState<FilterTab>("all")
   const searchParams = useSearchParams()
   const router = useRouter()
 
@@ -55,39 +60,54 @@ function MessagesPageContent() {
   )
 
   // Combine conversations
-  const conversations = [
-    ...(renterConversations || []),
-    ...(ownerConversations || []),
-  ].sort((a, b) => b.lastMessageAt - a.lastMessageAt)
+  const conversations = [...(renterConversations || []), ...(ownerConversations || [])].sort(
+    (a, b) => b.lastMessageAt - a.lastMessageAt
+  )
+
+  // Filter conversations based on filter tab
+  const tabFilteredConversations = conversations.filter((conversation) => {
+    const unreadCount =
+      user?.id === conversation.renterId
+        ? conversation.unreadCountRenter
+        : conversation.unreadCountOwner
+
+    if (filterTab === "unread") return unreadCount > 0
+    if (filterTab === "archived") return (conversation as any).isActive === false
+    // "all" = active non-deleted
+    return (conversation as any).isActive !== false
+  })
 
   // Filter conversations based on search query
-  const filteredConversations = conversations.filter((conversation) => {
+  const filteredConversations = tabFilteredConversations.filter((conversation) => {
     if (!searchQuery.trim()) return true
 
-    const otherUser =
-      user?.id === conversation.renterId ? conversation.owner : conversation.renter
+    const otherUser = user?.id === conversation.renterId ? conversation.owner : conversation.renter
 
     const searchLower = searchQuery.toLowerCase()
     return (
       otherUser?.name?.toLowerCase().includes(searchLower) ||
       conversation.vehicle?.make?.toLowerCase().includes(searchLower) ||
       conversation.vehicle?.model?.toLowerCase().includes(searchLower) ||
-      conversation.lastMessageText?.toLowerCase().includes(searchLower)
+      conversation.lastMessageText?.toLowerCase().includes(searchLower) ||
+      (conversation as any).team?.name?.toLowerCase().includes(searchLower) ||
+      (conversation as any).driverProfile?.name?.toLowerCase().includes(searchLower)
     )
   })
 
   // Mutations
   const bulkConversationActions = useMutation(api.conversations.bulkHostConversationActions)
 
-  if (!isSignedIn || !user) {
+  if (!(isSignedIn && user)) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center bg-background">
         <Card className="w-full max-w-md">
           <CardContent className="p-6">
             <div className="text-center">
-              <MessageSquare className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h2 className="text-xl font-semibold text-foreground mb-2">Please sign in</h2>
-              <p className="text-muted-foreground">You need to be signed in to view conversations.</p>
+              <MessageSquare className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
+              <h2 className="mb-2 font-semibold text-foreground text-xl">Please sign in</h2>
+              <p className="text-muted-foreground">
+                You need to be signed in to view conversations.
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -112,106 +132,48 @@ function MessagesPageContent() {
     }
   }
 
-  const handleBulkArchive = async () => {
+  const handleBulkAction = async (action: "archive" | "delete" | "mark_read") => {
     if (selectedConversations.length === 0) return
-
     setIsPerformingBulkAction(true)
     try {
       await bulkConversationActions({
         hostId: user?.id || "",
         conversationIds: selectedConversations.map((id) => id as Id<"conversations">),
-        action: "archive",
+        action,
       })
       setSelectedConversations([])
       setIsBulkMode(false)
     } catch (error) {
       handleErrorWithContext(error, {
-        action: "archive conversations",
+        action: `${action} conversations`,
         customMessages: {
-          generic: "Failed to archive conversations. Please try again.",
+          generic: `Failed to ${action.replace("_", " ")} conversations. Please try again.`,
         },
       })
     } finally {
       setIsPerformingBulkAction(false)
-    }
-  }
-
-  const handleBulkDelete = async () => {
-    if (selectedConversations.length === 0) return
-
-    setIsPerformingBulkAction(true)
-    try {
-      await bulkConversationActions({
-        hostId: user?.id || "",
-        conversationIds: selectedConversations.map((id) => id as Id<"conversations">),
-        action: "delete",
-      })
-      setSelectedConversations([])
-      setIsBulkMode(false)
-    } catch (error) {
-      handleErrorWithContext(error, {
-        action: "delete conversations",
-        customMessages: {
-          generic: "Failed to delete conversations. Please try again.",
-        },
-      })
-    } finally {
-      setIsPerformingBulkAction(false)
-    }
-  }
-
-  const handleBulkMarkRead = async () => {
-    if (selectedConversations.length === 0) return
-
-    setIsPerformingBulkAction(true)
-    try {
-      await bulkConversationActions({
-        hostId: user?.id || "",
-        conversationIds: selectedConversations.map((id) => id as Id<"conversations">),
-        action: "mark_read",
-      })
-      setSelectedConversations([])
-      setIsBulkMode(false)
-    } catch (error) {
-      handleErrorWithContext(error, {
-        action: "mark conversations as read",
-        customMessages: {
-          generic: "Failed to mark conversations as read. Please try again.",
-        },
-      })
-    } finally {
-      setIsPerformingBulkAction(false)
-    }
-  }
-
-  const formatTime = (timestamp: number) => {
-    const date = new Date(timestamp)
-    const now = new Date()
-    const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60)
-
-    if (diffInHours < 1) {
-      const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60))
-      return `${diffInMinutes}m ago`
-    } else if (diffInHours < 24) {
-      return `${Math.floor(diffInHours)}h ago`
-    } else {
-      return date.toLocaleDateString()
     }
   }
 
   const isLoading = renterConversations === undefined || ownerConversations === undefined
 
+  const filterTabs: { label: string; value: FilterTab }[] = [
+    { label: "All", value: "all" },
+    { label: "Unread", value: "unread" },
+    { label: "Archived", value: "archived" },
+  ]
+
   return (
     <div className="bg-background">
-      <div className="max-w-6xl mx-auto p-6">
+      <div className="mx-auto max-w-6xl p-6">
         <div className="mb-6">
-          <h1 className="text-3xl font-bold text-foreground">Messages</h1>
-          <p className="text-muted-foreground mt-2">
+          <h1 className="font-bold text-3xl text-foreground">Messages</h1>
+          <p className="mt-2 text-muted-foreground">
             Manage your conversations and stay connected with other users.
           </p>
         </div>
 
-        <Card className="h-[calc(100vh-16rem)] max-h-[700px]">
+        <Card className="h-[calc(100dvh-16rem)] max-h-[700px]">
           <CardHeader>
             <div className="space-y-4">
               <div className="flex items-center justify-between">
@@ -245,15 +207,15 @@ function MessagesPageContent() {
 
               {/* Bulk actions bar */}
               {isBulkMode && selectedConversations.length > 0 && (
-                <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
-                  <span className="text-sm text-muted-foreground">
+                <div className="flex items-center gap-2 rounded-lg bg-muted p-3">
+                  <span className="text-muted-foreground text-sm">
                     {selectedConversations.length} selected
                   </span>
                   <div className="flex gap-1">
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={handleBulkMarkRead}
+                      onClick={() => handleBulkAction("mark_read")}
                       disabled={isPerformingBulkAction}
                     >
                       Mark Read
@@ -261,7 +223,7 @@ function MessagesPageContent() {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={handleBulkArchive}
+                      onClick={() => handleBulkAction("archive")}
                       disabled={isPerformingBulkAction}
                     >
                       Archive
@@ -269,7 +231,7 @@ function MessagesPageContent() {
                     <Button
                       size="sm"
                       variant="destructive"
-                      onClick={handleBulkDelete}
+                      onClick={() => handleBulkAction("delete")}
                       disabled={isPerformingBulkAction}
                     >
                       Delete
@@ -278,8 +240,27 @@ function MessagesPageContent() {
                 </div>
               )}
 
+              {/* Filter tabs */}
+              <div className="flex gap-4 border-b border-border">
+                {filterTabs.map((tab) => (
+                  <button
+                    key={tab.value}
+                    type="button"
+                    onClick={() => setFilterTab(tab.value)}
+                    className={cn(
+                      "pb-2 text-sm font-medium transition-colors",
+                      filterTab === tab.value
+                        ? "border-b-2 border-[#EF1C25] text-foreground"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                <Search className="-translate-y-1/2 absolute top-1/2 left-3 h-4 w-4 transform text-muted-foreground" />
                 <Input
                   placeholder="Search conversations..."
                   value={searchQuery}
@@ -291,36 +272,45 @@ function MessagesPageContent() {
               </div>
             </div>
           </CardHeader>
-          <CardContent className="p-0 overflow-y-auto">
+          <CardContent className="overflow-y-auto p-0">
             {isLoading ? (
               // Loading state
               <div className="space-y-3 p-4">
                 {Array.from({ length: 5 }).map((_, index) => (
                   <div
                     key={index}
-                    className="flex items-center space-x-3 p-3 rounded-lg bg-muted animate-pulse"
+                    className="flex animate-pulse items-center space-x-3 rounded-lg bg-muted p-3"
                   >
-                    <div className="w-12 h-12 rounded-full bg-muted-foreground/20"></div>
+                    <div className="h-12 w-12 rounded-full bg-muted-foreground/20" />
                     <div className="flex-1 space-y-2">
-                      <div className="h-4 bg-muted-foreground/20 rounded w-3/4"></div>
-                      <div className="h-3 bg-muted-foreground/20 rounded w-1/2"></div>
+                      <div className="h-4 w-3/4 rounded bg-muted-foreground/20" />
+                      <div className="h-3 w-1/2 rounded bg-muted-foreground/20" />
                     </div>
                   </div>
                 ))}
               </div>
             ) : filteredConversations.length === 0 ? (
               // Empty state
-              <div className="flex items-center justify-center h-64">
+              <div className="flex h-64 items-center justify-center">
                 <div className="text-center">
-                  <MessageSquare className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-xl font-semibold text-foreground mb-2">
+                  <MessageSquare className="mx-auto mb-4 h-16 w-16 text-muted-foreground" />
+                  <h3 className="mb-2 font-semibold text-foreground text-xl">
                     {searchQuery ? "No conversations found" : "No conversations yet"}
                   </h3>
                   <p className="text-muted-foreground text-sm">
                     {searchQuery
                       ? "Try a different search term."
-                      : "Start a conversation by booking a vehicle or listing one."}
+                      : "Start a conversation by booking a vehicle, listing one, or connecting with drivers and teams."}
                   </p>
+                  {!searchQuery && (
+                    <Button
+                      variant="outline"
+                      className="mt-4"
+                      onClick={() => router.push("/vehicles")}
+                    >
+                      Browse Vehicles
+                    </Button>
+                  )}
                 </div>
               </div>
             ) : (
@@ -338,35 +328,41 @@ function MessagesPageContent() {
 
                   const conversationContent = (
                     <div className="flex items-start space-x-3">
-                      <div className="w-12 h-12 rounded-full bg-[#EF1C25] flex items-center justify-center text-white font-medium flex-shrink-0">
-                        {otherUser?.name?.[0]?.toUpperCase() || "U"}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between mb-1">
-                          <h4 className="font-semibold text-foreground truncate text-sm">
+                      <UserAvatar
+                        name={otherUser?.name || "Unknown"}
+                        imageUrl={(otherUser as any)?.imageUrl}
+                        size="md"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="mb-1 flex items-start justify-between">
+                          <h4 className="truncate font-semibold text-foreground text-sm">
                             {otherUser?.name || "Unknown User"}
                           </h4>
-                          <div className="flex items-center space-x-2 flex-shrink-0 ml-2">
-                            <span className="text-xs text-muted-foreground">
+                          <div className="ml-2 flex flex-shrink-0 items-center space-x-2">
+                            <span className="text-muted-foreground text-xs">
                               {formatTime(conversation.lastMessageAt)}
                             </span>
                             {unreadCount > 0 && (
-                              <Badge className="bg-[#EF1C25] text-white text-xs px-1.5 py-0.5 min-w-[18px] h-[18px] flex items-center justify-center">
+                              <Badge className="flex h-[18px] min-w-[18px] items-center justify-center bg-[#EF1C25] px-1.5 py-0.5 text-white text-xs">
                                 {unreadCount}
                               </Badge>
                             )}
                           </div>
                         </div>
-                        <p className="text-xs text-muted-foreground truncate mb-1">
+                        <p className="mb-1 truncate text-muted-foreground text-xs">
                           {conversation.vehicle
                             ? `${conversation.vehicle.year} ${conversation.vehicle.make} ${conversation.vehicle.model}`
-                            : "Vehicle conversation"}
+                            : (conversation as any).team
+                              ? `Team: ${(conversation as any).team.name}`
+                              : (conversation as any).driverProfile
+                                ? `Driver: ${(conversation as any).driverProfile?.name || "Driver conversation"}`
+                                : "Conversation"}
                         </p>
                         <p
                           className={cn(
-                            "text-xs truncate",
+                            "truncate text-xs",
                             unreadCount > 0
-                              ? "text-foreground font-medium"
+                              ? "font-medium text-foreground"
                               : "text-muted-foreground"
                           )}
                         >
@@ -377,25 +373,30 @@ function MessagesPageContent() {
                   )
 
                   return (
-                    <div
-                      key={conversation._id}
-                      className={cn(
-                        "w-full text-left hover:bg-muted/50 transition-colors",
-                        isBulkMode ? "flex items-center space-x-3 p-4" : "p-4"
-                      )}
-                    >
-                      {isBulkMode && (
-                        <input
-                          type="checkbox"
-                          checked={selectedConversations.includes(conversation._id)}
-                          onChange={() => handleBulkSelect(conversation._id)}
-                          className="w-4 h-4 text-[#EF1C25] border-border rounded focus:ring-[#EF1C25] flex-shrink-0"
-                        />
-                      )}
+                    <div key={conversation._id}>
                       {isBulkMode ? (
-                        <div className="flex-1">{conversationContent}</div>
+                        <div
+                          className={cn(
+                            "flex w-full items-center space-x-3 p-4 text-left transition-colors hover:bg-muted/50 active:bg-muted/70",
+                            unreadCount > 0 && "border-l-2 border-[#EF1C25] bg-[#EF1C25]/5"
+                          )}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedConversations.includes(conversation._id)}
+                            onChange={() => handleBulkSelect(conversation._id)}
+                            className="h-4 w-4 flex-shrink-0 rounded border-border text-[#EF1C25] focus:ring-[#EF1C25]"
+                          />
+                          <div className="flex-1">{conversationContent}</div>
+                        </div>
                       ) : (
-                        <Link href={`/messages/${conversation._id}`} className="w-full text-left">
+                        <Link
+                          href={`/messages/${conversation._id}`}
+                          className={cn(
+                            "block w-full p-4 text-left transition-colors hover:bg-muted/50 active:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                            unreadCount > 0 && "border-l-2 border-[#EF1C25] bg-[#EF1C25]/5"
+                          )}
+                        >
                           {conversationContent}
                         </Link>
                       )}
@@ -416,16 +417,29 @@ export default function MessagesPage() {
     <Suspense
       fallback={
         <div className="bg-background">
-          <div className="max-w-6xl mx-auto p-6">
+          <div className="mx-auto max-w-6xl p-6">
             <div className="mb-6">
-              <h1 className="text-3xl font-bold text-foreground">Messages</h1>
-              <p className="text-muted-foreground mt-2">
+              <h1 className="font-bold text-3xl text-foreground">Messages</h1>
+              <p className="mt-2 text-muted-foreground">
                 Manage your conversations and stay connected with other users.
               </p>
             </div>
-            <Card className="h-[calc(100vh-16rem)] max-h-[700px]">
+            <Card className="h-[calc(100dvh-16rem)] max-h-[700px]">
               <CardContent className="p-6">
-                <div className="text-center text-muted-foreground">Loading...</div>
+                <div className="space-y-3">
+                  {Array.from({ length: 5 }).map((_, index) => (
+                    <div
+                      key={index}
+                      className="flex animate-pulse items-center space-x-3 rounded-lg bg-muted p-3"
+                    >
+                      <div className="h-12 w-12 flex-shrink-0 rounded-full bg-muted-foreground/20" />
+                      <div className="flex-1 space-y-2">
+                        <div className="h-4 w-3/4 rounded bg-muted-foreground/20" />
+                        <div className="h-3 w-1/2 rounded bg-muted-foreground/20" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </CardContent>
             </Card>
           </div>

@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select"
-import { ArrowLeft, CheckCircle, XCircle, Loader2 } from "lucide-react"
+import { ArrowLeft, CheckCircle, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import Link from "next/link"
 import { handleErrorWithContext } from "@/lib/error-handler"
@@ -137,7 +137,7 @@ export default function DisputeDetailPage() {
             </Button>
           </Link>
           <h1 className="font-bold text-3xl">Dispute Details</h1>
-          <p className="text-muted-foreground mt-2">Dispute ID: {dispute._id}</p>
+          <p className="mt-2 text-muted-foreground">Dispute ID: {dispute._id}</p>
         </div>
         {getStatusBadge(dispute.status)}
       </div>
@@ -162,9 +162,7 @@ export default function DisputeDetailPage() {
             </div>
             <div>
               <Label>Created</Label>
-              <p className="mt-1">
-                {new Date(dispute.createdAt).toLocaleString()}
-              </p>
+              <p className="mt-1">{new Date(dispute.createdAt).toLocaleString()}</p>
             </div>
           </CardContent>
         </Card>
@@ -177,16 +175,12 @@ export default function DisputeDetailPage() {
             <div>
               <Label>Renter</Label>
               <p className="mt-1">{dispute.renter?.name || "Unknown"}</p>
-              <p className="text-muted-foreground text-sm">
-                {dispute.renter?.email || "N/A"}
-              </p>
+              <p className="text-muted-foreground text-sm">{dispute.renter?.email || "N/A"}</p>
             </div>
             <div>
               <Label>Owner</Label>
               <p className="mt-1">{dispute.owner?.name || "Unknown"}</p>
-              <p className="text-muted-foreground text-sm">
-                {dispute.owner?.email || "N/A"}
-              </p>
+              <p className="text-muted-foreground text-sm">{dispute.owner?.email || "N/A"}</p>
             </div>
             <div>
               <Label>Vehicle</Label>
@@ -205,7 +199,7 @@ export default function DisputeDetailPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {dispute.messages.map((msg) => (
+              {dispute.messages.map((msg: any) => (
                 <div key={msg.id} className="rounded-lg border p-4">
                   <div className="mb-2 flex items-center justify-between">
                     <span className="font-medium text-sm">
@@ -230,9 +224,7 @@ export default function DisputeDetailPage() {
           <Card>
             <CardHeader>
               <CardTitle>Add Admin Message</CardTitle>
-              <CardDescription>
-                Add a message to the dispute conversation
-              </CardDescription>
+              <CardDescription>Add a message to the dispute conversation</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
@@ -245,10 +237,7 @@ export default function DisputeDetailPage() {
                   rows={4}
                 />
               </div>
-              <Button
-                onClick={handleAddMessage}
-                disabled={isAddingMessage}
-              >
+              <Button onClick={handleAddMessage} disabled={isAddingMessage}>
                 {isAddingMessage ? (
                   <>
                     <Loader2 className="mr-2 size-4 animate-spin" />
@@ -264,9 +253,7 @@ export default function DisputeDetailPage() {
           <Card>
             <CardHeader>
               <CardTitle>Resolve Dispute</CardTitle>
-              <CardDescription>
-                Provide a resolution and close this dispute
-              </CardDescription>
+              <CardDescription>Provide a resolution and close this dispute</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
@@ -332,9 +319,7 @@ export default function DisputeDetailPage() {
           <CardContent className="space-y-2">
             <div>
               <Label>Resolution Type</Label>
-              <p className="mt-1 capitalize">
-                {dispute.resolutionType?.replace(/_/g, " ")}
-              </p>
+              <p className="mt-1 capitalize">{dispute.resolutionType?.replace(/_/g, " ")}</p>
             </div>
             <div>
               <Label>Resolution Details</Label>
@@ -343,9 +328,7 @@ export default function DisputeDetailPage() {
             {dispute.resolvedAt && (
               <div>
                 <Label>Resolved At</Label>
-                <p className="mt-1">
-                  {new Date(dispute.resolvedAt).toLocaleString()}
-                </p>
+                <p className="mt-1">{new Date(dispute.resolvedAt).toLocaleString()}</p>
               </div>
             )}
           </CardContent>
@@ -354,4 +337,3 @@ export default function DisputeDetailPage() {
     </div>
   )
 }
-

@@ -24,15 +24,7 @@ import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import { Textarea } from "@workspace/ui/components/textarea"
 import { Badge } from "@workspace/ui/components/badge"
-import {
-  MapPin,
-  Plus,
-  Edit,
-  Trash2,
-  Loader2,
-  Check,
-  X,
-} from "lucide-react"
+import { MapPin, Plus, Edit, Trash2, Loader2, Check, X } from "lucide-react"
 import { toast } from "sonner"
 import type { Id } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
@@ -68,7 +60,7 @@ export default function TracksPage() {
   }
 
   const handleCreate = async () => {
-    if (!formData.name.trim() || !formData.location.trim()) {
+    if (!(formData.name.trim() && formData.location.trim())) {
       toast.error("Please fill in required fields")
       return
     }
@@ -93,7 +85,7 @@ export default function TracksPage() {
   }
 
   const handleEdit = async () => {
-    if (!editingTrack || !formData.name.trim() || !formData.location.trim()) {
+    if (!(editingTrack && formData.name.trim() && formData.location.trim())) {
       toast.error("Please fill in required fields")
       return
     }
@@ -160,9 +152,7 @@ export default function TracksPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="font-bold text-3xl">Track Management</h1>
-          <p className="text-muted-foreground mt-2">
-            Manage racing tracks
-          </p>
+          <p className="mt-2 text-muted-foreground">Manage racing tracks</p>
         </div>
         <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
           <DialogTrigger asChild>
@@ -174,9 +164,7 @@ export default function TracksPage() {
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Create New Track</DialogTitle>
-              <DialogDescription>
-                Add a new racing track to the platform
-              </DialogDescription>
+              <DialogDescription>Add a new racing track to the platform</DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
               <div>
@@ -184,9 +172,7 @@ export default function TracksPage() {
                 <Input
                   id="create-name"
                   value={formData.name}
-                  onChange={(e) =>
-                    setFormData({ ...formData, name: e.target.value })
-                  }
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder="Track name"
                   required
                 />
@@ -196,9 +182,7 @@ export default function TracksPage() {
                 <Input
                   id="create-location"
                   value={formData.location}
-                  onChange={(e) =>
-                    setFormData({ ...formData, location: e.target.value })
-                  }
+                  onChange={(e) => setFormData({ ...formData, location: e.target.value })}
                   placeholder="City, State"
                   required
                 />
@@ -208,9 +192,7 @@ export default function TracksPage() {
                 <Textarea
                   id="create-description"
                   value={formData.description}
-                  onChange={(e) =>
-                    setFormData({ ...formData, description: e.target.value })
-                  }
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   placeholder="Track description"
                   rows={4}
                 />
@@ -220,9 +202,7 @@ export default function TracksPage() {
                 <Input
                   id="create-imageUrl"
                   value={formData.imageUrl}
-                  onChange={(e) =>
-                    setFormData({ ...formData, imageUrl: e.target.value })
-                  }
+                  onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
                   placeholder="https://example.com/image.jpg"
                 />
               </div>
@@ -231,19 +211,14 @@ export default function TracksPage() {
                   type="checkbox"
                   id="create-active"
                   checked={formData.isActive}
-                  onChange={(e) =>
-                    setFormData({ ...formData, isActive: e.target.checked })
-                  }
+                  onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
                   className="rounded"
                 />
                 <Label htmlFor="create-active">Active</Label>
               </div>
             </div>
             <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setIsCreateOpen(false)}
-              >
+              <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
                 Cancel
               </Button>
               <Button onClick={handleCreate} disabled={isProcessing}>
@@ -264,14 +239,12 @@ export default function TracksPage() {
       <Card>
         <CardHeader>
           <CardTitle>All Tracks</CardTitle>
-          <CardDescription>
-            {tracks?.length || 0} track(s) total
-          </CardDescription>
+          <CardDescription>{tracks?.length || 0} track(s) total</CardDescription>
         </CardHeader>
         <CardContent>
           {tracks && tracks.length > 0 ? (
             <div className="space-y-4">
-              {tracks.map((track) => (
+              {tracks.map((track: any) => (
                 <Card key={track._id}>
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between">
@@ -291,13 +264,9 @@ export default function TracksPage() {
                             </Badge>
                           )}
                         </div>
-                        <p className="text-muted-foreground mt-1">
-                          {track.location}
-                        </p>
+                        <p className="mt-1 text-muted-foreground">{track.location}</p>
                         {track.description && (
-                          <p className="text-muted-foreground mt-2 text-sm">
-                            {track.description}
-                          </p>
+                          <p className="mt-2 text-muted-foreground text-sm">{track.description}</p>
                         )}
                         {track.imageUrl && (
                           <img
@@ -308,11 +277,7 @@ export default function TracksPage() {
                         )}
                       </div>
                       <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => openEditDialog(track)}
-                        >
+                        <Button variant="outline" size="sm" onClick={() => openEditDialog(track)}>
                           <Edit className="mr-2 size-4" />
                           Edit
                         </Button>
@@ -353,9 +318,7 @@ export default function TracksPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Edit Track</DialogTitle>
-            <DialogDescription>
-              Update track information
-            </DialogDescription>
+            <DialogDescription>Update track information</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
@@ -363,9 +326,7 @@ export default function TracksPage() {
               <Input
                 id="edit-name"
                 value={formData.name}
-                onChange={(e) =>
-                  setFormData({ ...formData, name: e.target.value })
-                }
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 placeholder="Track name"
                 required
               />
@@ -375,9 +336,7 @@ export default function TracksPage() {
               <Input
                 id="edit-location"
                 value={formData.location}
-                onChange={(e) =>
-                  setFormData({ ...formData, location: e.target.value })
-                }
+                onChange={(e) => setFormData({ ...formData, location: e.target.value })}
                 placeholder="City, State"
                 required
               />
@@ -387,9 +346,7 @@ export default function TracksPage() {
               <Textarea
                 id="edit-description"
                 value={formData.description}
-                onChange={(e) =>
-                  setFormData({ ...formData, description: e.target.value })
-                }
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 placeholder="Track description"
                 rows={4}
               />
@@ -399,9 +356,7 @@ export default function TracksPage() {
               <Input
                 id="edit-imageUrl"
                 value={formData.imageUrl}
-                onChange={(e) =>
-                  setFormData({ ...formData, imageUrl: e.target.value })
-                }
+                onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
                 placeholder="https://example.com/image.jpg"
               />
             </div>
@@ -410,9 +365,7 @@ export default function TracksPage() {
                 type="checkbox"
                 id="edit-active"
                 checked={formData.isActive}
-                onChange={(e) =>
-                  setFormData({ ...formData, isActive: e.target.checked })
-                }
+                onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
                 className="rounded"
               />
               <Label htmlFor="edit-active">Active</Label>
@@ -438,4 +391,3 @@ export default function TracksPage() {
     </div>
   )
 }
-

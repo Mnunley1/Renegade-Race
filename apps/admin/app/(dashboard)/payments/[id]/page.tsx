@@ -1,18 +1,24 @@
 "use client"
 
-import { useQuery } from "convex/react"
+import { useQuery, useMutation, useAction } from "convex/react"
 import { useParams } from "next/navigation"
 import Link from "next/link"
 import { api } from "@/lib/convex"
 import { Button } from "@workspace/ui/components/button"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@workspace/ui/components/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Badge } from "@workspace/ui/components/badge"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@workspace/ui/components/dialog"
+import { Input } from "@workspace/ui/components/input"
+import { Label } from "@workspace/ui/components/label"
+import { Textarea } from "@workspace/ui/components/textarea"
 import {
   ArrowLeft,
   DollarSign,
@@ -25,11 +31,19 @@ import {
   RefreshCw,
 } from "lucide-react"
 import type { Id } from "@/lib/convex"
+import { useState } from "react"
+import { toast } from "sonner"
 
 export default function PaymentDetailPage() {
   const params = useParams()
   const paymentId = params.id as Id<"payments">
   const payment = useQuery(api.stripe.getPaymentById, { paymentId })
+  const initiateRefund = useAction(api.admin.initiateRefund)
+
+  const [refundDialogOpen, setRefundDialogOpen] = useState(false)
+  const [refundAmount, setRefundAmount] = useState("")
+  const [refundReason, setRefundReason] = useState("")
+  const [isProcessing, setIsProcessing] = useState(false)
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -66,13 +80,53 @@ export default function PaymentDetailPage() {
     }
   }
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-US", {
+  const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat("en-US", {
       style: "currency",
       currency: "USD",
       minimumFractionDigits: 2,
     }).format(amount / 100)
+
+  const handleRefund = async () => {
+    if (!payment) return
+
+    const amountInCents = Math.round(Number.parseFloat(refundAmount) * 100)
+    if (isNaN(amountInCents) || amountInCents <= 0) {
+      toast.error("Please enter a valid refund amount")
+      return
+    }
+
+    const maxRefundable = payment.amount - (payment.refundAmount || 0)
+    if (amountInCents > maxRefundable) {
+      toast.error(`Refund amount cannot exceed ${formatCurrency(maxRefundable)}`)
+      return
+    }
+
+    if (!refundReason.trim()) {
+      toast.error("Please provide a reason for the refund")
+      return
+    }
+
+    setIsProcessing(true)
+    try {
+      await initiateRefund({
+        paymentId,
+        amount: amountInCents,
+        reason: refundReason,
+      })
+      toast.success("Refund processed successfully")
+      setRefundDialogOpen(false)
+      setRefundAmount("")
+      setRefundReason("")
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to process refund")
+    } finally {
+      setIsProcessing(false)
+    }
   }
+
+  const canRefund =
+    payment && payment.status === "succeeded" && payment.amount - (payment.refundAmount || 0) > 0
 
   if (payment === undefined) {
     return (
@@ -101,8 +155,8 @@ export default function PaymentDetailPage() {
   }
 
   const primaryImage =
-    payment.vehicle?.images?.find((img: any) => img.isPrimary) ||
-    payment.vehicle?.images?.[0]
+    (payment.vehicle as any)?.images?.find((img: any) => img.isPrimary) ||
+    (payment.vehicle as any)?.images?.[0]
 
   return (
     <div className="space-y-6">
@@ -115,9 +169,69 @@ export default function PaymentDetailPage() {
             </Button>
           </Link>
           <h1 className="font-bold text-3xl">Payment Details</h1>
-          <p className="text-muted-foreground mt-2">Payment ID: {payment._id}</p>
+          <p className="mt-2 text-muted-foreground">Payment ID: {payment._id}</p>
         </div>
-        {getStatusBadge(payment.status)}
+        <div className="flex items-center gap-3">
+          {getStatusBadge(payment.status)}
+          {canRefund && (
+            <Dialog open={refundDialogOpen} onOpenChange={setRefundDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="destructive">
+                  <RefreshCw className="mr-2 size-4" />
+                  Process Refund
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Process Refund</DialogTitle>
+                  <DialogDescription>
+                    Issue a full or partial refund for this payment. Maximum refundable:{" "}
+                    {formatCurrency(payment.amount - (payment.refundAmount || 0))}
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="refund-amount">Refund Amount (USD)</Label>
+                    <Input
+                      id="refund-amount"
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      max={(payment.amount - (payment.refundAmount || 0)) / 100}
+                      placeholder="0.00"
+                      value={refundAmount}
+                      onChange={(e) => setRefundAmount(e.target.value)}
+                      disabled={isProcessing}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="refund-reason">Reason for Refund</Label>
+                    <Textarea
+                      id="refund-reason"
+                      placeholder="Enter reason for refund..."
+                      value={refundReason}
+                      onChange={(e) => setRefundReason(e.target.value)}
+                      disabled={isProcessing}
+                      rows={3}
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    onClick={() => setRefundDialogOpen(false)}
+                    disabled={isProcessing}
+                  >
+                    Cancel
+                  </Button>
+                  <Button variant="destructive" onClick={handleRefund} disabled={isProcessing}>
+                    {isProcessing ? "Processing..." : "Process Refund"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
+        </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
@@ -132,9 +246,7 @@ export default function PaymentDetailPage() {
           <CardContent className="space-y-4">
             <div>
               <p className="text-muted-foreground text-sm">Amount</p>
-              <p className="font-semibold text-2xl">
-                {formatCurrency(payment.amount || 0)}
-              </p>
+              <p className="font-semibold text-2xl">{formatCurrency(payment.amount || 0)}</p>
             </div>
             <div>
               <p className="text-muted-foreground text-sm">Status</p>
@@ -143,36 +255,30 @@ export default function PaymentDetailPage() {
             {payment.stripePaymentIntentId && (
               <div>
                 <p className="text-muted-foreground text-sm">Stripe Payment Intent ID</p>
-                <p className="font-mono text-sm break-all">{payment.stripePaymentIntentId}</p>
+                <p className="break-all font-mono text-sm">{payment.stripePaymentIntentId}</p>
               </div>
             )}
             {payment.stripeCheckoutSessionId && (
               <div>
                 <p className="text-muted-foreground text-sm">Stripe Checkout Session ID</p>
-                <p className="font-mono text-sm break-all">
-                  {payment.stripeCheckoutSessionId}
-                </p>
+                <p className="break-all font-mono text-sm">{payment.stripeCheckoutSessionId}</p>
               </div>
             )}
             <div>
               <p className="text-muted-foreground text-sm">Created</p>
-              <p className="font-medium">
-                {new Date(payment.createdAt).toLocaleString()}
-              </p>
+              <p className="font-medium">{new Date(payment.createdAt).toLocaleString()}</p>
             </div>
             {payment.updatedAt && (
               <div>
                 <p className="text-muted-foreground text-sm">Last Updated</p>
-                <p className="font-medium">
-                  {new Date(payment.updatedAt).toLocaleString()}
-                </p>
+                <p className="font-medium">{new Date(payment.updatedAt).toLocaleString()}</p>
               </div>
             )}
-            {payment.refundedAt && (
+            {(payment as any).refundedAt && (
               <div>
                 <p className="text-muted-foreground text-sm">Refunded At</p>
                 <p className="font-medium">
-                  {new Date(payment.refundedAt).toLocaleString()}
+                  {new Date((payment as any).refundedAt).toLocaleString()}
                 </p>
               </div>
             )}
@@ -241,13 +347,9 @@ export default function PaymentDetailPage() {
           <CardContent className="space-y-4">
             <div>
               <p className="font-medium">{payment.renter?.name || "Unknown"}</p>
-              <p className="text-muted-foreground text-sm">
-                {payment.renter?.email || "N/A"}
-              </p>
+              <p className="text-muted-foreground text-sm">{payment.renter?.email || "N/A"}</p>
               {payment.renter?.phone && (
-                <p className="text-muted-foreground text-sm">
-                  Phone: {payment.renter.phone}
-                </p>
+                <p className="text-muted-foreground text-sm">Phone: {payment.renter.phone}</p>
               )}
             </div>
             {payment.renter?.rating && (
@@ -277,13 +379,9 @@ export default function PaymentDetailPage() {
           <CardContent className="space-y-4">
             <div>
               <p className="font-medium">{payment.owner?.name || "Unknown"}</p>
-              <p className="text-muted-foreground text-sm">
-                {payment.owner?.email || "N/A"}
-              </p>
+              <p className="text-muted-foreground text-sm">{payment.owner?.email || "N/A"}</p>
               {payment.owner?.phone && (
-                <p className="text-muted-foreground text-sm">
-                  Phone: {payment.owner.phone}
-                </p>
+                <p className="text-muted-foreground text-sm">Phone: {payment.owner.phone}</p>
               )}
             </div>
             {payment.owner?.rating && (
@@ -327,9 +425,9 @@ export default function PaymentDetailPage() {
                 <h3 className="font-semibold text-lg">
                   {payment.vehicle.year} {payment.vehicle.make} {payment.vehicle.model}
                 </h3>
-                {payment.vehicle.track && (
+                {(payment.vehicle as any).track && (
                   <p className="text-muted-foreground text-sm">
-                    Track: {payment.vehicle.track.name}
+                    Track: {(payment.vehicle as any).track.name}
                   </p>
                 )}
                 <div className="mt-2">
@@ -352,7 +450,7 @@ export default function PaymentDetailPage() {
             <CardTitle>Additional Information</CardTitle>
           </CardHeader>
           <CardContent>
-            <pre className="rounded-lg bg-muted p-4 text-xs overflow-auto">
+            <pre className="overflow-auto rounded-lg bg-muted p-4 text-xs">
               {JSON.stringify(payment.metadata, null, 2)}
             </pre>
           </CardContent>
