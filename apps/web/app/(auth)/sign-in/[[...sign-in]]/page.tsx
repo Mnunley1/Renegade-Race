@@ -26,15 +26,24 @@ type ClerkError = {
 function getRedirectUrl(searchParams: URLSearchParams): string {
   const redirectUrl = searchParams.get("redirect_url")
   if (!redirectUrl) return "/"
-  
+
   // Decode the URL
   const decoded = decodeURIComponent(redirectUrl)
-  
+
   // Ensure it's a relative path (starts with /) and doesn't contain protocol
   if (decoded.startsWith("/") && !decoded.includes("://")) {
+    // Block protocol-relative URLs and backslash bypasses
+    if (
+      decoded.startsWith("//") ||
+      decoded.includes("\\") ||
+      decoded.includes("\n") ||
+      decoded.includes("\r")
+    ) {
+      return "/"
+    }
     return decoded
   }
-  
+
   // Fallback to home if invalid
   return "/"
 }
@@ -48,7 +57,7 @@ function SignInPageContent() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
   const searchParams = useSearchParams()
-  
+
   // Memoize redirect URL to avoid recalculating
   const redirectUrl = useMemo(() => getRedirectUrl(searchParams), [searchParams])
 
@@ -98,10 +107,12 @@ function SignInPageContent() {
         </p>
       </div>
 
-      <Card className="border-2 shadow-xl bg-card">
+      <Card className="border-2 bg-card shadow-xl">
         <CardHeader className="pb-4 sm:pb-6">
           <CardTitle className="text-lg sm:text-xl">Sign in to your account</CardTitle>
-          <CardDescription className="text-xs sm:text-sm">Enter your credentials below to access your account</CardDescription>
+          <CardDescription className="text-xs sm:text-sm">
+            Enter your credentials below to access your account
+          </CardDescription>
         </CardHeader>
         <CardContent className="pb-4 sm:pb-6">
           <form className="space-y-4 sm:space-y-6" onSubmit={handleSubmit}>
@@ -112,7 +123,9 @@ function SignInPageContent() {
             )}
 
             <div className="space-y-1.5 sm:space-y-2">
-              <Label htmlFor="email" className="text-sm">Email</Label>
+              <Label htmlFor="email" className="text-sm">
+                Email
+              </Label>
               <div className="relative">
                 <Mail className="-translate-y-1/2 absolute top-1/2 left-3 size-4 text-muted-foreground" />
                 <Input
@@ -130,7 +143,9 @@ function SignInPageContent() {
 
             <div className="space-y-1.5 sm:space-y-2">
               <div className="flex items-center justify-between">
-                <Label htmlFor="password" className="text-sm">Password</Label>
+                <Label htmlFor="password" className="text-sm">
+                  Password
+                </Label>
                 <Link
                   className="font-medium text-primary text-xs transition-colors hover:text-primary/80 sm:text-sm"
                   href="/reset-password"
@@ -141,7 +156,7 @@ function SignInPageContent() {
               <div className="relative">
                 <Lock className="-translate-y-1/2 absolute top-1/2 left-3 size-4 text-muted-foreground" />
                 <Input
-                  className="pl-10 pr-10"
+                  className="pr-10 pl-10"
                   disabled={isLoading}
                   id="password"
                   onChange={(e) => setPassword(e.target.value)}
@@ -158,11 +173,7 @@ function SignInPageContent() {
                   }}
                   type="button"
                 >
-                  {showPassword ? (
-                    <EyeOff className="size-4" />
-                  ) : (
-                    <Eye className="size-4" />
-                  )}
+                  {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                 </button>
               </div>
             </div>

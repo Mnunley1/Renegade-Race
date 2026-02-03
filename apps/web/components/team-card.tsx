@@ -53,50 +53,35 @@ export function TeamCard({
     <Link className="flex h-full" href={`/motorsports/teams/${id}`}>
       <Card
         className={cn(
-          "group relative flex h-full w-full flex-col overflow-hidden border-2 transition-all hover:scale-[1.02] hover:shadow-xl",
+          "group relative flex h-full w-full cursor-pointer flex-col overflow-hidden border-2 transition-all hover:scale-[1.02] hover:shadow-xl",
           className
         )}
         {...props}
       >
-        <div className="relative h-48 w-full flex-shrink-0 overflow-hidden bg-muted">
-          {logoUrl ? (
-            <Image
-              alt={name}
-              className="object-cover transition-transform duration-300 group-hover:scale-110"
-              fill
-              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-              src={logoUrl}
-            />
-          ) : (
-            <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-primary">
-              <h3 className="font-bold text-2xl text-white">{name}</h3>
-            </div>
-          )}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
-        </div>
-        <CardContent className="flex flex-1 flex-col p-6">
-          <div className="flex flex-1 flex-col space-y-4">
-            <div>
-              <h3 className="font-bold text-xl transition-colors group-hover:text-primary">
-                {name}
-              </h3>
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-muted-foreground text-sm">
-                <div className="flex items-center gap-2">
-                  <MapPin className="size-4" />
-                  <span>{location}</span>
-                </div>
-                {racingType && (
-                  <Badge className="text-xs" variant="outline">
-                    {getRacingTypeLabel(racingType)}
-                  </Badge>
+        <CardContent className="flex flex-1 flex-col p-4">
+          <div className="flex flex-1 flex-col space-y-3">
+            <div className="flex items-start gap-4">
+              <div className="relative h-24 w-24 flex-shrink-0 overflow-hidden rounded-lg border-2 border-primary/20 bg-muted">
+                {logoUrl ? (
+                  <Image alt={name} className="object-cover" fill src={logoUrl} />
+                ) : (
+                  <div className="flex h-full items-center justify-center bg-primary">
+                    <h3 className="font-bold text-lg text-white">{name.slice(0, 2)}</h3>
+                  </div>
                 )}
               </div>
-            </div>
-
-            <div className="flex items-center gap-4 text-sm">
-              <div className="flex items-center gap-2">
-                <Users className="size-4 text-primary" />
-                <span className="font-semibold">{availableSeats} seats</span>
+              <div className="min-w-0 flex-1">
+                <h3 className="font-bold text-xl transition-colors group-hover:text-primary">
+                  {name}
+                </h3>
+                <div className="mt-1.5 flex items-center gap-2 text-muted-foreground text-sm">
+                  <MapPin className="size-4" />
+                  <span className="truncate">{location}</span>
+                </div>
+                <div className="mt-1.5 flex items-center gap-2 text-sm">
+                  <Users className="size-4 text-primary" />
+                  <span className="font-semibold">{availableSeats} seats</span>
+                </div>
               </div>
             </div>
 
@@ -107,12 +92,12 @@ export function TeamCard({
                     {specialty}
                   </Badge>
                 ))}
+                {racingType && (
+                  <Badge variant="outline">
+                    {getRacingTypeLabel(racingType)}
+                  </Badge>
+                )}
               </div>
-              {requirements && requirements.length > 0 && (
-                <p className="line-clamp-2 text-muted-foreground text-xs">
-                  Requirements: {requirements.join(", ")}
-                </p>
-              )}
             </div>
           </div>
         </CardContent>

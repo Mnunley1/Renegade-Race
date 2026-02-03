@@ -204,7 +204,7 @@ export default function DisputeDetailPage() {
               <CardTitle>Messages & Updates</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {dispute.messages.map((msg) => {
+              {dispute.messages.map((msg: any) => {
                 const isFromUser = msg.senderId === user?.id
                 const sender = msg.senderId === dispute.renterId ? renter : owner
 
@@ -226,7 +226,7 @@ export default function DisputeDetailPage() {
                     <p className="text-muted-foreground text-sm">{msg.message}</p>
                     {msg.photos && msg.photos.length > 0 && (
                       <div className="mt-2 flex flex-wrap gap-2">
-                        {msg.photos.map((photo, index) => (
+                        {msg.photos.map((photo: string, index: number) => (
                           <img
                             alt={`Message photo ${index + 1}`}
                             className="h-20 w-20 rounded-lg object-cover"

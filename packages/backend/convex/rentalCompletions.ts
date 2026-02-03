@@ -1,105 +1,96 @@
-import { v } from 'convex/values';
-import { api } from './_generated/api';
-import { mutation, query } from './_generated/server';
-import {
-  getNewReviewEmailTemplate,
-  sendTransactionalEmail,
-} from './emails';
+import { v } from "convex/values"
+import { api } from "./_generated/api"
+import { mutation, query } from "./_generated/server"
+import { getNewReviewEmailTemplate, sendTransactionalEmail } from "./emails"
 
 // Create a new rental completion record
 export const create = mutation({
   args: {
-    reservationId: v.id('reservations'),
+    reservationId: v.id("reservations"),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await ctx.auth.getUserIdentity()
     if (!identity) {
-      throw new Error('Not authenticated');
+      throw new Error("Not authenticated")
     }
 
-    const reservation = await ctx.db.get(args.reservationId);
+    const reservation = await ctx.db.get(args.reservationId)
     if (!reservation) {
-      throw new Error('Reservation not found');
+      throw new Error("Reservation not found")
     }
 
-    if (reservation.status !== 'confirmed') {
-      throw new Error(
-        'Reservation must be confirmed to start completion process'
-      );
+    if (reservation.status !== "confirmed") {
+      throw new Error("Reservation must be confirmed to start completion process")
     }
 
     // Check if completion already exists
     const existingCompletion = await ctx.db
-      .query('rentalCompletions')
-      .withIndex('by_reservation', q =>
-        q.eq('reservationId', args.reservationId)
-      )
-      .first();
+      .query("rentalCompletions")
+      .withIndex("by_reservation", (q) => q.eq("reservationId", args.reservationId))
+      .first()
 
     if (existingCompletion) {
-      throw new Error('Rental completion already exists for this reservation');
+      throw new Error("Rental completion already exists for this reservation")
     }
 
-    const completionId = await ctx.db.insert('rentalCompletions', {
+    const completionId = await ctx.db.insert("rentalCompletions", {
       reservationId: args.reservationId,
       vehicleId: reservation.vehicleId,
       renterId: reservation.renterId,
       ownerId: reservation.ownerId,
-      status: 'pending_renter',
+      status: "pending_renter",
       createdAt: Date.now(),
       updatedAt: Date.now(),
-    });
+    })
 
-    return completionId;
+    return completionId
   },
-});
+})
 
 // Submit renter's return form
 export const submitRenterReturnForm = mutation({
   args: {
-    completionId: v.id('rentalCompletions'),
+    completionId: v.id("rentalCompletions"),
     returnDate: v.string(),
     vehicleCondition: v.union(
-      v.literal('excellent'),
-      v.literal('good'),
-      v.literal('fair'),
-      v.literal('poor'),
-      v.literal('damaged')
+      v.literal("excellent"),
+      v.literal("good"),
+      v.literal("fair"),
+      v.literal("poor"),
+      v.literal("damaged")
     ),
     fuelLevel: v.union(
-      v.literal('full'),
-      v.literal('3/4'),
-      v.literal('1/2'),
-      v.literal('1/4'),
-      v.literal('empty')
+      v.literal("full"),
+      v.literal("3/4"),
+      v.literal("1/2"),
+      v.literal("1/4"),
+      v.literal("empty")
     ),
     mileage: v.number(),
     notes: v.optional(v.string()),
     photos: v.array(v.string()),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await ctx.auth.getUserIdentity()
     if (!identity) {
-      throw new Error('Not authenticated');
+      throw new Error("Not authenticated")
     }
 
-    const completion = await ctx.db.get(args.completionId);
+    const completion = await ctx.db.get(args.completionId)
     if (!completion) {
-      throw new Error('Rental completion not found');
+      throw new Error("Rental completion not found")
     }
 
     if (completion.renterId !== identity.subject) {
-      throw new Error('Not authorized to submit return form');
+      throw new Error("Not authorized to submit return form")
     }
 
-    if (completion.status !== 'pending_renter') {
-      throw new Error(
-        'Return form already submitted or completion in wrong state'
-      );
+    if (completion.status !== "pending_renter") {
+      throw new Error("Return form already submitted or completion in wrong state")
     }
 
     await ctx.db.patch(args.completionId, {
-      status: 'pending_owner',
+      status: "pending_owner",
       renterReturnForm: {
         returnDate: args.returnDate,
         vehicleCondition: args.vehicleCondition,
@@ -110,16 +101,16 @@ export const submitRenterReturnForm = mutation({
         submittedAt: Date.now(),
       },
       updatedAt: Date.now(),
-    });
+    })
 
-    return args.completionId;
+    return args.completionId
   },
-});
+})
 
 // Submit owner's return review
 export const submitOwnerReturnReview = mutation({
   args: {
-    completionId: v.id('rentalCompletions'),
+    completionId: v.id("rentalCompletions"),
     vehicleReceived: v.boolean(),
     conditionMatches: v.boolean(),
     fuelLevelMatches: v.boolean(),
@@ -129,28 +120,26 @@ export const submitOwnerReturnReview = mutation({
     notes: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await ctx.auth.getUserIdentity()
     if (!identity) {
-      throw new Error('Not authenticated');
+      throw new Error("Not authenticated")
     }
 
-    const completion = await ctx.db.get(args.completionId);
+    const completion = await ctx.db.get(args.completionId)
     if (!completion) {
-      throw new Error('Rental completion not found');
+      throw new Error("Rental completion not found")
     }
 
     if (completion.ownerId !== identity.subject) {
-      throw new Error('Not authorized to submit return review');
+      throw new Error("Not authorized to submit return review")
     }
 
-    if (completion.status !== 'pending_owner') {
-      throw new Error(
-        'Return review already submitted or completion in wrong state'
-      );
+    if (completion.status !== "pending_owner") {
+      throw new Error("Return review already submitted or completion in wrong state")
     }
 
     await ctx.db.patch(args.completionId, {
-      status: 'completed',
+      status: "completed",
       ownerReturnReview: {
         vehicleReceived: args.vehicleReceived,
         conditionMatches: args.conditionMatches,
@@ -163,40 +152,40 @@ export const submitOwnerReturnReview = mutation({
       },
       completedAt: Date.now(),
       updatedAt: Date.now(),
-    });
+    })
 
     // Mark the reservation as completed
     await ctx.db.patch(completion.reservationId, {
-      status: 'completed',
+      status: "completed",
       updatedAt: Date.now(),
-    });
+    })
 
-    return args.completionId;
+    return args.completionId
   },
-});
+})
 
 // Submit vehicle vitals
 export const submitVehicleVitals = mutation({
   args: {
-    completionId: v.id('rentalCompletions'),
+    completionId: v.id("rentalCompletions"),
     engineTemp: v.optional(v.number()),
     oilPressure: v.optional(v.number()),
     oilLevel: v.optional(
       v.union(
-        v.literal('full'),
-        v.literal('3/4'),
-        v.literal('1/2'),
-        v.literal('1/4'),
-        v.literal('low')
+        v.literal("full"),
+        v.literal("3/4"),
+        v.literal("1/2"),
+        v.literal("1/4"),
+        v.literal("low")
       )
     ),
     coolantLevel: v.optional(
       v.union(
-        v.literal('full'),
-        v.literal('3/4'),
-        v.literal('1/2'),
-        v.literal('1/4'),
-        v.literal('low')
+        v.literal("full"),
+        v.literal("3/4"),
+        v.literal("1/2"),
+        v.literal("1/4"),
+        v.literal("low")
       )
     ),
     tirePressure: v.optional(
@@ -209,71 +198,68 @@ export const submitVehicleVitals = mutation({
     ),
     tireCondition: v.optional(
       v.union(
-        v.literal('excellent'),
-        v.literal('good'),
-        v.literal('fair'),
-        v.literal('poor'),
-        v.literal('needs_replacement')
+        v.literal("excellent"),
+        v.literal("good"),
+        v.literal("fair"),
+        v.literal("poor"),
+        v.literal("needs_replacement")
       )
     ),
     brakePadCondition: v.optional(
       v.union(
-        v.literal('excellent'),
-        v.literal('good'),
-        v.literal('fair'),
-        v.literal('poor'),
-        v.literal('needs_replacement')
+        v.literal("excellent"),
+        v.literal("good"),
+        v.literal("fair"),
+        v.literal("poor"),
+        v.literal("needs_replacement")
       )
     ),
     brakeFluidLevel: v.optional(
       v.union(
-        v.literal('full'),
-        v.literal('3/4'),
-        v.literal('1/2'),
-        v.literal('1/4'),
-        v.literal('low')
+        v.literal("full"),
+        v.literal("3/4"),
+        v.literal("1/2"),
+        v.literal("1/4"),
+        v.literal("low")
       )
     ),
     bodyCondition: v.optional(
       v.union(
-        v.literal('excellent'),
-        v.literal('good'),
-        v.literal('fair'),
-        v.literal('poor'),
-        v.literal('damaged')
+        v.literal("excellent"),
+        v.literal("good"),
+        v.literal("fair"),
+        v.literal("poor"),
+        v.literal("damaged")
       )
     ),
     interiorCondition: v.optional(
       v.union(
-        v.literal('excellent'),
-        v.literal('good'),
-        v.literal('fair'),
-        v.literal('poor'),
-        v.literal('damaged')
+        v.literal("excellent"),
+        v.literal("good"),
+        v.literal("fair"),
+        v.literal("poor"),
+        v.literal("damaged")
       )
     ),
     notes: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await ctx.auth.getUserIdentity()
     if (!identity) {
-      throw new Error('Not authenticated');
+      throw new Error("Not authenticated")
     }
 
-    const completion = await ctx.db.get(args.completionId);
+    const completion = await ctx.db.get(args.completionId)
     if (!completion) {
-      throw new Error('Rental completion not found');
+      throw new Error("Rental completion not found")
     }
 
     // Check if user is either renter or owner
-    if (
-      completion.renterId !== identity.subject &&
-      completion.ownerId !== identity.subject
-    ) {
-      throw new Error('Not authorized to submit vehicle vitals');
+    if (completion.renterId !== identity.subject && completion.ownerId !== identity.subject) {
+      throw new Error("Not authorized to submit vehicle vitals")
     }
 
-    const vitalsId = await ctx.db.insert('vehicleVitals', {
+    const vitalsId = await ctx.db.insert("vehicleVitals", {
       rentalCompletionId: args.completionId,
       vehicleId: completion.vehicleId,
       engineTemp: args.engineTemp,
@@ -289,16 +275,16 @@ export const submitVehicleVitals = mutation({
       notes: args.notes,
       submittedBy: identity.subject,
       submittedAt: Date.now(),
-    });
+    })
 
-    return vitalsId;
+    return vitalsId
   },
-});
+})
 
 // Submit a review
 export const submitReview = mutation({
   args: {
-    completionId: v.id('rentalCompletions'),
+    completionId: v.id("rentalCompletions"),
     rating: v.number(),
     communication: v.optional(v.number()),
     vehicleCondition: v.optional(v.number()),
@@ -309,48 +295,39 @@ export const submitReview = mutation({
     photos: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await ctx.auth.getUserIdentity()
     if (!identity) {
-      throw new Error('Not authenticated');
+      throw new Error("Not authenticated")
     }
 
-    const completion = await ctx.db.get(args.completionId);
+    const completion = await ctx.db.get(args.completionId)
     if (!completion) {
-      throw new Error('Rental completion not found');
+      throw new Error("Rental completion not found")
     }
 
     // Check if user is either renter or owner
-    if (
-      completion.renterId !== identity.subject &&
-      completion.ownerId !== identity.subject
-    ) {
-      throw new Error('Not authorized to submit review');
+    if (completion.renterId !== identity.subject && completion.ownerId !== identity.subject) {
+      throw new Error("Not authorized to submit review")
     }
 
     // Determine review type and reviewed ID
     const reviewType =
-      completion.renterId === identity.subject
-        ? 'renter_to_owner'
-        : 'owner_to_renter';
+      completion.renterId === identity.subject ? "renter_to_owner" : "owner_to_renter"
     const reviewedId =
-      completion.renterId === identity.subject
-        ? completion.ownerId
-        : completion.renterId;
+      completion.renterId === identity.subject ? completion.ownerId : completion.renterId
 
     // Check if review already exists
     const existingReview = await ctx.db
-      .query('rentalReviews')
-      .withIndex('by_rental_completion', q =>
-        q.eq('rentalCompletionId', args.completionId)
-      )
-      .filter(q => q.eq(q.field('reviewerId'), identity.subject))
-      .first();
+      .query("rentalReviews")
+      .withIndex("by_rental_completion", (q) => q.eq("rentalCompletionId", args.completionId))
+      .filter((q) => q.eq(q.field("reviewerId"), identity.subject))
+      .first()
 
     if (existingReview) {
-      throw new Error('Review already submitted for this rental');
+      throw new Error("Review already submitted for this rental")
     }
 
-    const reviewId = await ctx.db.insert('rentalReviews', {
+    const reviewId = await ctx.db.insert("rentalReviews", {
       rentalCompletionId: args.completionId,
       reservationId: completion.reservationId,
       vehicleId: completion.vehicleId,
@@ -376,21 +353,21 @@ export const submitReview = mutation({
       const [vehicle, reviewer, reviewed] = await Promise.all([
         ctx.db.get(completion.vehicleId),
         ctx.db
-          .query('users')
-          .withIndex('by_external_id', q => q.eq('externalId', identity.subject))
+          .query("users")
+          .withIndex("by_external_id", (q) => q.eq("externalId", identity.subject))
           .first(),
         ctx.db
-          .query('users')
-          .withIndex('by_external_id', q => q.eq('externalId', reviewedId))
+          .query("users")
+          .withIndex("by_external_id", (q) => q.eq("externalId", reviewedId))
           .first(),
       ])
 
       if (vehicle && reviewer && reviewed?.email) {
         const vehicleName = `${vehicle.year} ${vehicle.make} ${vehicle.model}`
-        const webUrl = process.env.WEB_URL || 'https://renegaderentals.com'
+        const webUrl = process.env.WEB_URL || "https://renegaderentals.com"
         const template = getNewReviewEmailTemplate({
-          reviewedName: reviewed.name || 'Guest',
-          reviewerName: reviewer.name || 'Guest',
+          reviewedName: reviewed.name || "Guest",
+          reviewerName: reviewer.name || "Guest",
           vehicleName,
           rating: args.rating,
           reviewUrl: `${webUrl}/profile`,
@@ -407,36 +384,32 @@ export const submitReview = mutation({
     // Update the reviewed user's rating via scheduler
     await ctx.scheduler.runAfter(0, api.reviews.updateUserRating, {
       userId: reviewedId,
-    });
+    })
 
     return reviewId
   },
-});
+})
 
 // Get rental completion by ID
 export const getById = query({
-  args: { id: v.id('rentalCompletions') },
+  args: { id: v.id("rentalCompletions") },
   handler: async (ctx, args) => {
-    const completion = await ctx.db.get(args.id);
-    if (!completion) return null;
+    const completion = await ctx.db.get(args.id)
+    if (!completion) return null
 
     // Get related data
     const [reservation, vehicle, renter, owner] = await Promise.all([
       ctx.db.get(completion.reservationId),
       ctx.db.get(completion.vehicleId),
       ctx.db
-        .query('users')
-        .withIndex('by_external_id', q =>
-          q.eq('externalId', completion.renterId)
-        )
+        .query("users")
+        .withIndex("by_external_id", (q) => q.eq("externalId", completion.renterId))
         .first(),
       ctx.db
-        .query('users')
-        .withIndex('by_external_id', q =>
-          q.eq('externalId', completion.ownerId)
-        )
+        .query("users")
+        .withIndex("by_external_id", (q) => q.eq("externalId", completion.ownerId))
         .first(),
-    ]);
+    ])
 
     return {
       ...completion,
@@ -444,40 +417,34 @@ export const getById = query({
       vehicle,
       renter,
       owner,
-    };
+    }
   },
-});
+})
 
 // Get rental completion by reservation ID
 export const getByReservation = query({
-  args: { reservationId: v.id('reservations') },
+  args: { reservationId: v.id("reservations") },
   handler: async (ctx, args) => {
     const completion = await ctx.db
-      .query('rentalCompletions')
-      .withIndex('by_reservation', q =>
-        q.eq('reservationId', args.reservationId)
-      )
-      .first();
+      .query("rentalCompletions")
+      .withIndex("by_reservation", (q) => q.eq("reservationId", args.reservationId))
+      .first()
 
-    if (!completion) return null;
+    if (!completion) return null
 
     // Get related data
     const [reservation, vehicle, renter, owner] = await Promise.all([
       ctx.db.get(completion.reservationId),
       ctx.db.get(completion.vehicleId),
       ctx.db
-        .query('users')
-        .withIndex('by_external_id', q =>
-          q.eq('externalId', completion.renterId)
-        )
+        .query("users")
+        .withIndex("by_external_id", (q) => q.eq("externalId", completion.renterId))
         .first(),
       ctx.db
-        .query('users')
-        .withIndex('by_external_id', q =>
-          q.eq('externalId', completion.ownerId)
-        )
+        .query("users")
+        .withIndex("by_external_id", (q) => q.eq("externalId", completion.ownerId))
         .first(),
-    ]);
+    ])
 
     return {
       ...completion,
@@ -485,51 +452,47 @@ export const getByReservation = query({
       vehicle,
       renter,
       owner,
-    };
+    }
   },
-});
+})
 
 // Get rental completions for a user
 export const getByUser = query({
   args: {
     userId: v.string(),
-    role: v.union(v.literal('renter'), v.literal('owner')),
+    role: v.union(v.literal("renter"), v.literal("owner")),
   },
   handler: async (ctx, args) => {
-    const { userId, role } = args;
+    const { userId, role } = args
 
-    let completionsQuery;
-    if (role === 'renter') {
+    let completionsQuery
+    if (role === "renter") {
       completionsQuery = ctx.db
-        .query('rentalCompletions')
-        .withIndex('by_renter', q => q.eq('renterId', userId));
+        .query("rentalCompletions")
+        .withIndex("by_renter", (q) => q.eq("renterId", userId))
     } else {
       completionsQuery = ctx.db
-        .query('rentalCompletions')
-        .withIndex('by_owner', q => q.eq('ownerId', userId));
+        .query("rentalCompletions")
+        .withIndex("by_owner", (q) => q.eq("ownerId", userId))
     }
 
-    const completions = await completionsQuery.order('desc').collect();
+    const completions = await completionsQuery.order("desc").collect()
 
     // Get related data for each completion
     const completionsWithDetails = await Promise.all(
-      completions.map(async completion => {
+      completions.map(async (completion) => {
         const [reservation, vehicle, renter, owner] = await Promise.all([
           ctx.db.get(completion.reservationId),
           ctx.db.get(completion.vehicleId),
           ctx.db
-            .query('users')
-            .withIndex('by_external_id', q =>
-              q.eq('externalId', completion.renterId)
-            )
+            .query("users")
+            .withIndex("by_external_id", (q) => q.eq("externalId", completion.renterId))
             .first(),
           ctx.db
-            .query('users')
-            .withIndex('by_external_id', q =>
-              q.eq('externalId', completion.ownerId)
-            )
+            .query("users")
+            .withIndex("by_external_id", (q) => q.eq("externalId", completion.ownerId))
             .first(),
-        ]);
+        ])
 
         return {
           ...completion,
@@ -537,54 +500,44 @@ export const getByUser = query({
           vehicle,
           renter,
           owner,
-        };
+        }
       })
-    );
+    )
 
-    return completionsWithDetails;
+    return completionsWithDetails
   },
-});
+})
 
 // Get pending completions for a user
 export const getPendingCompletions = query({
   args: { userId: v.string() },
   handler: async (ctx, args) => {
     const completions = await ctx.db
-      .query('rentalCompletions')
-      .filter(q =>
+      .query("rentalCompletions")
+      .filter((q) =>
         q.or(
-          q.and(
-            q.eq(q.field('renterId'), args.userId),
-            q.eq(q.field('status'), 'pending_renter')
-          ),
-          q.and(
-            q.eq(q.field('ownerId'), args.userId),
-            q.eq(q.field('status'), 'pending_owner')
-          )
+          q.and(q.eq(q.field("renterId"), args.userId), q.eq(q.field("status"), "pending_renter")),
+          q.and(q.eq(q.field("ownerId"), args.userId), q.eq(q.field("status"), "pending_owner"))
         )
       )
-      .order('desc')
-      .collect();
+      .order("desc")
+      .collect()
 
     // Get related data
     const completionsWithDetails = await Promise.all(
-      completions.map(async completion => {
+      completions.map(async (completion) => {
         const [reservation, vehicle, renter, owner] = await Promise.all([
           ctx.db.get(completion.reservationId),
           ctx.db.get(completion.vehicleId),
           ctx.db
-            .query('users')
-            .withIndex('by_external_id', q =>
-              q.eq('externalId', completion.renterId)
-            )
+            .query("users")
+            .withIndex("by_external_id", (q) => q.eq("externalId", completion.renterId))
             .first(),
           ctx.db
-            .query('users')
-            .withIndex('by_external_id', q =>
-              q.eq('externalId', completion.ownerId)
-            )
+            .query("users")
+            .withIndex("by_external_id", (q) => q.eq("externalId", completion.ownerId))
             .first(),
-        ]);
+        ])
 
         return {
           ...completion,
@@ -592,10 +545,10 @@ export const getPendingCompletions = query({
           vehicle,
           renter,
           owner,
-        };
+        }
       })
-    );
+    )
 
-    return completionsWithDetails;
+    return completionsWithDetails
   },
-});
+})

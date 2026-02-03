@@ -22,23 +22,14 @@ import {
 import { Badge } from "@workspace/ui/components/badge"
 import { Input } from "@workspace/ui/components/input"
 import { Checkbox } from "@workspace/ui/components/checkbox"
-import {
-  Car,
-  Search,
-  Ban,
-  CheckCircle,
-  Eye,
-  Loader2,
-} from "lucide-react"
+import { Car, Search, Ban, CheckCircle, Eye, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { Pagination } from "@/components/pagination"
 import { handleErrorWithContext } from "@/lib/error-handler"
 import type { Id } from "@/lib/convex"
 
 export default function VehiclesPage() {
-  const [statusFilter, setStatusFilter] = useState<
-    "pending" | "approved" | "rejected" | undefined
-  >(undefined)
+  const [statusFilter, setStatusFilter] = useState<"pending" | "approved" | undefined>(undefined)
   const [searchQuery, setSearchQuery] = useState("")
   const [currentPage, setCurrentPage] = useState(1)
   const [selectedIds, setSelectedIds] = useState<Set<Id<"vehicles">>>(new Set())
@@ -52,7 +43,7 @@ export default function VehiclesPage() {
   })
 
   const vehicles = result?.vehicles || []
-  const hasMore = result?.hasMore || false
+  const hasMore = result?.hasMore
 
   const suspendVehicle = useMutation(api.admin.suspendVehicle)
   const bulkSuspendVehicles = useMutation(api.admin.bulkSuspendVehicles)
@@ -71,7 +62,7 @@ export default function VehiclesPage() {
     setProcessingId(vehicleId)
     try {
       await suspendVehicle({ vehicleId, isActive: !currentStatus })
-      toast.success(`Vehicle ${!currentStatus ? "activated" : "suspended"} successfully`)
+      toast.success(`Vehicle ${currentStatus ? "suspended" : "activated"} successfully`)
       setSelectedIds(new Set())
     } catch (error) {
       handleErrorWithContext(error, { action: "suspend vehicle", entity: "vehicle" })
@@ -104,7 +95,7 @@ export default function VehiclesPage() {
     if (selectedIds.size === vehicles.length) {
       setSelectedIds(new Set())
     } else {
-      setSelectedIds(new Set(vehicles.map((v) => v._id)))
+      setSelectedIds(new Set(vehicles.map((v: any) => v._id)))
     }
   }
 
@@ -131,25 +122,26 @@ export default function VehiclesPage() {
       case "pending":
         return <Badge variant="default">Pending</Badge>
       case "approved":
-        return <Badge variant="default" className="bg-green-600">Approved</Badge>
-      case "rejected":
-        return <Badge variant="destructive">Rejected</Badge>
+        return (
+          <Badge variant="default" className="bg-green-600">
+            Approved
+          </Badge>
+        )
       default:
         return <Badge>{status}</Badge>
     }
   }
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-US", {
+  const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat("en-US", {
       style: "currency",
       currency: "USD",
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(amount / 100)
-  }
 
   const totalPages = Math.ceil((vehicles.length || 0) / 50) || 1
-  const approvedVehicles = vehicles.filter((v) => v.status === "approved")
+  const approvedVehicles = vehicles.filter((v: any) => v.status === "approved")
 
   if (result === undefined) {
     return (
@@ -163,9 +155,7 @@ export default function VehiclesPage() {
     <div className="space-y-6">
       <div>
         <h1 className="font-bold text-3xl">Vehicle Management</h1>
-        <p className="text-muted-foreground mt-2">
-          View and manage all platform vehicles
-        </p>
+        <p className="mt-2 text-muted-foreground">View and manage all platform vehicles</p>
       </div>
 
       <Card>
@@ -180,7 +170,7 @@ export default function VehiclesPage() {
             </div>
             <div className="flex gap-2">
               <div className="relative">
-                <Search className="absolute left-2 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Search className="-translate-y-1/2 absolute top-1/2 left-2 size-4 text-muted-foreground" />
                 <Input
                   className="w-64 pl-8"
                   placeholder="Search vehicles..."
@@ -201,7 +191,6 @@ export default function VehiclesPage() {
                   <SelectItem value="all">All Status</SelectItem>
                   <SelectItem value="pending">Pending</SelectItem>
                   <SelectItem value="approved">Approved</SelectItem>
-                  <SelectItem value="rejected">Rejected</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -210,20 +199,18 @@ export default function VehiclesPage() {
         <CardContent>
           {selectedIds.size > 0 && (
             <div className="mb-4 flex items-center justify-between rounded-lg border bg-muted p-3">
-              <span className="text-sm font-medium">
-                {selectedIds.size} vehicle(s) selected
-              </span>
+              <span className="font-medium text-sm">{selectedIds.size} vehicle(s) selected</span>
               <div className="flex gap-2">
-                {approvedVehicles.some((v) => selectedIds.has(v._id)) && (
+                {approvedVehicles.some((v: any) => selectedIds.has(v._id)) && (
                   <>
                     <Button
                       variant="default"
                       size="sm"
                       onClick={() => {
                         const selectedApproved = vehicles.filter(
-                          (v) => selectedIds.has(v._id) && v.status === "approved"
+                          (v: any) => selectedIds.has(v._id) && v.status === "approved"
                         )
-                        const allActive = selectedApproved.every((v) => v.isActive !== false)
+                        const allActive = selectedApproved.every((v: any) => v.isActive !== false)
                         handleBulkSuspend(!allActive)
                       }}
                       disabled={isBulkProcessing}
@@ -245,9 +232,11 @@ export default function VehiclesPage() {
                       size="sm"
                       onClick={() => {
                         const selectedApproved = vehicles.filter(
-                          (v) => selectedIds.has(v._id) && v.status === "approved"
+                          (v: any) => selectedIds.has(v._id) && v.status === "approved"
                         )
-                        const allSuspended = selectedApproved.every((v) => v.isActive === false)
+                        const allSuspended = selectedApproved.every(
+                          (v: any) => v.isActive === false
+                        )
                         if (allSuspended) {
                           handleBulkSuspend(true)
                         }
@@ -259,11 +248,7 @@ export default function VehiclesPage() {
                     </Button>
                   </>
                 )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setSelectedIds(new Set())}
-                >
+                <Button variant="outline" size="sm" onClick={() => setSelectedIds(new Set())}>
                   Clear Selection
                 </Button>
               </div>
@@ -280,10 +265,11 @@ export default function VehiclesPage() {
                   />
                   <span className="text-muted-foreground text-sm">Select all</span>
                 </div>
-                {vehicles.map((vehicle) => {
+                {vehicles.map((vehicle: any) => {
                   const isProcessing = processingId === vehicle._id
                   const isSelected = selectedIds.has(vehicle._id)
-                  const primaryImage = vehicle.images?.find((img) => img.isPrimary) || vehicle.images?.[0]
+                  const primaryImage =
+                    vehicle.images?.find((img: any) => img.isPrimary) || vehicle.images?.[0]
 
                   return (
                     <Card key={vehicle._id} className="overflow-hidden">
@@ -295,7 +281,7 @@ export default function VehiclesPage() {
                               onCheckedChange={() => handleSelectOne(vehicle._id)}
                             />
                           </div>
-                          <div className="flex gap-6 flex-1">
+                          <div className="flex flex-1 gap-6">
                             {primaryImage && (
                               <div className="flex-shrink-0">
                                 <img
@@ -314,7 +300,7 @@ export default function VehiclesPage() {
                                       {vehicle.year} {vehicle.make} {vehicle.model}
                                     </h3>
                                   </div>
-                                  <p className="text-muted-foreground mt-1">
+                                  <p className="mt-1 text-muted-foreground">
                                     Track: {vehicle.track?.name || "Unknown"} | Owner:{" "}
                                     {vehicle.owner?.name || "Unknown"}
                                   </p>
@@ -322,9 +308,13 @@ export default function VehiclesPage() {
                                 <div className="flex gap-2">
                                   {vehicle.status === "approved" && (
                                     <Button
-                                      onClick={() => handleSuspend(vehicle._id, vehicle.isActive !== false)}
+                                      onClick={() =>
+                                        handleSuspend(vehicle._id, vehicle.isActive !== false)
+                                      }
                                       disabled={isProcessing}
-                                      variant={vehicle.isActive === false ? "default" : "destructive"}
+                                      variant={
+                                        vehicle.isActive === false ? "default" : "destructive"
+                                      }
                                       size="sm"
                                     >
                                       {isProcessing ? (
@@ -385,7 +375,7 @@ export default function VehiclesPage() {
                                   <p className="text-muted-foreground text-sm">
                                     <strong>Description:</strong>
                                   </p>
-                                  <p className="text-muted-foreground mt-1 text-sm line-clamp-2">
+                                  <p className="mt-1 line-clamp-2 text-muted-foreground text-sm">
                                     {vehicle.description}
                                   </p>
                                 </div>

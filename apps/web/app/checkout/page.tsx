@@ -18,13 +18,7 @@ import {
 import { Separator } from "@workspace/ui/components/separator"
 import { cn } from "@workspace/ui/lib/utils"
 import { useAction, useMutation, useQuery } from "convex/react"
-import {
-  Calendar as CalendarIcon,
-  Check,
-  ChevronDown,
-  Clock,
-  Loader2,
-} from "lucide-react"
+import { Calendar as CalendarIcon, Check, ChevronDown, Clock, Loader2 } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
@@ -133,7 +127,6 @@ function PaymentForm({
   )
 }
 
-
 function CheckoutPageContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -187,16 +180,16 @@ function CheckoutPageContent() {
     if (startDateParam && endDateParam && !pickupDate && !dropoffDate) {
       const startDate = parseLocalDate(startDateParam)
       const endDate = parseLocalDate(endDateParam)
-      
+
       if (startDate && endDate) {
         // Set to midnight local time
         startDate.setHours(0, 0, 0, 0)
         endDate.setHours(0, 0, 0, 0)
-        
+
         // Only set if dates are valid and in the future
         const today = new Date()
         today.setHours(0, 0, 0, 0)
-        
+
         if (startDate >= today && endDate >= startDate) {
           setPickupDate(startDate)
           setDropoffDate(endDate)
@@ -221,7 +214,7 @@ function CheckoutPageContent() {
 
   const formatTimeForDisplay = (time24: string) => {
     const [hours, minutes] = time24.split(":")
-    if (!hours || !minutes) return time24
+    if (!(hours && minutes)) return time24
     const hour = Number.parseInt(hours, 10)
     const hour12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour
     const ampm = hour < 12 ? "AM" : "PM"
@@ -377,7 +370,11 @@ function CheckoutPageContent() {
   if (reservation && clientSecret) {
     const vehicle = reservation.vehicle
     const primaryImage =
-      vehicle?.images?.find((img: { isPrimary: boolean; cardUrl?: string }) => img.isPrimary)?.cardUrl || vehicle?.images?.[0]?.cardUrl || ""
+      (vehicle as any)?.images?.find(
+        (img: { isPrimary: boolean; cardUrl?: string }) => img.isPrimary
+      )?.cardUrl ||
+      (vehicle as any)?.images?.[0]?.cardUrl ||
+      ""
 
     const options: StripeElementsOptions = {
       clientSecret,
@@ -541,7 +538,10 @@ function CheckoutPageContent() {
   if (!vehicle) return null
 
   const primaryImage =
-    vehicle.images?.find((img: { isPrimary: boolean; cardUrl?: string }) => img.isPrimary)?.cardUrl || vehicle.images?.[0]?.cardUrl || ""
+    (vehicle as any)?.images?.find((img: { isPrimary: boolean; cardUrl?: string }) => img.isPrimary)
+      ?.cardUrl ||
+    (vehicle as any)?.images?.[0]?.cardUrl ||
+    ""
   // Check if form is valid and dates don't contain blocked dates
   const isValid =
     pickupDate &&
@@ -777,7 +777,7 @@ function CheckoutPageContent() {
                   <div className="space-y-3">
                     <Label className="font-semibold text-base">Add-ons (Optional)</Label>
                     <div className="space-y-2">
-                      {vehicle.addOns.map((addOn, index) => {
+                      {vehicle.addOns.map((addOn: AddOn, index: number) => {
                         const isSelected = selectedAddOns.some(
                           (selected) => selected.name === addOn.name
                         )

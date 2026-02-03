@@ -50,7 +50,7 @@ export default function HostReservationsPage() {
   const completionStatusMap = useMemo(() => {
     if (!pendingCompletions) return new Map()
     const map = new Map()
-    pendingCompletions.forEach((completion) => {
+    pendingCompletions.forEach((completion: any) => {
       if (completion.status === "pending_owner") {
         map.set(completion.reservationId, completion)
       }
@@ -61,8 +61,9 @@ export default function HostReservationsPage() {
   // Count pending returns
   const pendingReturnsCount = useMemo(() => {
     if (!pendingCompletions) return 0
-    return pendingCompletions.filter((c) => c.status === "pending_owner" && c.ownerId === user?.id)
-      .length
+    return pendingCompletions.filter(
+      (c: any) => c.status === "pending_owner" && c.ownerId === user?.id
+    ).length
   }, [pendingCompletions, user?.id])
 
   // Combine all reservations
@@ -97,14 +98,14 @@ export default function HostReservationsPage() {
   // Get counts for each status
   const pendingCount = pendingReservations?.length || 0
   const confirmedCount = confirmedReservations?.length || 0
-  const completedReservations = allReservations.filter((res) => res.status === "completed")
+  const completedReservations = allReservations.filter((res: any) => res.status === "completed")
   const completedCount = completedReservations.length
-  const cancelledCount = allReservations.filter((res) => res.status === "cancelled").length
+  const cancelledCount = allReservations.filter((res: any) => res.status === "cancelled").length
 
   const filteredReservations =
     selectedStatus === "all"
       ? allReservations
-      : allReservations.filter((res) => res.status === selectedStatus)
+      : allReservations.filter((res: any) => res.status === selectedStatus)
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -265,7 +266,7 @@ export default function HostReservationsPage() {
             </Card>
           ) : (
             <div className="space-y-4">
-              {filteredReservations.map((reservation) => {
+              {filteredReservations.map((reservation: any) => {
                 const vehicleImage =
                   reservation.vehicle?.images?.[0]?.cardUrl ||
                   reservation.vehicle?.images?.[0]?.cardUrl ||
@@ -418,7 +419,7 @@ export default function HostReservationsPage() {
             </Card>
           ) : (
             <div className="space-y-4">
-              {pendingReservations.map((reservation) => {
+              {pendingReservations.map((reservation: any) => {
                 const vehicleImage =
                   reservation.vehicle?.images?.[0]?.cardUrl ||
                   reservation.vehicle?.images?.[0]?.cardUrl ||
@@ -498,7 +499,7 @@ export default function HostReservationsPage() {
             </Card>
           ) : (
             <div className="space-y-4">
-              {confirmedReservations.map((reservation) => {
+              {confirmedReservations.map((reservation: any) => {
                 const vehicleImage =
                   reservation.vehicle.images?.[0]?.cardUrl ||
                   "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=400"
@@ -572,7 +573,7 @@ export default function HostReservationsPage() {
             </Card>
           ) : (
             <div className="space-y-4">
-              {completedReservations.map((reservation) => {
+              {completedReservations.map((reservation: any) => {
                 const vehicleImage =
                   reservation.vehicle?.images?.[0]?.cardUrl ||
                   "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=400"
@@ -645,8 +646,8 @@ export default function HostReservationsPage() {
           ) : (
             <div className="space-y-4">
               {pendingCompletions
-                ?.filter((c) => c.status === "pending_owner" && c.ownerId === user?.id)
-                .map((completion) => {
+                ?.filter((c: any) => c.status === "pending_owner" && c.ownerId === user?.id)
+                .map((completion: any) => {
                   const reservation = completion.reservation
                   if (!reservation) return null
 

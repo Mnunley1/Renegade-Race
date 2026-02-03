@@ -7,11 +7,11 @@ import { useEffect } from "react"
 
 function UnauthenticatedRedirect() {
   const router = useRouter()
-  
+
   useEffect(() => {
     router.push("/sign-in")
   }, [router])
-  
+
   return (
     <div className="flex min-h-screen items-center justify-center">
       <div className="text-muted-foreground">Redirecting to sign in...</div>
@@ -19,11 +19,7 @@ function UnauthenticatedRedirect() {
   )
 }
 
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
       <Authenticated>
@@ -40,4 +36,3 @@ export default function DashboardLayout({
     </>
   )
 }
-

@@ -32,7 +32,7 @@ export default function UsersPage() {
   })
 
   const users = result?.users || []
-  const hasMore = result?.hasMore || false
+  const hasMore = result?.hasMore
 
   const banUser = useMutation(api.admin.banUser)
   const unbanUser = useMutation(api.admin.unbanUser)
@@ -93,9 +93,7 @@ export default function UsersPage() {
     <div className="space-y-6">
       <div>
         <h1 className="font-bold text-3xl">User Management</h1>
-        <p className="text-muted-foreground mt-2">
-          Manage users and ban/unban accounts
-        </p>
+        <p className="mt-2 text-muted-foreground">Manage users and ban/unban accounts</p>
       </div>
 
       <Card>
@@ -109,7 +107,7 @@ export default function UsersPage() {
               </CardDescription>
             </div>
             <div className="relative">
-              <Search className="absolute left-2 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Search className="-translate-y-1/2 absolute top-1/2 left-2 size-4 text-muted-foreground" />
               <Input
                 className="w-64 pl-8"
                 placeholder="Search users..."
@@ -123,7 +121,7 @@ export default function UsersPage() {
           {users && users.length > 0 ? (
             <>
               <div className="space-y-4">
-                {users.map((user) => {
+                {users.map((user: any) => {
                   const isProcessing = processingId === user._id
                   const isBanned = user.isBanned === true
 
@@ -138,21 +136,15 @@ export default function UsersPage() {
                             <div>
                               <div className="flex items-center gap-2">
                                 <h3 className="font-medium">{user.name}</h3>
-                                {isBanned && (
-                                  <Badge variant="destructive">Banned</Badge>
-                                )}
-                                {user.role && (
-                                  <Badge variant="outline">{user.role}</Badge>
-                                )}
+                                {isBanned && <Badge variant="destructive">Banned</Badge>}
+                                {user.role && <Badge variant="outline">{user.role}</Badge>}
                               </div>
                               <p className="text-muted-foreground text-sm">
                                 {user.email || user.externalId}
                               </p>
                               <div className="mt-1 flex gap-4 text-muted-foreground text-xs">
                                 {user.phone && <span>Phone: {user.phone}</span>}
-                                {user.rating && (
-                                  <span>Rating: {user.rating}/5</span>
-                                )}
+                                {user.rating && <span>Rating: {user.rating}/5</span>}
                                 {user.totalRentals !== undefined && (
                                   <span>Rentals: {user.totalRentals}</span>
                                 )}

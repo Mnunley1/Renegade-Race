@@ -20,7 +20,7 @@ import { handleErrorWithContext } from "@/lib/error-handler"
 export default function SettingsPage() {
   const settings = useQuery(api.stripe.getPlatformSettings)
   const updateSettings = useMutation(api.stripe.updatePlatformSettings)
-  
+
   const [platformFeePercentage, setPlatformFeePercentage] = useState("")
   const [minimumPlatformFee, setMinimumPlatformFee] = useState("")
   const [maximumPlatformFee, setMaximumPlatformFee] = useState("")
@@ -38,14 +38,14 @@ export default function SettingsPage() {
   }, [settings])
 
   const handleSave = async () => {
-    if (!platformFeePercentage || !minimumPlatformFee) {
+    if (!(platformFeePercentage && minimumPlatformFee)) {
       toast.error("Please fill in all required fields")
       return
     }
 
-    const feePercentage = parseFloat(platformFeePercentage)
-    const minFee = parseFloat(minimumPlatformFee)
-    const maxFee = maximumPlatformFee ? parseFloat(maximumPlatformFee) : undefined
+    const feePercentage = Number.parseFloat(platformFeePercentage)
+    const minFee = Number.parseFloat(minimumPlatformFee)
+    const maxFee = maximumPlatformFee ? Number.parseFloat(maximumPlatformFee) : undefined
 
     if (isNaN(feePercentage) || feePercentage < 0 || feePercentage > 100) {
       toast.error("Platform fee percentage must be between 0 and 100")
@@ -88,8 +88,8 @@ export default function SettingsPage() {
   return (
     <div className="container mx-auto py-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold">Platform Settings</h1>
-        <p className="text-muted-foreground mt-2">
+        <h1 className="font-bold text-3xl">Platform Settings</h1>
+        <p className="mt-2 text-muted-foreground">
           Manage platform fee structure and payment settings
         </p>
       </div>
@@ -121,11 +121,11 @@ export default function SettingsPage() {
                 placeholder="5.0"
                 className="pr-8"
               />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+              <span className="-translate-y-1/2 absolute top-1/2 right-3 text-muted-foreground">
                 %
               </span>
             </div>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-muted-foreground text-sm">
               Percentage of each transaction that goes to the platform (e.g., 5 for 5%)
             </p>
           </div>
@@ -135,7 +135,7 @@ export default function SettingsPage() {
               Minimum Platform Fee <span className="text-destructive">*</span>
             </Label>
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+              <span className="-translate-y-1/2 absolute top-1/2 left-3 text-muted-foreground">
                 $
               </span>
               <Input
@@ -149,16 +149,16 @@ export default function SettingsPage() {
                 className="pl-7"
               />
             </div>
-            <p className="text-sm text-muted-foreground">
-              Minimum fee amount in USD (e.g., $1.00). The platform will always charge at least
-              this amount.
+            <p className="text-muted-foreground text-sm">
+              Minimum fee amount in USD (e.g., $1.00). The platform will always charge at least this
+              amount.
             </p>
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="maxFee">Maximum Platform Fee (Optional)</Label>
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+              <span className="-translate-y-1/2 absolute top-1/2 left-3 text-muted-foreground">
                 $
               </span>
               <Input
@@ -172,14 +172,14 @@ export default function SettingsPage() {
                 className="pl-7"
               />
             </div>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-muted-foreground text-sm">
               Maximum fee amount in USD (e.g., $50.00). Leave empty for no maximum limit.
             </p>
           </div>
 
           {settings && (
             <div className="rounded-lg bg-muted p-4">
-              <h4 className="font-semibold mb-2">Current Settings</h4>
+              <h4 className="mb-2 font-semibold">Current Settings</h4>
               <div className="space-y-1 text-sm">
                 <p>
                   <span className="text-muted-foreground">Fee Percentage:</span>{" "}
@@ -195,7 +195,7 @@ export default function SettingsPage() {
                     {(settings.maximumPlatformFee / 100).toFixed(2)}
                   </p>
                 )}
-                <p className="text-muted-foreground text-xs mt-2">
+                <p className="mt-2 text-muted-foreground text-xs">
                   Last updated: {new Date(settings.updatedAt).toLocaleString()}
                 </p>
               </div>
@@ -203,11 +203,7 @@ export default function SettingsPage() {
           )}
 
           <div className="flex justify-end gap-4 pt-4">
-            <Button
-              onClick={handleSave}
-              disabled={isSaving}
-              className="min-w-[120px]"
-            >
+            <Button onClick={handleSave} disabled={isSaving} className="min-w-[120px]">
               {isSaving ? (
                 <>
                   <Loader2 className="mr-2 size-4 animate-spin" />
@@ -232,28 +228,26 @@ export default function SettingsPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4 text-sm text-muted-foreground">
+          <div className="space-y-4 text-muted-foreground text-sm">
             <div>
-              <h4 className="font-semibold text-foreground mb-1">Fee Calculation</h4>
+              <h4 className="mb-1 font-semibold text-foreground">Fee Calculation</h4>
               <p>
-                Platform fees are calculated as a percentage of the total transaction amount,
-                with minimum and maximum limits applied.
+                Platform fees are calculated as a percentage of the total transaction amount, with
+                minimum and maximum limits applied.
               </p>
             </div>
             <div>
-              <h4 className="font-semibold text-foreground mb-1">Example</h4>
-              <p>
-                For a $100 rental with 5% fee, $1 minimum, and $50 maximum:
-              </p>
-              <ul className="list-disc list-inside mt-1 space-y-1">
+              <h4 className="mb-1 font-semibold text-foreground">Example</h4>
+              <p>For a $100 rental with 5% fee, $1 minimum, and $50 maximum:</p>
+              <ul className="mt-1 list-inside list-disc space-y-1">
                 <li>Calculated fee: $100 × 5% = $5.00</li>
                 <li>Applied fee: $5.00 (within min/max range)</li>
                 <li>Owner receives: $95.00</li>
               </ul>
             </div>
             <div>
-              <h4 className="font-semibold text-foreground mb-1">Important Notes</h4>
-              <ul className="list-disc list-inside space-y-1">
+              <h4 className="mb-1 font-semibold text-foreground">Important Notes</h4>
+              <ul className="list-inside list-disc space-y-1">
                 <li>Changes take effect immediately for new transactions</li>
                 <li>Existing transactions are not affected</li>
                 <li>Fees are automatically handled by Stripe Connect</li>
@@ -265,6 +259,3 @@ export default function SettingsPage() {
     </div>
   )
 }
-
-
-

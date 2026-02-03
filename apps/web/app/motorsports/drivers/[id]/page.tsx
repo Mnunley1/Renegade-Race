@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select"
 import { Separator } from "@workspace/ui/components/separator"
+import { Skeleton } from "@workspace/ui/components/skeleton"
 import { Textarea } from "@workspace/ui/components/textarea"
 import { useMutation, useQuery } from "convex/react"
 import {
@@ -37,6 +38,7 @@ import {
   Loader2,
   Mail,
   MapPin,
+  MessageSquare,
   Phone,
   Star,
   Trash2,
@@ -46,11 +48,15 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { use, useState } from "react"
+import { use, useEffect, useState } from "react"
 import { toast } from "sonner"
+import { DriverCard } from "@/components/driver-card"
+import { DriverEndorsements } from "@/components/driver-endorsements"
+import { DriverPortfolio } from "@/components/driver-portfolio"
+import { ProfileAnalytics } from "@/components/profile-analytics"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
-import type { Id } from "../../../../packages/backend/convex/_generated/dataModel"
+import type { Id } from "@/lib/convex"
 
 type DriverDetailPageProps = {
   params: Promise<{
@@ -58,18 +64,24 @@ type DriverDetailPageProps = {
   }>
 }
 
-const experienceColors = {
+const experienceColors: Record<string, string> = {
   beginner: "bg-green-500/10 text-green-600 dark:text-green-400",
   intermediate: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
   advanced: "bg-purple-500/10 text-purple-600 dark:text-purple-600",
   professional: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400",
 }
 
-const experienceLabels = {
+const experienceLabels: Record<string, string> = {
   beginner: "Beginner",
   intermediate: "Intermediate",
   advanced: "Advanced",
   professional: "Professional",
+}
+
+const racingTypeLabels: Record<string, string> = {
+  "real-world": "🏎️ Real-World",
+  "sim-racing": "🎮 Sim Racing",
+  both: "🏎️🎮 Both",
 }
 
 function getInstagramUrl(instagram: string): string {
@@ -114,6 +126,7 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
   const driverProfile = useQuery(api.driverProfiles.getById, {
     profileId,
   })
+  const similarDrivers = useQuery(api.driverProfiles.getSimilar, { profileId })
   const toggleVisibility = useMutation(api.driverProfiles.toggleVisibility)
   const deleteProfile = useMutation(api.driverProfiles.deleteProfile)
 
@@ -130,20 +143,68 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
   const firstTeamConnection = useQuery(
     api.teamDriverConnections.checkConnection,
     userTeams && userTeams.length > 0 && profileId
-      ? { teamId: userTeams[0]._id, driverProfileId: profileId }
+      ? { teamId: userTeams[0]!._id, driverProfileId: profileId }
       : "skip"
   )
-  const hasAcceptedConnection = firstTeamConnection?.status === "accepted"
+  const hasAcceptedConnection = (firstTeamConnection as any)?.status === "accepted"
+
+  const createConversation = useMutation(api.conversations.createMotorsportsConversation)
+  const recordView = useMutation(api.profileViews.recordView)
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [isToggling, setIsToggling] = useState(false)
 
+  // Record profile view for non-owners
+  useEffect(() => {
+    if (driverProfile && user && !driverProfile.isOwner) {
+      recordView({ profileId: profileId, profileType: "driver" })
+    }
+  }, [driverProfile, user, profileId, recordView])
+
   if (driverProfile === undefined) {
     return (
       <div className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-center py-20">
-          <p className="text-muted-foreground">Loading driver profile...</p>
+        <Skeleton className="mb-6 h-10 w-40" />
+        <div className="grid gap-8 lg:grid-cols-3">
+          <div className="space-y-6 lg:col-span-2">
+            <Card>
+              <CardHeader>
+                <div className="flex items-start gap-4">
+                  <Skeleton className="size-32 rounded-full" />
+                  <div className="flex-1">
+                    <Skeleton className="mb-2 h-9 w-64" />
+                    <Skeleton className="h-6 w-40" />
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div>
+                  <Skeleton className="mb-3 h-6 w-24" />
+                  <Skeleton className="h-20 w-full" />
+                </div>
+                <Separator />
+                <div>
+                  <Skeleton className="mb-3 h-6 w-32" />
+                  <div className="flex flex-wrap gap-2">
+                    <Skeleton className="h-7 w-24" />
+                    <Skeleton className="h-7 w-32" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+          <div className="space-y-6">
+            <Card>
+              <CardContent className="p-6">
+                <div className="space-y-4">
+                  <Skeleton className="h-12 w-full" />
+                  <Separator />
+                  <Skeleton className="h-12 w-full" />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </div>
     )
@@ -152,11 +213,17 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
   if (driverProfile === null) {
     return (
       <div className="container mx-auto px-4 py-8">
-        <Link href="/motorsports/drivers">
-          <Button className="mb-6" variant="outline">
-            ← Back to Drivers
-          </Button>
-        </Link>
+        <nav className="mb-3 flex items-center gap-1.5 text-sm">
+          <Link
+            className="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
+            href="/motorsports/drivers"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Drivers
+          </Link>
+          <span className="text-muted-foreground/50">/</span>
+          <span className="truncate text-foreground">Not Found</span>
+        </nav>
         <div className="flex items-center justify-center py-20">
           <div className="text-center">
             <p className="mb-2 font-semibold text-lg">Driver Profile Not Found</p>
@@ -175,11 +242,17 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
   if (isHidden && !isOwner) {
     return (
       <div className="container mx-auto px-4 py-8">
-        <Link href="/motorsports/drivers">
-          <Button className="mb-6" variant="outline">
-            ← Back to Drivers
-          </Button>
-        </Link>
+        <nav className="mb-3 flex items-center gap-1.5 text-sm">
+          <Link
+            className="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
+            href="/motorsports/drivers"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Drivers
+          </Link>
+          <span className="text-muted-foreground/50">/</span>
+          <span className="truncate text-foreground">Not Found</span>
+        </nav>
         <div className="flex items-center justify-center py-20">
           <div className="text-center">
             <p className="mb-2 font-semibold text-lg">Driver Profile Not Found</p>
@@ -234,13 +307,32 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <Link href="/motorsports/drivers">
-        <Button className="mb-6" variant="outline">
-          <ArrowLeft className="mr-2 size-4" />
-          Back to Drivers
-        </Button>
-      </Link>
+    <div className="container mx-auto px-4 py-8 pb-20 lg:pb-8">
+      <nav className="mb-4 flex items-center gap-1.5 text-sm">
+        <Link
+          className="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
+          href="/motorsports/drivers"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          Drivers
+        </Link>
+        <span className="text-muted-foreground/50">/</span>
+        <span className="truncate text-foreground">{driverName}</span>
+      </nav>
+
+      {isHidden && isOwner && (
+        <div className="mb-6 flex items-center gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
+          <EyeOff className="size-5 text-amber-600" />
+          <div className="flex-1">
+            <p className="font-medium text-amber-800 dark:text-amber-200">Your profile is currently hidden</p>
+            <p className="text-amber-700 text-sm dark:text-amber-300">Other users cannot see this profile.</p>
+          </div>
+          <Button size="sm" variant="outline" onClick={handleToggleVisibility} disabled={isToggling}>
+            {isToggling ? <Loader2 className="mr-1 size-3 animate-spin" /> : <Eye className="mr-1 size-3" />}
+            Make Visible
+          </Button>
+        </div>
+      )}
 
       <div className="grid gap-8 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
@@ -255,12 +347,26 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
                 </Avatar>
                 <div className="flex-1">
                   <CardTitle className="text-3xl">{driverName}</CardTitle>
-                  <div className="mt-2 flex items-center gap-2">
+                  {driverProfile.headline && (
+                    <p className="mt-1 text-muted-foreground text-lg">{driverProfile.headline}</p>
+                  )}
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
                     <Badge className={experienceColors[driverProfile.experience]}>
                       <Award className="mr-1 size-3" />
                       {experienceLabels[driverProfile.experience]}
                     </Badge>
+                    {driverProfile.racingType && (
+                      <Badge variant="secondary">
+                        {racingTypeLabels[driverProfile.racingType]}
+                      </Badge>
+                    )}
                   </div>
+                  {driverProfile.location && (
+                    <div className="mt-2 flex items-center gap-1 text-muted-foreground text-sm">
+                      <MapPin className="size-4" />
+                      <span>{driverProfile.location}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             </CardHeader>
@@ -282,74 +388,72 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
                 </>
               )}
 
-              <Separator />
-
-              <div>
-                <h3 className="mb-3 font-semibold text-lg">Licenses</h3>
-                <div className="flex flex-wrap gap-2">
-                  {driverProfile.licenses.length > 0 ? (
-                    driverProfile.licenses.map((license) => (
-                      <Badge className="px-3 py-1 text-sm" key={license} variant="outline">
-                        {license}
-                      </Badge>
-                    ))
-                  ) : (
-                    <p className="text-muted-foreground text-sm">No licenses listed</p>
-                  )}
-                </div>
-              </div>
-
-              <Separator />
-
-              <div>
-                <h3 className="mb-3 font-semibold text-lg">Preferred Categories</h3>
-                <div className="flex flex-wrap gap-2">
-                  {driverProfile.preferredCategories.length > 0 ? (
-                    driverProfile.preferredCategories.map((category) => (
-                      <Badge className="px-3 py-1 text-sm" key={category} variant="secondary">
-                        <Star className="mr-1 size-3" />
-                        {category}
-                      </Badge>
-                    ))
-                  ) : (
-                    <p className="text-muted-foreground text-sm">No categories listed</p>
-                  )}
-                </div>
-              </div>
-
-              <Separator />
-
-              <div>
-                <h3 className="mb-3 font-semibold text-lg">Availability</h3>
-                <div className="flex flex-wrap gap-2">
-                  {driverProfile.availability.length > 0 ? (
-                    driverProfile.availability.map((availability) => {
-                      const availabilityLabels: Record<string, string> = {
-                        "single-race": "Single Race",
-                        "multi-race": "Multi-Race",
-                        "season-commitment": "Season Commitment",
-                        // Legacy support for old values
-                        weekends: "Weekends",
-                        weekdays: "Weekdays",
-                        evenings: "Evenings",
-                        flexible: "Flexible",
-                      }
-                      const label =
-                        availabilityLabels[availability] ||
-                        availability.charAt(0).toUpperCase() +
-                          availability.slice(1).replace(/-/g, " ")
-                      return (
-                        <Badge className="px-3 py-1 text-sm" key={availability} variant="outline">
-                          <Calendar className="mr-1 size-3" />
-                          {label}
-                        </Badge>
-                      )
-                    })
-                  ) : (
-                    <p className="text-muted-foreground text-sm">No availability listed</p>
-                  )}
-                </div>
-              </div>
+              {(driverProfile.licenses.length > 0 ||
+                driverProfile.preferredCategories.length > 0 ||
+                driverProfile.availability.length > 0) && (
+                <>
+                  <Separator />
+                  <div>
+                    <h3 className="mb-4 font-semibold text-lg">Details</h3>
+                    <div className="grid gap-6 sm:grid-cols-2">
+                      {driverProfile.licenses.length > 0 && (
+                        <div>
+                          <p className="mb-2 font-medium text-muted-foreground text-sm">Licenses</p>
+                          <div className="flex flex-wrap gap-2">
+                            {driverProfile.licenses.map((license: string) => (
+                              <Badge className="px-3 py-1 text-sm" key={license} variant="outline">
+                                {license}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {driverProfile.preferredCategories.length > 0 && (
+                        <div>
+                          <p className="mb-2 font-medium text-muted-foreground text-sm">Preferred Categories</p>
+                          <div className="flex flex-wrap gap-2">
+                            {driverProfile.preferredCategories.map((category: string) => (
+                              <Badge className="px-3 py-1 text-sm" key={category} variant="secondary">
+                                <Star className="mr-1 size-3" />
+                                {category}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {driverProfile.availability.length > 0 && (
+                        <div>
+                          <p className="mb-2 font-medium text-muted-foreground text-sm">Availability</p>
+                          <div className="flex flex-wrap gap-2">
+                            {driverProfile.availability.map((availability: string) => {
+                              const availabilityLabels: Record<string, string> = {
+                                "single-race": "Single Race",
+                                "multi-race": "Multi-Race",
+                                "season-commitment": "Season Commitment",
+                                // Legacy support for old values
+                                weekends: "Weekends",
+                                weekdays: "Weekdays",
+                                evenings: "Evenings",
+                                flexible: "Flexible",
+                              }
+                              const label =
+                                availabilityLabels[availability] ||
+                                availability.charAt(0).toUpperCase() +
+                                  availability.slice(1).replace(/-/g, " ")
+                              return (
+                                <Badge className="px-3 py-1 text-sm" key={availability} variant="outline">
+                                  <Calendar className="mr-1 size-3" />
+                                  {label}
+                                </Badge>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
 
               {(driverProfile.racingType === "sim-racing" ||
                 driverProfile.racingType === "both") && (
@@ -365,7 +469,7 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
                               Platforms
                             </p>
                             <div className="flex flex-wrap gap-2">
-                              {driverProfile.simRacingPlatforms.map((platform) => (
+                              {driverProfile.simRacingPlatforms.map((platform: string) => (
                                 <Badge
                                   className="px-3 py-1 text-sm"
                                   key={platform}
@@ -389,9 +493,91 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
               )}
             </CardContent>
           </Card>
+
+          <DriverPortfolio driverProfileId={profileId} isOwner={isOwner} />
+
+          <DriverEndorsements driverProfileId={profileId} isOwner={isOwner} />
+
+          {similarDrivers && similarDrivers.length > 0 && (
+            <div>
+              <h2 className="mb-4 font-semibold text-xl">Similar Drivers</h2>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {similarDrivers.map((driver: any) => (
+                  <DriverCard
+                    key={driver._id}
+                    id={driver._id}
+                    name={driver.user?.name || "Unknown"}
+                    avatarUrl={driver.avatarUrl || driver.user?.avatarUrl}
+                    location={driver.location}
+                    experience={driver.experience}
+                    racingType={driver.racingType}
+                    licenses={driver.licenses}
+                    preferredCategories={driver.preferredCategories}
+                    headline={driver.headline}
+                    bio={driver.bio}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="space-y-6">
+          {isOwner && (
+            <ProfileAnalytics profileId={profileId} profileType="driver" />
+          )}
+
+          {!isOwner && (
+            <>
+              {hasAcceptedConnection && driverProfile && (
+                <Card>
+                  <CardContent className="p-6">
+                    <Button
+                      className="w-full"
+                      onClick={async () => {
+                        try {
+                          const conversationId = await createConversation({
+                            participantId: driverProfile.userId,
+                            conversationType: "driver",
+                            driverProfileId: profileId,
+                          })
+                          router.push(`/messages/${conversationId}`)
+                        } catch {
+                          toast.error("Failed to start conversation")
+                        }
+                      }}
+                    >
+                      <MessageSquare className="mr-2 size-4" />
+                      Message Driver
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
+
+              {!hasAcceptedConnection && userTeams && userTeams.length > 0 && (
+                <Card>
+                  <CardContent className="p-6">
+                    <p className="mb-3 text-muted-foreground text-sm">
+                      Connect with this driver to access their contact information
+                    </p>
+                    <Button
+                      className="w-full"
+                      onClick={() => {
+                        if (userTeams.length === 1) {
+                          setSelectedTeamId(userTeams[0]!._id)
+                        }
+                        setShowConnectionDialog(true)
+                      }}
+                    >
+                      <UserPlus className="mr-2 size-4" />
+                      Request to Connect
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
+            </>
+          )}
+
           <Card>
             <CardContent className="p-6">
               <div className="space-y-4">
@@ -403,7 +589,7 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
                   </div>
                 </div>
 
-                {hasAcceptedConnection || isOwner ? (
+                {(hasAcceptedConnection || isOwner) && (
                   <>
                     {driverProfile.contactInfo?.phone && (
                       <>
@@ -435,34 +621,6 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
                       </>
                     )}
                   </>
-                ) : (
-                  userTeams &&
-                  userTeams.length > 0 &&
-                  !isOwner && (
-                    <>
-                      <Separator />
-                      <div className="rounded-lg border border-muted bg-muted/50 p-4">
-                        <p className="mb-3 text-muted-foreground text-sm">
-                          Contact information is only available to teams that the driver has
-                          accepted a connection request from.
-                        </p>
-                        <Button
-                          className="w-full"
-                          onClick={() => {
-                            if (userTeams.length === 1) {
-                              setSelectedTeamId(userTeams[0]._id)
-                              setShowConnectionDialog(true)
-                            } else {
-                              setShowConnectionDialog(true)
-                            }
-                          }}
-                        >
-                          <UserPlus className="mr-2 size-4" />
-                          Request to Connect
-                        </Button>
-                      </div>
-                    </>
-                  )
                 )}
               </div>
             </CardContent>
@@ -485,6 +643,7 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
                           href={getInstagramUrl(driverProfile.socialLinks.instagram)}
                           rel="noopener noreferrer"
                           target="_blank"
+                          aria-label="Visit Instagram profile"
                         >
                           <Instagram className="mr-2 size-4" />
                           Instagram
@@ -497,6 +656,7 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
                           href={getTwitterUrl(driverProfile.socialLinks.twitter)}
                           rel="noopener noreferrer"
                           target="_blank"
+                          aria-label="Visit Twitter profile"
                         >
                           <Twitter className="mr-2 size-4" />
                           Twitter
@@ -509,6 +669,7 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
                           href={getLinkedInUrl(driverProfile.socialLinks.linkedin)}
                           rel="noopener noreferrer"
                           target="_blank"
+                          aria-label="Visit LinkedIn profile"
                         >
                           <Linkedin className="mr-2 size-4" />
                           LinkedIn
@@ -521,6 +682,7 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
                           href={getWebsiteUrl(driverProfile.socialLinks.website)}
                           rel="noopener noreferrer"
                           target="_blank"
+                          aria-label="Visit website"
                         >
                           <Globe className="mr-2 size-4" />
                           Website
@@ -562,7 +724,7 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
                     })()}
                     {driverProfile.isActive ? "Hide Profile" : "Show Profile"}
                   </Button>
-                  <Button disabled={isDeleting} onClick={() => setShowDeleteDialog(true)}>
+                  <Button disabled={isDeleting} onClick={() => setShowDeleteDialog(true)} variant="destructive">
                     <Trash2 className="mr-2 size-4" />
                     Delete Profile
                   </Button>
@@ -572,6 +734,34 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
           )}
         </div>
       </div>
+
+      {/* Mobile sticky CTA */}
+      {!isOwner && (
+        <div className="fixed right-0 bottom-0 left-0 border-t bg-background p-4 lg:hidden">
+          {hasAcceptedConnection ? (
+            <Button className="w-full" onClick={async () => {
+              try {
+                const conversationId = await createConversation({
+                  participantId: driverProfile.userId,
+                  conversationType: "driver",
+                  driverProfileId: profileId,
+                })
+                router.push(`/messages/${conversationId}`)
+              } catch {
+                toast.error("Failed to start conversation")
+              }
+            }}>
+              <MessageSquare className="mr-2 size-4" />
+              Message Driver
+            </Button>
+          ) : userTeams && userTeams.length > 0 ? (
+            <Button className="w-full" onClick={() => { if (userTeams.length === 1) setSelectedTeamId(userTeams[0]!._id); setShowConnectionDialog(true) }}>
+              <UserPlus className="mr-2 size-4" />
+              Request to Connect
+            </Button>
+          ) : null}
+        </div>
+      )}
 
       <Dialog onOpenChange={setShowDeleteDialog} open={showDeleteDialog}>
         <DialogContent>
@@ -628,7 +818,7 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
                     <SelectValue placeholder="Select a team..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {userTeams.map((team) => (
+                    {userTeams.map((team: { _id: string; name: string }) => (
                       <SelectItem key={team._id} value={team._id}>
                         {team.name}
                       </SelectItem>
@@ -672,7 +862,7 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
                   return
                 }
 
-                const teamId = selectedTeamId || userTeams[0]._id
+                const teamId = selectedTeamId || userTeams[0]!._id
                 setIsRequestingConnection(true)
 
                 try {
