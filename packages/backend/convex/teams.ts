@@ -1,6 +1,6 @@
-import { v } from 'convex/values';
-import { mutation, query } from './_generated/server';
-import { getCurrentUserOrThrow } from './users';
+import { v } from "convex/values"
+import { mutation, query } from "./_generated/server"
+import { getCurrentUserOrThrow } from "./users"
 
 export const create = mutation({
   args: {
@@ -9,11 +9,7 @@ export const create = mutation({
     logoUrl: v.optional(v.string()),
     location: v.string(),
     racingType: v.optional(
-      v.union(
-        v.literal('real-world'),
-        v.literal('sim-racing'),
-        v.literal('both')
-      )
+      v.union(v.literal("real-world"), v.literal("sim-racing"), v.literal("both"))
     ),
     simRacingPlatforms: v.optional(v.array(v.string())),
     specialties: v.array(v.string()),
@@ -34,38 +30,34 @@ export const create = mutation({
     ),
   },
   handler: async (ctx, args) => {
-    const user = await getCurrentUserOrThrow(ctx);
+    const user = await getCurrentUserOrThrow(ctx)
 
-    const teamId = await ctx.db.insert('teams', {
+    const teamId = await ctx.db.insert("teams", {
       ...args,
       ownerId: user.externalId,
       isActive: true,
       createdAt: Date.now(),
       updatedAt: Date.now(),
-    });
+    })
 
     // Update user type to include team
     await ctx.db.patch(user._id, {
-      userType: user.userType === 'driver' ? 'both' : 'team',
-    });
+      userType: user.userType === "driver" ? "both" : "team",
+    })
 
-    return teamId;
+    return teamId
   },
-});
+})
 
 export const update = mutation({
   args: {
-    teamId: v.id('teams'),
+    teamId: v.id("teams"),
     name: v.optional(v.string()),
     description: v.optional(v.string()),
     logoUrl: v.optional(v.string()),
     location: v.optional(v.string()),
     racingType: v.optional(
-      v.union(
-        v.literal('real-world'),
-        v.literal('sim-racing'),
-        v.literal('both')
-      )
+      v.union(v.literal("real-world"), v.literal("sim-racing"), v.literal("both"))
     ),
     simRacingPlatforms: v.optional(v.array(v.string())),
     specialties: v.optional(v.array(v.string())),
@@ -89,105 +81,119 @@ export const update = mutation({
     isActive: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    const user = await getCurrentUserOrThrow(ctx);
-    const { teamId, ...updates } = args;
+    const user = await getCurrentUserOrThrow(ctx)
+    const { teamId, ...updates } = args
 
-    const team = await ctx.db.get(teamId);
+    const team = await ctx.db.get(teamId)
     if (!team || team.ownerId !== user.externalId) {
-      throw new Error('Not authorized to update this team');
+      throw new Error("Not authorized to update this team")
     }
 
     await ctx.db.patch(teamId, {
       ...updates,
       updatedAt: Date.now(),
-    });
+    })
 
-    return teamId;
+    return teamId
   },
-});
+})
 
 export const list = query({
   args: {
     location: v.optional(v.string()),
     racingType: v.optional(
-      v.union(
-        v.literal('real-world'),
-        v.literal('sim-racing'),
-        v.literal('both')
-      )
+      v.union(v.literal("real-world"), v.literal("sim-racing"), v.literal("both"))
     ),
     specialties: v.optional(v.array(v.string())),
     availableSeats: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    let teamsQuery = ctx.db
-      .query('teams')
-      .withIndex('by_active', q => q.eq('isActive', true));
+    let teamsQuery = ctx.db.query("teams").withIndex("by_active", (q) => q.eq("isActive", true))
 
     if (args.location) {
-      teamsQuery = teamsQuery.filter(q =>
-        q.eq(q.field('location'), args.location)
-      );
+      teamsQuery = teamsQuery.filter((q) => q.eq(q.field("location"), args.location))
     }
 
     if (args.racingType) {
-      teamsQuery = teamsQuery.filter(q =>
-        q.or(
-          q.eq(q.field('racingType'), args.racingType),
-          q.eq(q.field('racingType'), 'both')
-        )
-      );
+      teamsQuery = teamsQuery.filter((q) =>
+        q.or(q.eq(q.field("racingType"), args.racingType), q.eq(q.field("racingType"), "both"))
+      )
     }
 
-    if (typeof args.availableSeats === 'number') {
-      const seats = args.availableSeats; // Type guard narrows to number
-      teamsQuery = teamsQuery.filter(q =>
-        q.gte(q.field('availableSeats'), seats)
-      );
+    if (typeof args.availableSeats === "number") {
+      const seats = args.availableSeats // Type guard narrows to number
+      teamsQuery = teamsQuery.filter((q) => q.gte(q.field("availableSeats"), seats))
     }
 
-    const teams = await teamsQuery.collect();
+    const teams = await teamsQuery.collect()
 
     // Filter by specialties if specified
     if (args.specialties && args.specialties.length > 0) {
-      return teams.filter(team =>
-        args.specialties!.some(specialty =>
-          team.specialties.includes(specialty)
-        )
-      );
+      return teams.filter((team) =>
+        args.specialties!.some((specialty) => team.specialties.includes(specialty))
+      )
     }
 
-    return teams;
+    return teams
   },
-});
+})
 
 export const getById = query({
-  args: { teamId: v.id('teams') },
+  args: { teamId: v.id("teams") },
   handler: async (ctx, args) => await ctx.db.get(args.teamId),
-});
+})
 
 export const getByOwner = query({
   args: {},
-  handler: async ctx => {
-    const user = await getCurrentUserOrThrow(ctx);
+  handler: async (ctx) => {
+    const user = await getCurrentUserOrThrow(ctx)
     return await ctx.db
-      .query('teams')
-      .withIndex('by_owner', q => q.eq('ownerId', user.externalId))
-      .collect();
+      .query("teams")
+      .withIndex("by_owner", (q) => q.eq("ownerId", user.externalId))
+      .collect()
   },
-});
+})
 
 export const deleteTeam = mutation({
-  args: { teamId: v.id('teams') },
+  args: { teamId: v.id("teams") },
   handler: async (ctx, args) => {
-    const user = await getCurrentUserOrThrow(ctx);
-    const team = await ctx.db.get(args.teamId);
+    const user = await getCurrentUserOrThrow(ctx)
+    const team = await ctx.db.get(args.teamId)
 
     if (!team || team.ownerId !== user.externalId) {
-      throw new Error('Not authorized to delete this team');
+      throw new Error("Not authorized to delete this team")
     }
 
-    await ctx.db.delete(args.teamId);
-    return true;
+    await ctx.db.delete(args.teamId)
+    return true
   },
-});
+})
+
+export const getSimilar = query({
+  args: {
+    teamId: v.id("teams"),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const team = await ctx.db.get(args.teamId)
+    if (!team) return []
+
+    const allTeams = await ctx.db
+      .query("teams")
+      .filter((q) => q.and(q.neq(q.field("_id"), args.teamId), q.eq(q.field("isActive"), true)))
+      .take(50)
+
+    const scored = allTeams.map((t) => {
+      let score = 0
+      if (t.racingType === team.racingType) score += 2
+      if (t.location === team.location) score += 2
+      for (const spec of t.specialties) {
+        if (team.specialties.includes(spec)) score += 1
+      }
+      return { ...t, score }
+    })
+
+    scored.sort((a, b) => b.score - a.score)
+    return scored.slice(0, args.limit || 3).filter((t) => t.score > 0)
+  },
+})

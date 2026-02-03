@@ -31,7 +31,7 @@ export default function ContactPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     setIsSubmitting(true)
     try {
       await sendContactEmail({
@@ -40,15 +40,17 @@ export default function ContactPage() {
         subject: formData.subject,
         message: formData.message,
       })
-      
+
       toast.success("Message sent successfully! We'll get back to you soon.")
       setFormData({ name: "", email: "", subject: "", message: "" })
     } catch (error) {
       handleErrorWithContext(error, {
         action: "send message",
         customMessages: {
-          network: "Failed to send your message. Please check your connection and try again, or email us directly at support@renegaderace.com",
-          generic: "Failed to send your message. Please try again or email us directly at support@renegaderace.com",
+          network:
+            "Failed to send your message. Please check your connection and try again, or email us directly at support@renegaderace.com",
+          generic:
+            "Failed to send your message. Please try again or email us directly at support@renegaderace.com",
         },
       })
     } finally {
@@ -156,12 +158,7 @@ export default function ContactPage() {
                     value={formData.message}
                   />
                 </div>
-                <Button 
-                  className="w-full gap-2" 
-                  size="lg" 
-                  type="submit"
-                  disabled={isSubmitting}
-                >
+                <Button className="w-full gap-2" size="lg" type="submit" disabled={isSubmitting}>
                   {isSubmitting ? (
                     <>
                       <Loader2 className="size-4 animate-spin" />

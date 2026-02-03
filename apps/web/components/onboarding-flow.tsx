@@ -87,7 +87,13 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
 
   // Step 3: Add-ons state
   const [addOns, setAddOns] = useState<
-    Array<{ name: string; price: number; description: string; isRequired: boolean; priceType: "daily" | "one-time" }>
+    Array<{
+      name: string
+      price: number
+      description: string
+      isRequired: boolean
+      priceType: "daily" | "one-time"
+    }>
   >([])
   const [newAddOn, setNewAddOn] = useState({
     name: "",
@@ -116,17 +122,21 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
       setVehicleFormData((prev) => ({
         ...prev,
         trackId: draft.vehicleData?.trackId || "",
-        make: draft.vehicleData.make || prev.make,
-        model: draft.vehicleData.model || prev.model,
-        year: draft.vehicleData.year || prev.year,
-        dailyRate: draft.vehicleData.dailyRate ? String(draft.vehicleData.dailyRate) : prev.dailyRate,
-        description: draft.vehicleData.description || prev.description,
-        horsepower: draft.vehicleData.horsepower ? String(draft.vehicleData.horsepower) : prev.horsepower,
-        transmission: draft.vehicleData.transmission || prev.transmission,
-        drivetrain: draft.vehicleData.drivetrain || prev.drivetrain,
+        make: draft.vehicleData?.make || prev.make,
+        model: draft.vehicleData?.model || prev.model,
+        year: draft.vehicleData?.year || prev.year,
+        dailyRate: draft.vehicleData?.dailyRate
+          ? String(draft.vehicleData.dailyRate)
+          : prev.dailyRate,
+        description: draft.vehicleData?.description || prev.description,
+        horsepower: draft.vehicleData?.horsepower
+          ? String(draft.vehicleData.horsepower)
+          : prev.horsepower,
+        transmission: draft.vehicleData?.transmission || prev.transmission,
+        drivetrain: draft.vehicleData?.drivetrain || prev.drivetrain,
       }))
-      setAddOns(draft.vehicleData.addOns || [])
-      if (draft.vehicleData.advanceNotice) setAdvanceNotice(draft.vehicleData.advanceNotice)
+      setAddOns((draft.vehicleData?.addOns as any) || [])
+      if (draft.vehicleData?.advanceNotice) setAdvanceNotice(draft.vehicleData.advanceNotice)
       if (draft.vehicleData.minTripDuration) setMinTripDuration(draft.vehicleData.minTripDuration)
       if (draft.vehicleData.maxTripDuration) setMaxTripDuration(draft.vehicleData.maxTripDuration)
       if (draft.vehicleData.requireWeekendMin !== undefined)
@@ -264,6 +274,7 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
       const imageKeys: string[] = []
       for (let index = 0; index < images.length; index++) {
         const img = images[index]
+        if (!img) continue
         try {
           if (index > 0) {
             await new Promise((resolve) => setTimeout(resolve, 500))
@@ -334,7 +345,7 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
   }
 
   const handleAmenitiesContinue = async () => {
-    if (!draft?.vehicleData || !draft?.address) {
+    if (!(draft?.vehicleData && draft?.address)) {
       toast.error("Missing vehicle data. Please complete previous steps.")
       return
     }
@@ -364,7 +375,7 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
 
   // Step 4 Handlers
   const handleAvailabilityContinue = async () => {
-    if (!draft?.vehicleData || !draft?.address) {
+    if (!(draft?.vehicleData && draft?.address)) {
       toast.error("Missing vehicle data. Please complete previous steps.")
       return
     }
@@ -401,7 +412,7 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
       return
     }
 
-    if (!draft?.vehicleData || !draft?.address) {
+    if (!(draft?.vehicleData && draft?.address)) {
       toast.error("Missing vehicle data. Please complete previous steps.")
       return
     }
@@ -522,7 +533,7 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
                     <SelectValue placeholder="Select a track (optional)" />
                   </SelectTrigger>
                   <SelectContent>
-                    {tracks.map((track) => (
+                    {tracks.map((track: { _id: string; name: string; location: string }) => (
                       <SelectItem key={track._id} value={track._id}>
                         {track.name} - {track.location}
                       </SelectItem>
@@ -839,13 +850,10 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
           <Card>
             <CardHeader>
               <CardTitle>Optional Add-ons</CardTitle>
-              <CardDescription>
-                Additional services or items renters can purchase
-              </CardDescription>
+              <CardDescription>Additional services or items renters can purchase</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-4">
-
                 {addOns.length > 0 && (
                   <div className="space-y-2">
                     {addOns.map((addOn, index) => (
@@ -859,7 +867,8 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
                             <p className="text-muted-foreground text-sm">{addOn.description}</p>
                           )}
                           <p className="font-semibold text-primary">
-                            ${addOn.price}{addOn.priceType === "daily" ? "/day" : " one-time"}
+                            ${addOn.price}
+                            {addOn.priceType === "daily" ? "/day" : " one-time"}
                           </p>
                         </div>
                         <Button
@@ -890,7 +899,9 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
                       <Label htmlFor="addOnPrice">Price ($)</Label>
                       <Input
                         id="addOnPrice"
-                        onChange={(e) => setNewAddOn((prev) => ({ ...prev, price: e.target.value }))}
+                        onChange={(e) =>
+                          setNewAddOn((prev) => ({ ...prev, price: e.target.value }))
+                        }
                         placeholder="150"
                         type="number"
                         value={newAddOn.price}
@@ -900,7 +911,9 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
                   <div className="space-y-2">
                     <Label htmlFor="addOnPriceType">Payment Type</Label>
                     <Select
-                      onValueChange={(value: "daily" | "one-time") => setNewAddOn((prev) => ({ ...prev, priceType: value }))}
+                      onValueChange={(value: "daily" | "one-time") =>
+                        setNewAddOn((prev) => ({ ...prev, priceType: value }))
+                      }
                       value={newAddOn.priceType}
                     >
                       <SelectTrigger id="addOnPriceType">
@@ -916,7 +929,9 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
                     <Label htmlFor="addOnDescription">Description (Optional)</Label>
                     <Input
                       id="addOnDescription"
-                      onChange={(e) => setNewAddOn((prev) => ({ ...prev, description: e.target.value }))}
+                      onChange={(e) =>
+                        setNewAddOn((prev) => ({ ...prev, description: e.target.value }))
+                      }
                       placeholder="Brief description of the add-on"
                       value={newAddOn.description}
                     />
@@ -965,8 +980,8 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
             <CardHeader>
               <CardTitle>Default Availability Settings</CardTitle>
               <CardDescription>
-                Configure your vehicle's default availability rules. You can update these anytime from
-                your dashboard.
+                Configure your vehicle's default availability rules. You can update these anytime
+                from your dashboard.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-8">
@@ -1089,7 +1104,7 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
         )
       }
 
-      if (!draft?.vehicleData || !draft?.address) {
+      if (!(draft?.vehicleData && draft?.address)) {
         return (
           <div className="container mx-auto max-w-2xl px-4 pb-4 md:pb-16">
             <Card>

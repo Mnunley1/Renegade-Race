@@ -23,13 +23,13 @@ type ClerkError = {
 function getRedirectUrl(searchParams: URLSearchParams): string {
   const redirectUrl = searchParams.get("redirect_url")
   if (!redirectUrl) return "/"
-  
+
   const decoded = decodeURIComponent(redirectUrl)
-  
+
   if (decoded.startsWith("/") && !decoded.includes("://")) {
     return decoded
   }
-  
+
   return "/"
 }
 
@@ -43,7 +43,7 @@ function AdminSignInPageContent() {
   const [error, setError] = useState("")
   const searchParams = useSearchParams()
   const router = useRouter()
-  
+
   const redirectUrl = useMemo(() => getRedirectUrl(searchParams), [searchParams])
   const errorParam = searchParams.get("error")
 
@@ -113,12 +113,10 @@ function AdminSignInPageContent() {
             />
           </div>
           <h1 className="mb-2 font-bold text-3xl">Admin Portal</h1>
-          <p className="text-muted-foreground text-sm">
-            Sign in to access the admin dashboard
-          </p>
+          <p className="text-muted-foreground text-sm">Sign in to access the admin dashboard</p>
         </div>
 
-        <Card className="border-2 shadow-xl bg-card transition-none hover:shadow-xl">
+        <Card className="border-2 bg-card shadow-xl transition-none hover:shadow-xl">
           <CardHeader>
             <CardTitle>Admin Sign In</CardTitle>
             <CardDescription>Enter your admin credentials to continue</CardDescription>
@@ -153,7 +151,7 @@ function AdminSignInPageContent() {
                 <div className="relative">
                   <Lock className="-translate-y-1/2 absolute top-1/2 left-3 size-4 text-muted-foreground" />
                   <Input
-                    className="pl-10 pr-10"
+                    className="pr-10 pl-10"
                     disabled={isLoading}
                     id="password"
                     onChange={(e) => setPassword(e.target.value)}
@@ -170,11 +168,7 @@ function AdminSignInPageContent() {
                     }}
                     type="button"
                   >
-                    {showPassword ? (
-                      <EyeOff className="size-4" />
-                    ) : (
-                      <Eye className="size-4" />
-                    )}
+                    {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                   </button>
                 </div>
               </div>
@@ -209,9 +203,7 @@ export default function AdminSignInPage() {
                 />
               </div>
               <h1 className="mb-2 font-bold text-3xl">Admin Portal</h1>
-              <p className="text-muted-foreground text-sm">
-                Sign in to access the admin dashboard
-              </p>
+              <p className="text-muted-foreground text-sm">Sign in to access the admin dashboard</p>
             </div>
             <div className="text-center">
               <p className="text-muted-foreground">Loading...</p>
@@ -224,4 +216,3 @@ export default function AdminSignInPage() {
     </Suspense>
   )
 }
-

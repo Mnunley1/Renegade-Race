@@ -30,7 +30,7 @@ export default function AmenitiesPage() {
   const [amenities, setAmenities] = useState<string[]>(draft?.vehicleData?.amenities || [])
   const [addOns, setAddOns] = useState<
     Array<{ name: string; price: number; description: string; isRequired: boolean }>
-  >(draft?.vehicleData?.addOns || [])
+  >((draft?.vehicleData?.addOns as any) || [])
 
   const [newAddOn, setNewAddOn] = useState({
     name: "",
@@ -65,7 +65,7 @@ export default function AmenitiesPage() {
   }
 
   const handleContinue = async () => {
-    if (!draft?.vehicleData || !draft?.address) {
+    if (!(draft?.vehicleData && draft?.address)) {
       toast.error("Missing vehicle data. Please go back and complete previous steps.")
       return
     }
@@ -225,4 +225,3 @@ export default function AmenitiesPage() {
     </div>
   )
 }
-

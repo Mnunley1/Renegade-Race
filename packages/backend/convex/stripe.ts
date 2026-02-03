@@ -4,13 +4,89 @@ import Stripe from "stripe"
 import { api, components, internal } from "./_generated/api"
 import type { Id } from "./_generated/dataModel"
 import { action, internalAction, mutation, query } from "./_generated/server"
+import { checkAdmin } from "./admin"
+import { calculateDaysBetween, parseLocalDate } from "./dateUtils"
 import {
   getPaymentFailedEmailTemplate,
   getPaymentSucceededEmailTemplate,
   sendTransactionalEmail,
 } from "./emails"
-// TODO: Uncomment after installing @convex-dev/rate-limiter
-// import { rateLimiter } from "./rateLimiter"
+import { rateLimiter } from "./rateLimiter"
+
+// ============================================================================
+// Cancellation Policy - Tiered Refund Calculation
+// ============================================================================
+
+/**
+ * Calculate refund percentage based on cancellation policy.
+ *
+ * Flexible Policy:
+ * - 1+ days before start: 100% refund (full)
+ * - <24 hours before start: 50% refund (partial)
+ *
+ * Moderate Policy (default):
+ * - 7+ days before start: 100% refund (full)
+ * - 2-7 days before start: 50% refund (partial)
+ * - <48 hours before start: 0% refund (none)
+ *
+ * Strict Policy:
+ * - 14+ days before start: 100% refund (full)
+ * - 7-14 days before start: 50% refund (partial)
+ * - <7 days before start: 0% refund (none)
+ *
+ * @param startDate - Rental start date in YYYY-MM-DD format
+ * @param policyType - Cancellation policy type
+ * @param cancellationDate - Date of cancellation (defaults to now)
+ * @returns Object with refund percentage and policy tier
+ */
+export function calculateRefundTier(
+  startDate: string,
+  policyType: "flexible" | "moderate" | "strict" = "moderate",
+  cancellationDate?: Date
+): { percentage: number; policy: "full" | "partial" | "none" } {
+  const now = cancellationDate || new Date()
+  const start = parseLocalDate(startDate)
+
+  if (!start) {
+    // If we can't parse the date, default to no refund for safety
+    return { percentage: 0, policy: "none" }
+  }
+
+  // Set both dates to start of day for accurate comparison
+  now.setHours(0, 0, 0, 0)
+  start.setHours(0, 0, 0, 0)
+
+  // Calculate days until start
+  const diffTime = start.getTime() - now.getTime()
+  const daysUntilStart = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+
+  // Apply policy-specific rules
+  if (policyType === "flexible") {
+    if (daysUntilStart >= 1) {
+      return { percentage: 100, policy: "full" }
+    }
+    return { percentage: 50, policy: "partial" }
+  }
+
+  if (policyType === "strict") {
+    if (daysUntilStart >= 14) {
+      return { percentage: 100, policy: "full" }
+    }
+    if (daysUntilStart >= 7) {
+      return { percentage: 50, policy: "partial" }
+    }
+    return { percentage: 0, policy: "none" }
+  }
+
+  // Default: moderate policy
+  if (daysUntilStart >= 7) {
+    return { percentage: 100, policy: "full" }
+  }
+  if (daysUntilStart >= 2) {
+    return { percentage: 50, policy: "partial" }
+  }
+  return { percentage: 0, policy: "none" }
+}
 
 // Initialize Stripe client from component
 const stripeClient = new StripeSubscriptions(components.stripe, {})
@@ -35,6 +111,11 @@ export const calculatePlatformFee = mutation({
     amount: v.number(), // Amount in cents
   },
   handler: async (ctx, args) => {
+    // Validate amount
+    if (args.amount <= 0) {
+      throw new Error("Amount must be positive")
+    }
+
     const settings = await ctx.db
       .query("platformSettings")
       .withIndex("by_active", (q) => q.eq("isActive", true))
@@ -50,6 +131,11 @@ export const calculatePlatformFee = mutation({
     }
 
     const feePercentage = settings.platformFeePercentage
+
+    // Validate fee percentage (should already be validated on insert, but double-check)
+    if (feePercentage < 0 || feePercentage > 100) {
+      throw new Error("Platform fee percentage must be between 0 and 100")
+    }
     const calculatedFee = Math.round((args.amount * feePercentage) / 100)
 
     const platformFee = Math.max(
@@ -97,16 +183,7 @@ export const initializePlatformSettings = mutation({
 export const getPlatformSettings = query({
   args: {},
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity()
-    if (!identity) {
-      throw new Error("Not authenticated")
-    }
-
-    // Check if user is admin
-    const role = (identity as unknown as { metadata?: { role?: string } }).metadata?.role
-    if (role !== "admin") {
-      throw new Error("Admin access required")
-    }
+    await checkAdmin(ctx)
 
     return await ctx.db
       .query("platformSettings")
@@ -123,16 +200,7 @@ export const updatePlatformSettings = mutation({
     maximumPlatformFee: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity()
-    if (!identity) {
-      throw new Error("Not authenticated")
-    }
-
-    // Check if user is admin
-    const role = (identity as unknown as { metadata?: { role?: string } }).metadata?.role
-    if (role !== "admin") {
-      throw new Error("Admin access required")
-    }
+    await checkAdmin(ctx)
 
     // Validate inputs
     if (args.platformFeePercentage < 0 || args.platformFeePercentage > 100) {
@@ -187,7 +255,10 @@ export const createConnectAccount = action({
     ownerId: v.string(),
     returnUrlBase: v.optional(v.string()), // Allow client to specify the base URL for redirects
   },
-  handler: async (ctx, args) => {
+  handler: async (
+    ctx,
+    args
+  ): Promise<{ accountId: string; onboardingUrl: string | null; isComplete: boolean }> => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity || identity.subject !== args.ownerId) {
       throw new Error("Not authorized")
@@ -240,47 +311,50 @@ export const createConnectAccount = action({
     // Determine the base URL to use for redirects
     // Priority: client-provided URL > WEB_URL env var > production default
     let baseUrl = args.returnUrlBase || process.env.WEB_URL || "https://renegaderentals.com"
-    
+
     // Validate the URL is allowed (security check)
     // In development, allow localhost, ngrok, and 127.0.0.1
     // In production, only allow configured production domains
-    const isDevelopment = 
-      baseUrl.includes("localhost") || 
+    const isDevelopment =
+      baseUrl.includes("localhost") ||
       baseUrl.includes("ngrok") ||
       baseUrl.includes("127.0.0.1") ||
       baseUrl.startsWith("http://")
-    
+
     // Production allowed domains
     const allowedProductionDomains = [
       "https://renegaderentals.com",
       // Add other production/staging domains here as needed
     ]
-    
+
     // If not development, validate against allowed domains
     if (!isDevelopment) {
-      const isAllowed = allowedProductionDomains.some(domain => 
-        baseUrl.startsWith(domain)
-      )
+      const isAllowed = allowedProductionDomains.some((domain) => baseUrl.startsWith(domain))
       if (!isAllowed) {
         throw new Error(
           `Invalid return URL: ${baseUrl}. ` +
-          `Allowed domains: ${allowedProductionDomains.join(", ")}`
+            `Allowed domains: ${allowedProductionDomains.join(", ")}`
         )
       }
     }
-    
+
     // Ensure baseUrl doesn't end with a slash
     if (baseUrl.endsWith("/")) {
       baseUrl = baseUrl.slice(0, -1)
     }
-    
+
     // Create account link for onboarding
-    const accountLink = await stripe.accountLinks.create({
-      account: account.id,
-      refresh_url: `${baseUrl}/host/dashboard?stripe_refresh=true`,
-      return_url: `${baseUrl}/host/dashboard?stripe_return=true`,
-      type: "account_onboarding",
-    })
+    const accountLink = await stripe.accountLinks.create(
+      {
+        account: account.id,
+        refresh_url: `${baseUrl}/host/dashboard?stripe_refresh=true`,
+        return_url: `${baseUrl}/host/dashboard?stripe_return=true`,
+        type: "account_onboarding",
+      },
+      {
+        idempotencyKey: `account_link_${account.id}_${Date.now()}`,
+      }
+    )
 
     return {
       accountId: account.id,
@@ -295,7 +369,16 @@ export const getConnectAccountStatus = action({
   args: {
     ownerId: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (
+    ctx,
+    args
+  ): Promise<{
+    hasAccount: boolean
+    isComplete: boolean
+    chargesEnabled?: boolean
+    payoutsEnabled?: boolean
+    accountId?: string
+  }> => {
     const user = await ctx.runQuery(api.users.getByExternalId, {
       externalId: args.ownerId,
     })
@@ -326,7 +409,17 @@ export const refreshConnectAccountStatus = action({
   args: {
     ownerId: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (
+    ctx,
+    args
+  ): Promise<{
+    success: boolean
+    reason?: string
+    status?: "pending" | "enabled" | "restricted" | "disabled"
+    chargesEnabled?: boolean
+    payoutsEnabled?: boolean
+    detailsSubmitted?: boolean
+  }> => {
     const user = await ctx.runQuery(api.users.getByExternalId, {
       externalId: args.ownerId,
     })
@@ -352,10 +445,11 @@ export const refreshConnectAccountStatus = action({
     } else if (account.charges_enabled && account.payouts_enabled && account.details_submitted) {
       // Check for blocking restrictions (currently_due, past_due, or disabled_reason)
       // Note: eventually_due requirements are normal and don't block functionality
-      const hasBlockingRestrictions = 
+      const hasBlockingRestrictions =
         (account.requirements?.currently_due && account.requirements.currently_due.length > 0) ||
         (account.requirements?.past_due && account.requirements.past_due.length > 0) ||
-        (account.requirements?.disabled_reason !== null && account.requirements?.disabled_reason !== undefined)
+        (account.requirements?.disabled_reason !== null &&
+          account.requirements?.disabled_reason !== undefined)
 
       if (hasBlockingRestrictions) {
         status = "restricted"
@@ -387,7 +481,7 @@ export const createConnectLoginLink = action({
   args: {
     ownerId: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<{ url: string }> => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity || identity.subject !== args.ownerId) {
       throw new Error("Not authorized")
@@ -420,7 +514,10 @@ export const createCheckoutSession = action({
     reservationId: v.id("reservations"),
     amount: v.number(),
   },
-  handler: async (ctx, args) => {
+  handler: async (
+    ctx,
+    args
+  ): Promise<{ paymentId: any; sessionId: string; url: string | null }> => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) {
       throw new Error("Not authenticated")
@@ -441,6 +538,64 @@ export const createCheckoutSession = action({
       throw new Error("Reservation must be pending to create payment")
     }
 
+    // Monetary validation
+    const MAX_AMOUNT_CENTS = 1_000_000 // $10,000 max
+    const MIN_AMOUNT_CENTS = 100 // $1 min
+
+    if (args.amount <= 0 || args.amount < MIN_AMOUNT_CENTS) {
+      throw new Error("Payment amount must be at least $1.00")
+    }
+
+    if (args.amount > MAX_AMOUNT_CENTS) {
+      throw new Error("Payment amount cannot exceed $10,000.00")
+    }
+
+    // Get current vehicle pricing to validate payment amount
+    const vehicle = await ctx.runQuery(api.vehicles.getById, {
+      id: reservation.vehicleId,
+    })
+
+    if (!vehicle) {
+      throw new Error("Vehicle not found")
+    }
+
+    // Recalculate total from current pricing (server-side validation)
+    const totalDays = calculateDaysBetween(reservation.startDate, reservation.endDate)
+    const baseAmount = totalDays * vehicle.dailyRate
+
+    // Validate add-ons against vehicle's current add-ons
+    let addOnsTotal = 0
+    if (reservation.addOns && reservation.addOns.length > 0) {
+      for (const reservationAddOn of reservation.addOns) {
+        const vehicleAddOn = vehicle.addOns?.find((va: any) => va.name === reservationAddOn.name)
+        if (!vehicleAddOn) {
+          throw new Error(`Add-on "${reservationAddOn.name}" is no longer available`)
+        }
+        if (vehicleAddOn.price !== reservationAddOn.price) {
+          throw new Error(
+            `Add-on "${reservationAddOn.name}" price has changed from ${reservationAddOn.price} to ${vehicleAddOn.price} cents`
+          )
+        }
+        // Daily add-ons are charged per day, one-time add-ons are charged once
+        const priceType = reservationAddOn.priceType || vehicleAddOn.priceType || "one-time"
+        if (priceType === "daily") {
+          addOnsTotal += reservationAddOn.price * totalDays
+        } else {
+          addOnsTotal += reservationAddOn.price
+        }
+      }
+    }
+
+    const expectedTotal = baseAmount + addOnsTotal
+
+    // Validate that the payment amount matches the recalculated total
+    if (args.amount !== expectedTotal) {
+      throw new Error(
+        `Payment amount mismatch: expected ${expectedTotal} cents (based on current pricing), got ${args.amount} cents. ` +
+          "Vehicle daily rate may have changed."
+      )
+    }
+
     // Get owner's Stripe Connect account
     const owner = await ctx.runQuery(api.users.getByExternalId, {
       externalId: reservation.ownerId,
@@ -455,7 +610,9 @@ export const createCheckoutSession = action({
     const connectAccount = await stripe.accounts.retrieve(owner.stripeAccountId)
 
     if (!connectAccount.details_submitted) {
-      throw new Error("Owner account onboarding is not complete. Please complete Stripe onboarding.")
+      throw new Error(
+        "Owner account onboarding is not complete. Please complete Stripe onboarding."
+      )
     }
 
     if (!connectAccount.charges_enabled) {
@@ -463,10 +620,9 @@ export const createCheckoutSession = action({
     }
 
     // Check if transfers capability is enabled (required for destination payments)
+    const capabilities = connectAccount.capabilities as Record<string, string> | undefined
     const transfersEnabled =
-      connectAccount.capabilities?.transfers === "active" ||
-      connectAccount.capabilities?.crypto_transfers === "active" ||
-      connectAccount.capabilities?.legacy_payments === "active"
+      capabilities?.transfers === "active" || capabilities?.legacy_payments === "active"
 
     if (!transfersEnabled) {
       throw new Error(
@@ -501,43 +657,48 @@ export const createCheckoutSession = action({
 
     // Create checkout session using Stripe directly (component doesn't support Connect)
     // but we use the component's customer management
-    const checkoutSession = await stripe.checkout.sessions.create({
-      customer: customer.customerId,
-      mode: "payment",
-      line_items: [
-        {
-          price_data: {
-            currency: "usd",
-            product_data: {
-              name: `Vehicle Rental - Reservation ${args.reservationId}`,
+    const checkoutSession = await stripe.checkout.sessions.create(
+      {
+        customer: customer.customerId,
+        mode: "payment",
+        line_items: [
+          {
+            price_data: {
+              currency: "usd",
+              product_data: {
+                name: `Vehicle Rental - Reservation ${args.reservationId}`,
+              },
+              unit_amount: args.amount,
             },
-            unit_amount: args.amount,
+            quantity: 1,
           },
-          quantity: 1,
+        ],
+        payment_intent_data: {
+          application_fee_amount: platformFee, // Your platform fee
+          transfer_data: {
+            destination: owner.stripeAccountId, // Owner's Connect account
+          },
+          metadata: {
+            reservationId: args.reservationId,
+            renterId: reservation.renterId,
+            ownerId: reservation.ownerId,
+            vehicleId: reservation.vehicleId,
+            platformFee: platformFee.toString(),
+            ownerAmount: ownerAmount.toString(),
+          },
         },
-      ],
-      payment_intent_data: {
-        application_fee_amount: platformFee, // Your platform fee
-        transfer_data: {
-          destination: owner.stripeAccountId, // Owner's Connect account
-        },
+        success_url: `${webUrl}/checkout/success?reservationId=${args.reservationId}`,
+        cancel_url: `${webUrl}/checkout?reservationId=${args.reservationId}`,
         metadata: {
           reservationId: args.reservationId,
           renterId: reservation.renterId,
           ownerId: reservation.ownerId,
-          vehicleId: reservation.vehicleId,
-          platformFee: platformFee.toString(),
-          ownerAmount: ownerAmount.toString(),
         },
       },
-      success_url: `${webUrl}/checkout/success?reservationId=${args.reservationId}`,
-      cancel_url: `${webUrl}/checkout?reservationId=${args.reservationId}`,
-      metadata: {
-        reservationId: args.reservationId,
-        renterId: reservation.renterId,
-        ownerId: reservation.ownerId,
-      },
-    })
+      {
+        idempotencyKey: `cs_create_${args.reservationId}`,
+      }
+    )
 
     // Create payment record
     const paymentId = await ctx.runMutation(api.stripe.createPaymentRecord, {
@@ -573,19 +734,17 @@ export const createPaymentIntent = action({
     reservationId: v.id("reservations"),
     amount: v.number(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<{ paymentId: Id<"payments">; clientSecret: string }> => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) {
       throw new Error("Not authenticated")
     }
 
     // Rate limit: 20 payment operations per hour per user
-    // TODO: Uncomment after installing @convex-dev/rate-limiter
-    // await ctx.runMutation(internal.rateLimitHelpers.checkRateLimit, {
-    //   name: "processPayment",
-    //   key: identity.subject,
-    //   throws: true,
-    // })
+    await rateLimiter.limit(ctx, "processPayment", {
+      key: identity.subject,
+      throws: true,
+    })
 
     const reservation = await ctx.runQuery(api.reservations.getById, {
       id: args.reservationId,
@@ -602,6 +761,64 @@ export const createPaymentIntent = action({
       throw new Error("Reservation must be pending to create payment")
     }
 
+    // Monetary validation
+    const MAX_AMOUNT_CENTS = 1_000_000 // $10,000 max
+    const MIN_AMOUNT_CENTS = 100 // $1 min
+
+    if (args.amount <= 0 || args.amount < MIN_AMOUNT_CENTS) {
+      throw new Error("Payment amount must be at least $1.00")
+    }
+
+    if (args.amount > MAX_AMOUNT_CENTS) {
+      throw new Error("Payment amount cannot exceed $10,000.00")
+    }
+
+    // Get current vehicle pricing to validate payment amount
+    const vehicle = await ctx.runQuery(api.vehicles.getById, {
+      id: reservation.vehicleId,
+    })
+
+    if (!vehicle) {
+      throw new Error("Vehicle not found")
+    }
+
+    // Recalculate total from current pricing (server-side validation)
+    const totalDays = calculateDaysBetween(reservation.startDate, reservation.endDate)
+    const baseAmount = totalDays * vehicle.dailyRate
+
+    // Validate add-ons against vehicle's current add-ons
+    let addOnsTotal = 0
+    if (reservation.addOns && reservation.addOns.length > 0) {
+      for (const reservationAddOn of reservation.addOns) {
+        const vehicleAddOn = vehicle.addOns?.find((va: any) => va.name === reservationAddOn.name)
+        if (!vehicleAddOn) {
+          throw new Error(`Add-on "${reservationAddOn.name}" is no longer available`)
+        }
+        if (vehicleAddOn.price !== reservationAddOn.price) {
+          throw new Error(
+            `Add-on "${reservationAddOn.name}" price has changed from ${reservationAddOn.price} to ${vehicleAddOn.price} cents`
+          )
+        }
+        // Daily add-ons are charged per day, one-time add-ons are charged once
+        const priceType = reservationAddOn.priceType || vehicleAddOn.priceType || "one-time"
+        if (priceType === "daily") {
+          addOnsTotal += reservationAddOn.price * totalDays
+        } else {
+          addOnsTotal += reservationAddOn.price
+        }
+      }
+    }
+
+    const expectedTotal = baseAmount + addOnsTotal
+
+    // Validate that the payment amount matches the recalculated total
+    if (args.amount !== expectedTotal) {
+      throw new Error(
+        `Payment amount mismatch: expected ${expectedTotal} cents (based on current pricing), got ${args.amount} cents. ` +
+          "Vehicle daily rate may have changed."
+      )
+    }
+
     // Get owner's Stripe Connect account
     const owner = await ctx.runQuery(api.users.getByExternalId, {
       externalId: reservation.ownerId,
@@ -616,7 +833,9 @@ export const createPaymentIntent = action({
     const connectAccount = await stripe.accounts.retrieve(owner.stripeAccountId)
 
     if (!connectAccount.details_submitted) {
-      throw new Error("Owner account onboarding is not complete. Please complete Stripe onboarding.")
+      throw new Error(
+        "Owner account onboarding is not complete. Please complete Stripe onboarding."
+      )
     }
 
     if (!connectAccount.charges_enabled) {
@@ -624,10 +843,9 @@ export const createPaymentIntent = action({
     }
 
     // Check if transfers capability is enabled (required for destination payments)
+    const capabilities = connectAccount.capabilities as Record<string, string> | undefined
     const transfersEnabled =
-      connectAccount.capabilities?.transfers === "active" ||
-      connectAccount.capabilities?.crypto_transfers === "active" ||
-      connectAccount.capabilities?.legacy_payments === "active"
+      capabilities?.transfers === "active" || capabilities?.legacy_payments === "active"
 
     if (!transfersEnabled) {
       throw new Error(
@@ -659,26 +877,31 @@ export const createPaymentIntent = action({
     }
 
     // Create Stripe Payment Intent with Connect
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: args.amount,
-      currency: "usd",
-      customer: customer.customerId,
-      application_fee_amount: platformFee, // Your platform fee
-      transfer_data: {
-        destination: owner.stripeAccountId, // Owner's Connect account
+    const paymentIntent = await stripe.paymentIntents.create(
+      {
+        amount: args.amount,
+        currency: "usd",
+        customer: customer.customerId,
+        application_fee_amount: platformFee, // Your platform fee
+        transfer_data: {
+          destination: owner.stripeAccountId, // Owner's Connect account
+        },
+        metadata: {
+          reservationId: args.reservationId,
+          renterId: reservation.renterId,
+          ownerId: reservation.ownerId,
+          vehicleId: reservation.vehicleId,
+          platformFee: platformFee.toString(),
+          ownerAmount: ownerAmount.toString(),
+        },
+        automatic_payment_methods: {
+          enabled: true,
+        },
       },
-      metadata: {
-        reservationId: args.reservationId,
-        renterId: reservation.renterId,
-        ownerId: reservation.ownerId,
-        vehicleId: reservation.vehicleId,
-        platformFee: platformFee.toString(),
-        ownerAmount: ownerAmount.toString(),
-      },
-      automatic_payment_methods: {
-        enabled: true,
-      },
-    })
+      {
+        idempotencyKey: `pi_create_${args.reservationId}`,
+      }
+    )
 
     // Create payment record
     const paymentId = await ctx.runMutation(api.stripe.createPaymentRecord, {
@@ -701,7 +924,7 @@ export const createPaymentIntent = action({
 
     return {
       paymentId,
-      clientSecret: paymentIntent.client_secret,
+      clientSecret: paymentIntent.client_secret as string,
     }
   },
 })
@@ -794,7 +1017,9 @@ export const handlePaymentSuccess = mutation({
   },
   handler: async (ctx, args) => {
     const payment = await ctx.db.get(args.paymentId)
-    if (!payment) return
+    if (!payment) {
+      return
+    }
 
     await ctx.db.patch(args.paymentId, {
       status: "succeeded",
@@ -802,11 +1027,53 @@ export const handlePaymentSuccess = mutation({
       updatedAt: Date.now(),
     })
 
-    await ctx.db.patch(payment.reservationId, {
-      status: "confirmed",
-      paymentStatus: "paid",
-      updatedAt: Date.now(),
-    })
+    try {
+      await ctx.db.patch(payment.reservationId, {
+        status: "confirmed",
+        paymentStatus: "paid",
+        updatedAt: Date.now(),
+      })
+
+      // Trigger notification for renter
+      await ctx.scheduler.runAfter(0, internal.notifications.createNotification, {
+        userId: payment.renterId,
+        type: "payment_success",
+        title: "Payment Successful",
+        message: `Your payment of $${(payment.amount / 100).toFixed(2)} was successful.`,
+        link: "/trips",
+        metadata: {
+          paymentId: args.paymentId,
+          reservationId: payment.reservationId,
+        },
+      })
+    } catch (error) {
+      // If updating reservation fails after payment succeeded, log and schedule retry
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { logError } = require("./logger")
+      logError(error, "Failed to update reservation after payment success")
+
+      // Log to audit log
+      try {
+        await ctx.runMutation(internal.auditLog.create, {
+          entityType: "payment",
+          entityId: args.paymentId,
+          action: "reservation_update_failed",
+          metadata: {
+            reservationId: payment.reservationId,
+            error: String(error),
+            reason: "Reservation status update failed after payment succeeded",
+          },
+        })
+      } catch {
+        // Don't fail if audit log fails
+      }
+
+      // Schedule retry after 1 minute
+      await ctx.scheduler.runAfter(60_000, internal.stripe.retryReservationUpdate, {
+        paymentId: args.paymentId,
+        reservationId: payment.reservationId,
+      })
+    }
 
     // Send payment success email
     try {
@@ -850,12 +1117,28 @@ export const handlePaymentFailure = mutation({
   },
   handler: async (ctx, args) => {
     const payment = await ctx.db.get(args.paymentId)
-    if (!payment) return
+    if (!payment) {
+      return
+    }
 
     await ctx.db.patch(args.paymentId, {
       status: "failed",
       failureReason: args.failureReason,
       updatedAt: Date.now(),
+    })
+
+    // Trigger notification for renter
+    await ctx.scheduler.runAfter(0, internal.notifications.createNotification, {
+      userId: payment.renterId,
+      type: "payment_failed",
+      title: "Payment Failed",
+      message: "Your payment failed. Please try again or use a different payment method.",
+      link: `/checkout?reservationId=${payment.reservationId}`,
+      metadata: {
+        paymentId: args.paymentId,
+        reservationId: payment.reservationId,
+        failureReason: args.failureReason,
+      },
     })
 
     // Send payment failure email
@@ -930,18 +1213,32 @@ export const createCustomerPortalSession = action({
 // ============================================================================
 
 // Internal action to process refund on cancellation (called via scheduler)
+// Uses tiered refund policy based on vehicle's cancellation policy
 export const processRefundOnCancellation = internalAction({
   args: {
     paymentId: v.id("payments"),
     reservationId: v.id("reservations"),
     reason: v.string(),
+    forceFullRefund: v.optional(v.boolean()),
   },
-  handler: async (ctx, args) => {
+  handler: async (
+    ctx,
+    args
+  ): Promise<{
+    success?: boolean
+    skipped?: boolean
+    reason?: string
+    refunded?: boolean
+    refundId?: string
+    refundAmount?: number
+    percentage?: number
+    policy?: string
+  }> => {
     const payment = await ctx.runQuery(api.stripe.getPaymentById, {
       paymentId: args.paymentId,
     })
-    
-    if (!(payment && payment.stripeChargeId)) {
+
+    if (!payment?.stripeChargeId) {
       throw new Error("Payment not found or charge ID missing")
     }
 
@@ -950,37 +1247,155 @@ export const processRefundOnCancellation = internalAction({
       return { skipped: true, reason: `Payment status is ${payment.status}, cannot refund` }
     }
 
+    // Get the reservation to fetch vehicle cancellation policy
+    const reservation = await ctx.runQuery(api.reservations.getById, {
+      id: args.reservationId,
+    })
+
+    if (!reservation) {
+      throw new Error("Reservation not found")
+    }
+
+    // Get vehicle to fetch cancellation policy
+    const vehicle = await ctx.runQuery(api.vehicles.getById, {
+      id: reservation.vehicleId,
+    })
+
+    if (!vehicle) {
+      throw new Error("Vehicle not found")
+    }
+
+    // Get the reservation start date to calculate refund tier
+    const startDate = payment.metadata?.startDate
+    if (!startDate) {
+      throw new Error("Payment metadata missing start date")
+    }
+
+    // If forceFullRefund is true (owner cancellation), apply 100% refund
+    let percentage: number
+    let policy: "full" | "partial" | "none"
+
+    if (args.forceFullRefund) {
+      percentage = 100
+      policy = "full"
+    } else {
+      // Calculate refund tier based on vehicle's cancellation policy
+      const policyType = vehicle.cancellationPolicy || "moderate"
+      const refundTier = calculateRefundTier(startDate, policyType)
+      percentage = refundTier.percentage
+      policy = refundTier.policy
+    }
+
+    // If no refund is due, just update the status
+    if (percentage === 0) {
+      await ctx.runMutation(api.stripe.updateRefundStatus, {
+        paymentId: args.paymentId,
+        status: "succeeded", // Keep as succeeded, no refund
+        refundAmount: 0,
+        refundReason: `${args.reason} - No refund (cancelled less than 48 hours before start)`,
+        refundPercentage: 0,
+        refundPolicy: "none",
+      })
+
+      // Update reservation payment status
+      await ctx.runMutation(api.stripe.updateReservationStatus, {
+        reservationId: args.reservationId,
+        status: "cancelled",
+        paymentStatus: "paid", // Payment was successful, just no refund
+      })
+
+      return {
+        success: true,
+        refunded: false,
+        reason: "No refund due - cancelled less than 48 hours before start",
+        policy,
+        percentage,
+      }
+    }
+
     const stripe = getStripe()
 
-    // Refund with Connect - automatically reverses transfer
+    // Calculate the refund amount based on percentage
+    const refundAmount = Math.round(payment.amount * (percentage / 100))
+
+    // Validate refund amount
+    if (refundAmount <= 0 || refundAmount > payment.amount) {
+      throw new Error("Invalid refund amount")
+    }
+
+    // Refund with Connect - automatically reverses transfer proportionally
     const refundParams: Stripe.RefundCreateParams = {
       charge: payment.stripeChargeId,
+      amount: refundAmount, // Partial or full based on policy
       reverse_transfer: true, // Automatically reverse the transfer to owner
-      refund_application_fee: true, // Refund your platform fee too
+      refund_application_fee: percentage === 100, // Only refund platform fee on full refund
       reason: "requested_by_customer" as Stripe.RefundCreateParams.Reason,
     }
 
-    const refund = await stripe.refunds.create(refundParams)
+    const refund = await stripe.refunds.create(refundParams, {
+      idempotencyKey: `refund_${args.paymentId}_${refundAmount}`,
+    })
+
+    // Verify that transfer reversal succeeded if it was requested
+    if (refundParams.reverse_transfer && refund.status !== "succeeded") {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { logError } = require("./logger")
+      logError(
+        new Error(
+          `Refund created but status is ${refund.status}, transfer reversal may have failed`
+        ),
+        "Transfer reversal verification failed"
+      )
+
+      // Log to audit log for admin visibility
+      try {
+        await ctx.runMutation(internal.auditLog.create, {
+          entityType: "payment",
+          entityId: args.paymentId,
+          action: "refund_transfer_reversal_failed",
+          metadata: {
+            refundId: refund.id,
+            refundStatus: refund.status,
+            transferReversed: refund.transfer_reversal,
+            reason: "Transfer reversal may have failed - refund status not succeeded",
+          },
+        })
+      } catch {
+        // Don't fail if audit log fails
+      }
+    }
+
+    // Determine status based on refund percentage
+    const newStatus = percentage === 100 ? "refunded" : "partially_refunded"
 
     await ctx.runMutation(api.stripe.updateRefundStatus, {
       paymentId: args.paymentId,
-      status: "refunded",
+      status: newStatus,
       refundAmount: refund.amount,
       refundReason: args.reason,
+      refundPercentage: percentage,
+      refundPolicy: policy,
     })
 
     // Update reservation payment status
     await ctx.runMutation(api.stripe.updateReservationStatus, {
       reservationId: args.reservationId,
       status: "cancelled",
-      paymentStatus: "refunded",
+      paymentStatus: newStatus,
     })
 
-    return { success: true, refundId: refund.id }
+    return {
+      success: true,
+      refundId: refund.id,
+      refunded: true,
+      refundAmount: refund.amount,
+      percentage,
+      policy,
+    }
   },
 })
 
-export const processRefund = action({
+export const processRefund: ReturnType<typeof action> = action({
   args: {
     paymentId: v.id("payments"),
     amount: v.optional(v.number()),
@@ -995,7 +1410,7 @@ export const processRefund = action({
     const payment = await ctx.runQuery(api.stripe.getPaymentById, {
       paymentId: args.paymentId,
     })
-    if (!(payment && payment.stripeChargeId)) {
+    if (!payment?.stripeChargeId) {
       throw new Error("Payment not found")
     }
 
@@ -1006,6 +1421,12 @@ export const processRefund = action({
 
     const stripe = getStripe()
 
+    // Validate refund amount if provided
+    const refundAmount = args.amount || payment.amount
+    if (refundAmount <= 0 || refundAmount > payment.amount) {
+      throw new Error("Invalid refund amount")
+    }
+
     // Refund with Connect - automatically reverses transfer
     const refundParams: Stripe.RefundCreateParams = {
       charge: payment.stripeChargeId,
@@ -1013,12 +1434,16 @@ export const processRefund = action({
       refund_application_fee: true, // Refund your platform fee too
     }
 
-    if (args.amount) refundParams.amount = args.amount
+    if (args.amount) {
+      refundParams.amount = args.amount
+    }
     if (args.reason) {
       refundParams.reason = args.reason as Stripe.RefundCreateParams.Reason
     }
 
-    const refund = await stripe.refunds.create(refundParams)
+    const refund = await stripe.refunds.create(refundParams, {
+      idempotencyKey: `refund_${args.paymentId}_${refundAmount}_${Date.now()}`,
+    })
 
     await ctx.runMutation(api.stripe.updateRefundStatus, {
       paymentId: args.paymentId,
@@ -1089,10 +1514,18 @@ export const updateRefundStatus = mutation({
     status: v.string(),
     refundAmount: v.optional(v.number()),
     refundReason: v.optional(v.string()),
+    refundPercentage: v.optional(v.number()),
+    refundPolicy: v.optional(v.union(v.literal("full"), v.literal("partial"), v.literal("none"))),
   },
   handler: async (ctx, args) => {
     await ctx.db.patch(args.paymentId, {
-      status: args.status as "pending" | "cancelled" | "failed" | "refunded" | "partially_refunded",
+      status: args.status as
+        | "pending"
+        | "cancelled"
+        | "failed"
+        | "refunded"
+        | "partially_refunded"
+        | "succeeded",
       refundAmount: args.refundAmount,
       refundReason: args.refundReason,
       updatedAt: Date.now(),
@@ -1147,7 +1580,9 @@ export const getPaymentById = query({
   },
   handler: async (ctx, args) => {
     const payment = await ctx.db.get(args.paymentId)
-    if (!payment) return null
+    if (!payment) {
+      return null
+    }
 
     const [reservation, vehicle, renter, owner] = await Promise.all([
       ctx.db.get(payment.reservationId),
@@ -1181,7 +1616,18 @@ export const getCustomerPaymentMethods = action({
   args: {
     customerId: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (
+    ctx,
+    args
+  ): Promise<
+    Array<{
+      id: string
+      type: string
+      card: { brand: string; last4: string; expMonth: number; expYear: number } | null
+      billingDetails: any
+      created: number
+    }>
+  > => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) {
       throw new Error("Not authenticated")
@@ -1225,7 +1671,23 @@ export const getCustomerInvoices = action({
     customerId: v.string(),
     limit: v.optional(v.number()),
   },
-  handler: async (ctx, args) => {
+  handler: async (
+    ctx,
+    args
+  ): Promise<
+    Array<{
+      id: string
+      number: string | null
+      amount: number
+      currency: string
+      status: string | null
+      created: number
+      dueDate: number | null
+      hostedInvoiceUrl: string | null
+      invoicePdf: string | null
+      description: string
+    }>
+  > => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) {
       throw new Error("Not authenticated")
@@ -1247,15 +1709,15 @@ export const getCustomerInvoices = action({
     })
 
     return invoices.data.map((invoice) => ({
-      id: invoice.id,
+      id: invoice.id!,
       number: invoice.number,
       amount: invoice.amount_paid,
       currency: invoice.currency,
       status: invoice.status,
       created: invoice.created,
       dueDate: invoice.due_date,
-      hostedInvoiceUrl: invoice.hosted_invoice_url,
-      invoicePdf: invoice.invoice_pdf,
+      hostedInvoiceUrl: invoice.hosted_invoice_url ?? null,
+      invoicePdf: invoice.invoice_pdf ?? null,
       description: invoice.description || invoice.lines?.data[0]?.description || "Vehicle rental",
     }))
   },
@@ -1266,7 +1728,18 @@ export const getCustomerDetails = action({
   args: {
     customerId: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (
+    ctx,
+    args
+  ): Promise<{
+    id: string
+    email: string | null
+    name: string | null
+    phone: string | null
+    address: any
+    defaultSource: any
+    invoiceSettings: any
+  }> => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) {
       throw new Error("Not authenticated")
@@ -1290,12 +1763,222 @@ export const getCustomerDetails = action({
 
     return {
       id: customer.id,
-      email: customer.email,
-      name: customer.name,
-      phone: customer.phone,
+      email: customer.email ?? null,
+      name: customer.name ?? null,
+      phone: customer.phone ?? null,
       address: customer.address,
       defaultSource: customer.default_source,
       invoiceSettings: customer.invoice_settings,
+    }
+  },
+})
+
+// ============================================================================
+// Webhook Handler Mutations
+// ============================================================================
+
+// Handle charge refunded webhook event
+export const handleChargeRefunded = mutation({
+  args: {
+    stripePaymentIntentId: v.string(),
+    refundAmount: v.number(),
+    refundId: v.string(),
+  },
+  handler: async (ctx, args): Promise<void> => {
+    const payment = await ctx.db
+      .query("payments")
+      .withIndex("by_stripe_payment_intent", (q) =>
+        q.eq("stripePaymentIntentId", args.stripePaymentIntentId)
+      )
+      .first()
+
+    if (!payment) {
+      return
+    }
+
+    // Determine if full or partial refund
+    const isFullRefund = args.refundAmount >= payment.amount
+    const newStatus = isFullRefund ? "refunded" : "partially_refunded"
+
+    await ctx.db.patch(payment._id, {
+      status: newStatus,
+      refundAmount: (payment.refundAmount || 0) + args.refundAmount,
+      updatedAt: Date.now(),
+    })
+
+    // Update reservation if exists
+    if (payment.reservationId) {
+      const reservation = await ctx.db.get(payment.reservationId)
+      if (reservation) {
+        await ctx.db.patch(payment.reservationId, {
+          paymentStatus: newStatus as "pending" | "paid" | "failed" | "refunded",
+          updatedAt: Date.now(),
+        })
+      }
+    }
+  },
+})
+
+// Handle transfer failed webhook event
+export const handleTransferFailed = mutation({
+  args: {
+    stripeTransferId: v.string(),
+    failureReason: v.optional(v.string()),
+  },
+  handler: async (ctx, args): Promise<void> => {
+    // Find payment by transfer ID
+    const payments = await ctx.db.query("payments").collect()
+    const payment = payments.find((p) => p.stripeTransferId === args.stripeTransferId)
+
+    if (!payment) {
+      return
+    }
+
+    await ctx.db.patch(payment._id, {
+      failureReason: args.failureReason || "Transfer failed",
+      updatedAt: Date.now(),
+    })
+  },
+})
+
+// Handle payout failed webhook event
+export const handlePayoutFailed = mutation({
+  args: {
+    stripeAccountId: v.string(),
+    payoutId: v.string(),
+    failureReason: v.optional(v.string()),
+  },
+  handler: async (ctx, args): Promise<void> => {
+    // Find user by Stripe account ID
+    const users = await ctx.db.query("users").collect()
+    const user = users.find((u) => u.stripeAccountId === args.stripeAccountId)
+
+    if (user) {
+    }
+  },
+})
+
+// Handle payment intent canceled webhook event
+export const handlePaymentCanceled = mutation({
+  args: {
+    stripePaymentIntentId: v.string(),
+  },
+  handler: async (ctx, args): Promise<void> => {
+    const payment = await ctx.db
+      .query("payments")
+      .withIndex("by_stripe_payment_intent", (q) =>
+        q.eq("stripePaymentIntentId", args.stripePaymentIntentId)
+      )
+      .first()
+
+    if (!payment) {
+      return
+    }
+
+    // Only update if payment is still pending
+    if (payment.status === "pending" || payment.status === "processing") {
+      await ctx.db.patch(payment._id, {
+        status: "cancelled",
+        updatedAt: Date.now(),
+      })
+
+      // Update reservation if exists
+      if (payment.reservationId) {
+        const reservation = await ctx.db.get(payment.reservationId)
+        if (reservation && reservation.status === "pending") {
+          await ctx.db.patch(payment.reservationId, {
+            paymentStatus: "failed",
+            updatedAt: Date.now(),
+          })
+        }
+      }
+    }
+  },
+})
+
+// Handle account deauthorized webhook event
+export const handleAccountDeauthorized = mutation({
+  args: {
+    stripeAccountId: v.string(),
+  },
+  handler: async (ctx, args): Promise<void> => {
+    // Find user by Stripe account ID
+    const users = await ctx.db.query("users").collect()
+    const user = users.find((u) => u.stripeAccountId === args.stripeAccountId)
+
+    if (!user) {
+      return
+    }
+
+    // Update user's Stripe account status to disabled
+    await ctx.db.patch(user._id, {
+      stripeAccountStatus: "disabled",
+    })
+  },
+})
+
+// Handle charge dispute created webhook event
+export const handleDisputeCreated = mutation({
+  args: {
+    stripePaymentIntentId: v.string(),
+    disputeId: v.string(),
+    disputeReason: v.optional(v.string()),
+    disputeAmount: v.number(),
+  },
+  handler: async (ctx, args): Promise<void> => {
+    const payment = await ctx.db
+      .query("payments")
+      .withIndex("by_stripe_payment_intent", (q) =>
+        q.eq("stripePaymentIntentId", args.stripePaymentIntentId)
+      )
+      .first()
+
+    if (!payment) {
+      return
+    }
+
+    // Could create a system notification or flag the reservation for review
+    if (payment.reservationId) {
+      const reservation = await ctx.db.get(payment.reservationId)
+      if (reservation) {
+      }
+    }
+  },
+})
+
+// Internal mutation to retry reservation update after payment success
+export const retryReservationUpdate = internalAction({
+  args: {
+    paymentId: v.id("payments"),
+    reservationId: v.id("reservations"),
+  },
+  handler: async (ctx, args) => {
+    try {
+      await ctx.runMutation(api.stripe.updateReservationStatus, {
+        reservationId: args.reservationId,
+        status: "confirmed",
+        paymentStatus: "paid",
+      })
+    } catch (error) {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { logError } = require("./logger")
+      logError(error, "Retry failed to update reservation after payment success")
+
+      // Log final failure to audit log
+      try {
+        await ctx.runMutation(internal.auditLog.create, {
+          entityType: "payment",
+          entityId: args.paymentId,
+          action: "reservation_update_retry_failed",
+          metadata: {
+            reservationId: args.reservationId,
+            error: String(error),
+            reason: "Reservation status update retry failed - manual intervention required",
+          },
+        })
+      } catch {
+        // Don't fail if audit log fails
+      }
     }
   },
 })
