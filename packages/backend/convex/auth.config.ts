@@ -1,4 +1,4 @@
-import { AuthConfig } from "convex/server"
+import type { AuthConfig } from "convex/server"
 
 export default {
   providers: [
@@ -7,7 +7,7 @@ export default {
       // This should be set to your Clerk Frontend API URL
       // In development: https://verb-noun-00.clerk.accounts.dev
       // In production: https://clerk.<your-domain>.com
-      domain: process.env.CLERK_JWT_ISSUER_DOMAIN || process.env.CLERK_FRONTEND_API_URL,
+      domain: (process.env.CLERK_JWT_ISSUER_DOMAIN || process.env.CLERK_FRONTEND_API_URL) as string,
       applicationID: "convex",
     },
   ],

@@ -12,7 +12,7 @@ export async function loadSentry() {
   try {
     const consentKey = "cookie-consent"
     const stored = localStorage.getItem(consentKey)
-    
+
     if (stored) {
       const data = JSON.parse(stored)
       // Only load Sentry if user has accepted cookies

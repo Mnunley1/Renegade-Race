@@ -70,6 +70,3 @@ export const imagePresets = {
   thumbnail: (key: string) =>
     getImageKitUrl(key, { width: 240, height: 160, quality: 70, format: "auto" }),
 }
-
-
-

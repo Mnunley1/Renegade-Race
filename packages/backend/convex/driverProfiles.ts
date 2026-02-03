@@ -286,3 +286,61 @@ export const deleteProfile = mutation({
     return true
   },
 })
+
+export const getSimilar = query({
+  args: {
+    profileId: v.id("driverProfiles"),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const profile = await ctx.db.get(args.profileId)
+    if (!profile) return []
+
+    // Get all active profiles except this one
+    const allProfiles = await ctx.db
+      .query("driverProfiles")
+      .filter((q) =>
+        q.and(q.neq(q.field("_id"), args.profileId), q.eq(q.field("isActive"), true))
+      )
+      .take(50)
+
+    // Score by: same experience (3), same racingType (2), overlapping categories (1 each)
+    const scored = allProfiles.map((p) => {
+      let score = 0
+      if (p.experience === profile.experience) score += 3
+      if (p.racingType === profile.racingType) score += 2
+      for (const cat of p.preferredCategories) {
+        if (profile.preferredCategories.includes(cat)) score += 1
+      }
+      return { ...p, score }
+    })
+
+    // Sort by score descending, take top N
+    scored.sort((a, b) => b.score - a.score)
+    const topProfiles = scored.slice(0, args.limit || 3).filter((p) => p.score > 0)
+
+    // Enrich with user data
+    const enriched = await Promise.all(
+      topProfiles.map(async (p) => {
+        const user = await ctx.db
+          .query("users")
+          .withIndex("by_external_id", (q) => q.eq("externalId", p.userId))
+          .first()
+        return {
+          ...p,
+          user: user
+            ? {
+                name: user.name,
+                avatarUrl: user.profileImage,
+              }
+            : {
+                name: "Unknown Driver",
+                avatarUrl: undefined,
+              },
+        }
+      })
+    )
+
+    return enriched
+  },
+})

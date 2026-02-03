@@ -24,7 +24,7 @@ export default function HomePage() {
   // Fetch vehicle stats for featured vehicles
   const featuredVehicleIds = useMemo(() => {
     if (!vehiclesData) return []
-    return vehiclesData.slice(0, 6).map((v) => v._id as Id<"vehicles">)
+    return vehiclesData.slice(0, 6).map((v: any) => v._id as Id<"vehicles">)
   }, [vehiclesData])
 
   const featuredVehicleStats = useQuery(
@@ -34,18 +34,17 @@ export default function HomePage() {
 
   const featuredVehicles = useMemo(() => {
     if (!vehiclesData) return []
-    return vehiclesData.slice(0, 6).map((vehicle) => {
-      const primaryImage = vehicle.images?.find((img) => img.isPrimary) || vehicle.images?.[0]
+    return vehiclesData.slice(0, 6).map((vehicle: any) => {
+      const primaryImage = vehicle.images?.find((img: any) => img.isPrimary) || vehicle.images?.[0]
       const stats = featuredVehicleStats?.[vehicle._id]
-      
+
       // Build location string from vehicle address (city, state) or fall back to track location
       const locationParts = []
       if (vehicle.address?.city) locationParts.push(vehicle.address.city)
       if (vehicle.address?.state) locationParts.push(vehicle.address.state)
-      const location = locationParts.length > 0 
-        ? locationParts.join(", ") 
-        : vehicle.track?.location || ""
-      
+      const location =
+        locationParts.length > 0 ? locationParts.join(", ") : vehicle.track?.location || ""
+
       return {
         id: vehicle._id,
         image: primaryImage?.cardUrl ?? "",
@@ -112,7 +111,7 @@ export default function HomePage() {
         <div className="container relative z-10 mx-auto flex h-full items-center px-4 sm:px-6">
           <div className="max-w-3xl space-y-8 text-white">
             <div className="space-y-6">
-              <h1 className="font-semibold text-4xl leading-tight tracking-tight md:text-5xl lg:text-6xl xl:text-7xl">
+              <h1 className="font-bold text-4xl leading-tight tracking-tight md:text-5xl lg:text-6xl xl:text-7xl">
                 Experience the ultimate thrill of racing
               </h1>
               <p className="max-w-xl text-lg text-white/90 leading-relaxed md:text-xl">
@@ -145,7 +144,7 @@ export default function HomePage() {
       {/* How It Works */}
       <section className="container mx-auto px-4 sm:px-6">
         <div className="mb-16 text-center">
-          <h2 className="mb-4 font-semibold text-3xl tracking-tight md:text-4xl lg:text-5xl">
+          <h2 className="mb-4 font-bold text-3xl tracking-tight md:text-4xl lg:text-5xl">
             How It Works
           </h2>
           <p className="mx-auto max-w-2xl text-lg text-muted-foreground">
@@ -156,12 +155,12 @@ export default function HomePage() {
           <div className="grid gap-8 md:grid-cols-3">
             {/* Step 1 */}
             <div className="relative">
-              <Card className="group relative h-full border-2 transition-all duration-300 hover:scale-[1.02] hover:border-primary/50 hover:shadow-xl">
+              <Card className="group relative h-full border transition-colors duration-200 hover:border-primary/40">
                 <CardContent className="p-8">
                   <div className="mb-6 flex items-center justify-between">
-                    <div className="relative flex h-16 w-16 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 transition-all group-hover:scale-110 group-hover:from-primary/30 group-hover:to-primary/10">
+                    <div className="relative flex h-16 w-16 items-center justify-center rounded-lg bg-primary/10">
                       <Search className="size-8 text-primary" />
-                      <div className="-right-2 -top-2 absolute flex h-7 w-7 items-center justify-center rounded-full bg-primary font-bold text-primary-foreground text-sm shadow-lg">
+                      <div className="-right-2 -top-2 absolute flex h-7 w-7 items-center justify-center rounded-full bg-primary font-bold text-primary-foreground text-sm">
                         1
                       </div>
                     </div>
@@ -178,7 +177,7 @@ export default function HomePage() {
               {/* Arrow to Step 2 - Desktop Only */}
               <div className="-translate-y-1/2 absolute top-1/2 right-0 hidden translate-x-1/2 md:block">
                 <div className="flex items-center">
-                  <div className="h-0.5 w-8 bg-gradient-to-r from-primary/50 to-primary" />
+                  <div className="h-0.5 w-8 bg-primary/40" />
                   <ArrowRight className="size-5 text-primary" />
                 </div>
               </div>
@@ -186,12 +185,12 @@ export default function HomePage() {
 
             {/* Step 2 */}
             <div className="relative">
-              <Card className="group relative h-full border-2 transition-all duration-300 hover:scale-[1.02] hover:border-primary/50 hover:shadow-xl">
+              <Card className="group relative h-full border transition-colors duration-200 hover:border-primary/40">
                 <CardContent className="p-8">
                   <div className="mb-6 flex items-center justify-between">
-                    <div className="relative flex h-16 w-16 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 transition-all group-hover:scale-110 group-hover:from-primary/30 group-hover:to-primary/10">
+                    <div className="relative flex h-16 w-16 items-center justify-center rounded-lg bg-primary/10">
                       <CreditCard className="size-8 text-primary" />
-                      <div className="-right-2 -top-2 absolute flex h-7 w-7 items-center justify-center rounded-full bg-primary font-bold text-primary-foreground text-sm shadow-lg">
+                      <div className="-right-2 -top-2 absolute flex h-7 w-7 items-center justify-center rounded-full bg-primary font-bold text-primary-foreground text-sm">
                         2
                       </div>
                     </div>
@@ -208,7 +207,7 @@ export default function HomePage() {
               {/* Arrow to Step 3 - Desktop Only */}
               <div className="-translate-y-1/2 absolute top-1/2 right-0 hidden translate-x-1/2 md:block">
                 <div className="flex items-center">
-                  <div className="h-0.5 w-8 bg-gradient-to-r from-primary/50 to-primary" />
+                  <div className="h-0.5 w-8 bg-primary/40" />
                   <ArrowRight className="size-5 text-primary" />
                 </div>
               </div>
@@ -216,12 +215,12 @@ export default function HomePage() {
 
             {/* Step 3 */}
             <div className="relative">
-              <Card className="group relative h-full border-2 transition-all duration-300 hover:scale-[1.02] hover:border-primary/50 hover:shadow-xl">
+              <Card className="group relative h-full border transition-colors duration-200 hover:border-primary/40">
                 <CardContent className="p-8">
                   <div className="mb-6 flex items-center justify-between">
-                    <div className="relative flex h-16 w-16 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 transition-all group-hover:scale-110 group-hover:from-primary/30 group-hover:to-primary/10">
+                    <div className="relative flex h-16 w-16 items-center justify-center rounded-lg bg-primary/10">
                       <Car className="size-8 text-primary" />
-                      <div className="-right-2 -top-2 absolute flex h-7 w-7 items-center justify-center rounded-full bg-primary font-bold text-primary-foreground text-sm shadow-lg">
+                      <div className="-right-2 -top-2 absolute flex h-7 w-7 items-center justify-center rounded-full bg-primary font-bold text-primary-foreground text-sm">
                         3
                       </div>
                     </div>
@@ -258,7 +257,7 @@ export default function HomePage() {
               </div>
             ) : (
               <div className="grid auto-rows-fr gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {featuredVehicles.slice(0, 3).map((vehicle) => (
+                {featuredVehicles.slice(0, 3).map((vehicle: any) => (
                   <VehicleCard key={vehicle.id} {...vehicle} />
                 ))}
               </div>
@@ -289,7 +288,7 @@ export default function HomePage() {
         <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
           {/* Text Content */}
           <div className="space-y-6">
-            <h2 className="font-semibold text-3xl tracking-tight md:text-4xl lg:text-5xl">
+            <h2 className="font-bold text-3xl tracking-tight md:text-4xl lg:text-5xl">
               Your Gateway to Track Day Excellence
             </h2>
             <div className="space-y-5 text-lg text-muted-foreground leading-relaxed md:text-xl">
@@ -308,7 +307,7 @@ export default function HomePage() {
           </div>
 
           {/* Video Content */}
-          <div className="relative aspect-video overflow-hidden rounded-xl bg-muted">
+          <div className="relative aspect-video overflow-hidden rounded-lg bg-muted">
             {videoError ? (
               <Image
                 alt="Racing on track"
@@ -337,9 +336,9 @@ export default function HomePage() {
 
       {/* CTA Section */}
       <section className="container mx-auto px-4 sm:px-6">
-        <div className="relative overflow-hidden rounded-2xl bg-primary p-12 md:p-20">
+        <div className="relative overflow-hidden rounded-lg bg-primary p-12 md:p-20">
           <div className="relative z-10 text-center text-primary-foreground">
-            <h2 className="mb-6 font-semibold text-3xl tracking-tight md:text-4xl lg:text-5xl">
+            <h2 className="mb-6 font-bold text-3xl tracking-tight md:text-4xl lg:text-5xl">
               Ready to Race?
             </h2>
             <p className="mx-auto mb-8 max-w-2xl text-lg leading-relaxed opacity-95 md:text-xl">
@@ -355,7 +354,7 @@ export default function HomePage() {
               </Link>
               <Link href="/host/dashboard">
                 <Button
-                  className="w-full border-white/30 bg-white/15 text-white backdrop-blur-sm hover:bg-white/25 sm:w-auto dark:border-white/40 dark:bg-white/20 dark:hover:bg-white/30"
+                  className="w-full border-white/30 bg-white/15 text-white hover:bg-white/25 sm:w-auto dark:border-white/40 dark:bg-white/20 dark:hover:bg-white/30"
                   size="lg"
                   variant="outline"
                 >

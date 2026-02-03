@@ -1,9 +1,9 @@
 /**
  * Migration utility to geocode existing vehicles that were created before geocoding was added
- * 
+ *
  * This is a one-time migration function that can be run to geocode all existing vehicles
  * that have addresses but no coordinates.
- * 
+ *
  * Usage:
  * 1. Run this mutation from Convex dashboard or via API
  * 2. It will process vehicles in batches to avoid rate limits
@@ -109,7 +109,7 @@ export const geocodeAllVehicles = internalMutation({
     }
 
     // Helper function to process a single vehicle
-    const processVehicle = async (vehicle: typeof vehicles[0]) => {
+    const processVehicle = async (vehicle: (typeof vehicles)[0]) => {
       results.processed++
 
       // Skip if already geocoded (double-check)

@@ -60,6 +60,7 @@ export default function PhotosPage() {
       const imageKeys: string[] = []
       for (let index = 0; index < images.length; index++) {
         const img = images[index]
+        if (!img) continue
         try {
           // Add a small delay between uploads to avoid rate limiting
           if (index > 0) {
@@ -201,4 +202,3 @@ export default function PhotosPage() {
     </div>
   )
 }
-

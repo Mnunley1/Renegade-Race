@@ -22,7 +22,7 @@ export function Pagination({
   const maxVisiblePages = 5
 
   let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2))
-  let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1)
+  const endPage = Math.min(totalPages, startPage + maxVisiblePages - 1)
 
   if (endPage - startPage < maxVisiblePages - 1) {
     startPage = Math.max(1, endPage - maxVisiblePages + 1)
@@ -50,11 +50,7 @@ export function Pagination({
 
         {startPage > 1 && (
           <>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onPageChange(1)}
-            >
+            <Button variant="outline" size="sm" onClick={() => onPageChange(1)}>
               1
             </Button>
             {startPage > 2 && <span className="text-muted-foreground">...</span>}
@@ -75,11 +71,7 @@ export function Pagination({
         {endPage < totalPages && (
           <>
             {endPage < totalPages - 1 && <span className="text-muted-foreground">...</span>}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onPageChange(totalPages)}
-            >
+            <Button variant="outline" size="sm" onClick={() => onPageChange(totalPages)}>
               {totalPages}
             </Button>
           </>

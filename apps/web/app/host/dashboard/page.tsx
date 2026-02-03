@@ -3,7 +3,13 @@
 import { useUser } from "@clerk/nextjs"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@workspace/ui/components/card"
 import { Separator } from "@workspace/ui/components/separator"
 import { useAction, useQuery } from "convex/react"
 import {
@@ -21,7 +27,6 @@ import {
   Plus,
   Share2,
   Star,
-  TrendingUp,
   XCircle,
 } from "lucide-react"
 import { Image, ImageKitProvider } from "@imagekit/next"
@@ -31,7 +36,7 @@ import { Suspense, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 import { HostOnboardingChecklist } from "@/components/host-onboarding-checklist"
 import { api } from "@/lib/convex"
-import { handleError, handleErrorWithContext } from "@/lib/error-handler"
+import { handleError } from "@/lib/error-handler"
 
 function HostDashboardContent() {
   const { user } = useUser()
@@ -87,7 +92,7 @@ function HostDashboardContent() {
 
     if ((stripeReturn || stripeRefresh) && !stripeReturnHandled) {
       setStripeReturnHandled(true)
-      
+
       // Clean up the URL by removing stripe params
       const url = new URL(window.location.href)
       url.searchParams.delete("stripe_return")
@@ -113,7 +118,7 @@ function HostDashboardContent() {
         await refreshConnectStatus({ ownerId: user.id }).catch(() => {
           // Silently ignore refresh errors - we'll still try to fetch status
         })
-        
+
         const status = await fetchConnectStatus({ ownerId: user.id })
         setConnectStatus(status)
 
@@ -122,7 +127,9 @@ function HostDashboardContent() {
           if (status.isComplete) {
             toast.success("Your Stripe account is set up! You can now receive payments.")
           } else if (status.hasAccount) {
-            toast.info("Stripe setup incomplete. Please complete the remaining steps to receive payments.")
+            toast.info(
+              "Stripe setup incomplete. Please complete the remaining steps to receive payments."
+            )
           }
         }
       } catch (error) {
@@ -145,15 +152,28 @@ function HostDashboardContent() {
 
     // Calculate total earnings from confirmed reservations (in cents, convert to dollars)
     const totalEarnings =
-      confirmedReservations?.reduce((sum: number, res: { totalAmount?: number }) => sum + (res.totalAmount || 0), 0) || 0
+      confirmedReservations?.reduce(
+        (sum: number, res: { totalAmount?: number }) => sum + (res.totalAmount || 0),
+        0
+      ) || 0
 
     // Get average rating from review stats
     const averageRating = reviewStats?.averageRating || 0
 
     // Calculate analytics totals
-    const totalViews = vehicleAnalytics?.reduce((sum: number, v: { totalViews: number }) => sum + v.totalViews, 0) || 0
-    const totalShares = vehicleAnalytics?.reduce((sum: number, v: { totalShares: number }) => sum + v.totalShares, 0) || 0
-    const totalFavorites = vehicleAnalytics?.reduce((sum: number, v: { favoriteCount: number }) => sum + v.favoriteCount, 0) || 0
+    const totalViews =
+      vehicleAnalytics?.reduce((sum: number, v: { totalViews: number }) => sum + v.totalViews, 0) ||
+      0
+    const totalShares =
+      vehicleAnalytics?.reduce(
+        (sum: number, v: { totalShares: number }) => sum + v.totalShares,
+        0
+      ) || 0
+    const totalFavorites =
+      vehicleAnalytics?.reduce(
+        (sum: number, v: { favoriteCount: number }) => sum + v.favoriteCount,
+        0
+      ) || 0
 
     return {
       totalVehicles,
@@ -167,41 +187,55 @@ function HostDashboardContent() {
     }
   }, [vehicles, pendingReservations, confirmedReservations, reviewStats, vehicleAnalytics])
 
-
   // Map recent vehicles from real data
   const recentVehicles = useMemo(() => {
     if (!vehicles || vehicles.length === 0) return []
 
-    return vehicles.slice(0, 3).map((vehicle: { _id: string; images?: Array<{ isPrimary: boolean; cardUrl?: string; r2Key?: string }>; make: string; model: string; year: number; isApproved?: boolean; isActive?: boolean; dailyRate?: number }) => {
-      const primaryImage = vehicle.images?.find((img: { isPrimary: boolean }) => img.isPrimary) || vehicle.images?.[0]
+    return vehicles
+      .slice(0, 3)
+      .map(
+        (vehicle: {
+          _id: string
+          images?: Array<{ isPrimary: boolean; cardUrl?: string; r2Key?: string }>
+          make: string
+          model: string
+          year: number
+          isApproved?: boolean
+          isActive?: boolean
+          dailyRate?: number
+        }) => {
+          const primaryImage =
+            vehicle.images?.find((img: { isPrimary: boolean }) => img.isPrimary) ||
+            vehicle.images?.[0]
 
-      // Calculate bookings and earnings from reservations
-      const vehicleReservations = [
-        ...(pendingReservations || []),
-        ...(confirmedReservations || []),
-      ].filter((res) => res.vehicleId === vehicle._id)
+          // Calculate bookings and earnings from reservations
+          const vehicleReservations = [
+            ...(pendingReservations || []),
+            ...(confirmedReservations || []),
+          ].filter((res) => res.vehicleId === vehicle._id)
 
-      const bookings = vehicleReservations.length
-      const earnings = vehicleReservations.reduce(
-        (sum, res) => sum + Math.round((res.totalAmount || 0) / 100),
-        0
+          const bookings = vehicleReservations.length
+          const earnings = vehicleReservations.reduce(
+            (sum, res) => sum + Math.round((res.totalAmount || 0) / 100),
+            0
+          )
+
+          const status = vehicle.isApproved ? "active" : vehicle.isActive ? "pending" : "inactive"
+
+          return {
+            id: vehicle._id,
+            name: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
+            make: vehicle.make,
+            model: vehicle.model,
+            year: vehicle.year,
+            status,
+            bookings,
+            earnings,
+            imageKey: primaryImage?.r2Key ?? "",
+            dailyRate: vehicle.dailyRate,
+          }
+        }
       )
-
-      const status = vehicle.isApproved ? "active" : vehicle.isActive ? "pending" : "inactive"
-
-      return {
-        id: vehicle._id,
-        name: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
-        make: vehicle.make,
-        model: vehicle.model,
-        year: vehicle.year,
-        status,
-        bookings,
-        earnings,
-        imageKey: primaryImage?.r2Key ?? "",
-        dailyRate: vehicle.dailyRate,
-      }
-    })
   }, [vehicles, pendingReservations, confirmedReservations])
 
   const getStatusBadge = (status: string) => {
@@ -236,9 +270,9 @@ function HostDashboardContent() {
   function getTimeAgo(timestamp: number): string {
     const now = Date.now()
     const diff = now - timestamp
-    const minutes = Math.floor(diff / 60000)
-    const hours = Math.floor(diff / 3600000)
-    const days = Math.floor(diff / 86400000)
+    const minutes = Math.floor(diff / 60_000)
+    const hours = Math.floor(diff / 3_600_000)
+    const days = Math.floor(diff / 86_400_000)
 
     if (minutes < 1) return "Just now"
     if (minutes < 60) return `${minutes} ${minutes === 1 ? "minute" : "minutes"} ago`
@@ -261,8 +295,8 @@ function HostDashboardContent() {
     try {
       // Pass the current origin so redirects work with any domain (localhost, ngrok, staging, production)
       const returnUrlBase = typeof window !== "undefined" ? window.location.origin : undefined
-      
-      const result = await startOrContinueOnboarding({ 
+
+      const result = await startOrContinueOnboarding({
         ownerId: user.id,
         returnUrlBase, // Pass current domain for flexible redirects
       })
@@ -375,14 +409,14 @@ function HostDashboardContent() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Card className="border-primary/20 bg-primary/5">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="font-medium text-sm text-muted-foreground">
+                <CardTitle className="font-medium text-muted-foreground text-sm">
                   Pending Bookings
                 </CardTitle>
                 <Clock className="size-4 text-primary" />
               </CardHeader>
               <CardContent>
                 <div className="font-bold text-3xl">{stats.pendingBookings}</div>
-                <p className="mt-1 text-xs text-muted-foreground">Require your attention</p>
+                <p className="mt-1 text-muted-foreground text-xs">Require your attention</p>
                 {stats.pendingBookings > 0 && (
                   <Link href="/host/reservations?status=pending">
                     <Button className="mt-3 w-full" size="sm" variant="outline">
@@ -396,16 +430,16 @@ function HostDashboardContent() {
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="font-medium text-sm text-muted-foreground">
+                <CardTitle className="font-medium text-muted-foreground text-sm">
                   Total Earnings
                 </CardTitle>
                 <DollarSign className="size-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
                 <div className="font-bold text-3xl">${stats.totalEarnings.toLocaleString()}</div>
-                <p className="mt-1 text-xs text-muted-foreground">All-time revenue</p>
+                <p className="mt-1 text-muted-foreground text-xs">All-time revenue</p>
                 {connectStatus && !connectStatus.isComplete && (
-                  <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+                  <p className="mt-2 text-amber-600 text-xs dark:text-amber-400">
                     Complete Stripe setup to receive payouts
                   </p>
                 )}
@@ -414,22 +448,25 @@ function HostDashboardContent() {
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="font-medium text-sm text-muted-foreground">
+                <CardTitle className="font-medium text-muted-foreground text-sm">
                   Active Vehicles
                 </CardTitle>
                 <Car className="size-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
                 <div className="font-bold text-3xl">{stats.totalVehicles}</div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {vehicles?.filter((v: { isApproved?: boolean; isActive?: boolean }) => v.isApproved && v.isActive).length || 0} approved
+                <p className="mt-1 text-muted-foreground text-xs">
+                  {vehicles?.filter(
+                    (v: { isApproved?: boolean; isActive?: boolean }) => v.isApproved && v.isActive
+                  ).length || 0}{" "}
+                  approved
                 </p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="font-medium text-sm text-muted-foreground">
+                <CardTitle className="font-medium text-muted-foreground text-sm">
                   Average Rating
                 </CardTitle>
                 <Star className="size-4 text-muted-foreground" />
@@ -445,7 +482,7 @@ function HostDashboardContent() {
                     </div>
                   )}
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground">
+                <p className="mt-1 text-muted-foreground text-xs">
                   {reviewStats?.totalReviews || 0} reviews
                 </p>
               </CardContent>
@@ -456,7 +493,7 @@ function HostDashboardContent() {
         {/* Main Content Grid */}
         <div className="grid gap-6 lg:grid-cols-3">
           {/* Left Column - Main Content */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="space-y-6 lg:col-span-2">
             {/* Pending Bookings - Priority Section */}
             {stats.pendingBookings > 0 && (
               <Card className="border-yellow-200 bg-yellow-50/50 dark:border-yellow-900 dark:bg-yellow-950/20">
@@ -483,22 +520,20 @@ function HostDashboardContent() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3">
-                    {pendingReservations?.slice(0, 3).map((reservation: { _id: string; createdAt: number; totalAmount?: number; vehicle?: { year: number; make: string; model: string; images?: Array<{ isPrimary: boolean; cardUrl?: string }> }; renter?: { name?: string } }) => {
+                    {pendingReservations?.slice(0, 3).map((reservation: any) => {
                       const vehicleName = reservation.vehicle
                         ? `${reservation.vehicle.year} ${reservation.vehicle.make} ${reservation.vehicle.model}`
                         : "Vehicle"
                       const renterName = reservation.renter?.name || "Guest"
                       const primaryImage =
-                        reservation.vehicle?.images?.find((img: { isPrimary: boolean }) => img.isPrimary) ||
-                        reservation.vehicle?.images?.[0]
+                        reservation.vehicle?.images?.find(
+                          (img: { isPrimary: boolean }) => img.isPrimary
+                        ) || reservation.vehicle?.images?.[0]
 
                       const hasImage = primaryImage?.cardUrl
 
                       return (
-                        <Link
-                          key={reservation._id}
-                          href={`/host/reservations/${reservation._id}`}
-                        >
+                        <Link key={reservation._id} href={`/host/reservations/${reservation._id}`}>
                           <div className="flex items-center gap-4 rounded-lg border bg-background p-4 transition-colors hover:bg-muted/50">
                             <div className="relative flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted">
                               {hasImage && primaryImage?.cardUrl ? (
@@ -513,7 +548,7 @@ function HostDashboardContent() {
                                 <Car className="size-6 text-muted-foreground/40" />
                               )}
                             </div>
-                            <div className="flex-1 min-w-0">
+                            <div className="min-w-0 flex-1">
                               <p className="font-semibold text-sm">{vehicleName}</p>
                               <p className="text-muted-foreground text-xs">
                                 {renterName} • {getTimeAgo(reservation.createdAt)}
@@ -565,67 +600,91 @@ function HostDashboardContent() {
                   </div>
                 ) : (
                   <div className="grid gap-4 sm:grid-cols-1">
-                    {recentVehicles.map((vehicle: { id: string; name: string; imageKey?: string; status?: string; year: number; make: string; model: string; dailyRate?: number; bookings: number; earnings: number }) => (
-                      <Link key={vehicle.id} href={`/host/vehicles/${vehicle.id}`}>
-                        <Card className="group overflow-hidden transition-all hover:shadow-lg">
-                          <div className="flex flex-col sm:flex-row">
-                            {/* Vehicle Image - Larger and more prominent */}
-                            <div className="relative flex h-48 w-full shrink-0 items-center justify-center overflow-hidden bg-muted sm:h-auto sm:w-48">
-                              {vehicle.imageKey && vehicle.imageKey.trim() !== "" ? (
-                                <ImageKitProvider urlEndpoint={process.env.NEXT_PUBLIC_IMAGEKIT_URL_ENDPOINT || "https://ik.imagekit.io/renegaderace"}>
-                                  <Image
-                                    alt={vehicle.name}
-                                    src={`/${vehicle.imageKey}`}
-                                    fill
-                                    className="object-cover transition-transform duration-300 group-hover:scale-105"
-                                    transformation={[{ width: 400, height: 300, quality: 80 }]}
-                                  />
-                                </ImageKitProvider>
-                              ) : (
-                                <div className="flex flex-col items-center gap-2 text-center">
-                                  <Car className="size-12 text-muted-foreground/40" />
-                                  <p className="text-muted-foreground text-xs">No image</p>
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Vehicle Details */}
-                            <div className="flex flex-1 flex-col p-6">
-                              <div className="mb-4 flex items-start justify-between gap-4">
-                                <div className="flex-1 min-w-0">
-                                  <div className="mb-2 flex items-center gap-2">
-                                    <h3 className="font-bold text-xl">
-                                      {vehicle.year} {vehicle.make} {vehicle.model}
-                                    </h3>
-                                    {getStatusBadge(vehicle.status || "")}
+                    {recentVehicles.map(
+                      (vehicle: {
+                        id: string
+                        name: string
+                        imageKey?: string
+                        status?: string
+                        year: number
+                        make: string
+                        model: string
+                        dailyRate?: number
+                        bookings: number
+                        earnings: number
+                      }) => (
+                        <Link key={vehicle.id} href={`/host/vehicles/${vehicle.id}`}>
+                          <Card className="group overflow-hidden transition-all hover:shadow-lg">
+                            <div className="flex flex-col sm:flex-row">
+                              {/* Vehicle Image - Larger and more prominent */}
+                              <div className="relative flex h-48 w-full shrink-0 items-center justify-center overflow-hidden bg-muted sm:h-auto sm:w-48">
+                                {vehicle.imageKey && vehicle.imageKey.trim() !== "" ? (
+                                  <ImageKitProvider
+                                    urlEndpoint={
+                                      process.env.NEXT_PUBLIC_IMAGEKIT_URL_ENDPOINT ||
+                                      "https://ik.imagekit.io/renegaderace"
+                                    }
+                                  >
+                                    <Image
+                                      alt={vehicle.name}
+                                      src={`/${vehicle.imageKey}`}
+                                      fill
+                                      className="object-cover transition-transform duration-300 group-hover:scale-105"
+                                      transformation={[{ width: 400, height: 300, quality: 80 }]}
+                                    />
+                                  </ImageKitProvider>
+                                ) : (
+                                  <div className="flex flex-col items-center gap-2 text-center">
+                                    <Car className="size-12 text-muted-foreground/40" />
+                                    <p className="text-muted-foreground text-xs">No image</p>
                                   </div>
+                                )}
+                              </div>
 
-                                  {/* Key Metrics - Better organized */}
-                                  <div className="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-3">
-                                    <div>
-                                      <p className="text-muted-foreground text-xs">Daily Rate</p>
-                                      <p className="font-semibold text-base">
-                                        ${vehicle.dailyRate.toLocaleString()}
-                                      </p>
+                              {/* Vehicle Details */}
+                              <div className="flex flex-1 flex-col p-6">
+                                <div className="mb-4 flex items-start justify-between gap-4">
+                                  <div className="min-w-0 flex-1">
+                                    <div className="mb-2 flex items-center gap-2">
+                                      <h3 className="font-bold text-xl">
+                                        {vehicle.year} {vehicle.make} {vehicle.model}
+                                      </h3>
+                                      {getStatusBadge(vehicle.status || "")}
                                     </div>
-                                    <div>
-                                      <p className="text-muted-foreground text-xs">Total Bookings</p>
-                                      <p className="font-semibold text-base">{vehicle.bookings}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-muted-foreground text-xs">Total Earned</p>
-                                      <p className="font-semibold text-base text-primary">
-                                        ${vehicle.earnings.toLocaleString()}
-                                      </p>
+
+                                    {/* Key Metrics - Better organized */}
+                                    <div className="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-3">
+                                      <div>
+                                        <p className="text-muted-foreground text-xs">Daily Rate</p>
+                                        <p className="font-semibold text-base">
+                                          ${vehicle.dailyRate?.toLocaleString() ?? "0"}
+                                        </p>
+                                      </div>
+                                      <div>
+                                        <p className="text-muted-foreground text-xs">
+                                          Total Bookings
+                                        </p>
+                                        <p className="font-semibold text-base">
+                                          {vehicle.bookings}
+                                        </p>
+                                      </div>
+                                      <div>
+                                        <p className="text-muted-foreground text-xs">
+                                          Total Earned
+                                        </p>
+                                        <p className="font-semibold text-base text-primary">
+                                          ${vehicle.earnings.toLocaleString()}
+                                        </p>
+                                      </div>
                                     </div>
                                   </div>
                                 </div>
                               </div>
                             </div>
-                          </div>
-                        </Card>
-                      </Link>
-                    ))}
+                          </Card>
+                        </Link>
+                      )
+                    )}
                   </div>
                 )}
               </CardContent>
@@ -640,30 +699,32 @@ function HostDashboardContent() {
               <CardContent>
                 <div className="grid gap-4 sm:grid-cols-3">
                   <div className="rounded-lg border p-4">
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="mb-2 flex items-center justify-between">
                       <span className="text-muted-foreground text-sm">Total Views</span>
                       <Eye className="size-4 text-muted-foreground" />
                     </div>
                     <div className="font-bold text-2xl">{stats.totalViews.toLocaleString()}</div>
-                    <p className="text-muted-foreground text-xs mt-1">Listing views</p>
+                    <p className="mt-1 text-muted-foreground text-xs">Listing views</p>
                   </div>
 
                   <div className="rounded-lg border p-4">
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="mb-2 flex items-center justify-between">
                       <span className="text-muted-foreground text-sm">Total Shares</span>
                       <Share2 className="size-4 text-muted-foreground" />
                     </div>
                     <div className="font-bold text-2xl">{stats.totalShares.toLocaleString()}</div>
-                    <p className="text-muted-foreground text-xs mt-1">Times shared</p>
+                    <p className="mt-1 text-muted-foreground text-xs">Times shared</p>
                   </div>
 
                   <div className="rounded-lg border p-4">
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="mb-2 flex items-center justify-between">
                       <span className="text-muted-foreground text-sm">Total Favorites</span>
                       <Heart className="size-4 text-muted-foreground" />
                     </div>
-                    <div className="font-bold text-2xl">{stats.totalFavorites.toLocaleString()}</div>
-                    <p className="text-muted-foreground text-xs mt-1">Saved by users</p>
+                    <div className="font-bold text-2xl">
+                      {stats.totalFavorites.toLocaleString()}
+                    </div>
+                    <p className="mt-1 text-muted-foreground text-xs">Saved by users</p>
                   </div>
                 </div>
               </CardContent>
@@ -676,7 +737,9 @@ function HostDashboardContent() {
             <Card className="border-primary/20 bg-primary/5">
               <CardHeader>
                 <CardTitle className="text-lg">Host Hub</CardTitle>
-                <CardDescription className="mt-1">Quick access to manage your business</CardDescription>
+                <CardDescription className="mt-1">
+                  Quick access to manage your business
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 <Link className="block" href="/host/reservations">
@@ -685,9 +748,7 @@ function HostDashboardContent() {
                     <span className="font-semibold">All Reservations</span>
                     <div className="ml-auto flex items-center gap-2">
                       {stats.pendingBookings > 0 && (
-                        <Badge variant="destructive">
-                          {stats.pendingBookings}
-                        </Badge>
+                        <Badge variant="destructive">{stats.pendingBookings}</Badge>
                       )}
                       <ArrowRight className="size-4" />
                     </div>
@@ -708,7 +769,10 @@ function HostDashboardContent() {
                   </Button>
                 </Link>
                 <Link className="block" href="/host/vehicles/new">
-                  <Button className="w-full justify-start bg-primary text-primary-foreground hover:bg-primary/90" size="lg">
+                  <Button
+                    className="w-full justify-start bg-primary text-primary-foreground hover:bg-primary/90"
+                    size="lg"
+                  >
                     <Plus className="mr-3 size-5" />
                     <span className="font-semibold">List New Vehicle</span>
                     <ArrowRight className="ml-auto size-4" />
@@ -740,7 +804,10 @@ function HostDashboardContent() {
                         Connected
                       </Badge>
                     ) : (
-                      <Badge className="gap-1.5 bg-red-500/10 text-red-700 dark:text-red-400" variant="secondary">
+                      <Badge
+                        className="gap-1.5 bg-red-500/10 text-red-700 dark:text-red-400"
+                        variant="secondary"
+                      >
                         <XCircle className="size-3" />
                         Not Set Up
                       </Badge>
@@ -801,7 +868,6 @@ function HostDashboardContent() {
                 </div>
               </CardContent>
             </Card>
-
           </div>
         </div>
       </div>

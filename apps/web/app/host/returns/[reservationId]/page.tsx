@@ -33,14 +33,8 @@ export default function ReturnReviewPage() {
   const [notes, setNotes] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const {
-    photos,
-    setPhotos,
-    isUploading,
-    fileInputRef,
-    handlePhotoUpload,
-    handleRemovePhoto,
-  } = usePhotoUpload()
+  const { photos, setPhotos, isUploading, fileInputRef, handlePhotoUpload, handleRemovePhoto } =
+    usePhotoUpload()
 
   // Fetch completion data
   const completion = useQuery(
@@ -82,7 +76,6 @@ export default function ReturnReviewPage() {
       setIsSubmitting(false)
     }
   }
-
 
   if (!completion) {
     return (
@@ -225,7 +218,7 @@ export default function ReturnReviewPage() {
               <div>
                 <Label>Photos</Label>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {renterReturnForm.photos.map((photo, index) => (
+                  {renterReturnForm.photos.map((photo: string, index: number) => (
                     <img
                       alt={`Return photo ${index + 1}`}
                       className="h-24 w-24 rounded-lg object-cover"
@@ -327,7 +320,7 @@ export default function ReturnReviewPage() {
                       src={getImageKitUrl(photoKey, { width: 96, height: 96, quality: 80 })}
                     />
                     <button
-                      className="absolute right-1 top-1 rounded-full bg-destructive p-1 opacity-0 transition-opacity group-hover:opacity-100"
+                      className="absolute top-1 right-1 rounded-full bg-destructive p-1 opacity-0 transition-opacity group-hover:opacity-100"
                       onClick={() => handleRemovePhoto(index)}
                       type="button"
                     >

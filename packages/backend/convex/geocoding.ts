@@ -44,11 +44,17 @@ export async function geocodeAddress(address: Address): Promise<GeocodeResult | 
       return null
     }
 
-    const data = await response.json()
+    const data = (await response.json()) as {
+      status: string
+      results?: Array<{
+        geometry: { location: { lat: number; lng: number } }
+        formatted_address: string
+      }>
+    }
 
     // Check if the API returned results
     if (data.status === "OK" && data.results && data.results.length > 0) {
-      const result = data.results[0]
+      const result = data.results[0]!
       const location = result.geometry.location
 
       return {
@@ -99,22 +105,14 @@ const EARTH_RADIUS_MILES = 3959
 const EARTH_RADIUS_KM = 6371
 const DECIMAL_PLACES = 10
 
-export function calculateDistance(
-  lat1: number,
-  lon1: number,
-  lat2: number,
-  lon2: number
-): number {
+export function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = EARTH_RADIUS_MILES
   const dLat = toRadians(lat2 - lat1)
   const dLon = toRadians(lon2 - lon1)
 
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(toRadians(lat1)) *
-      Math.cos(toRadians(lat2)) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2)
+    Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2)
 
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
   const distance = R * c
@@ -154,10 +152,7 @@ export function calculateDistanceKm(
 
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(toRadians(lat1)) *
-      Math.cos(toRadians(lat2)) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2)
+    Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2)
 
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
   const distance = R * c
