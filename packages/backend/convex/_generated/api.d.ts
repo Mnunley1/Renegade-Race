@@ -9,33 +9,48 @@
  */
 
 import type * as admin from "../admin.js";
+import type * as auditLog from "../auditLog.js";
 import type * as availability from "../availability.js";
+import type * as config from "../config.js";
 import type * as conversations from "../conversations.js";
+import type * as crons from "../crons.js";
 import type * as dateUtils from "../dateUtils.js";
 import type * as disputes from "../disputes.js";
+import type * as driverMedia from "../driverMedia.js";
 import type * as driverProfiles from "../driverProfiles.js";
 import type * as emails from "../emails.js";
+import type * as endorsements from "../endorsements.js";
 import type * as favorites from "../favorites.js";
 import type * as geocodeExistingVehicles from "../geocodeExistingVehicles.js";
 import type * as geocoding from "../geocoding.js";
 import type * as http from "../http.js";
 import type * as init from "../init.js";
 import type * as logger from "../logger.js";
+import type * as messageTemplates from "../messageTemplates.js";
 import type * as messages from "../messages.js";
 import type * as migrateAdalo from "../migrateAdalo.js";
+import type * as motorsportsMatching from "../motorsportsMatching.js";
 import type * as notificationCron from "../notificationCron.js";
+import type * as notifications from "../notifications.js";
+import type * as presence from "../presence.js";
+import type * as profileViews from "../profileViews.js";
 import type * as r2 from "../r2.js";
 import type * as rateLimitHelpers from "../rateLimitHelpers.js";
 import type * as rateLimiter from "../rateLimiter.js";
 import type * as rentalCompletions from "../rentalCompletions.js";
+import type * as reports from "../reports.js";
 import type * as reservations from "../reservations.js";
 import type * as reviews from "../reviews.js";
+import type * as sanitize from "../sanitize.js";
 import type * as seed from "../seed.js";
 import type * as stripe from "../stripe.js";
 import type * as teamApplications from "../teamApplications.js";
 import type * as teamDriverConnections from "../teamDriverConnections.js";
+import type * as teamEvents from "../teamEvents.js";
+import type * as teamMembers from "../teamMembers.js";
 import type * as teams from "../teams.js";
 import type * as tracks from "../tracks.js";
+import type * as userBlocks from "../userBlocks.js";
 import type * as users from "../users.js";
 import type * as vehicleAnalytics from "../vehicleAnalytics.js";
 import type * as vehicles from "../vehicles.js";
@@ -56,33 +71,48 @@ import type {
  */
 declare const fullApi: ApiFromModules<{
   admin: typeof admin;
+  auditLog: typeof auditLog;
   availability: typeof availability;
+  config: typeof config;
   conversations: typeof conversations;
+  crons: typeof crons;
   dateUtils: typeof dateUtils;
   disputes: typeof disputes;
+  driverMedia: typeof driverMedia;
   driverProfiles: typeof driverProfiles;
   emails: typeof emails;
+  endorsements: typeof endorsements;
   favorites: typeof favorites;
   geocodeExistingVehicles: typeof geocodeExistingVehicles;
   geocoding: typeof geocoding;
   http: typeof http;
   init: typeof init;
   logger: typeof logger;
+  messageTemplates: typeof messageTemplates;
   messages: typeof messages;
   migrateAdalo: typeof migrateAdalo;
+  motorsportsMatching: typeof motorsportsMatching;
   notificationCron: typeof notificationCron;
+  notifications: typeof notifications;
+  presence: typeof presence;
+  profileViews: typeof profileViews;
   r2: typeof r2;
   rateLimitHelpers: typeof rateLimitHelpers;
   rateLimiter: typeof rateLimiter;
   rentalCompletions: typeof rentalCompletions;
+  reports: typeof reports;
   reservations: typeof reservations;
   reviews: typeof reviews;
+  sanitize: typeof sanitize;
   seed: typeof seed;
   stripe: typeof stripe;
   teamApplications: typeof teamApplications;
   teamDriverConnections: typeof teamDriverConnections;
+  teamEvents: typeof teamEvents;
+  teamMembers: typeof teamMembers;
   teams: typeof teams;
   tracks: typeof tracks;
+  userBlocks: typeof userBlocks;
   users: typeof users;
   vehicleAnalytics: typeof vehicleAnalytics;
   vehicles: typeof vehicles;
@@ -99,6 +129,140 @@ export declare const internal: FilterApi<
 >;
 
 export declare const components: {
+  rateLimiter: {
+    lib: {
+      checkRateLimit: FunctionReference<
+        "query",
+        "internal",
+        {
+          config:
+            | {
+                capacity?: number;
+                kind: "token bucket";
+                maxReserved?: number;
+                period: number;
+                rate: number;
+                shards?: number;
+                start?: null;
+              }
+            | {
+                capacity?: number;
+                kind: "fixed window";
+                maxReserved?: number;
+                period: number;
+                rate: number;
+                shards?: number;
+                start?: number;
+              };
+          count?: number;
+          key?: string;
+          name: string;
+          reserve?: boolean;
+          throws?: boolean;
+        },
+        { ok: true; retryAfter?: number } | { ok: false; retryAfter: number }
+      >;
+      clearAll: FunctionReference<
+        "mutation",
+        "internal",
+        { before?: number },
+        null
+      >;
+      getServerTime: FunctionReference<"mutation", "internal", {}, number>;
+      getValue: FunctionReference<
+        "query",
+        "internal",
+        {
+          config:
+            | {
+                capacity?: number;
+                kind: "token bucket";
+                maxReserved?: number;
+                period: number;
+                rate: number;
+                shards?: number;
+                start?: null;
+              }
+            | {
+                capacity?: number;
+                kind: "fixed window";
+                maxReserved?: number;
+                period: number;
+                rate: number;
+                shards?: number;
+                start?: number;
+              };
+          key?: string;
+          name: string;
+          sampleShards?: number;
+        },
+        {
+          config:
+            | {
+                capacity?: number;
+                kind: "token bucket";
+                maxReserved?: number;
+                period: number;
+                rate: number;
+                shards?: number;
+                start?: null;
+              }
+            | {
+                capacity?: number;
+                kind: "fixed window";
+                maxReserved?: number;
+                period: number;
+                rate: number;
+                shards?: number;
+                start?: number;
+              };
+          shard: number;
+          ts: number;
+          value: number;
+        }
+      >;
+      rateLimit: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          config:
+            | {
+                capacity?: number;
+                kind: "token bucket";
+                maxReserved?: number;
+                period: number;
+                rate: number;
+                shards?: number;
+                start?: null;
+              }
+            | {
+                capacity?: number;
+                kind: "fixed window";
+                maxReserved?: number;
+                period: number;
+                rate: number;
+                shards?: number;
+                start?: number;
+              };
+          count?: number;
+          key?: string;
+          name: string;
+          reserve?: boolean;
+          throws?: boolean;
+        },
+        { ok: true; retryAfter?: number } | { ok: false; retryAfter: number }
+      >;
+      resetRateLimit: FunctionReference<
+        "mutation",
+        "internal",
+        { key?: string; name: string },
+        null
+      >;
+    };
+    time: {
+      getServerTime: FunctionReference<"mutation", "internal", {}, number>;
+    };
+  };
   crons: {
     public: {
       del: FunctionReference<

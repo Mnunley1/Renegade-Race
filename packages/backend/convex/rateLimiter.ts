@@ -1,28 +1,18 @@
-// TODO: Uncomment after running `pnpm install` to install @convex-dev/rate-limiter
-// import { RateLimiter, MINUTE, HOUR } from "@convex-dev/rate-limiter"
-// import { components } from "./_generated/api"
+import { RateLimiter, MINUTE, HOUR } from "@convex-dev/rate-limiter"
+import { components } from "./_generated/api"
 
 /**
  * Rate limiter configuration for the application
- * 
+ *
  * Rate limits are defined per operation type with different strategies:
  * - "fixed window": Tokens granted all at once, resets every period
  * - "token bucket": Tokens accumulate over time, allows burst up to capacity
- * 
- * TODO: Uncomment after installing @convex-dev/rate-limiter package
  */
-// Temporary no-op rate limiter until package is installed
-export const rateLimiter = {
-  limit: async () => ({ ok: true, retryAfter: null }),
-  check: async () => ({ ok: true, retryAfter: null }),
-} as any
-
-// Uncomment this after installing the package:
-/* export const rateLimiter = new RateLimiter(components.rateLimiter, {
+export const rateLimiter = new RateLimiter(components.rateLimiter, {
   // ============================================
   // Critical Operations (Strict Limits)
   // ============================================
-  
+
   // Reservation creation: 10 per hour per user (prevents spam bookings)
   createReservation: {
     kind: "token bucket",
@@ -50,7 +40,7 @@ export const rateLimiter = {
   // ============================================
   // Communication Operations
   // ============================================
-  
+
   // Message sending: 20 per minute per user (allows conversation flow)
   sendMessage: {
     kind: "token bucket",
@@ -70,7 +60,7 @@ export const rateLimiter = {
   // ============================================
   // Content Creation Operations
   // ============================================
-  
+
   // Vehicle creation: 5 per hour per user (prevents spam listings)
   createVehicle: {
     kind: "token bucket",
@@ -103,10 +93,17 @@ export const rateLimiter = {
     capacity: 3,
   },
 
+  // Report creation: 5 per hour per user (prevents abuse)
+  createReport: {
+    kind: "fixed window",
+    rate: 5,
+    period: HOUR,
+  },
+
   // ============================================
   // HTTP Webhook Endpoints (IP-based)
   // ============================================
-  
+
   // Webhook endpoints: 100 per minute per IP (for Stripe, Clerk, Resend)
   webhookEndpoint: {
     kind: "fixed window",
@@ -118,7 +115,7 @@ export const rateLimiter = {
   // ============================================
   // Authentication & Security
   // ============================================
-  
+
   // Failed login attempts: 10 per hour per IP (prevents brute force)
   failedLoginAttempts: {
     kind: "token bucket",
@@ -134,4 +131,4 @@ export const rateLimiter = {
     period: HOUR,
     capacity: 2,
   },
-}) */
+})

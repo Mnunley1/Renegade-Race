@@ -7,6 +7,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useState } from "react"
+import { NotificationBell } from "@/components/notification-bell"
 import { UserMenu } from "@/components/user-menu"
 
 export function Navigation() {
@@ -72,6 +73,7 @@ export function Navigation() {
             </div>
 
             <div className="flex items-center gap-4">
+              <NotificationBell />
               <UserMenu />
             </div>
           </div>

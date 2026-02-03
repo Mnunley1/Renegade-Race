@@ -77,7 +77,7 @@ export default function AvailabilityPage() {
   }, [draft])
 
   const handleContinue = async () => {
-    if (!draft?.vehicleData || !draft?.address) {
+    if (!(draft?.vehicleData && draft?.address)) {
       toast.error("Missing vehicle data. Please go back and complete previous steps.")
       return
     }
@@ -233,4 +233,3 @@ export default function AvailabilityPage() {
     </div>
   )
 }
-

@@ -12,8 +12,10 @@ export default defineSchema({
     totalRentals: v.optional(v.number()),
     memberSince: v.optional(v.string()),
     profileImageR2Key: v.optional(v.string()), // R2 object key for profile image
+    profileImage: v.optional(v.string()), // ImageKit or legacy URL for profile image
     isHost: v.optional(v.boolean()),
     isBanned: v.optional(v.boolean()),
+    userType: v.optional(v.union(v.literal("driver"), v.literal("team"), v.literal("both"))),
     // Stripe Connect fields
     stripeAccountId: v.optional(v.string()),
     stripeAccountStatus: v.optional(
@@ -38,6 +40,8 @@ export default defineSchema({
         marketing: v.boolean(),
       })
     ),
+    // Owner cancellation tracking
+    ownerCancellationCount: v.optional(v.number()),
     // Timestamp of last message digest email sent (to prevent spam)
     lastMessageDigestAt: v.optional(v.number()),
     // User profile fields
@@ -123,7 +127,9 @@ export default defineSchema({
         ),
       })
     ),
-  }).index("by_external_id", ["externalId"]),
+  })
+    .index("by_external_id", ["externalId"])
+    .index("by_stripe_account", ["stripeAccountId"]),
 
   tracks: defineTable({
     name: v.string(),
@@ -173,6 +179,13 @@ export default defineSchema({
     minTripDuration: v.optional(v.string()),
     maxTripDuration: v.optional(v.string()),
     requireWeekendMin: v.optional(v.boolean()),
+    experienceLevel: v.optional(v.union(v.literal("beginner"), v.literal("intermediate"), v.literal("advanced"))),
+    tireType: v.optional(v.string()),
+    deliveryAvailable: v.optional(v.boolean()),
+    // Cancellation policy
+    cancellationPolicy: v.optional(
+      v.union(v.literal("flexible"), v.literal("moderate"), v.literal("strict"))
+    ),
     isActive: v.boolean(),
     isApproved: v.optional(v.boolean()),
     viewCount: v.optional(v.number()), // Total views
@@ -281,9 +294,15 @@ export default defineSchema({
 
   // New tables for messaging system
   conversations: defineTable({
-    vehicleId: v.id("vehicles"),
+    vehicleId: v.optional(v.id("vehicles")),
     renterId: v.string(),
     ownerId: v.string(),
+    conversationType: v.optional(
+      v.union(v.literal("rental"), v.literal("team"), v.literal("driver"))
+    ),
+    teamId: v.optional(v.id("teams")),
+    driverProfileId: v.optional(v.id("driverProfiles")),
+    reservationId: v.optional(v.id("reservations")),
     lastMessageAt: v.number(),
     lastMessageText: v.optional(v.string()),
     lastMessageSenderId: v.optional(v.string()),
@@ -303,7 +322,8 @@ export default defineSchema({
     .index("by_renter_active", ["renterId", "isActive"])
     .index("by_owner_active", ["ownerId", "isActive"])
     .index("by_participants", ["renterId", "ownerId"])
-    .index("by_last_message", ["lastMessageAt"]),
+    .index("by_last_message", ["lastMessageAt"])
+    .index("by_reservation", ["reservationId"]),
 
   messages: defineTable({
     conversationId: v.id("conversations"),
@@ -311,6 +331,12 @@ export default defineSchema({
     content: v.string(),
     messageType: v.union(v.literal("text"), v.literal("image"), v.literal("system")),
     replyTo: v.optional(v.id("messages")),
+    attachments: v.optional(v.array(v.object({
+      type: v.union(v.literal("image"), v.literal("pdf")),
+      url: v.string(),
+      fileName: v.string(),
+      fileSize: v.number(),
+    }))),
     isRead: v.boolean(),
     readAt: v.optional(v.number()),
     createdAt: v.number(),
@@ -634,6 +660,10 @@ export default defineSchema({
     stripeTransferId: v.optional(v.string()), // For Connect transfers
     stripeAccountId: v.optional(v.string()), // Owner's Connect account ID
     refundAmount: v.optional(v.number()),
+    refundPercentage: v.optional(v.number()), // Percentage of original amount refunded (0-100)
+    refundPolicy: v.optional(
+      v.union(v.literal("full"), v.literal("partial"), v.literal("none"), v.literal("custom"))
+    ),
     refundReason: v.optional(v.string()),
     failureReason: v.optional(v.string()),
     metadata: v.optional(
@@ -653,7 +683,8 @@ export default defineSchema({
     .index("by_status", ["status"])
     .index("by_stripe_payment_intent", ["stripePaymentIntentId"])
     .index("by_stripe_checkout_session", ["stripeCheckoutSessionId"])
-    .index("by_stripe_customer", ["stripeCustomerId"]),
+    .index("by_stripe_customer", ["stripeCustomerId"])
+    .index("by_owner_status", ["ownerId", "status"]),
 
   // Disputes table
   disputes: defineTable({
@@ -703,6 +734,28 @@ export default defineSchema({
     .index("by_status", ["status"])
     .index("by_created_by", ["createdBy"]),
 
+  // Audit logs for tracking state changes
+  auditLogs: defineTable({
+    entityType: v.union(
+      v.literal("reservation"),
+      v.literal("payment"),
+      v.literal("user"),
+      v.literal("vehicle"),
+      v.literal("dispute")
+    ),
+    entityId: v.string(), // ID of the entity being changed
+    action: v.string(), // e.g., "status_change", "create", "update", "delete"
+    userId: v.optional(v.string()), // User who performed the action (null for system actions)
+    previousState: v.optional(v.any()), // Previous state snapshot
+    newState: v.optional(v.any()), // New state snapshot
+    metadata: v.optional(v.any()), // Additional context
+    timestamp: v.number(),
+  })
+    .index("by_entity", ["entityType", "entityId"])
+    .index("by_user", ["userId"])
+    .index("by_timestamp", ["timestamp"])
+    .index("by_action", ["action"]),
+
   // Platform settings for fees and configuration
   platformSettings: defineTable({
     platformFeePercentage: v.number(), // e.g., 5 for 5%
@@ -713,4 +766,204 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
   }).index("by_active", ["isActive"]),
+
+  // Notifications
+  notifications: defineTable({
+    userId: v.string(),
+    type: v.union(
+      v.literal("reservation_approved"),
+      v.literal("reservation_declined"),
+      v.literal("reservation_cancelled"),
+      v.literal("reservation_completed"),
+      v.literal("new_message"),
+      v.literal("payment_success"),
+      v.literal("payment_failed"),
+      v.literal("dispute_update"),
+      v.literal("review_received"),
+      v.literal("system"),
+      v.literal("team_application"),
+      v.literal("connection_request"),
+      v.literal("application_status_change"),
+      v.literal("endorsement_received"),
+      v.literal("team_event"),
+      v.literal("profile_view")
+    ),
+    title: v.string(),
+    message: v.string(),
+    isRead: v.boolean(),
+    link: v.optional(v.string()),
+    metadata: v.optional(v.any()),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_read", ["userId", "isRead"])
+    .index("by_user_created", ["userId", "createdAt"]),
+
+  // Reports
+  reports: defineTable({
+    reporterId: v.string(),
+    reportedUserId: v.optional(v.string()),
+    reportedVehicleId: v.optional(v.id("vehicles")),
+    reportedReviewId: v.optional(v.id("rentalReviews")),
+    reason: v.union(
+      v.literal("inappropriate_content"),
+      v.literal("fraud"),
+      v.literal("safety_concern"),
+      v.literal("harassment"),
+      v.literal("spam"),
+      v.literal("other")
+    ),
+    description: v.string(),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("reviewed"),
+      v.literal("resolved"),
+      v.literal("dismissed")
+    ),
+    adminNotes: v.optional(v.string()),
+    resolvedAt: v.optional(v.number()),
+    resolvedBy: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_reporter", ["reporterId"])
+    .index("by_status", ["status"])
+    .index("by_reported_user", ["reportedUserId"]),
+
+  // User blocks
+  userBlocks: defineTable({
+    blockerId: v.string(),
+    blockedUserId: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_blocker", ["blockerId"])
+    .index("by_blocked", ["blockedUserId"])
+    .index("by_blocker_blocked", ["blockerId", "blockedUserId"]),
+
+  // Motorsports networking tables
+  teamDriverConnections: defineTable({
+    teamId: v.id("teams"),
+    driverProfileId: v.id("driverProfiles"),
+    status: v.union(v.literal("pending"), v.literal("accepted"), v.literal("declined")),
+    message: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_team", ["teamId"])
+    .index("by_driver", ["driverProfileId"])
+    .index("by_team_driver", ["teamId", "driverProfileId"])
+    .index("by_status", ["status"]),
+
+  teamMembers: defineTable({
+    teamId: v.id("teams"),
+    driverProfileId: v.optional(v.id("driverProfiles")),
+    userId: v.string(),
+    role: v.union(
+      v.literal("owner"),
+      v.literal("driver"),
+      v.literal("crew"),
+      v.literal("manager")
+    ),
+    joinedAt: v.number(),
+    status: v.union(v.literal("active"), v.literal("inactive")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_team", ["teamId"])
+    .index("by_user", ["userId"])
+    .index("by_team_user", ["teamId", "userId"])
+    .index("by_team_status", ["teamId", "status"]),
+
+  teamEvents: defineTable({
+    teamId: v.id("teams"),
+    title: v.string(),
+    description: v.optional(v.string()),
+    date: v.string(),
+    endDate: v.optional(v.string()),
+    time: v.optional(v.string()),
+    location: v.optional(v.string()),
+    type: v.union(
+      v.literal("race"),
+      v.literal("practice"),
+      v.literal("meeting"),
+      v.literal("social"),
+      v.literal("other")
+    ),
+    createdBy: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_team", ["teamId"])
+    .index("by_date", ["date"])
+    .index("by_team_date", ["teamId", "date"]),
+
+  eventRsvps: defineTable({
+    eventId: v.id("teamEvents"),
+    userId: v.string(),
+    status: v.union(v.literal("going"), v.literal("maybe"), v.literal("not_going")),
+    createdAt: v.number(),
+  })
+    .index("by_event", ["eventId"])
+    .index("by_user", ["userId"])
+    .index("by_event_user", ["eventId", "userId"]),
+
+  driverMedia: defineTable({
+    driverProfileId: v.id("driverProfiles"),
+    url: v.string(),
+    r2Key: v.optional(v.string()),
+    type: v.union(v.literal("image"), v.literal("video")),
+    caption: v.optional(v.string()),
+    order: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_driver", ["driverProfileId"])
+    .index("by_driver_order", ["driverProfileId", "order"]),
+
+  endorsements: defineTable({
+    driverProfileId: v.id("driverProfiles"),
+    endorserId: v.string(),
+    type: v.union(
+      v.literal("racecraft"),
+      v.literal("consistency"),
+      v.literal("qualifying_pace"),
+      v.literal("teamwork"),
+      v.literal("communication")
+    ),
+    message: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_driver", ["driverProfileId"])
+    .index("by_endorser", ["endorserId"])
+    .index("by_driver_endorser", ["driverProfileId", "endorserId"]),
+
+  profileViews: defineTable({
+    profileId: v.string(),
+    profileType: v.union(v.literal("driver"), v.literal("team")),
+    viewerId: v.optional(v.string()),
+    viewedAt: v.number(),
+  })
+    .index("by_profile", ["profileId", "profileType"])
+    .index("by_viewer", ["viewerId"])
+    .index("by_profile_viewer", ["profileId", "profileType", "viewerId"]),
+
+  presence: defineTable({
+    conversationId: v.id("conversations"),
+    userId: v.string(),
+    isTyping: v.boolean(),
+    lastSeen: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_conversation", ["conversationId"])
+    .index("by_user", ["userId"])
+    .index("by_conversation_user", ["conversationId", "userId"]),
+
+  messageTemplates: defineTable({
+    userId: v.optional(v.string()),
+    label: v.string(),
+    content: v.string(),
+    category: v.union(v.literal("inquiry"), v.literal("response"), v.literal("logistics")),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_category", ["category"])
+    .index("by_user_category", ["userId", "category"]),
 })

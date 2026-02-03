@@ -1,8 +1,14 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@workspace/ui/components/card"
 import { Button } from "@workspace/ui/components/button"
 import { Separator } from "@workspace/ui/components/separator"
 import { useCookieConsent } from "@/hooks/useCookieConsent"
@@ -37,7 +43,7 @@ export default function CookiePreferencesPage() {
     <div className="container mx-auto max-w-4xl px-4 py-12">
       <div className="mb-8 text-center">
         <h1 className="mb-4 font-bold text-4xl md:text-5xl">Cookie Preferences</h1>
-        <p className="text-muted-foreground text-lg">
+        <p className="text-lg text-muted-foreground">
           Manage your cookie preferences for this website
         </p>
       </div>
@@ -66,9 +72,8 @@ export default function CookiePreferencesPage() {
             <div>
               <h3 className="mb-2 font-semibold text-lg">Analytics & Error Tracking</h3>
               <p className="mb-4 text-muted-foreground text-sm">
-                We use these cookies to track errors and improve our service. This helps us
-                identify and fix issues that users encounter. You can choose to disable these
-                cookies below.
+                We use these cookies to track errors and improve our service. This helps us identify
+                and fix issues that users encounter. You can choose to disable these cookies below.
               </p>
               <div className="rounded-lg border bg-muted/30 p-4">
                 <div className="mb-4 flex items-center justify-between">
@@ -98,7 +103,11 @@ export default function CookiePreferencesPage() {
             <Button variant="outline" onClick={() => router.back()}>
               Cancel
             </Button>
-            <Button variant="outline" onClick={handleReject} disabled={consentStatus === "rejected"}>
+            <Button
+              variant="outline"
+              onClick={handleReject}
+              disabled={consentStatus === "rejected"}
+            >
               Decline All Non-Essential Cookies
             </Button>
             <Button onClick={handleAccept} disabled={consentStatus === "accepted"}>
@@ -108,7 +117,7 @@ export default function CookiePreferencesPage() {
 
           {hasChanged && (
             <div className="rounded-lg border border-green-500/50 bg-green-500/10 p-4">
-              <p className="text-sm text-green-700 dark:text-green-400">
+              <p className="text-green-700 text-sm dark:text-green-400">
                 Your cookie preferences have been saved. The page will refresh to apply changes.
               </p>
             </div>

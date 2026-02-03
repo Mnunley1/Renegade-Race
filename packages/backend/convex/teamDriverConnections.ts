@@ -1,4 +1,5 @@
 import { v } from "convex/values"
+import { internal } from "./_generated/api"
 import { mutation, query } from "./_generated/server"
 import { getCurrentUser, getCurrentUserOrThrow } from "./users"
 
@@ -38,6 +39,19 @@ export const requestConnection = mutation({
       updatedAt: Date.now(),
     })
 
+    // Notify the driver
+    const driverProfile = await ctx.db.get(args.driverProfileId)
+    if (driverProfile) {
+      await ctx.scheduler.runAfter(0, internal.notifications.createNotification, {
+        userId: driverProfile.userId,
+        type: "connection_request",
+        title: "New Connection Request",
+        message: `${team.name} wants to connect with you`,
+        link: `/motorsports/drivers/${args.driverProfileId}`,
+        metadata: { teamId: args.teamId, connectionId },
+      })
+    }
+
     return connectionId
   },
 })
@@ -65,6 +79,19 @@ export const updateConnectionStatus = mutation({
       status: args.status,
       updatedAt: Date.now(),
     })
+
+    // Notify the team owner
+    const team = await ctx.db.get(connection.teamId)
+    if (team) {
+      await ctx.scheduler.runAfter(0, internal.notifications.createNotification, {
+        userId: team.ownerId,
+        type: "connection_request",
+        title: `Connection ${args.status === "accepted" ? "Accepted" : "Declined"}`,
+        message: `${user.name} has ${args.status} your connection request`,
+        link: `/motorsports/teams/${connection.teamId}`,
+        metadata: { connectionId: args.connectionId },
+      })
+    }
 
     return args.connectionId
   },
@@ -140,5 +167,3 @@ export const checkConnection = query({
     return connection
   },
 })
-
-

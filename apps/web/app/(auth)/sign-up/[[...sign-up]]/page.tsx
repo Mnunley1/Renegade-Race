@@ -15,7 +15,18 @@ import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import { Separator } from "@workspace/ui/components/separator"
 import { handleError } from "@/lib/error-handler"
-import { ArrowRight, CheckCircle2, Eye, EyeOff, Lock, Mail, Shield, Star, User, Zap } from "lucide-react"
+import {
+  ArrowRight,
+  CheckCircle2,
+  Eye,
+  EyeOff,
+  Lock,
+  Mail,
+  Shield,
+  Star,
+  User,
+  Zap,
+} from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -148,7 +159,7 @@ export default function SignUpPage() {
                 />
               </Link>
             </div>
-            
+
             <div className="space-y-2">
               <h1 className="mb-1 font-bold text-2xl leading-tight tracking-tight sm:mb-2 sm:text-3xl lg:text-4xl">
                 Experience the ultimate thrill of racing
@@ -185,10 +196,12 @@ export default function SignUpPage() {
 
         {/* Right Column - Sign Up Form */}
         <div className="flex items-center justify-center">
-          <Card className="w-full border-2 bg-card shadow-xl max-w-md">
+          <Card className="w-full max-w-md border-2 bg-card shadow-xl">
             <CardHeader className="pb-4 sm:pb-6">
               <CardTitle className="text-lg sm:text-xl">Create Your Account</CardTitle>
-              <CardDescription className="text-xs sm:text-sm">Sign up to start renting track cars</CardDescription>
+              <CardDescription className="text-xs sm:text-sm">
+                Sign up to start renting track cars
+              </CardDescription>
             </CardHeader>
             <CardContent className="pb-4 sm:pb-6">
               <form className="space-y-4 sm:space-y-6" onSubmit={handleSubmit}>
@@ -200,7 +213,9 @@ export default function SignUpPage() {
 
                 <div className="grid grid-cols-2 gap-3 sm:gap-4">
                   <div className="space-y-1.5 sm:space-y-2">
-                    <Label htmlFor="firstName" className="text-sm">First Name</Label>
+                    <Label htmlFor="firstName" className="text-sm">
+                      First Name
+                    </Label>
                     <div className="relative">
                       <User className="-translate-y-1/2 absolute top-1/2 left-3 size-4 text-muted-foreground" />
                       <Input
@@ -216,7 +231,9 @@ export default function SignUpPage() {
                     </div>
                   </div>
                   <div className="space-y-1.5 sm:space-y-2">
-                    <Label htmlFor="lastName" className="text-sm">Last Name</Label>
+                    <Label htmlFor="lastName" className="text-sm">
+                      Last Name
+                    </Label>
                     <Input
                       disabled={isLoading}
                       id="lastName"
@@ -230,7 +247,9 @@ export default function SignUpPage() {
                 </div>
 
                 <div className="space-y-1.5 sm:space-y-2">
-                  <Label htmlFor="email" className="text-sm">Email</Label>
+                  <Label htmlFor="email" className="text-sm">
+                    Email
+                  </Label>
                   <div className="relative">
                     <Mail className="-translate-y-1/2 absolute top-1/2 left-3 size-4 text-muted-foreground" />
                     <Input
@@ -247,7 +266,9 @@ export default function SignUpPage() {
                 </div>
 
                 <div className="space-y-1.5 sm:space-y-2">
-                  <Label htmlFor="password" className="text-sm">Password</Label>
+                  <Label htmlFor="password" className="text-sm">
+                    Password
+                  </Label>
                   <div className="relative">
                     <Lock className="-translate-y-1/2 absolute top-1/2 left-3 size-4 text-muted-foreground" />
                     <Input
@@ -310,7 +331,12 @@ export default function SignUpPage() {
                   </div>
                 </div>
 
-                <Button className="w-full" disabled={isLoading || !termsAccepted} size="lg" type="submit">
+                <Button
+                  className="w-full"
+                  disabled={isLoading || !termsAccepted}
+                  size="lg"
+                  type="submit"
+                >
                   {isLoading ? "Creating account..." : "Create account"}
                   <ArrowRight className="ml-2 size-4" />
                 </Button>
@@ -398,7 +424,7 @@ export default function SignUpPage() {
                     Sign in
                   </Link>
                 </div>
-                <div className="text-xs text-muted-foreground">
+                <div className="text-muted-foreground text-xs">
                   By creating an account, you agree to our{" "}
                   <Link
                     className="text-primary underline hover:text-primary/80"
