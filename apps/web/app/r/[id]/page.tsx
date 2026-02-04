@@ -26,8 +26,8 @@ import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import { useMemo, useState } from "react"
 import { VehicleCard } from "@/components/vehicle-card"
-import { api } from "@/lib/convex"
 import type { Id } from "@/lib/convex"
+import { api } from "@/lib/convex"
 
 // Time constants
 const MS_PER_SECOND = 1000
@@ -89,11 +89,11 @@ function StarRating({ rating, size = "sm" }: { rating: number; size?: "sm" | "md
     <div className="flex items-center gap-0.5">
       {STAR_RATINGS.map((star) => (
         <Star
-          key={star}
           className={cn(
             sizeClasses[size],
             star <= Math.round(rating) ? "fill-amber-400 text-amber-400" : "fill-muted text-muted"
           )}
+          key={star}
         />
       ))}
     </div>
@@ -201,7 +201,7 @@ function ProfileHero({
                 </AvatarFallback>
               </Avatar>
               {userRating > 0 && (
-                <div className="-translate-x-1/2 -bottom-2 absolute left-1/2 flex items-center gap-1.5 rounded-full bg-white px-4 py-2 shadow-lg dark:bg-gray-900">
+                <div className="absolute -bottom-2 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-white px-4 py-2 shadow-lg dark:bg-gray-900">
                   <Star className="size-5 fill-amber-400 text-amber-400" />
                   <span className="font-bold text-lg">{userRating.toFixed(1)}</span>
                 </div>
@@ -393,7 +393,7 @@ function ProfileSidebar({
               </p>
               <div className="flex flex-wrap gap-2">
                 {user.interests.map((interest) => (
-                  <Badge key={interest} className="text-xs" variant="secondary">
+                  <Badge className="text-xs" key={interest} variant="secondary">
                     {interest}
                   </Badge>
                 ))}
@@ -422,8 +422,8 @@ function ProfileSidebar({
             <div className="space-y-2">
               {[...STAR_RATINGS].reverse().map((rating) => (
                 <RatingBar
-                  key={rating}
                   count={reviewStats.ratingBreakdown?.[rating] || 0}
+                  key={rating}
                   rating={rating}
                   total={totalReviews}
                 />
@@ -718,8 +718,8 @@ export default function UserProfilePage() {
                   <div className="space-y-4">
                     {reviews.map((review: any) => (
                       <ReviewCard
-                        key={review._id}
                         firstName={firstName}
+                        key={review._id}
                         review={review as ReviewData}
                       />
                     ))}

@@ -69,7 +69,7 @@ export function UserMenu() {
               )}
             </Avatar>
             {unreadCount !== undefined && unreadCount > 0 && (
-              <span className="-right-1 -top-1 absolute flex min-w-[1.25rem] items-center justify-center rounded-full bg-primary px-1 py-0.5 font-semibold text-primary-foreground text-xs leading-none">
+              <span className="absolute -top-1 -right-1 flex min-w-[1.25rem] items-center justify-center rounded-full bg-primary px-1 py-0.5 font-semibold text-primary-foreground text-xs leading-none">
                 {unreadCount > 99 ? "99+" : unreadCount}
               </span>
             )}
@@ -107,40 +107,37 @@ export function UserMenu() {
             <DropdownMenuSeparator />
 
             {/* Host Section */}
-            {isSignedIn && (
-              <>
-                {!onboardingStatus || onboardingStatus.status === "not_started" ? (
-                  <DropdownMenuItem asChild>
-                    <Link className="flex items-center text-sm" href="/host/onboarding">
-                      <Car className="mr-3 size-4" />
-                      Become a Host
-                    </Link>
-                  </DropdownMenuItem>
-                ) : onboardingStatus.status === "in_progress" ? (
-                  <DropdownMenuItem asChild>
-                    <Link
-                      className="flex items-center justify-between text-sm"
-                      href="/host/onboarding"
-                    >
-                      <span className="flex items-center">
-                        <Car className="mr-3 size-4 shrink-0" />
-                        <span>Continue Setup</span>
-                      </span>
-                      <span className="ml-2 shrink-0 rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-700 text-xs dark:bg-amber-900/30 dark:text-amber-400">
-                        In Progress
-                      </span>
-                    </Link>
-                  </DropdownMenuItem>
-                ) : (
-                  <DropdownMenuItem asChild>
-                    <Link className="flex items-center text-sm" href="/host/dashboard">
-                      <Car className="mr-3 size-4" />
-                      Host Dashboard
-                    </Link>
-                  </DropdownMenuItem>
-                )}
-              </>
-            )}
+            {isSignedIn &&
+              (!onboardingStatus || onboardingStatus.status === "not_started" ? (
+                <DropdownMenuItem asChild>
+                  <Link className="flex items-center text-sm" href="/host/onboarding">
+                    <Car className="mr-3 size-4" />
+                    Become a Host
+                  </Link>
+                </DropdownMenuItem>
+              ) : onboardingStatus.status === "in_progress" ? (
+                <DropdownMenuItem asChild>
+                  <Link
+                    className="flex items-center justify-between text-sm"
+                    href="/host/onboarding"
+                  >
+                    <span className="flex items-center">
+                      <Car className="mr-3 size-4 shrink-0" />
+                      <span>Continue Setup</span>
+                    </span>
+                    <span className="ml-2 shrink-0 rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-700 text-xs dark:bg-amber-900/30 dark:text-amber-400">
+                      In Progress
+                    </span>
+                  </Link>
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem asChild>
+                  <Link className="flex items-center text-sm" href="/host/dashboard">
+                    <Car className="mr-3 size-4" />
+                    Host Dashboard
+                  </Link>
+                </DropdownMenuItem>
+              ))}
 
             <DropdownMenuSeparator />
 
@@ -151,10 +148,7 @@ export function UserMenu() {
                 Profile
               </Link>
             </DropdownMenuItem>
-            <DropdownMenuItem
-              asChild
-              className={pathname === "/settings" ? "bg-accent" : ""}
-            >
+            <DropdownMenuItem asChild className={pathname === "/settings" ? "bg-accent" : ""}>
               <Link className="flex items-center text-sm" href="/settings">
                 <Settings className="mr-3 size-4" />
                 Account

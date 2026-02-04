@@ -16,8 +16,8 @@ import { ArrowRight, CheckCircle2, Loader2, Plus, X } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { toast } from "sonner"
-import { api } from "@/lib/convex"
 import { COMMON_AMENITIES } from "@/lib/constants"
+import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 
 export default function AmenitiesPage() {

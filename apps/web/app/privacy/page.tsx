@@ -1,7 +1,7 @@
-import type { Metadata } from "next"
-import Link from "next/link"
 import { Card, CardContent } from "@workspace/ui/components/card"
 import { Separator } from "@workspace/ui/components/separator"
+import type { Metadata } from "next"
+import Link from "next/link"
 
 export const metadata: Metadata = {
   title: "Privacy Policy",
@@ -81,7 +81,7 @@ export default function PrivacyPolicyPage() {
                     <strong>Cookies and Tracking Technologies:</strong> We use cookies, web beacons,
                     and similar tools to enhance your experience, analyze traffic, and assist in
                     error tracking. You can manage your cookie preferences{" "}
-                    <Link href="/cookie-preferences" className="text-primary underline">
+                    <Link className="text-primary underline" href="/cookie-preferences">
                       here
                     </Link>
                     .
@@ -149,10 +149,10 @@ export default function PrivacyPolicyPage() {
                     management. Clerk processes your email, password (encrypted), and authentication
                     tokens.{" "}
                     <a
-                      href="https://clerk.com/privacy"
-                      target="_blank"
-                      rel="noopener noreferrer"
                       className="text-primary underline"
+                      href="https://clerk.com/privacy"
+                      rel="noopener noreferrer"
+                      target="_blank"
                     >
                       View Clerk's Privacy Policy
                     </a>
@@ -168,10 +168,10 @@ export default function PrivacyPolicyPage() {
                     vehicle owners. Stripe processes payment card information, billing addresses,
                     and transaction data. We never store full payment card numbers on our servers.{" "}
                     <a
-                      href="https://stripe.com/privacy"
-                      target="_blank"
-                      rel="noopener noreferrer"
                       className="text-primary underline"
+                      href="https://stripe.com/privacy"
+                      rel="noopener noreferrer"
+                      target="_blank"
                     >
                       View Stripe's Privacy Policy
                     </a>
@@ -189,10 +189,10 @@ export default function PrivacyPolicyPage() {
                     Convex stores your user profile data, vehicle listings, reservations, messages,
                     and other platform data.{" "}
                     <a
-                      href="https://www.convex.dev/privacy"
-                      target="_blank"
-                      rel="noopener noreferrer"
                       className="text-primary underline"
+                      href="https://www.convex.dev/privacy"
+                      rel="noopener noreferrer"
+                      target="_blank"
                     >
                       View Convex's Privacy Policy
                     </a>
@@ -211,10 +211,10 @@ export default function PrivacyPolicyPage() {
                     (with text and media masked). This service only operates if you consent to
                     non-essential cookies.{" "}
                     <a
-                      href="https://sentry.io/privacy/"
-                      target="_blank"
-                      rel="noopener noreferrer"
                       className="text-primary underline"
+                      href="https://sentry.io/privacy/"
+                      rel="noopener noreferrer"
+                      target="_blank"
                     >
                       View Sentry's Privacy Policy
                     </a>
@@ -230,10 +230,10 @@ export default function PrivacyPolicyPage() {
                     (verification emails, reservation confirmations, notifications). Resend
                     processes your email address and email content.{" "}
                     <a
-                      href="https://resend.com/legal/privacy-policy"
-                      target="_blank"
-                      rel="noopener noreferrer"
                       className="text-primary underline"
+                      href="https://resend.com/legal/privacy-policy"
+                      rel="noopener noreferrer"
+                      target="_blank"
                     >
                       View Resend's Privacy Policy
                     </a>
@@ -248,10 +248,10 @@ export default function PrivacyPolicyPage() {
                     <strong>Cloudflare R2:</strong> We use Cloudflare R2 to store vehicle images,
                     profile photos, dispute documentation, and other user-uploaded files.{" "}
                     <a
-                      href="https://www.cloudflare.com/privacy/"
-                      target="_blank"
-                      rel="noopener noreferrer"
                       className="text-primary underline"
+                      href="https://www.cloudflare.com/privacy/"
+                      rel="noopener noreferrer"
+                      target="_blank"
                     >
                       View Cloudflare's Privacy Policy
                     </a>
@@ -273,7 +273,7 @@ export default function PrivacyPolicyPage() {
             <p className="mb-4 text-muted-foreground leading-relaxed">
               We use cookies and similar technologies to enhance your experience on our platform.
               You can manage your cookie preferences at any time by visiting our{" "}
-              <Link href="/cookie-preferences" className="text-primary underline">
+              <Link className="text-primary underline" href="/cookie-preferences">
                 Cookie Preferences page
               </Link>
               .
@@ -321,7 +321,7 @@ export default function PrivacyPolicyPage() {
                 <h3 className="mb-2 font-semibold text-foreground text-lg">Managing Cookies</h3>
                 <p className="text-muted-foreground text-sm">
                   You can control cookies through your browser settings or by using our{" "}
-                  <Link href="/cookie-preferences" className="text-primary underline">
+                  <Link className="text-primary underline" href="/cookie-preferences">
                     Cookie Preferences
                   </Link>{" "}
                   page. Note that disabling essential cookies may impact your ability to use certain
@@ -409,7 +409,7 @@ export default function PrivacyPolicyPage() {
               </li>
               <li>
                 <strong>Cookie Preferences:</strong> You can manage your cookie preferences{" "}
-                <Link href="/cookie-preferences" className="text-primary underline">
+                <Link className="text-primary underline" href="/cookie-preferences">
                   here
                 </Link>
                 .

@@ -154,7 +154,7 @@ export default function ReportsPage() {
               </div>
               <div className="flex gap-2">
                 <div className="relative">
-                  <Search className="-translate-y-1/2 absolute top-1/2 left-2 size-4 text-muted-foreground" />
+                  <Search className="absolute top-1/2 left-2 size-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     className="w-64 pl-8"
                     onChange={(e) => setSearchQuery(e.target.value)}
@@ -195,34 +195,34 @@ export default function ReportsPage() {
                     key={report._id}
                     onClick={() => setSelectedReport(report)}
                   >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1 space-y-2">
-                          <div className="flex items-center gap-2">
-                            {getStatusBadge(report.status)}
-                            <div className="flex items-center gap-1">
-                              {getEntityIcon(report.reportedEntity)}
-                              <span className="font-medium text-sm">
-                                {report.reportedEntity} Report
-                              </span>
-                            </div>
-                          </div>
-                          <p className="text-muted-foreground text-sm">
-                            <strong>Reason:</strong> {report.reason.replace(/_/g, " ")}
-                          </p>
-                          <p className="line-clamp-2 text-muted-foreground text-sm">
-                            {report.description}
-                          </p>
-                          <div className="flex gap-4 text-muted-foreground text-xs">
-                            <span>
-                              <strong>Reporter:</strong> {report.reporter?.name || "Unknown"}
-                            </span>
-                            <span>
-                              <strong>Created:</strong>{" "}
-                              {new Date(report.createdAt).toLocaleDateString()}
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 space-y-2">
+                        <div className="flex items-center gap-2">
+                          {getStatusBadge(report.status)}
+                          <div className="flex items-center gap-1">
+                            {getEntityIcon(report.reportedEntity)}
+                            <span className="font-medium text-sm">
+                              {report.reportedEntity} Report
                             </span>
                           </div>
                         </div>
+                        <p className="text-muted-foreground text-sm">
+                          <strong>Reason:</strong> {report.reason.replace(/_/g, " ")}
+                        </p>
+                        <p className="line-clamp-2 text-muted-foreground text-sm">
+                          {report.description}
+                        </p>
+                        <div className="flex gap-4 text-muted-foreground text-xs">
+                          <span>
+                            <strong>Reporter:</strong> {report.reporter?.name || "Unknown"}
+                          </span>
+                          <span>
+                            <strong>Created:</strong>{" "}
+                            {new Date(report.createdAt).toLocaleDateString()}
+                          </span>
+                        </div>
                       </div>
+                    </div>
                   </div>
                 ))}
               </div>

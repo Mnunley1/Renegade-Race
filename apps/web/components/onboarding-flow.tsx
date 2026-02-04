@@ -1,5 +1,6 @@
 "use client"
 
+import { useUploadFile } from "@convex-dev/r2/react"
 import { Button } from "@workspace/ui/components/button"
 import {
   Card,
@@ -19,14 +20,13 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select"
 import { Textarea } from "@workspace/ui/components/textarea"
-import { useUploadFile } from "@convex-dev/r2/react"
 import { useMutation, useQuery } from "convex/react"
 import { ArrowRight, Loader2, Plus, Upload, X } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
-import { api } from "@/lib/convex"
 import type { Id } from "@/lib/convex"
+import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 
 const ADVANCE_NOTICE_OPTIONS = [
@@ -602,8 +602,8 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
                   <Label htmlFor="transmission">Transmission *</Label>
                   <Select
                     onValueChange={(value) => handleVehicleSelectChange("transmission", value)}
-                    value={vehicleFormData.transmission}
                     required
+                    value={vehicleFormData.transmission}
                   >
                     <SelectTrigger id="transmission">
                       <SelectValue placeholder="Select transmission" />
@@ -620,8 +620,8 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
                   <Label htmlFor="drivetrain">Drivetrain *</Label>
                   <Select
                     onValueChange={(value) => handleVehicleSelectChange("drivetrain", value)}
-                    value={vehicleFormData.drivetrain}
                     required
+                    value={vehicleFormData.drivetrain}
                   >
                     <SelectTrigger id="drivetrain">
                       <SelectValue placeholder="Select drivetrain" />
@@ -776,7 +776,7 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
                         )}
                       </div>
                       <Button
-                        className="-right-2 -top-2 absolute size-6 rounded-full p-0"
+                        className="absolute -top-2 -right-2 size-6 rounded-full p-0"
                         onClick={() => removeImage(index)}
                         size="icon"
                         type="button"

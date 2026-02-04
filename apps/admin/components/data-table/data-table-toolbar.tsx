@@ -1,16 +1,16 @@
 "use client"
 
-import { Input } from "@workspace/ui/components/input"
 import { Button } from "@workspace/ui/components/button"
 import {
   DropdownMenu,
-  DropdownMenuContent,
   DropdownMenuCheckboxItem,
-  DropdownMenuTrigger,
+  DropdownMenuContent,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu"
-import { Search, SlidersHorizontal, X, Download } from "lucide-react"
+import { Input } from "@workspace/ui/components/input"
+import { Download, Search, SlidersHorizontal, X } from "lucide-react"
 
 export interface FilterOption {
   label: string
@@ -52,17 +52,17 @@ export function DataTableToolbar({
     <div className="flex flex-wrap items-center gap-2">
       {onSearchChange && (
         <div className="relative min-w-[200px] max-w-sm flex-1">
-          <Search className="-translate-y-1/2 absolute top-1/2 left-3 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
+            className="pl-9"
+            onChange={(e) => onSearchChange(e.target.value)}
             placeholder={searchPlaceholder}
             value={search ?? ""}
-            onChange={(e) => onSearchChange(e.target.value)}
-            className="pl-9"
           />
           {search && (
             <button
+              className="absolute top-1/2 right-3 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               onClick={() => onSearchChange("")}
-              className="-translate-y-1/2 absolute top-1/2 right-3 text-muted-foreground hover:text-foreground"
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -73,7 +73,7 @@ export function DataTableToolbar({
       {filters?.map((filter) => (
         <DropdownMenu key={filter.key}>
           <DropdownMenuTrigger asChild>
-            <Button variant={filter.value ? "default" : "outline"} size="sm" className="h-9">
+            <Button className="h-9" size="sm" variant={filter.value ? "default" : "outline"}>
               {filter.label}
               {filter.value && (
                 <span className="ml-1.5 rounded-sm bg-primary-foreground/20 px-1 text-xs">
@@ -92,8 +92,8 @@ export function DataTableToolbar({
             <DropdownMenuSeparator />
             {filter.options.map((option) => (
               <DropdownMenuCheckboxItem
-                key={option.value}
                 checked={filter.value === option.value}
+                key={option.value}
                 onCheckedChange={() =>
                   filter.onChange(filter.value === option.value ? undefined : option.value)
                 }
@@ -107,10 +107,10 @@ export function DataTableToolbar({
 
       {hasActiveFilters && (
         <Button
-          variant="ghost"
-          size="sm"
           className="h-9"
           onClick={() => filters?.forEach((f) => f.onChange(undefined))}
+          size="sm"
+          variant="ghost"
         >
           Clear filters
           <X className="ml-1 h-3.5 w-3.5" />
@@ -122,7 +122,7 @@ export function DataTableToolbar({
       {columnVisibility && onColumnVisibilityChange && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="h-9">
+            <Button className="h-9" size="sm" variant="outline">
               <SlidersHorizontal className="mr-2 h-4 w-4" />
               Columns
             </Button>
@@ -132,8 +132,8 @@ export function DataTableToolbar({
             <DropdownMenuSeparator />
             {columnVisibility.map((col) => (
               <DropdownMenuCheckboxItem
-                key={col.key}
                 checked={col.visible}
+                key={col.key}
                 onCheckedChange={(checked) => onColumnVisibilityChange(col.key, !!checked)}
               >
                 {col.label}
@@ -144,7 +144,7 @@ export function DataTableToolbar({
       )}
 
       {onExport && (
-        <Button variant="outline" size="sm" className="h-9" onClick={onExport}>
+        <Button className="h-9" onClick={onExport} size="sm" variant="outline">
           <Download className="mr-2 h-4 w-4" />
           Export
         </Button>

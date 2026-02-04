@@ -1,22 +1,21 @@
 "use client"
 
-import { Suspense } from "react"
 import { useUser } from "@clerk/nextjs"
-import type { Id } from "@/lib/convex"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
+import { cn } from "@workspace/ui/lib/utils"
 import { useMutation, useQuery } from "convex/react"
 import { MessageSquare, Search } from "lucide-react"
-import { useEffect, useState } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
+import { useRouter, useSearchParams } from "next/navigation"
+import { Suspense, useEffect, useState } from "react"
+import { UserAvatar } from "@/components/user-avatar"
+import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
-import { cn } from "@workspace/ui/lib/utils"
 import { formatTime } from "@/lib/format-time"
-import { UserAvatar } from "@/components/user-avatar"
 
 type FilterTab = "all" | "unread" | "archived"
 
@@ -89,8 +88,7 @@ function MessagesPageContent() {
       conversation.vehicle?.make?.toLowerCase().includes(searchLower) ||
       conversation.vehicle?.model?.toLowerCase().includes(searchLower) ||
       conversation.lastMessageText?.toLowerCase().includes(searchLower) ||
-      conversation.team?.name?.toLowerCase().includes(searchLower) ||
-      conversation.driverProfile?.name?.toLowerCase().includes(searchLower)
+      conversation.team?.name?.toLowerCase().includes(searchLower)
     )
   })
 
@@ -182,23 +180,23 @@ function MessagesPageContent() {
                   {isBulkMode ? (
                     <>
                       <Button
-                        size="sm"
-                        variant="outline"
                         onClick={() => {
                           setIsBulkMode(false)
                           setSelectedConversations([])
                         }}
+                        size="sm"
+                        variant="outline"
                       >
                         Cancel
                       </Button>
-                      <Button size="sm" onClick={handleSelectAll}>
+                      <Button onClick={handleSelectAll} size="sm">
                         {selectedConversations.length === conversations.length
                           ? "Deselect All"
                           : "Select All"}
                       </Button>
                     </>
                   ) : (
-                    <Button size="sm" variant="outline" onClick={() => setIsBulkMode(true)}>
+                    <Button onClick={() => setIsBulkMode(true)} size="sm" variant="outline">
                       Select
                     </Button>
                   )}
@@ -213,26 +211,26 @@ function MessagesPageContent() {
                   </span>
                   <div className="flex gap-1">
                     <Button
+                      disabled={isPerformingBulkAction}
+                      onClick={() => handleBulkAction("mark_read")}
                       size="sm"
                       variant="outline"
-                      onClick={() => handleBulkAction("mark_read")}
-                      disabled={isPerformingBulkAction}
                     >
                       Mark Read
                     </Button>
                     <Button
+                      disabled={isPerformingBulkAction}
+                      onClick={() => handleBulkAction("archive")}
                       size="sm"
                       variant="outline"
-                      onClick={() => handleBulkAction("archive")}
-                      disabled={isPerformingBulkAction}
                     >
                       Archive
                     </Button>
                     <Button
+                      disabled={isPerformingBulkAction}
+                      onClick={() => handleBulkAction("delete")}
                       size="sm"
                       variant="destructive"
-                      onClick={() => handleBulkAction("delete")}
-                      disabled={isPerformingBulkAction}
                     >
                       Delete
                     </Button>
@@ -241,18 +239,18 @@ function MessagesPageContent() {
               )}
 
               {/* Filter tabs */}
-              <div className="flex gap-4 border-b border-border">
+              <div className="flex gap-4 border-border border-b">
                 {filterTabs.map((tab) => (
                   <button
-                    key={tab.value}
-                    type="button"
-                    onClick={() => setFilterTab(tab.value)}
                     className={cn(
-                      "pb-2 text-sm font-medium transition-colors",
+                      "pb-2 font-medium text-sm transition-colors",
                       filterTab === tab.value
-                        ? "border-b-2 border-[#EF1C25] text-foreground"
+                        ? "border-[#EF1C25] border-b-2 text-foreground"
                         : "text-muted-foreground hover:text-foreground"
                     )}
+                    key={tab.value}
+                    onClick={() => setFilterTab(tab.value)}
+                    type="button"
                   >
                     {tab.label}
                   </button>
@@ -260,14 +258,14 @@ function MessagesPageContent() {
               </div>
 
               <div className="relative">
-                <Search className="-translate-y-1/2 absolute top-1/2 left-3 h-4 w-4 transform text-muted-foreground" />
+                <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 transform text-muted-foreground" />
                 <Input
-                  placeholder="Search conversations..."
-                  value={searchQuery}
+                  className="pl-10"
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                     setSearchQuery(e.target.value)
                   }
-                  className="pl-10"
+                  placeholder="Search conversations..."
+                  value={searchQuery}
                 />
               </div>
             </div>
@@ -278,8 +276,8 @@ function MessagesPageContent() {
               <div className="space-y-3 p-4">
                 {Array.from({ length: 5 }).map((_, index) => (
                   <div
-                    key={index}
                     className="flex animate-pulse items-center space-x-3 rounded-lg bg-muted p-3"
+                    key={index}
                   >
                     <div className="h-12 w-12 rounded-full bg-muted-foreground/20" />
                     <div className="flex-1 space-y-2">
@@ -304,9 +302,9 @@ function MessagesPageContent() {
                   </p>
                   {!searchQuery && (
                     <Button
-                      variant="outline"
                       className="mt-4"
                       onClick={() => router.push("/vehicles")}
+                      variant="outline"
                     >
                       Browse Vehicles
                     </Button>
@@ -329,8 +327,8 @@ function MessagesPageContent() {
                   const conversationContent = (
                     <div className="flex items-start space-x-3">
                       <UserAvatar
-                        name={otherUser?.name || "Unknown"}
                         imageUrl={otherUser?.profileImage}
+                        name={otherUser?.name || "Unknown"}
                         size="md"
                       />
                       <div className="min-w-0 flex-1">
@@ -355,7 +353,7 @@ function MessagesPageContent() {
                             : conversation.team
                               ? `Team: ${conversation.team.name}`
                               : conversation.driverProfile
-                                ? `Driver: ${conversation.driverProfile?.name || "Driver conversation"}`
+                                ? "Driver conversation"
                                 : "Conversation"}
                         </p>
                         <p
@@ -378,24 +376,24 @@ function MessagesPageContent() {
                         <div
                           className={cn(
                             "flex w-full items-center space-x-3 p-4 text-left transition-colors hover:bg-muted/50 active:bg-muted/70",
-                            unreadCount > 0 && "border-l-2 border-[#EF1C25] bg-[#EF1C25]/5"
+                            unreadCount > 0 && "border-[#EF1C25] border-l-2 bg-[#EF1C25]/5"
                           )}
                         >
                           <input
-                            type="checkbox"
                             checked={selectedConversations.includes(conversation._id)}
-                            onChange={() => handleBulkSelect(conversation._id)}
                             className="h-4 w-4 flex-shrink-0 rounded border-border text-[#EF1C25] focus:ring-[#EF1C25]"
+                            onChange={() => handleBulkSelect(conversation._id)}
+                            type="checkbox"
                           />
                           <div className="flex-1">{conversationContent}</div>
                         </div>
                       ) : (
                         <Link
-                          href={`/messages/${conversation._id}`}
                           className={cn(
-                            "block w-full p-4 text-left transition-colors hover:bg-muted/50 active:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                            unreadCount > 0 && "border-l-2 border-[#EF1C25] bg-[#EF1C25]/5"
+                            "block w-full p-4 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:bg-muted/70",
+                            unreadCount > 0 && "border-[#EF1C25] border-l-2 bg-[#EF1C25]/5"
                           )}
+                          href={`/messages/${conversation._id}`}
                         >
                           {conversationContent}
                         </Link>
@@ -429,8 +427,8 @@ export default function MessagesPage() {
                 <div className="space-y-3">
                   {Array.from({ length: 5 }).map((_, index) => (
                     <div
-                      key={index}
                       className="flex animate-pulse items-center space-x-3 rounded-lg bg-muted p-3"
+                      key={index}
                     >
                       <div className="h-12 w-12 flex-shrink-0 rounded-full bg-muted-foreground/20" />
                       <div className="flex-1 space-y-2">

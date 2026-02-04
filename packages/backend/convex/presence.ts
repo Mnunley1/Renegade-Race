@@ -89,11 +89,7 @@ export const getTypingUsers = query({
 
     // Filter to users who are currently typing (not self, updated within 5 seconds)
     const typingUserIds = presenceRecords
-      .filter((p) =>
-        p.userId !== userId &&
-        p.isTyping &&
-        (now - p.updatedAt) < TYPING_TIMEOUT_MS
-      )
+      .filter((p) => p.userId !== userId && p.isTyping && now - p.updatedAt < TYPING_TIMEOUT_MS)
       .map((p) => p.userId)
 
     // Get user details for typing users
@@ -120,7 +116,7 @@ export const cleanupStalePresence = mutation({
 
     // Find all presence records that haven't been updated in the last hour
     const allPresence = await ctx.db.query("presence").collect()
-    const stalePresence = allPresence.filter((p) => (now - p.updatedAt) > STALE_THRESHOLD_MS)
+    const stalePresence = allPresence.filter((p) => now - p.updatedAt > STALE_THRESHOLD_MS)
 
     // Delete stale records
     for (const record of stalePresence) {

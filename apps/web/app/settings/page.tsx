@@ -246,10 +246,10 @@ export default function SettingsPage() {
         errors?: Array<{ longMessage?: string; message?: string }>
       }
       const message =
-        clerkError?.errors?.[0]?.longMessage
-        || clerkError?.errors?.[0]?.message
-        || (error instanceof Error ? error.message : null)
-        || "Failed to update account. Please try again."
+        clerkError?.errors?.[0]?.longMessage ||
+        clerkError?.errors?.[0]?.message ||
+        (error instanceof Error ? error.message : null) ||
+        "Failed to update account. Please try again."
       toast.error(message)
     } finally {
       setIsSavingAccount(false)
@@ -286,9 +286,7 @@ export default function SettingsPage() {
         ...(hasPassword ? { currentPassword } : {}),
         newPassword,
       })
-      toast.success(
-        hasPassword ? "Password updated" : "Password created"
-      )
+      toast.success(hasPassword ? "Password updated" : "Password created")
       setIsChangingPassword(false)
       setCurrentPassword("")
       setNewPassword("")
@@ -299,10 +297,10 @@ export default function SettingsPage() {
         errors?: Array<{ longMessage?: string; message?: string }>
       }
       const message =
-        clerkError?.errors?.[0]?.longMessage
-        || clerkError?.errors?.[0]?.message
-        || (error instanceof Error ? error.message : null)
-        || "Failed to update password. Please try again."
+        clerkError?.errors?.[0]?.longMessage ||
+        clerkError?.errors?.[0]?.message ||
+        (error instanceof Error ? error.message : null) ||
+        "Failed to update password. Please try again."
       toast.error(message)
     } finally {
       setIsSavingPassword(false)
@@ -515,11 +513,7 @@ export default function SettingsPage() {
                       <CardDescription>Your personal details</CardDescription>
                     </div>
                     {!isEditingAccount && (
-                      <Button
-                        onClick={() => setIsEditingAccount(true)}
-                        size="sm"
-                        variant="outline"
-                      >
+                      <Button onClick={() => setIsEditingAccount(true)} size="sm" variant="outline">
                         Edit
                       </Button>
                     )}
@@ -550,36 +544,24 @@ export default function SettingsPage() {
                         <Label>Email</Label>
                         <Input
                           disabled
-                          value={
-                            clerkUser?.primaryEmailAddress?.emailAddress
-                              || ""
-                          }
+                          value={clerkUser?.primaryEmailAddress?.emailAddress || ""}
                         />
                         <p className="text-muted-foreground text-xs">
-                          Email changes require verification and must be
-                          updated through your account provider
+                          Email changes require verification and must be updated through your
+                          account provider
                         </p>
                       </div>
                       <div className="space-y-2">
                         <Label>Phone</Label>
-                        <Input
-                          disabled
-                          value={
-                            clerkUser?.primaryPhoneNumber?.phoneNumber
-                              || ""
-                          }
-                        />
+                        <Input disabled value={clerkUser?.primaryPhoneNumber?.phoneNumber || ""} />
                         <p className="text-muted-foreground text-xs">
-                          Phone changes require verification and must be
-                          updated through your account provider
+                          Phone changes require verification and must be updated through your
+                          account provider
                         </p>
                       </div>
                       <Separator />
                       <div className="flex gap-2">
-                        <Button
-                          disabled={isSavingAccount}
-                          onClick={handleSaveAccount}
-                        >
+                        <Button disabled={isSavingAccount} onClick={handleSaveAccount}>
                           {isSavingAccount ? (
                             <>
                               <Loader2 className="mr-2 size-4 animate-spin" />
@@ -600,22 +582,9 @@ export default function SettingsPage() {
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      <InfoRow
-                        label="Full Name"
-                        value={clerkUser?.fullName}
-                      />
-                      <InfoRow
-                        label="Email"
-                        value={
-                          clerkUser?.primaryEmailAddress?.emailAddress
-                        }
-                      />
-                      <InfoRow
-                        label="Phone"
-                        value={
-                          clerkUser?.primaryPhoneNumber?.phoneNumber
-                        }
-                      />
+                      <InfoRow label="Full Name" value={clerkUser?.fullName} />
+                      <InfoRow label="Email" value={clerkUser?.primaryEmailAddress?.emailAddress} />
+                      <InfoRow label="Phone" value={clerkUser?.primaryPhoneNumber?.phoneNumber} />
                     </div>
                   )}
                 </CardContent>
@@ -713,42 +682,30 @@ export default function SettingsPage() {
                       <div className="space-y-3 rounded-lg border bg-muted/30 p-4">
                         {hasPassword && (
                           <div className="space-y-2">
-                            <Label htmlFor="current-password">
-                              Current Password
-                            </Label>
+                            <Label htmlFor="current-password">Current Password</Label>
                             <Input
                               id="current-password"
-                              onChange={(e) =>
-                                setCurrentPassword(e.target.value)
-                              }
+                              onChange={(e) => setCurrentPassword(e.target.value)}
                               type="password"
                               value={currentPassword}
                             />
                           </div>
                         )}
                         <div className="space-y-2">
-                          <Label htmlFor="new-password">
-                            New Password
-                          </Label>
+                          <Label htmlFor="new-password">New Password</Label>
                           <Input
                             id="new-password"
-                            onChange={(e) =>
-                              setNewPassword(e.target.value)
-                            }
+                            onChange={(e) => setNewPassword(e.target.value)}
                             placeholder="Min. 8 characters"
                             type="password"
                             value={newPassword}
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="confirm-password">
-                            Confirm Password
-                          </Label>
+                          <Label htmlFor="confirm-password">Confirm Password</Label>
                           <Input
                             id="confirm-password"
-                            onChange={(e) =>
-                              setConfirmPassword(e.target.value)
-                            }
+                            onChange={(e) => setConfirmPassword(e.target.value)}
                             type="password"
                             value={confirmPassword}
                           />
@@ -756,10 +713,10 @@ export default function SettingsPage() {
                         <div className="flex gap-2 pt-1">
                           <Button
                             disabled={
-                              isSavingPassword
-                                || (hasPassword && !currentPassword)
-                                || !newPassword
-                                || !confirmPassword
+                              isSavingPassword ||
+                              (hasPassword && !currentPassword) ||
+                              !newPassword ||
+                              !confirmPassword
                             }
                             onClick={handleSavePassword}
                             size="sm"
@@ -793,70 +750,62 @@ export default function SettingsPage() {
                   <div className="space-y-3">
                     <p className="font-medium text-sm">Connected Accounts</p>
                     <p className="text-muted-foreground text-sm">
-                      Sign in with your social accounts or link them for
-                      easier access
+                      Sign in with your social accounts or link them for easier access
                     </p>
 
-                    {clerkUser?.externalAccounts &&
-                      clerkUser.externalAccounts.length > 0 && (
-                        <div className="space-y-2">
-                          {clerkUser.externalAccounts.map((account) => (
-                            <div
-                              className="flex items-center justify-between rounded-lg border p-3"
-                              key={account.id}
-                            >
-                              <div className="flex items-center gap-3">
-                                <div className="flex size-9 items-center justify-center rounded-md bg-muted">
-                                  {account.imageUrl ? (
-                                    <img
-                                      alt={account.providerTitle()}
-                                      className="size-5 rounded-sm"
-                                      src={account.imageUrl}
-                                    />
-                                  ) : (
-                                    <LinkIcon className="size-4 text-muted-foreground" />
-                                  )}
-                                </div>
-                                <div>
-                                  <p className="font-medium text-sm">
-                                    {account.providerTitle()}
-                                  </p>
-                                  <p className="text-muted-foreground text-xs">
-                                    {account.emailAddress
-                                      || account.username
-                                      || "Connected"}
-                                  </p>
-                                </div>
+                    {clerkUser?.externalAccounts && clerkUser.externalAccounts.length > 0 && (
+                      <div className="space-y-2">
+                        {clerkUser.externalAccounts.map((account) => (
+                          <div
+                            className="flex items-center justify-between rounded-lg border p-3"
+                            key={account.id}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="flex size-9 items-center justify-center rounded-md bg-muted">
+                                {account.imageUrl ? (
+                                  <img
+                                    alt={account.providerTitle()}
+                                    className="size-5 rounded-sm"
+                                    src={account.imageUrl}
+                                  />
+                                ) : (
+                                  <LinkIcon className="size-4 text-muted-foreground" />
+                                )}
                               </div>
-                              <Button
-                                onClick={async () => {
-                                  try {
-                                    await account.destroy()
-                                    toast.success(
-                                      `${account.providerTitle()} disconnected`
-                                    )
-                                  } catch (err: unknown) {
-                                    const clerkErr = err as {
-                                      errors?: Array<{
-                                        longMessage?: string
-                                        message?: string
-                                      }>
-                                    }
-                                    toast.error(
-                                      clerkErr?.errors?.[0]?.longMessage
-                                        || "Cannot disconnect this account"
-                                    )
-                                  }
-                                }}
-                                size="sm"
-                                variant="outline"
-                              >
-                                Disconnect
-                              </Button>
+                              <div>
+                                <p className="font-medium text-sm">{account.providerTitle()}</p>
+                                <p className="text-muted-foreground text-xs">
+                                  {account.emailAddress || account.username || "Connected"}
+                                </p>
+                              </div>
                             </div>
-                          ))}
-                        </div>
-                      )}
+                            <Button
+                              onClick={async () => {
+                                try {
+                                  await account.destroy()
+                                  toast.success(`${account.providerTitle()} disconnected`)
+                                } catch (err: unknown) {
+                                  const clerkErr = err as {
+                                    errors?: Array<{
+                                      longMessage?: string
+                                      message?: string
+                                    }>
+                                  }
+                                  toast.error(
+                                    clerkErr?.errors?.[0]?.longMessage ||
+                                      "Cannot disconnect this account"
+                                  )
+                                }
+                              }}
+                              size="sm"
+                              variant="outline"
+                            >
+                              Disconnect
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
 
                     <div className="flex flex-wrap gap-2 pt-1">
                       {(
@@ -869,8 +818,7 @@ export default function SettingsPage() {
                         .filter(
                           (provider) =>
                             !clerkUser?.externalAccounts?.some(
-                              (a) =>
-                                `oauth_${a.provider}` === provider.strategy
+                              (a) => `oauth_${a.provider}` === provider.strategy
                             )
                         )
                         .map((provider) => (
@@ -890,8 +838,8 @@ export default function SettingsPage() {
                                   }>
                                 }
                                 toast.error(
-                                  clerkErr?.errors?.[0]?.longMessage
-                                    || `Failed to connect ${provider.label}`
+                                  clerkErr?.errors?.[0]?.longMessage ||
+                                    `Failed to connect ${provider.label}`
                                 )
                               }
                             }}

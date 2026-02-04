@@ -6,7 +6,7 @@ export const trackView = mutation({
   args: { vehicleId: v.id("vehicles") },
   handler: async (ctx, args) => {
     const vehicle = await ctx.db.get(args.vehicleId)
-    if (!(vehicle && vehicle.isActive)) {
+    if (!vehicle?.isActive) {
       return null
     }
 

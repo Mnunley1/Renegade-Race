@@ -63,8 +63,7 @@ export function ConfirmationDialogs({
           <DialogHeader>
             <DialogTitle>Delete Message</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete this message? This action cannot
-              be undone.
+              Are you sure you want to delete this message? This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
           {deleteError && (
@@ -105,10 +104,9 @@ export function ConfirmationDialogs({
           <DialogHeader>
             <DialogTitle>Delete Conversation</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete this conversation? This will
-              remove it from your messages list. The other participant will
-              still be able to see the conversation. If both participants
-              delete the conversation, it will be permanently deleted.
+              Are you sure you want to delete this conversation? This will remove it from your
+              messages list. The other participant will still be able to see the conversation. If
+              both participants delete the conversation, it will be permanently deleted.
             </DialogDescription>
           </DialogHeader>
           {deleteError && (
@@ -138,29 +136,20 @@ export function ConfirmationDialogs({
       </Dialog>
 
       {/* Archive Conversation Dialog */}
-      <Dialog
-        onOpenChange={onShowArchiveConversationChange}
-        open={showArchiveConversation}
-      >
+      <Dialog onOpenChange={onShowArchiveConversationChange} open={showArchiveConversation}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Archive Conversation</DialogTitle>
             <DialogDescription>
-              Are you sure you want to archive this conversation? You can
-              unarchive it later from your archived conversations.
+              Are you sure you want to archive this conversation? You can unarchive it later from
+              your archived conversations.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button
-              onClick={() => onShowArchiveConversationChange(false)}
-              variant="outline"
-            >
+            <Button onClick={() => onShowArchiveConversationChange(false)} variant="outline">
               Cancel
             </Button>
-            <Button
-              disabled={isArchivingConversation}
-              onClick={onConfirmArchiveConversation}
-            >
+            <Button disabled={isArchivingConversation} onClick={onConfirmArchiveConversation}>
               {isArchivingConversation ? "Archiving..." : "Archive"}
             </Button>
           </DialogFooter>

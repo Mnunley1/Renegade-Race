@@ -1,7 +1,7 @@
-import type { Metadata } from "next"
-import Link from "next/link"
 import { Card, CardContent } from "@workspace/ui/components/card"
 import { Separator } from "@workspace/ui/components/separator"
+import type { Metadata } from "next"
+import Link from "next/link"
 
 export const metadata: Metadata = {
   title: "Terms of Use",

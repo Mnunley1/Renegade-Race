@@ -299,9 +299,7 @@ export const getSimilar = query({
     // Get all active profiles except this one
     const allProfiles = await ctx.db
       .query("driverProfiles")
-      .filter((q) =>
-        q.and(q.neq(q.field("_id"), args.profileId), q.eq(q.field("isActive"), true))
-      )
+      .filter((q) => q.and(q.neq(q.field("_id"), args.profileId), q.eq(q.field("isActive"), true)))
       .take(50)
 
     // Score by: same experience (3), same racingType (2), overlapping categories (1 each)

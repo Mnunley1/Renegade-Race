@@ -9,8 +9,8 @@ import Image from "next/image"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { Suspense } from "react"
-import { api } from "@/lib/convex"
 import type { Id } from "@/lib/convex"
+import { api } from "@/lib/convex"
 import { formatDateForDisplay } from "@/lib/date-utils"
 
 function CheckoutSuccessContent() {
@@ -51,10 +51,9 @@ function CheckoutSuccessContent() {
   }
 
   const vehicle = reservation.vehicle
-  const primaryImage =
-    vehicle?.images?.find((img) => img.isPrimary)?.cardUrl ||
-    vehicle?.images?.[0]?.cardUrl ||
-    ""
+  const vehicleImages = (vehicle as any)?.images as Array<{ isPrimary: boolean; imageUrl?: string; r2Key?: string }> | undefined
+  const primaryImageData = vehicleImages?.find((img) => img.isPrimary) || vehicleImages?.[0]
+  const primaryImage = primaryImageData?.imageUrl || (primaryImageData?.r2Key ? `https://ik.imagekit.io/renegaderace/${primaryImageData.r2Key}?tr=w-320,h-200,q-80,f-auto` : "")
 
   return (
     <div className="container mx-auto max-w-4xl px-4 py-8">
@@ -88,7 +87,10 @@ function CheckoutSuccessContent() {
                     {vehicle.address && (
                       <div className="mb-2 flex items-center gap-2 text-muted-foreground">
                         <MapPin className="size-4" />
-                        <span>{vehicle.address}</span>
+                        <span>
+                          {vehicle.address.street}, {vehicle.address.city}, {vehicle.address.state}{" "}
+                          {vehicle.address.zipCode}
+                        </span>
                       </div>
                     )}
                   </div>

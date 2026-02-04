@@ -52,9 +52,7 @@ interface ClerkInvitation {
 }
 
 async function main() {
-  console.log(
-    `\n📧 Clerk Invitation Sender ${DRY_RUN ? "(DRY RUN)" : "(PRODUCTION)"}\n`
-  )
+  console.log(`\n📧 Clerk Invitation Sender ${DRY_RUN ? "(DRY RUN)" : "(PRODUCTION)"}\n`)
 
   // List all pending invitations
   console.log("Fetching pending invitations...")
@@ -113,7 +111,7 @@ async function main() {
       })
 
       sentCount++
-      console.log(`  ✓ Sent`)
+      console.log("  ✓ Sent")
     } catch (e) {
       errorCount++
       console.error(`  ✗ Error: ${e}`)

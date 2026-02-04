@@ -1,9 +1,9 @@
 "use client"
 
 import { Authenticated, AuthLoading, Unauthenticated } from "convex/react"
-import { AdminLayout } from "@/components/admin-layout"
 import { useRouter } from "next/navigation"
 import { useEffect } from "react"
+import { AdminLayout } from "@/components/admin-layout"
 
 function UnauthenticatedRedirect() {
   const router = useRouter()

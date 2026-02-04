@@ -17,12 +17,13 @@
  *   R2_BUCKET_NAME       - R2 bucket name
  */
 
-import { parse } from "csv-parse/sync"
-import { ConvexHttpClient } from "convex/browser"
-import { api } from "../convex/_generated/api"
+import * as crypto from "node:crypto"
 import * as fs from "node:fs"
 import * as path from "node:path"
-import * as crypto from "node:crypto"
+import { ConvexHttpClient } from "convex/browser"
+import { parse } from "csv-parse/sync"
+import { api } from "../convex/_generated/api"
+import type { Id } from "../convex/_generated/dataModel"
 
 // ---------------------------------------------------------------------------
 // Config
@@ -115,18 +116,15 @@ function splitName(fullName: string): { firstName: string; lastName: string } {
 
 /** Map Adalo experience to Convex experience level */
 function mapExperience(exp: string): "beginner" | "intermediate" | "advanced" | undefined {
-  if (!exp) return undefined
+  if (!exp) return
   if (exp.includes("DE1") || exp.toLowerCase().includes("novice")) return "beginner"
   if (exp.includes("DE2") || exp.toLowerCase().includes("intermediate")) return "intermediate"
   if (exp.includes("DE3") || exp.toLowerCase().includes("advanced")) return "advanced"
-  return undefined
+  return
 }
 
 /** Map Adalo user type */
-function mapUserType(
-  userType: string,
-  hasCars: boolean
-): "driver" | "both" | undefined {
+function mapUserType(userType: string, hasCars: boolean): "driver" | "both" | undefined {
   if (hasCars) return "both"
   if (userType === "Car Owner") return "both"
   if (userType === "Car Renter") return "driver"
@@ -154,11 +152,7 @@ async function downloadImage(
 }
 
 /** Upload buffer to R2 directly using S3-compatible PUT */
-async function uploadToR2(
-  key: string,
-  buffer: Buffer,
-  contentType: string
-): Promise<boolean> {
+async function uploadToR2(key: string, buffer: Buffer, contentType: string): Promise<boolean> {
   // Use AWS S3-compatible API with basic auth via presigned URL approach
   // For simplicity, use the S3 PutObject with SigV4
   const endpoint = R2_ENDPOINT!
@@ -168,7 +162,10 @@ async function uploadToR2(
 
   const url = `${endpoint}/${bucket}/${key}`
   const date = new Date()
-  const dateStr = date.toISOString().replace(/[:-]|\.\d{3}/g, "").slice(0, 8)
+  const dateStr = date
+    .toISOString()
+    .replace(/[:-]|\.\d{3}/g, "")
+    .slice(0, 8)
   const dateTimeStr = date.toISOString().replace(/[:-]|\.\d{3}/g, "")
   const region = "auto"
   const service = "s3"
@@ -202,20 +199,15 @@ async function uploadToR2(
     crypto.createHash("sha256").update(canonicalRequest).digest("hex"),
   ].join("\n")
 
-  const signingKey = (
-    (key: string | Buffer, data: string) =>
-      crypto.createHmac("sha256", key).update(data).digest()
-  )
+  const signingKey = (key: string | Buffer, data: string) =>
+    crypto.createHmac("sha256", key).update(data).digest()
 
   const kDate = signingKey(`AWS4${secretKey}`, dateStr)
   const kRegion = signingKey(kDate, region)
   const kService = signingKey(kRegion, service)
   const kSigning = signingKey(kService, "aws4_request")
 
-  const signature = crypto
-    .createHmac("sha256", kSigning)
-    .update(stringToSign)
-    .digest("hex")
+  const signature = crypto.createHmac("sha256", kSigning).update(stringToSign).digest("hex")
 
   const authorization =
     `AWS4-HMAC-SHA256 Credential=${accessKey}/${credentialScope}, ` +
@@ -231,7 +223,7 @@ async function uploadToR2(
         Authorization: authorization,
         Host: parsedUrl.host,
       },
-      body: buffer,
+      body: new Uint8Array(buffer),
     })
     if (!res.ok) {
       const body = await res.text()
@@ -284,8 +276,10 @@ async function clerkApiWithRetry(
     } catch (e: unknown) {
       const errMsg = String(e)
       if (errMsg.includes("429") && attempt < maxRetries) {
-        const backoff = Math.min(2000 * 2 ** attempt, 30000)
-        console.log(`    ⏳ Rate limited, waiting ${backoff / 1000}s (attempt ${attempt + 1}/${maxRetries})...`)
+        const backoff = Math.min(2000 * 2 ** attempt, 30_000)
+        console.log(
+          `    ⏳ Rate limited, waiting ${backoff / 1000}s (attempt ${attempt + 1}/${maxRetries})...`
+        )
         await sleep(backoff)
         continue
       }
@@ -311,7 +305,7 @@ async function main() {
     requireEnv("R2_BUCKET_NAME", R2_BUCKET_NAME)
   }
 
-  const repoRoot = path.resolve(__dirname, "../../..")
+  const repoRoot = path.resolve(import.meta.dirname, "../../..")
   const usersCsv = fs.readFileSync(path.join(repoRoot, "Users.csv"), "utf-8")
   const carsCsv = fs.readFileSync(path.join(repoRoot, "Cars.csv"), "utf-8")
 
@@ -383,7 +377,7 @@ async function main() {
 
   // Step 1: Create tracks
   console.log("── Step 1: Creating Tracks ──")
-  const trackMap = new Map<string, string>() // track name → convex ID
+  const trackMap = new Map<string, Id<"tracks">>() // track name → convex ID
 
   // Always create a placeholder track for cars with no track assigned
   const allTrackNames = [...trackNames, "Unassigned"]
@@ -458,7 +452,7 @@ async function main() {
         // If user already exists in Clerk, try to find them
         const errMsg = String(e)
         if (errMsg.includes("already exists") || errMsg.includes("taken")) {
-          console.log(`    Clerk user already exists, searching...`)
+          console.log("    Clerk user already exists, searching...")
           const found = (await clerkApiWithRetry(
             "GET",
             `/users?email_address=${encodeURIComponent(email)}`
@@ -479,7 +473,7 @@ async function main() {
       let profileImageR2Key: string | undefined
       const picData = parseAdaloJson(u["Profile Picture"])
       if (picData?.url) {
-        console.log(`    Downloading profile image...`)
+        console.log("    Downloading profile image...")
         const img = await downloadImage(picData.url)
         if (img) {
           const ext = picData.url.split(".").pop() || "jpg"
@@ -488,7 +482,7 @@ async function main() {
           const ok = await uploadToR2(key, img.buffer, img.contentType)
           if (ok) {
             profileImageR2Key = key
-            console.log(`    ✓ Image uploaded`)
+            console.log("    ✓ Image uploaded")
           }
         }
       }
@@ -556,9 +550,10 @@ async function main() {
 
       // Look up track (fall back to "Unassigned" placeholder)
       const trackName = c.Track?.trim()
-      const trackId = (trackName ? trackMap.get(trackName) : undefined) ?? trackMap.get("Unassigned")
+      const trackId =
+        (trackName ? trackMap.get(trackName) : undefined) ?? trackMap.get("Unassigned")
       if (!trackId) {
-        console.warn(`    ⚠ No track available, skipping`)
+        console.warn("    ⚠ No track available, skipping")
         vehicleErrorCount++
         continue
       }
@@ -603,7 +598,7 @@ async function main() {
       // Upload vehicle image
       const imgData = parseAdaloJson(c.Image)
       if (imgData?.url) {
-        console.log(`    Downloading vehicle image...`)
+        console.log("    Downloading vehicle image...")
         const img = await downloadImage(imgData.url)
         if (img) {
           const ext = imgData.url.split(".").pop() || "jpg"
@@ -617,7 +612,7 @@ async function main() {
               isPrimary: true,
               order: 0,
             })
-            console.log(`    ✓ Image uploaded and linked`)
+            console.log("    ✓ Image uploaded and linked")
           }
         }
       }
@@ -629,9 +624,7 @@ async function main() {
     }
   }
 
-  console.log(
-    `\n  Vehicles migrated: ${vehicleSuccessCount} success, ${vehicleErrorCount} errors`
-  )
+  console.log(`\n  Vehicles migrated: ${vehicleSuccessCount} success, ${vehicleErrorCount} errors`)
 
   console.log("\n✅ Migration complete!")
   console.log(`  Tracks: ${trackMap.size}`)

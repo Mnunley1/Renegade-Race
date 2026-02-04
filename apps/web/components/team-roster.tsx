@@ -1,7 +1,5 @@
 "use client"
 
-import type { Id } from "@/lib/convex"
-import { api } from "@/lib/convex"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
@@ -15,6 +13,8 @@ import {
 import { useMutation, useQuery } from "convex/react"
 import { UserMinus, Users } from "lucide-react"
 import { toast } from "sonner"
+import type { Id } from "@/lib/convex"
+import { api } from "@/lib/convex"
 
 interface TeamRosterProps {
   teamId: Id<"teams">
@@ -72,16 +72,11 @@ export function TeamRoster({ teamId, isOwner }: TeamRosterProps) {
       </CardHeader>
       <CardContent className="space-y-3">
         {members.map((member) => (
-          <div
-            key={member._id}
-            className="flex items-center justify-between rounded-lg border p-3"
-          >
+          <div className="flex items-center justify-between rounded-lg border p-3" key={member._id}>
             <div className="flex-1">
               <div className="flex items-center gap-2">
                 <span className="font-medium">{member.user?.name || "Unknown"}</span>
-                <Badge variant="secondary">
-                  {ROLE_LABELS[member.role] || member.role}
-                </Badge>
+                <Badge variant="secondary">{ROLE_LABELS[member.role] || member.role}</Badge>
               </div>
               <p className="text-muted-foreground text-sm">
                 Joined {new Date(member.joinedAt).toLocaleDateString()}
@@ -91,13 +86,10 @@ export function TeamRoster({ teamId, isOwner }: TeamRosterProps) {
             {isOwner && member.role !== "owner" && (
               <div className="flex items-center gap-2">
                 <Select
-                  value={member.role}
                   onValueChange={(value) =>
-                    handleRoleUpdate(
-                      member._id,
-                      value as "driver" | "crew" | "manager"
-                    )
+                    handleRoleUpdate(member._id, value as "driver" | "crew" | "manager")
                   }
+                  value={member.role}
                 >
                   <SelectTrigger className="w-28">
                     <SelectValue />
@@ -108,11 +100,7 @@ export function TeamRoster({ teamId, isOwner }: TeamRosterProps) {
                     <SelectItem value="manager">Manager</SelectItem>
                   </SelectContent>
                 </Select>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => handleRemove(member._id)}
-                >
+                <Button onClick={() => handleRemove(member._id)} size="icon" variant="ghost">
                   <UserMinus className="size-4" />
                 </Button>
               </div>

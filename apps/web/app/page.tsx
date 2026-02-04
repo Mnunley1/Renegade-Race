@@ -8,8 +8,8 @@ import Image from "next/image"
 import Link from "next/link"
 import { useMemo, useState } from "react"
 import { VehicleCard } from "@/components/vehicle-card"
-import { api } from "@/lib/convex"
 import type { Id } from "@/lib/convex"
+import { api } from "@/lib/convex"
 
 export default function HomePage() {
   // Track video load error for hero section
@@ -100,7 +100,7 @@ export default function HomePage() {
             playsInline
             poster="/images/hero-vid-thumbnail.png"
           >
-            <source src="/videos/renegade-hero-video.mp4" type="video/mp4" />
+            <source src="https://ik.imagekit.io/renegaderace/site-media/renegade-hero-video.mp4" type="video/mp4" />
           </video>
         )}
 
@@ -160,7 +160,7 @@ export default function HomePage() {
                   <div className="mb-6 flex items-center justify-between">
                     <div className="relative flex h-16 w-16 items-center justify-center rounded-lg bg-primary/10">
                       <Search className="size-8 text-primary" />
-                      <div className="-right-2 -top-2 absolute flex h-7 w-7 items-center justify-center rounded-full bg-primary font-bold text-primary-foreground text-sm">
+                      <div className="absolute -top-2 -right-2 flex h-7 w-7 items-center justify-center rounded-full bg-primary font-bold text-primary-foreground text-sm">
                         1
                       </div>
                     </div>
@@ -175,7 +175,7 @@ export default function HomePage() {
                 </CardContent>
               </Card>
               {/* Arrow to Step 2 - Desktop Only */}
-              <div className="-translate-y-1/2 absolute top-1/2 right-0 hidden translate-x-1/2 md:block">
+              <div className="absolute top-1/2 right-0 hidden translate-x-1/2 -translate-y-1/2 md:block">
                 <div className="flex items-center">
                   <div className="h-0.5 w-8 bg-primary/40" />
                   <ArrowRight className="size-5 text-primary" />
@@ -190,7 +190,7 @@ export default function HomePage() {
                   <div className="mb-6 flex items-center justify-between">
                     <div className="relative flex h-16 w-16 items-center justify-center rounded-lg bg-primary/10">
                       <CreditCard className="size-8 text-primary" />
-                      <div className="-right-2 -top-2 absolute flex h-7 w-7 items-center justify-center rounded-full bg-primary font-bold text-primary-foreground text-sm">
+                      <div className="absolute -top-2 -right-2 flex h-7 w-7 items-center justify-center rounded-full bg-primary font-bold text-primary-foreground text-sm">
                         2
                       </div>
                     </div>
@@ -205,7 +205,7 @@ export default function HomePage() {
                 </CardContent>
               </Card>
               {/* Arrow to Step 3 - Desktop Only */}
-              <div className="-translate-y-1/2 absolute top-1/2 right-0 hidden translate-x-1/2 md:block">
+              <div className="absolute top-1/2 right-0 hidden translate-x-1/2 -translate-y-1/2 md:block">
                 <div className="flex items-center">
                   <div className="h-0.5 w-8 bg-primary/40" />
                   <ArrowRight className="size-5 text-primary" />
@@ -220,7 +220,7 @@ export default function HomePage() {
                   <div className="mb-6 flex items-center justify-between">
                     <div className="relative flex h-16 w-16 items-center justify-center rounded-lg bg-primary/10">
                       <Car className="size-8 text-primary" />
-                      <div className="-right-2 -top-2 absolute flex h-7 w-7 items-center justify-center rounded-full bg-primary font-bold text-primary-foreground text-sm">
+                      <div className="absolute -top-2 -right-2 flex h-7 w-7 items-center justify-center rounded-full bg-primary font-bold text-primary-foreground text-sm">
                         3
                       </div>
                     </div>
@@ -326,7 +326,7 @@ export default function HomePage() {
                 playsInline
                 preload="metadata"
               >
-                <source src="/videos/Renegade_promo_video.mp4" type="video/mp4" />
+                <source src="https://ik.imagekit.io/renegaderace/site-media/Renegade_promo_video.mp4" type="video/mp4" />
                 Your browser does not support the video tag.
               </video>
             )}

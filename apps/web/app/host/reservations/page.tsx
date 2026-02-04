@@ -19,8 +19,8 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { useMemo, useState } from "react"
-import { api } from "@/lib/convex"
 import type { Id } from "@/lib/convex"
+import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 
 export default function HostReservationsPage() {
@@ -101,7 +101,7 @@ export default function HostReservationsPage() {
   const confirmedCount = confirmedReservations?.length || 0
   const completedReservations = allReservations.filter((res: any) => res.status === "completed")
   const completedCount = completedReservations.length
-  const cancelledCount = allReservations.filter((res: any) => res.status === "cancelled").length
+  const _cancelledCount = allReservations.filter((res: any) => res.status === "cancelled").length
 
   const filteredReservations =
     selectedStatus === "all"

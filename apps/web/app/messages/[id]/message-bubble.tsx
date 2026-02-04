@@ -1,11 +1,11 @@
 "use client"
 
-import type { Id } from "@/lib/convex"
 import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
 import { cn } from "@workspace/ui/lib/utils"
-import { formatTime } from "@/lib/format-time"
 import { Copy, Edit, Reply, Trash2 } from "lucide-react"
+import type { Id } from "@/lib/convex"
+import { formatTime } from "@/lib/format-time"
 
 interface RepliedToMessage {
   sender?: { name?: string } | null
@@ -62,10 +62,7 @@ export function MessageBubble({
 
   return (
     <div
-      className={cn(
-        "group flex items-start gap-2",
-        isOwn ? "justify-end" : "justify-start"
-      )}
+      className={cn("group flex items-start gap-2", isOwn ? "justify-end" : "justify-start")}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
     >
@@ -74,16 +71,14 @@ export function MessageBubble({
         <div
           className={cn(
             "flex gap-1 transition-all duration-200",
-            showOwnActions
-              ? "scale-100 opacity-100"
-              : "pointer-events-none scale-95 opacity-0"
+            showOwnActions ? "scale-100 opacity-100" : "pointer-events-none scale-95 opacity-0"
           )}
         >
           {isOwn && (
             <>
               <Button
                 aria-label="Copy message"
-                className="h-7 w-7 min-h-[44px] min-w-[44px] p-0"
+                className="h-7 min-h-[44px] w-7 min-w-[44px] p-0"
                 onClick={() => onCopy(message.content)}
                 size="sm"
                 title="Copy message"
@@ -94,7 +89,7 @@ export function MessageBubble({
               {canEdit && (
                 <Button
                   aria-label="Edit message"
-                  className="h-7 w-7 min-h-[44px] min-w-[44px] p-0"
+                  className="h-7 min-h-[44px] w-7 min-w-[44px] p-0"
                   onClick={() => onEdit(message._id, message.content)}
                   size="sm"
                   title="Edit message"
@@ -105,7 +100,7 @@ export function MessageBubble({
               )}
               <Button
                 aria-label="Delete message"
-                className="h-7 w-7 min-h-[44px] min-w-[44px] p-0 text-destructive hover:text-destructive"
+                className="h-7 min-h-[44px] w-7 min-w-[44px] p-0 text-destructive hover:text-destructive"
                 onClick={() => onDelete(message._id)}
                 size="sm"
                 title="Delete message"
@@ -124,9 +119,7 @@ export function MessageBubble({
           <div
             className={cn(
               "rounded-lg p-3",
-              isOwn
-                ? "bg-[#EF1C25] text-white"
-                : "bg-muted text-foreground"
+              isOwn ? "bg-[#EF1C25] text-white" : "bg-muted text-foreground"
             )}
           >
             <Input
@@ -138,19 +131,10 @@ export function MessageBubble({
               value={editContent}
             />
             <div className="flex gap-2">
-              <Button
-                disabled={isSavingEdit || !editContent.trim()}
-                onClick={onSaveEdit}
-                size="sm"
-              >
+              <Button disabled={isSavingEdit || !editContent.trim()} onClick={onSaveEdit} size="sm">
                 {isSavingEdit ? "Saving..." : "Save"}
               </Button>
-              <Button
-                disabled={isSavingEdit}
-                onClick={onCancelEdit}
-                size="sm"
-                variant="outline"
-              >
+              <Button disabled={isSavingEdit} onClick={onCancelEdit} size="sm" variant="outline">
                 Cancel
               </Button>
             </div>
@@ -160,9 +144,7 @@ export function MessageBubble({
             <div
               className={cn(
                 "rounded-lg p-3",
-                isOwn
-                  ? "bg-[#EF1C25] text-white"
-                  : "bg-muted text-foreground"
+                isOwn ? "bg-[#EF1C25] text-white" : "bg-muted text-foreground"
               )}
             >
               {message.repliedToMessage && (
@@ -177,9 +159,7 @@ export function MessageBubble({
                   <div className="font-medium">
                     {message.repliedToMessage.sender?.name || "Unknown"}
                   </div>
-                  <div className="truncate">
-                    {message.repliedToMessage.content}
-                  </div>
+                  <div className="truncate">{message.repliedToMessage.content}</div>
                 </div>
               )}
               <p className="text-sm">{message.content}</p>
@@ -196,15 +176,13 @@ export function MessageBubble({
         <div
           className={cn(
             "flex gap-1 transition-all duration-200",
-            showReceiverActions
-              ? "scale-100 opacity-100"
-              : "pointer-events-none scale-95 opacity-0"
+            showReceiverActions ? "scale-100 opacity-100" : "pointer-events-none scale-95 opacity-0"
           )}
         >
           {!isOwn && (
             <Button
               aria-label="Reply to message"
-              className="h-7 w-7 min-h-[44px] min-w-[44px] p-0"
+              className="h-7 min-h-[44px] w-7 min-w-[44px] p-0"
               onClick={() => onReply(message)}
               size="sm"
               title="Reply to message"

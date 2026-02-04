@@ -1,5 +1,5 @@
-import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@workspace/ui/lib/utils"
+import { cva, type VariantProps } from "class-variance-authority"
 
 const spinnerVariants = cva(
   "animate-spin rounded-full border-2 border-current border-t-transparent",
@@ -21,7 +21,7 @@ interface SpinnerProps extends VariantProps<typeof spinnerVariants> {
 
 export function Spinner({ size, className }: SpinnerProps) {
   return (
-    <div className={cn(spinnerVariants({ size }), className)} role="status" aria-label="Loading">
+    <div aria-label="Loading" className={cn(spinnerVariants({ size }), className)} role="status">
       <span className="sr-only">Loading...</span>
     </div>
   )

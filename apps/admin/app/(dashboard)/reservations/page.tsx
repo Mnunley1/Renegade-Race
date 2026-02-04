@@ -1,11 +1,6 @@
 "use client"
 
-import { useQuery, useMutation } from "convex/react"
-import { useState, useMemo } from "react"
-import Link from "next/link"
-import { format } from "date-fns"
-import type { DateRange } from "react-day-picker"
-import { api } from "@/lib/convex"
+import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import {
   Card,
@@ -14,6 +9,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@workspace/ui/components/card"
+import { Checkbox } from "@workspace/ui/components/checkbox"
+import { Input } from "@workspace/ui/components/input"
 import {
   Select,
   SelectContent,
@@ -21,15 +18,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select"
-import { Badge } from "@workspace/ui/components/badge"
-import { Input } from "@workspace/ui/components/input"
-import { Checkbox } from "@workspace/ui/components/checkbox"
-import { Calendar, Search, XCircle, Loader2, Eye } from "lucide-react"
+import { useMutation, useQuery } from "convex/react"
+import { format } from "date-fns"
+import { Calendar, Eye, Loader2, Search, XCircle } from "lucide-react"
+import Link from "next/link"
+import { useMemo, useState } from "react"
+import type { DateRange } from "react-day-picker"
 import { toast } from "sonner"
-import { Pagination } from "@/components/pagination"
-import { handleErrorWithContext } from "@/lib/error-handler"
 import { DateRangeFilter } from "@/components/date-range-filter"
+import { Pagination } from "@/components/pagination"
 import type { Id } from "@/lib/convex"
+import { api } from "@/lib/convex"
+import { handleErrorWithContext } from "@/lib/error-handler"
 
 export default function ReservationsPage() {
   const [statusFilter, setStatusFilter] = useState<
@@ -117,7 +117,7 @@ export default function ReservationsPage() {
         return <Badge variant="default">Pending</Badge>
       case "confirmed":
         return (
-          <Badge variant="default" className="bg-green-600">
+          <Badge className="bg-green-600" variant="default">
             Confirmed
           </Badge>
         )
@@ -176,28 +176,23 @@ export default function ReservationsPage() {
             <div className="flex gap-2">
               <DateRangeFilter dateRange={dateRange} onDateRangeChange={setDateRange} />
               <div className="relative">
-                <Search className="-translate-y-1/2 absolute top-1/2 left-2 size-4 text-muted-foreground" />
+                <Search className="absolute top-1/2 left-2 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   className="w-64 pl-8"
+                  onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search reservations..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
               <Select
-                value={statusFilter || "all"}
                 onValueChange={(value) =>
                   setStatusFilter(
                     value === "all"
                       ? undefined
-                      : (value as
-                          | "pending"
-                          | "confirmed"
-                          | "cancelled"
-                          | "completed"
-                          | "declined")
+                      : (value as "pending" | "confirmed" | "cancelled" | "completed" | "declined")
                   )
                 }
+                value={statusFilter || "all"}
               >
                 <SelectTrigger className="w-40">
                   <SelectValue />
@@ -220,8 +215,6 @@ export default function ReservationsPage() {
               <span className="font-medium text-sm">{selectedIds.size} item(s) selected</span>
               <div className="flex gap-2">
                 <Button
-                  variant="destructive"
-                  size="sm"
                   onClick={async () => {
                     if (
                       !confirm(
@@ -242,10 +235,12 @@ export default function ReservationsPage() {
                       handleErrorWithContext(error, { action: "cancel reservations" })
                     }
                   }}
+                  size="sm"
+                  variant="destructive"
                 >
                   Cancel Selected
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => setSelectedIds(new Set())}>
+                <Button onClick={() => setSelectedIds(new Set())} size="sm" variant="outline">
                   Clear Selection
                 </Button>
               </div>
@@ -272,7 +267,7 @@ export default function ReservationsPage() {
                     reservation.status !== "cancelled" && reservation.status !== "completed"
 
                   return (
-                    <Card key={reservation._id} className="overflow-hidden">
+                    <Card className="overflow-hidden" key={reservation._id}>
                       <CardContent className="p-6">
                         <div className="flex gap-4">
                           <div className="flex items-start pt-1">
@@ -285,9 +280,9 @@ export default function ReservationsPage() {
                             {primaryImage && (
                               <div className="flex-shrink-0">
                                 <img
-                                  src={primaryImage.cardUrl || primaryImage.imageUrl}
                                   alt={`${reservation.vehicle?.make} ${reservation.vehicle?.model}`}
                                   className="h-32 w-48 rounded-lg object-cover"
+                                  src={primaryImage.cardUrl || primaryImage.imageUrl}
                                 />
                               </div>
                             )}
@@ -308,10 +303,10 @@ export default function ReservationsPage() {
                                 <div className="flex gap-2">
                                   {canCancel && (
                                     <Button
-                                      onClick={() => handleCancel(reservation._id)}
                                       disabled={isProcessing}
-                                      variant="destructive"
+                                      onClick={() => handleCancel(reservation._id)}
                                       size="sm"
+                                      variant="destructive"
                                     >
                                       {isProcessing ? (
                                         <>
@@ -327,7 +322,7 @@ export default function ReservationsPage() {
                                     </Button>
                                   )}
                                   <Link href={`/reservations/${reservation._id}`}>
-                                    <Button variant="outline" size="sm">
+                                    <Button size="sm" variant="outline">
                                       <Eye className="mr-2 size-4" />
                                       View Details
                                     </Button>
@@ -420,8 +415,6 @@ export default function ReservationsPage() {
                 <div className="mt-4">
                   <Pagination
                     currentPage={currentPage}
-                    totalPages={totalPages}
-                    onPageChange={handlePageChange}
                     hasMore={hasMore}
                     onLoadMore={() => {
                       if (result?.nextCursor) {
@@ -429,6 +422,8 @@ export default function ReservationsPage() {
                         setCurrentPage(currentPage + 1)
                       }
                     }}
+                    onPageChange={handlePageChange}
+                    totalPages={totalPages}
                   />
                 </div>
               )}

@@ -1,24 +1,24 @@
 "use client"
 
-import { useState, useMemo } from "react"
-import { useQuery } from "convex/react"
 import { api } from "@renegade/backend/convex/_generated/api"
+import { Button } from "@workspace/ui/components/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
+import { useQuery } from "convex/react"
 import {
-  format,
-  startOfMonth,
-  endOfMonth,
-  eachDayOfInterval,
-  getDay,
   addMonths,
-  subMonths,
+  eachDayOfInterval,
+  endOfMonth,
+  format,
+  getDay,
   isSameMonth,
   parseISO,
+  startOfMonth,
+  subMonths,
 } from "date-fns"
-import { PageHeader } from "@/components/page-header"
-import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
-import { Button } from "@workspace/ui/components/button"
-import { LoadingState } from "@/components/loading-state"
 import { ChevronLeft, ChevronRight } from "lucide-react"
+import { useMemo, useState } from "react"
+import { LoadingState } from "@/components/loading-state"
+import { PageHeader } from "@/components/page-header"
 
 export default function ReservationCalendarPage() {
   const [currentMonth, setCurrentMonth] = useState(new Date())
@@ -64,25 +64,25 @@ export default function ReservationCalendarPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Reservation Calendar" description="Monthly view of all reservations" />
+      <PageHeader description="Monthly view of all reservations" title="Reservation Calendar" />
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0">
           <CardTitle>{format(currentMonth, "MMMM yyyy")}</CardTitle>
           <div className="flex gap-2">
             <Button
-              variant="outline"
-              size="sm"
               onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
+              size="sm"
+              variant="outline"
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setCurrentMonth(new Date())}>
+            <Button onClick={() => setCurrentMonth(new Date())} size="sm" variant="outline">
               Today
             </Button>
             <Button
-              variant="outline"
-              size="sm"
               onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
+              size="sm"
+              variant="outline"
             >
               <ChevronRight className="h-4 w-4" />
             </Button>
@@ -103,20 +103,20 @@ export default function ReservationCalendarPage() {
           <div className="grid grid-cols-7 gap-px rounded-lg border bg-muted">
             {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
               <div
-                key={d}
                 className="bg-background p-2 text-center font-medium text-muted-foreground text-xs"
+                key={d}
               >
                 {d}
               </div>
             ))}
             {Array.from({ length: startDayOfWeek }).map((_, i) => (
-              <div key={`empty-${i}`} className="bg-background p-2" />
+              <div className="bg-background p-2" key={`empty-${i}`} />
             ))}
             {days.map((day) => {
               const key = format(day, "yyyy-MM-dd")
               const counts = reservationsByDay[key]
               return (
-                <div key={key} className="min-h-[80px] bg-background p-2">
+                <div className="min-h-[80px] bg-background p-2" key={key}>
                   <span className="text-sm">{format(day, "d")}</span>
                   {counts && (
                     <div className="mt-1 space-y-0.5">

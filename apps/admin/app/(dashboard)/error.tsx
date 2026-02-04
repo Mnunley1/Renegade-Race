@@ -1,8 +1,8 @@
 "use client"
 
-import { useEffect } from "react"
 import { Button } from "@workspace/ui/components/button"
 import { AlertTriangle } from "lucide-react"
+import { useEffect } from "react"
 
 export default function ErrorBoundary({
   error,
@@ -13,7 +13,6 @@ export default function ErrorBoundary({
 }) {
   useEffect(() => {
     if (process.env.NODE_ENV === "development") {
-      console.error(error)
     }
   }, [error])
 

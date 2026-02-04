@@ -1,8 +1,8 @@
 "use client"
 
 import { Card, CardContent } from "@workspace/ui/components/card"
-import { TrendingUp, TrendingDown } from "lucide-react"
-import { AreaChart, Area, ResponsiveContainer } from "recharts"
+import { TrendingDown, TrendingUp } from "lucide-react"
+import { Area, AreaChart, ResponsiveContainer } from "recharts"
 
 interface StatCardProps {
   label: string
@@ -38,14 +38,14 @@ export function StatCard({ label, value, trend, sparklineData, icon }: StatCardP
           </div>
           {sparklineData && sparklineData.length > 0 && (
             <div className="h-10 w-20">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer height="100%" width="100%">
                 <AreaChart data={sparklineData}>
                   <Area
-                    type="monotone"
                     dataKey="value"
-                    stroke={trend?.isPositive !== false ? "#10b981" : "#ef4444"}
                     fill={trend?.isPositive !== false ? "#10b98120" : "#ef444420"}
+                    stroke={trend?.isPositive !== false ? "#10b981" : "#ef4444"}
                     strokeWidth={1.5}
+                    type="monotone"
                   />
                 </AreaChart>
               </ResponsiveContainer>

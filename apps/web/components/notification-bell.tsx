@@ -1,6 +1,7 @@
 "use client"
 
 import { useUser } from "@clerk/nextjs"
+import type { Id } from "@renegade/backend/convex/_generated/dataModel"
 import { Button } from "@workspace/ui/components/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@workspace/ui/components/popover"
 import { useMutation, useQuery } from "convex/react"
@@ -9,7 +10,6 @@ import { Bell } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { api } from "@/lib/convex"
-import type { Id } from "@renegade/backend/convex/_generated/dataModel"
 
 export function NotificationBell() {
   const { user, isSignedIn } = useUser()
@@ -28,10 +28,7 @@ export function NotificationBell() {
   const markAsRead = useMutation(api.notifications.markAsRead)
   const markAllAsRead = useMutation(api.notifications.markAllAsRead)
 
-  const handleNotificationClick = async (
-    notificationId: Id<"notifications">,
-    link?: string
-  ) => {
+  const handleNotificationClick = async (notificationId: Id<"notifications">, link?: string) => {
     await markAsRead({ notificationId })
     if (link) {
       router.push(link)
@@ -54,7 +51,7 @@ export function NotificationBell() {
         <Button className="relative" size="icon" variant="ghost">
           <Bell className="size-5" />
           {unreadCount !== undefined && unreadCount > 0 && (
-            <span className="-right-1 -top-1 absolute flex min-w-[1.25rem] items-center justify-center rounded-full bg-primary px-1 py-0.5 font-semibold text-primary-foreground text-xs leading-none">
+            <span className="absolute -top-1 -right-1 flex min-w-[1.25rem] items-center justify-center rounded-full bg-primary px-1 py-0.5 font-semibold text-primary-foreground text-xs leading-none">
               {unreadCount > 99 ? "99+" : unreadCount}
             </span>
           )}
@@ -83,30 +80,20 @@ export function NotificationBell() {
                   className="w-full cursor-pointer p-4 text-left transition-colors hover:bg-accent"
                   key={notification._id}
                   onClick={() =>
-                    handleNotificationClick(
-                      notification._id,
-                      notification.link ?? undefined
-                    )
+                    handleNotificationClick(notification._id, notification.link ?? undefined)
                   }
                   type="button"
                 >
                   <div className="space-y-1">
                     <div className="flex items-start justify-between gap-2">
-                      <p className="font-medium text-sm">
-                        {notification.title}
-                      </p>
+                      <p className="font-medium text-sm">{notification.title}</p>
                       {!notification.isRead && (
                         <span className="mt-1 size-2 shrink-0 rounded-full bg-primary" />
                       )}
                     </div>
-                    <p className="text-muted-foreground text-sm">
-                      {notification.message}
-                    </p>
+                    <p className="text-muted-foreground text-sm">{notification.message}</p>
                     <p className="text-muted-foreground text-xs">
-                      {formatDistanceToNow(
-                        new Date(notification.createdAt),
-                        { addSuffix: true }
-                      )}
+                      {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
                     </p>
                   </div>
                 </button>

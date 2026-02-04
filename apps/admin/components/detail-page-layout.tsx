@@ -1,8 +1,8 @@
 "use client"
 
-import { useRouter } from "next/navigation"
-import { ArrowLeft } from "lucide-react"
 import { Button } from "@workspace/ui/components/button"
+import { ArrowLeft } from "lucide-react"
+import { useRouter } from "next/navigation"
 
 interface DetailPageLayoutProps {
   title: string
@@ -17,7 +17,7 @@ export function DetailPageLayout({ title, badges, actions, children }: DetailPag
   return (
     <div>
       <div className="mb-6">
-        <Button variant="ghost" size="sm" onClick={() => router.back()} className="-ml-2 mb-4">
+        <Button className="mb-4 -ml-2" onClick={() => router.back()} size="sm" variant="ghost">
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back
         </Button>

@@ -72,11 +72,7 @@ export function VehicleResultsGrid({
         </p>
 
         <div className="flex items-center gap-2 sm:gap-3">
-          {mobileFilters && (
-            <div className="xl:hidden">
-              {mobileFilters}
-            </div>
-          )}
+          {mobileFilters && <div className="xl:hidden">{mobileFilters}</div>}
           <Select onValueChange={setSortBy} value={sortBy}>
             <SelectTrigger
               aria-label="Sort vehicles"
@@ -120,9 +116,7 @@ export function VehicleResultsGrid({
         <div
           className={cn(
             "grid gap-4 sm:gap-6",
-            viewMode === "grid"
-              ? "auto-rows-fr grid-cols-1 sm:grid-cols-2"
-              : "grid-cols-1"
+            viewMode === "grid" ? "auto-rows-fr grid-cols-1 sm:grid-cols-2" : "grid-cols-1"
           )}
         >
           {Array.from({ length: itemsPerPage }).map((_, index) => (
@@ -163,32 +157,59 @@ export function VehicleResultsGrid({
             {filterState && filterActions && (
               <div className="mb-4 flex flex-wrap justify-center gap-2">
                 {filterState.selectedMake !== "all" && (
-                  <Badge className="gap-1 cursor-pointer" variant="secondary" onClick={() => filterActions.setSelectedMake("all")}>
+                  <Badge
+                    className="cursor-pointer gap-1"
+                    onClick={() => filterActions.setSelectedMake("all")}
+                    variant="secondary"
+                  >
                     Make: {filterState.selectedMake} <X className="size-3" />
                   </Badge>
                 )}
                 {filterState.selectedTransmission !== "all" && (
-                  <Badge className="gap-1 cursor-pointer" variant="secondary" onClick={() => filterActions.setSelectedTransmission("all")}>
+                  <Badge
+                    className="cursor-pointer gap-1"
+                    onClick={() => filterActions.setSelectedTransmission("all")}
+                    variant="secondary"
+                  >
                     Trans: {filterState.selectedTransmission} <X className="size-3" />
                   </Badge>
                 )}
                 {filterState.selectedDriveType !== "all" && (
-                  <Badge className="gap-1 cursor-pointer" variant="secondary" onClick={() => filterActions.setSelectedDriveType("all")}>
+                  <Badge
+                    className="cursor-pointer gap-1"
+                    onClick={() => filterActions.setSelectedDriveType("all")}
+                    variant="secondary"
+                  >
                     Drive: {filterState.selectedDriveType} <X className="size-3" />
                   </Badge>
                 )}
                 {filterState.selectedPriceRange !== "any" && (
-                  <Badge className="gap-1 cursor-pointer" variant="secondary" onClick={() => { filterActions.setSelectedPriceRange("any"); filterActions.setCustomPriceRange(null) }}>
+                  <Badge
+                    className="cursor-pointer gap-1"
+                    onClick={() => {
+                      filterActions.setSelectedPriceRange("any")
+                      filterActions.setCustomPriceRange(null)
+                    }}
+                    variant="secondary"
+                  >
                     Price: {filterState.selectedPriceRange} <X className="size-3" />
                   </Badge>
                 )}
                 {filterState.selectedExperienceLevel !== "all" && (
-                  <Badge className="gap-1 cursor-pointer" variant="secondary" onClick={() => filterActions.setSelectedExperienceLevel("all")}>
+                  <Badge
+                    className="cursor-pointer gap-1"
+                    onClick={() => filterActions.setSelectedExperienceLevel("all")}
+                    variant="secondary"
+                  >
                     Exp: {filterState.selectedExperienceLevel} <X className="size-3" />
                   </Badge>
                 )}
                 {filterState.selectedTireType !== "all" && (
-                  <Badge className="gap-1 cursor-pointer" variant="secondary" onClick={() => filterActions.setSelectedTireType("all")}>
+                  <Badge
+                    className="cursor-pointer gap-1"
+                    onClick={() => filterActions.setSelectedTireType("all")}
+                    variant="secondary"
+                  >
                     Tires: {filterState.selectedTireType} <X className="size-3" />
                   </Badge>
                 )}
@@ -210,9 +231,7 @@ export function VehicleResultsGrid({
             <div
               className={cn(
                 "grid gap-4 sm:gap-6",
-                viewMode === "grid"
-                  ? "auto-rows-fr grid-cols-1 sm:grid-cols-2"
-                  : "grid-cols-1"
+                viewMode === "grid" ? "auto-rows-fr grid-cols-1 sm:grid-cols-2" : "grid-cols-1"
               )}
             >
               {paginatedVehicles.map((vehicle) => (

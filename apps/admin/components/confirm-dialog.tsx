@@ -35,7 +35,7 @@ export function ConfirmDialog({
   isLoading,
 }: ConfirmDialogProps) {
   return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
+    <AlertDialog onOpenChange={onOpenChange} open={open}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
@@ -44,13 +44,13 @@ export function ConfirmDialog({
         <AlertDialogFooter>
           <AlertDialogCancel disabled={isLoading}>{cancelLabel}</AlertDialogCancel>
           <AlertDialogAction
-            onClick={onConfirm}
-            disabled={isLoading}
             className={
               variant === "destructive"
                 ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 : ""
             }
+            disabled={isLoading}
+            onClick={onConfirm}
           >
             {isLoading ? "Processing..." : confirmLabel}
           </AlertDialogAction>

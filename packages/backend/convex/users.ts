@@ -1,8 +1,8 @@
 // @ts-expect-error - @clerk/backend module resolution issue
 import type { UserJSON } from "@clerk/backend"
 import { type Validator, v } from "convex/values"
-import { action, internalMutation, mutation, type QueryCtx, query } from "./_generated/server"
 import { api, internal } from "./_generated/api"
+import { action, internalMutation, mutation, type QueryCtx, query } from "./_generated/server"
 import { getWelcomeEmailTemplate, sendTransactionalEmail } from "./emails"
 import { imagePresets, r2 } from "./r2"
 
@@ -594,7 +594,7 @@ export const updateOnboardingAddressCoordinates = internalMutation({
   },
   handler: async (ctx, args) => {
     const user = await ctx.db.get(args.userId)
-    if (!(user && user.onboardingVehicleAddress)) {
+    if (!user?.onboardingVehicleAddress) {
       return
     }
 
@@ -941,7 +941,7 @@ export const createMigrationUser = mutation({
       experience: args.experience,
       location: args.location,
       stripeAccountId: args.stripeAccountId,
-      stripeAccountStatus: args.stripeAccountId ? "pending" as const : undefined,
+      stripeAccountStatus: args.stripeAccountId ? ("pending" as const) : undefined,
       memberSince: args.memberSince,
       rating: args.rating,
       totalRentals: args.totalRentals,

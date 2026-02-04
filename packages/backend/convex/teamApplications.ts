@@ -96,7 +96,7 @@ export const updateStatus = mutation({
         type: "application_status_change",
         title: `Application ${args.status === "accepted" ? "Accepted" : "Declined"}`,
         message: `Your application to ${team?.name || "the team"} has been ${args.status}`,
-        link: `/motorsports/applications`,
+        link: "/motorsports/applications",
         metadata: { applicationId: args.applicationId, status: args.status },
       })
     }

@@ -1,11 +1,11 @@
 "use client"
 
-import type { Id } from "@/lib/convex"
-import type { RefObject } from "react"
 import { MessageSquare } from "lucide-react"
+import type { RefObject } from "react"
 import { useState } from "react"
-import { MessageBubble } from "./message-bubble"
+import type { Id } from "@/lib/convex"
 import type { MessageData } from "./message-bubble"
+import { MessageBubble } from "./message-bubble"
 
 interface MessageListProps {
   messages: MessageData[] | undefined
@@ -33,11 +33,7 @@ function getDateLabel(timestamp: number): string {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const yesterday = new Date(today)
   yesterday.setDate(yesterday.getDate() - 1)
-  const messageDay = new Date(
-    date.getFullYear(),
-    date.getMonth(),
-    date.getDate()
-  )
+  const messageDay = new Date(date.getFullYear(), date.getMonth(), date.getDate())
 
   if (messageDay.getTime() === today.getTime()) return "Today"
   if (messageDay.getTime() === yesterday.getTime()) return "Yesterday"
@@ -84,12 +80,10 @@ export function MessageList({
       <div className="flex h-full items-center justify-center">
         <div className="text-center">
           <MessageSquare className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
-          <h3 className="mb-2 font-semibold text-foreground text-lg">
-            Start a conversation
-          </h3>
+          <h3 className="mb-2 font-semibold text-foreground text-lg">Start a conversation</h3>
           <p className="mb-4 text-muted-foreground text-sm">
-            Send your first message to {pendingRecipientName || "this user"}{" "}
-            about the {pendingVehicleLabel || "vehicle"}.
+            Send your first message to {pendingRecipientName || "this user"} about the{" "}
+            {pendingVehicleLabel || "vehicle"}.
           </p>
         </div>
       </div>
@@ -100,16 +94,16 @@ export function MessageList({
     return (
       <div className="space-y-4">
         {messages.map((message: MessageData, index: number) => {
+          const prevMessage = messages[index - 1]
           const showDateDivider =
-            index === 0 ||
-            !isSameDay(message.createdAt, messages[index - 1]!.createdAt)
+            index === 0 || (prevMessage && !isSameDay(message.createdAt, prevMessage.createdAt))
 
           return (
             <div key={message._id}>
               {showDateDivider && (
                 <div className="flex items-center gap-4 py-2">
                   <div className="h-px flex-1 bg-border" />
-                  <span className="text-muted-foreground text-xs font-medium">
+                  <span className="font-medium text-muted-foreground text-xs">
                     {getDateLabel(message.createdAt)}
                   </span>
                   <div className="h-px flex-1 bg-border" />
@@ -145,9 +139,7 @@ export function MessageList({
     <div className="flex h-full items-center justify-center">
       <div className="text-center">
         <MessageSquare className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
-        <h3 className="mb-2 font-semibold text-foreground text-lg">
-          No messages yet
-        </h3>
+        <h3 className="mb-2 font-semibold text-foreground text-lg">No messages yet</h3>
         <p className="text-muted-foreground text-sm">
           Start the conversation by sending a message.
         </p>

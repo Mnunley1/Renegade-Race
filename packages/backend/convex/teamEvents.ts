@@ -39,9 +39,7 @@ export const create = mutation({
     // Notify team members
     const members = await ctx.db
       .query("teamMembers")
-      .withIndex("by_team_status", (q) =>
-        q.eq("teamId", args.teamId).eq("status", "active")
-      )
+      .withIndex("by_team_status", (q) => q.eq("teamId", args.teamId).eq("status", "active"))
       .collect()
 
     for (const member of members) {
@@ -135,12 +133,11 @@ export const remove = mutation({
 
 export const getByTeam = query({
   args: { teamId: v.id("teams") },
-  handler: async (ctx, args) => {
-    return await ctx.db
+  handler: async (ctx, args) =>
+    await ctx.db
       .query("teamEvents")
       .withIndex("by_team", (q) => q.eq("teamId", args.teamId))
-      .collect()
-  },
+      .collect(),
 })
 
 export const rsvp = mutation({

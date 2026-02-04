@@ -96,8 +96,8 @@ export function CancellationPolicy({
           const Icon = tier.icon
           return (
             <div
-              key={tier.name}
               className={cn("flex items-center gap-4 rounded-lg p-3", tier.bgColor)}
+              key={tier.name}
             >
               <Icon className={cn("size-5 shrink-0", tier.iconColor)} />
               <div className="flex-1">

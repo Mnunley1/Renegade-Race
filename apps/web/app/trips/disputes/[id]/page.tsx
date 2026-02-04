@@ -12,14 +12,14 @@ import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import { useState } from "react"
 import { toast } from "sonner"
-import { api } from "@/lib/convex"
 import type { Id } from "@/lib/convex"
+import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 
 export default function DisputeDetailPage() {
   const { user } = useUser()
   const params = useParams()
-  const router = useRouter()
+  const _router = useRouter()
   const disputeId = params.id as string
 
   const [message, setMessage] = useState("")

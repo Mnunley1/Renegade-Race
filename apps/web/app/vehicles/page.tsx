@@ -44,7 +44,10 @@ const saveFiltersToStorage = (filters: Record<string, unknown>) => {
     return
   }
   try {
-    sessionStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify({ ...filters, timestamp: Date.now() }))
+    sessionStorage.setItem(
+      FILTERS_STORAGE_KEY,
+      JSON.stringify({ ...filters, timestamp: Date.now() })
+    )
   } catch {
     // Ignore storage errors
   }
@@ -87,9 +90,10 @@ function VehiclesPageContent() {
       locationLabel: searchParams.get("locLabel") || storedFilters?.locationLabel || "",
       maxDistance: Number(searchParams.get("dist")) || storedFilters?.maxDistance || 0,
       selectedSafetyEquipment: storedFilters?.selectedSafetyEquipment || [],
-      selectedExperienceLevel: searchParams.get("expLevel") || storedFilters?.selectedExperienceLevel || "all",
+      selectedExperienceLevel:
+        searchParams.get("expLevel") || storedFilters?.selectedExperienceLevel || "all",
       selectedTireType: searchParams.get("tire") || storedFilters?.selectedTireType || "all",
-      deliveryOnly: searchParams.get("delivery") === "true" || storedFilters?.deliveryOnly || false,
+      deliveryOnly: searchParams.get("delivery") === "true" || storedFilters?.deliveryOnly,
     }
   }
 
@@ -149,12 +153,8 @@ function VehiclesPageContent() {
   const [selectedExperienceLevel, setSelectedExperienceLevel] = useState(
     initialState.selectedExperienceLevel || "all"
   )
-  const [selectedTireType, setSelectedTireType] = useState(
-    initialState.selectedTireType || "all"
-  )
-  const [deliveryOnly, setDeliveryOnly] = useState(
-    initialState.deliveryOnly || false
-  )
+  const [selectedTireType, setSelectedTireType] = useState(initialState.selectedTireType || "all")
+  const [deliveryOnly, setDeliveryOnly] = useState(initialState.deliveryOnly)
 
   // Filter sheet state (for sub-xl screens)
 
@@ -214,9 +214,7 @@ function VehiclesPageContent() {
     setIsGeocodingZip(true)
     setLocationError(null)
     try {
-      const response = await fetch(
-        `/api/geocode?address=${encodeURIComponent(zipCode)}`
-      )
+      const response = await fetch(`/api/geocode?address=${encodeURIComponent(zipCode)}`)
       const data = await response.json()
       if (data.status === "OK" && data.results?.[0]) {
         const location = data.results[0].geometry.location
@@ -708,7 +706,10 @@ function VehiclesPageContent() {
           return false
         }
       }
-      if (selectedExperienceLevel !== "all" && vehicle.experienceLevel !== selectedExperienceLevel) {
+      if (
+        selectedExperienceLevel !== "all" &&
+        vehicle.experienceLevel !== selectedExperienceLevel
+      ) {
         return false
       }
       if (selectedTireType !== "all" && vehicle.tireType !== selectedTireType) {
@@ -960,9 +961,9 @@ function VehiclesPageContent() {
               clearSearchAndDates={clearSearchAndDates}
               compareVehicleIds={compareIds}
               datesSelected={datesSelected}
+              filterActions={filterActions}
               filteredVehicles={filteredVehicles}
               filterState={filterState}
-              filterActions={filterActions}
               hasMore={hasMore}
               isLoading={vehiclesData === undefined || tracksData === undefined}
               itemsPerPage={itemsPerPage}
@@ -995,7 +996,6 @@ function VehiclesPageContent() {
           </div>
         </div>
       </div>
-
 
       {/* Compare */}
       <CompareBar

@@ -92,7 +92,7 @@ export const imagePresets = {
 
 // R2 Client API with validation
 export const { generateUploadUrl, syncMetadata } = r2.clientApi({
-  checkUpload: async (ctx, bucket) => {
+  checkUpload: async (ctx, _bucket) => {
     // Verify user is authenticated
     // @ts-expect-error - GenericQueryCtx type mismatch with QueryCtx
     const user = await getCurrentUser(ctx)
@@ -103,7 +103,7 @@ export const { generateUploadUrl, syncMetadata } = r2.clientApi({
     // Additional validation can be added here (file size, type, etc.)
     // The actual file validation happens client-side before upload
   },
-  onUpload: async (ctx, bucket, key) => {
+  onUpload: async (_ctx, _bucket, _key) => {
     // Optional: Log upload or perform additional actions
     // This runs after the file is uploaded to R2 and metadata is synced
   },
@@ -184,7 +184,7 @@ export const testR2Configuration = mutation({
         success: true,
         message: "R2 configuration appears to be working",
         testKey,
-        uploadUrl: (uploadUrl.url || String(uploadUrl)).substring(0, 100) + "...", // Truncate for security
+        uploadUrl: `${(uploadUrl.url || String(uploadUrl)).substring(0, 100)}...`, // Truncate for security
       }
     } catch (error) {
       return {

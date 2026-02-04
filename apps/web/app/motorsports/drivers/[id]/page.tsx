@@ -54,9 +54,9 @@ import { DriverCard } from "@/components/driver-card"
 import { DriverEndorsements } from "@/components/driver-endorsements"
 import { DriverPortfolio } from "@/components/driver-portfolio"
 import { ProfileAnalytics } from "@/components/profile-analytics"
+import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
-import type { Id } from "@/lib/convex"
 
 type DriverDetailPageProps = {
   params: Promise<{
@@ -142,8 +142,8 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
   // We'll check connections for the first team (can be expanded to check all teams)
   const firstTeamConnection = useQuery(
     api.teamDriverConnections.checkConnection,
-    userTeams && userTeams.length > 0 && profileId
-      ? { teamId: userTeams[0]!._id, driverProfileId: profileId }
+    userTeams && userTeams.length > 0 && userTeams[0] && profileId
+      ? { teamId: userTeams[0]._id, driverProfileId: profileId }
       : "skip"
   )
   const hasAcceptedConnection = firstTeamConnection?.status === "accepted"
@@ -158,7 +158,7 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
   // Record profile view for non-owners
   useEffect(() => {
     if (driverProfile && user && !driverProfile.isOwner) {
-      recordView({ profileId: profileId, profileType: "driver" })
+      recordView({ profileId, profileType: "driver" })
     }
   }, [driverProfile, user, profileId, recordView])
 
@@ -324,11 +324,24 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
         <div className="mb-6 flex items-center gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
           <EyeOff className="size-5 text-amber-600" />
           <div className="flex-1">
-            <p className="font-medium text-amber-800 dark:text-amber-200">Your profile is currently hidden</p>
-            <p className="text-amber-700 text-sm dark:text-amber-300">Other users cannot see this profile.</p>
+            <p className="font-medium text-amber-800 dark:text-amber-200">
+              Your profile is currently hidden
+            </p>
+            <p className="text-amber-700 text-sm dark:text-amber-300">
+              Other users cannot see this profile.
+            </p>
           </div>
-          <Button size="sm" variant="outline" onClick={handleToggleVisibility} disabled={isToggling}>
-            {isToggling ? <Loader2 className="mr-1 size-3 animate-spin" /> : <Eye className="mr-1 size-3" />}
+          <Button
+            disabled={isToggling}
+            onClick={handleToggleVisibility}
+            size="sm"
+            variant="outline"
+          >
+            {isToggling ? (
+              <Loader2 className="mr-1 size-3 animate-spin" />
+            ) : (
+              <Eye className="mr-1 size-3" />
+            )}
             Make Visible
           </Button>
         </div>
@@ -348,7 +361,7 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
                 <div className="flex-1">
                   <CardTitle className="text-3xl">{driverName}</CardTitle>
                   {driverProfile.headline && (
-                    <p className="mt-1 text-muted-foreground text-lg">{driverProfile.headline}</p>
+                    <p className="mt-1 text-lg text-muted-foreground">{driverProfile.headline}</p>
                   )}
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     <Badge className={experienceColors[driverProfile.experience]}>
@@ -410,10 +423,16 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
                       )}
                       {driverProfile.preferredCategories.length > 0 && (
                         <div>
-                          <p className="mb-2 font-medium text-muted-foreground text-sm">Preferred Categories</p>
+                          <p className="mb-2 font-medium text-muted-foreground text-sm">
+                            Preferred Categories
+                          </p>
                           <div className="flex flex-wrap gap-2">
                             {driverProfile.preferredCategories.map((category: string) => (
-                              <Badge className="px-3 py-1 text-sm" key={category} variant="secondary">
+                              <Badge
+                                className="px-3 py-1 text-sm"
+                                key={category}
+                                variant="secondary"
+                              >
                                 <Star className="mr-1 size-3" />
                                 {category}
                               </Badge>
@@ -423,7 +442,9 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
                       )}
                       {driverProfile.availability.length > 0 && (
                         <div>
-                          <p className="mb-2 font-medium text-muted-foreground text-sm">Availability</p>
+                          <p className="mb-2 font-medium text-muted-foreground text-sm">
+                            Availability
+                          </p>
                           <div className="flex flex-wrap gap-2">
                             {driverProfile.availability.map((availability: string) => {
                               const availabilityLabels: Record<string, string> = {
@@ -436,7 +457,11 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
                                 availability.charAt(0).toUpperCase() +
                                   availability.slice(1).replace(/-/g, " ")
                               return (
-                                <Badge className="px-3 py-1 text-sm" key={availability} variant="outline">
+                                <Badge
+                                  className="px-3 py-1 text-sm"
+                                  key={availability}
+                                  variant="outline"
+                                >
                                   <Calendar className="mr-1 size-3" />
                                   {label}
                                 </Badge>
@@ -499,17 +524,17 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {similarDrivers.map((driver: any) => (
                   <DriverCard
-                    key={driver._id}
-                    id={driver._id}
-                    name={driver.user?.name || "Unknown"}
                     avatarUrl={driver.avatarUrl || driver.user?.avatarUrl}
-                    location={driver.location}
-                    experience={driver.experience}
-                    racingType={driver.racingType}
-                    licenses={driver.licenses}
-                    preferredCategories={driver.preferredCategories}
-                    headline={driver.headline}
                     bio={driver.bio}
+                    experience={driver.experience}
+                    headline={driver.headline}
+                    id={driver._id}
+                    key={driver._id}
+                    licenses={driver.licenses}
+                    location={driver.location}
+                    name={driver.user?.name || "Unknown"}
+                    preferredCategories={driver.preferredCategories}
+                    racingType={driver.racingType}
                   />
                 ))}
               </div>
@@ -518,9 +543,7 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
         </div>
 
         <div className="space-y-6">
-          {isOwner && (
-            <ProfileAnalytics profileId={profileId} profileType="driver" />
-          )}
+          {isOwner && <ProfileAnalytics profileId={profileId} profileType="driver" />}
 
           {!isOwner && (
             <>
@@ -558,8 +581,8 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
                     <Button
                       className="w-full"
                       onClick={() => {
-                        if (userTeams.length === 1) {
-                          setSelectedTeamId(userTeams[0]!._id)
+                        if (userTeams.length === 1 && userTeams[0]) {
+                          setSelectedTeamId(userTeams[0]._id)
                         }
                         setShowConnectionDialog(true)
                       }}
@@ -635,10 +658,10 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
                     {driverProfile.socialLinks.instagram && (
                       <Button asChild size="sm" type="button" variant="outline">
                         <a
+                          aria-label="Visit Instagram profile"
                           href={getInstagramUrl(driverProfile.socialLinks.instagram)}
                           rel="noopener noreferrer"
                           target="_blank"
-                          aria-label="Visit Instagram profile"
                         >
                           <Instagram className="mr-2 size-4" />
                           Instagram
@@ -648,10 +671,10 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
                     {driverProfile.socialLinks.twitter && (
                       <Button asChild size="sm" type="button" variant="outline">
                         <a
+                          aria-label="Visit Twitter profile"
                           href={getTwitterUrl(driverProfile.socialLinks.twitter)}
                           rel="noopener noreferrer"
                           target="_blank"
-                          aria-label="Visit Twitter profile"
                         >
                           <Twitter className="mr-2 size-4" />
                           Twitter
@@ -661,10 +684,10 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
                     {driverProfile.socialLinks.linkedin && (
                       <Button asChild size="sm" type="button" variant="outline">
                         <a
+                          aria-label="Visit LinkedIn profile"
                           href={getLinkedInUrl(driverProfile.socialLinks.linkedin)}
                           rel="noopener noreferrer"
                           target="_blank"
-                          aria-label="Visit LinkedIn profile"
                         >
                           <Linkedin className="mr-2 size-4" />
                           LinkedIn
@@ -674,10 +697,10 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
                     {driverProfile.socialLinks.website && (
                       <Button asChild size="sm" type="button" variant="outline">
                         <a
+                          aria-label="Visit website"
                           href={getWebsiteUrl(driverProfile.socialLinks.website)}
                           rel="noopener noreferrer"
                           target="_blank"
-                          aria-label="Visit website"
                         >
                           <Globe className="mr-2 size-4" />
                           Website
@@ -719,7 +742,11 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
                     })()}
                     {driverProfile.isActive ? "Hide Profile" : "Show Profile"}
                   </Button>
-                  <Button disabled={isDeleting} onClick={() => setShowDeleteDialog(true)} variant="destructive">
+                  <Button
+                    disabled={isDeleting}
+                    onClick={() => setShowDeleteDialog(true)}
+                    variant="destructive"
+                  >
                     <Trash2 className="mr-2 size-4" />
                     Delete Profile
                   </Button>
@@ -734,23 +761,34 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
       {!isOwner && (
         <div className="fixed right-0 bottom-0 left-0 border-t bg-background p-4 lg:hidden">
           {hasAcceptedConnection ? (
-            <Button className="w-full" onClick={async () => {
-              try {
-                const conversationId = await createConversation({
-                  participantId: driverProfile.userId,
-                  conversationType: "driver",
-                  driverProfileId: profileId,
-                })
-                router.push(`/messages/${conversationId}`)
-              } catch {
-                toast.error("Failed to start conversation")
-              }
-            }}>
+            <Button
+              className="w-full"
+              onClick={async () => {
+                try {
+                  const conversationId = await createConversation({
+                    participantId: driverProfile.userId,
+                    conversationType: "driver",
+                    driverProfileId: profileId,
+                  })
+                  router.push(`/messages/${conversationId}`)
+                } catch {
+                  toast.error("Failed to start conversation")
+                }
+              }}
+            >
               <MessageSquare className="mr-2 size-4" />
               Message Driver
             </Button>
           ) : userTeams && userTeams.length > 0 ? (
-            <Button className="w-full" onClick={() => { if (userTeams.length === 1) setSelectedTeamId(userTeams[0]!._id); setShowConnectionDialog(true) }}>
+            <Button
+              className="w-full"
+              onClick={() => {
+                if (userTeams.length === 1 && userTeams[0]) {
+                  setSelectedTeamId(userTeams[0]._id)
+                }
+                setShowConnectionDialog(true)
+              }}
+            >
               <UserPlus className="mr-2 size-4" />
               Request to Connect
             </Button>
@@ -857,7 +895,11 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
                   return
                 }
 
-                const teamId = selectedTeamId || userTeams[0]!._id
+                const teamId = selectedTeamId || (userTeams[0] ? userTeams[0]._id : null)
+                if (!teamId) {
+                  toast.error("Please select a team")
+                  return
+                }
                 setIsRequestingConnection(true)
 
                 try {

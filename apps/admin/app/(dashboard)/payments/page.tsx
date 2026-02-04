@@ -1,11 +1,6 @@
 "use client"
 
-import { useQuery } from "convex/react"
-import { useState, useMemo } from "react"
-import Link from "next/link"
-import { format } from "date-fns"
-import type { DateRange } from "react-day-picker"
-import { api } from "@/lib/convex"
+import { Badge } from "@workspace/ui/components/badge"
 import {
   Card,
   CardContent,
@@ -13,6 +8,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@workspace/ui/components/card"
+import { Input } from "@workspace/ui/components/input"
 import {
   Select,
   SelectContent,
@@ -20,19 +16,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select"
-import { Badge } from "@workspace/ui/components/badge"
-import { Input } from "@workspace/ui/components/input"
+import { useQuery } from "convex/react"
+import { format } from "date-fns"
 import {
-  DollarSign,
-  Search,
   ArrowRight,
   CheckCircle,
-  XCircle,
   Clock,
+  DollarSign,
   RefreshCw,
+  Search,
+  XCircle,
 } from "lucide-react"
-import { Pagination } from "@/components/pagination"
+import Link from "next/link"
+import { useMemo, useState } from "react"
+import type { DateRange } from "react-day-picker"
 import { DateRangeFilter } from "@/components/date-range-filter"
+import { Pagination } from "@/components/pagination"
+import { api } from "@/lib/convex"
 
 export default function PaymentsPage() {
   const [statusFilter, setStatusFilter] = useState<
@@ -75,14 +75,14 @@ export default function PaymentsPage() {
     switch (status) {
       case "pending":
         return (
-          <Badge variant="default" className="bg-yellow-600">
+          <Badge className="bg-yellow-600" variant="default">
             <Clock className="mr-1 size-3" />
             Pending
           </Badge>
         )
       case "succeeded":
         return (
-          <Badge variant="default" className="bg-green-600">
+          <Badge className="bg-green-600" variant="default">
             <CheckCircle className="mr-1 size-3" />
             Succeeded
           </Badge>
@@ -198,16 +198,15 @@ export default function PaymentsPage() {
             <div className="flex gap-2">
               <DateRangeFilter dateRange={dateRange} onDateRangeChange={setDateRange} />
               <div className="relative">
-                <Search className="-translate-y-1/2 absolute top-1/2 left-2 size-4 text-muted-foreground" />
+                <Search className="absolute top-1/2 left-2 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   className="w-64 pl-8"
+                  onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search payments..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
               <Select
-                value={statusFilter || "all"}
                 onValueChange={(value) =>
                   setStatusFilter(
                     value === "all"
@@ -215,6 +214,7 @@ export default function PaymentsPage() {
                       : (value as "pending" | "succeeded" | "failed" | "refunded")
                   )
                 }
+                value={statusFilter || "all"}
               >
                 <SelectTrigger className="w-40">
                   <SelectValue />
@@ -240,7 +240,7 @@ export default function PaymentsPage() {
                     payment.vehicle?.images?.[0]
 
                   return (
-                    <Link key={payment._id} href={`/payments/${payment._id}`} className="block">
+                    <Link className="block" href={`/payments/${payment._id}`} key={payment._id}>
                       <Card className="transition-colors hover:bg-accent">
                         <CardContent className="p-4">
                           <div className="flex items-start justify-between">
@@ -248,9 +248,9 @@ export default function PaymentsPage() {
                               {primaryImage && (
                                 <div className="flex-shrink-0">
                                   <img
-                                    src={primaryImage.cardUrl || primaryImage.imageUrl}
                                     alt={`${payment.vehicle?.make} ${payment.vehicle?.model}`}
                                     className="h-20 w-32 rounded-lg object-cover"
+                                    src={primaryImage.cardUrl || primaryImage.imageUrl}
                                   />
                                 </div>
                               )}
@@ -307,8 +307,6 @@ export default function PaymentsPage() {
                 <div className="mt-4">
                   <Pagination
                     currentPage={currentPage}
-                    totalPages={totalPages}
-                    onPageChange={handlePageChange}
                     hasMore={hasMore}
                     onLoadMore={() => {
                       if (result?.nextCursor) {
@@ -316,6 +314,8 @@ export default function PaymentsPage() {
                         setCurrentPage(currentPage + 1)
                       }
                     }}
+                    onPageChange={handlePageChange}
+                    totalPages={totalPages}
                   />
                 </div>
               )}

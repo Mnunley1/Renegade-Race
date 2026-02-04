@@ -1,9 +1,6 @@
 "use client"
 
-import { useQuery } from "convex/react"
-import { useState } from "react"
-import Link from "next/link"
-import { api } from "@/lib/convex"
+import { Badge } from "@workspace/ui/components/badge"
 import {
   Card,
   CardContent,
@@ -11,6 +8,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@workspace/ui/components/card"
+import { Input } from "@workspace/ui/components/input"
 import {
   Select,
   SelectContent,
@@ -18,9 +16,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select"
-import { Badge } from "@workspace/ui/components/badge"
+import { useQuery } from "convex/react"
 import { ArrowRight, Search } from "lucide-react"
-import { Input } from "@workspace/ui/components/input"
+import Link from "next/link"
+import { useState } from "react"
+import { api } from "@/lib/convex"
 
 export default function DisputesPage() {
   const [statusFilter, setStatusFilter] = useState<"open" | "resolved" | "closed" | undefined>(
@@ -80,21 +80,21 @@ export default function DisputesPage() {
             </div>
             <div className="flex gap-2">
               <div className="relative">
-                <Search className="-translate-y-1/2 absolute top-1/2 left-2 size-4 text-muted-foreground" />
+                <Search className="absolute top-1/2 left-2 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   className="w-64 pl-8"
+                  onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search disputes..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
               <Select
-                value={statusFilter || "all"}
                 onValueChange={(value) =>
                   setStatusFilter(
                     value === "all" ? undefined : (value as "open" | "resolved" | "closed")
                   )
                 }
+                value={statusFilter || "all"}
               >
                 <SelectTrigger className="w-40">
                   <SelectValue />
@@ -113,7 +113,7 @@ export default function DisputesPage() {
           {filteredDisputes && filteredDisputes.length > 0 ? (
             <div className="space-y-4">
               {filteredDisputes.map((dispute: any) => (
-                <Link key={dispute._id} href={`/disputes/${dispute._id}`} className="block">
+                <Link className="block" href={`/disputes/${dispute._id}`} key={dispute._id}>
                   <Card className="transition-colors hover:bg-accent">
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between">

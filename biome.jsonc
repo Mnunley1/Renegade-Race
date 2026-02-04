@@ -9,17 +9,9 @@
       "**/*.js",
       "**/*.jsx",
       "**/*.json",
-      "**/*.jsonc"
+      "**/*.jsonc",
+      "**/*.css"
     ]
-  },
-  "linter": {
-    "enabled": true,
-    "rules": {
-      "recommended": true,
-      "performance": {
-        "noNamespaceImport": "off"
-      }
-    }
   },
   "formatter": {
     "enabled": true,
@@ -28,16 +20,94 @@
     "lineEnding": "lf",
     "lineWidth": 100
   },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": false,
+      "performance": {
+        // Convex and other libs use namespace imports extensively
+        "noNamespaceImport": "off"
+      },
+      "style": {
+        // Too noisy for UI code with prices, indices, dimensions, etc.
+        "noMagicNumbers": "off",
+        // Single-line if/return/arrow is acceptable and often cleaner
+        "useBlockStatements": "off",
+        // Convex values are often known to exist after query checks
+        "noNonNullAssertion": "warn",
+        // Project uses both interface and type per CLAUDE.md convention
+        "useConsistentTypeDefinitions": "off",
+        // Allow camelCase for hooks (useDebounce.ts) and Convex files (driverProfiles.ts)
+        "useFilenamingConvention": {
+          "level": "error",
+          "options": {
+            "requireAscii": true,
+            "filenameCases": ["kebab-case", "camelCase"]
+          }
+        },
+        // Enums are sometimes appropriate for domain models
+        "noEnum": "off",
+        // Nested ternaries are common in JSX conditional rendering
+        "noNestedTernary": "warn"
+      },
+      "complexity": {
+        // Complex UI components and backend handlers naturally exceed 15
+        "noExcessiveCognitiveComplexity": {
+          "level": "warn",
+          "options": { "maxAllowedComplexity": 25 }
+        },
+        // forEach is acceptable - not always worth converting to for...of
+        "noForEach": "warn"
+      },
+      "suspicious": {
+        // Warn rather than error - some contexts (Convex, third-party) legitimately need any
+        "noExplicitAny": "warn",
+        // Console is useful in development and error boundaries
+        "noConsole": "warn",
+        // Rarely relevant in a web app
+        "noBitwiseOperators": "off",
+        // Warn during development, alerts may be intentional in some UI flows
+        "noAlert": "warn"
+      },
+      "nursery": {
+        // Nursery rule, still unstable - warn rather than error
+        "noShadow": "warn"
+      }
+    },
+    "includes": ["**", "apps/**", "packages/**"]
+  },
   "javascript": {
     "formatter": {
-      "semicolons": "asNeeded",
       "trailingCommas": "es5",
+      "semicolons": "asNeeded",
       "quoteStyle": "double"
     }
   },
-  "json": {
-    "formatter": {
-      "enabled": true
+  "json": { "formatter": { "enabled": true } },
+  "overrides": [
+    {
+      // Tailwind v4 globals - Biome CSS parser doesn't support @custom-variant media syntax
+      "includes": ["packages/ui/src/styles/globals.css"],
+      "linter": { "enabled": false },
+      "formatter": { "enabled": false }
+    },
+    {
+      // Convex backend - relax rules for serverless function contexts
+      "includes": ["packages/backend/convex/**/*"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            // Convex context types are complex and sometimes need any
+            "noExplicitAny": "off",
+            // Backend logging is expected
+            "noConsole": "off"
+          },
+          "style": {
+            // Convex generated files use camelCase
+            "useFilenamingConvention": "off"
+          }
+        }
+      }
     }
-  }
+  ]
 }

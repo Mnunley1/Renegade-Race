@@ -105,12 +105,16 @@ export const send = mutation({
     content: v.string(),
     messageType: v.optional(v.union(v.literal("text"), v.literal("image"), v.literal("system"))),
     replyTo: v.optional(v.id("messages")),
-    attachments: v.optional(v.array(v.object({
-      type: v.union(v.literal("image"), v.literal("pdf")),
-      url: v.string(),
-      fileName: v.string(),
-      fileSize: v.number(),
-    }))),
+    attachments: v.optional(
+      v.array(
+        v.object({
+          type: v.union(v.literal("image"), v.literal("pdf")),
+          url: v.string(),
+          fileName: v.string(),
+          fileSize: v.number(),
+        })
+      )
+    ),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()
@@ -206,7 +210,7 @@ export const send = mutation({
         if (attachment.fileSize > MAX_FILE_SIZE) {
           throw new Error(`File ${attachment.fileName} exceeds maximum size of 10MB`)
         }
-        if (!attachment.url || !attachment.fileName) {
+        if (!(attachment.url && attachment.fileName)) {
           throw new Error("Invalid attachment data")
         }
       }

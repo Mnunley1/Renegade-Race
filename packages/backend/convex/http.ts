@@ -1,16 +1,16 @@
 // @ts-expect-error - @clerk/backend module resolution issue
 import type { WebhookEvent } from "@clerk/backend"
+import { registerRoutes } from "@convex-dev/stripe"
 import { httpRouter } from "convex/server"
 import Stripe from "stripe"
 import { Webhook } from "svix"
-import { api, internal, components } from "./_generated/api"
+import { api, components, internal } from "./_generated/api"
 import { httpAction } from "./_generated/server"
 import { resendComponent } from "./emails"
-import { registerRoutes } from "@convex-dev/stripe"
 import { rateLimiter } from "./rateLimiter"
 
 // Helper function to get Stripe instance
-function getStripe(): Stripe {
+function _getStripe(): Stripe {
   const secretKey = process.env.STRIPE_SECRET_KEY
   if (!secretKey) {
     throw new Error("STRIPE_SECRET_KEY environment variable is not set")
@@ -125,7 +125,7 @@ registerRoutes(http, components.stripe, {
       ctx,
       event: Stripe.AccountApplicationDeauthorizedEvent
     ) => {
-      const application = event.data.object
+      const _application = event.data.object
       // The account ID is in the event's account field for connected accounts
       const accountId = event.account
 

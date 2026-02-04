@@ -91,7 +91,7 @@ function Combobox({
         </svg>
       </button>
       {open && (
-        <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover p-1 shadow-md animate-in fade-in-0 zoom-in-95">
+        <div className="fade-in-0 zoom-in-95 absolute z-50 mt-1 w-full animate-in rounded-md border bg-popover p-1 shadow-md">
           <div className="px-2 pb-1.5">
             <input
               className="flex h-8 w-full rounded-md bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-muted-foreground"
@@ -124,7 +124,10 @@ function Combobox({
                   type="button"
                 >
                   <svg
-                    className={cn("mr-2 size-4 shrink-0", value === option.value ? "opacity-100" : "opacity-0")}
+                    className={cn(
+                      "mr-2 size-4 shrink-0",
+                      value === option.value ? "opacity-100" : "opacity-0"
+                    )}
                     fill="none"
                     stroke="currentColor"
                     strokeLinecap="round"

@@ -7,8 +7,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu"
-import { UserAvatar } from "@/components/user-avatar"
 import { Archive, MoreVertical, Trash2 } from "lucide-react"
+import { UserAvatar } from "@/components/user-avatar"
 
 interface VehicleInfo {
   year?: number
@@ -61,10 +61,7 @@ export function ChatHeader({
               <Archive className="mr-2 h-4 w-4" />
               Archive Conversation
             </DropdownMenuItem>
-            <DropdownMenuItem
-              className="text-destructive"
-              onClick={onDelete}
-            >
+            <DropdownMenuItem className="text-destructive" onClick={onDelete}>
               <Trash2 className="mr-2 h-4 w-4" />
               Delete Conversation
             </DropdownMenuItem>

@@ -1,7 +1,6 @@
 "use client"
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { Button } from "@workspace/ui/components/button"
 import {
   Card,
   CardContent,
@@ -9,8 +8,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@workspace/ui/components/card"
-import { Button } from "@workspace/ui/components/button"
 import { Separator } from "@workspace/ui/components/separator"
+import { useRouter } from "next/navigation"
+import { useState } from "react"
 import { useCookieConsent } from "@/hooks/useCookieConsent"
 import { loadSentry } from "@/lib/sentry-loader"
 
@@ -100,17 +100,17 @@ export default function CookiePreferencesPage() {
           <Separator />
 
           <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
-            <Button variant="outline" onClick={() => router.back()}>
+            <Button onClick={() => router.back()} variant="outline">
               Cancel
             </Button>
             <Button
-              variant="outline"
-              onClick={handleReject}
               disabled={consentStatus === "rejected"}
+              onClick={handleReject}
+              variant="outline"
             >
               Decline All Non-Essential Cookies
             </Button>
-            <Button onClick={handleAccept} disabled={consentStatus === "accepted"}>
+            <Button disabled={consentStatus === "accepted"} onClick={handleAccept}>
               Accept All Cookies
             </Button>
           </div>
@@ -132,7 +132,7 @@ export default function CookiePreferencesPage() {
         <CardContent>
           <p className="text-muted-foreground text-sm">
             For more information about how we use cookies and handle your data, please read our{" "}
-            <a href="/privacy" className="text-primary underline hover:text-primary/80">
+            <a className="text-primary underline hover:text-primary/80" href="/privacy">
               Privacy Policy
             </a>
             .

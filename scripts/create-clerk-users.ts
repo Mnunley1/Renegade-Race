@@ -1,4 +1,5 @@
 #!/usr/bin/env tsx
+
 /**
  * Clerk User Creation Script
  *
@@ -8,9 +9,9 @@
  *   CLERK_SECRET_KEY=your-key tsx scripts/create-clerk-users.ts --users-file adalo-users.json --output mapping.json
  */
 
+import * as fs from "node:fs"
+import * as path from "node:path"
 import { ClerkClient } from "@clerk/clerk-sdk-node"
-import * as fs from "fs"
-import * as path from "path"
 
 type AdaloUser = {
   id: string
