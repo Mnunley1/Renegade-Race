@@ -16,7 +16,7 @@
     "prepare": "husky"
   },
   "lint-staged": {
-    "*.{ts,tsx,js,jsx}": [
+    "!(packages/backend/convex/**)*.{ts,tsx,js,jsx}": [
       "biome format --write --no-errors-on-unmatched"
     ],
     "*.{json,jsonc}": [
