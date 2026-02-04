@@ -9,15 +9,10 @@ import { LoadingState } from "@/components/loading-state"
 import { DollarSign, Percent, TrendingUp, Calendar } from "lucide-react"
 
 export default function FeesPage() {
-  // TODO: Implement getPlatformSettings query
-  const settings: any = {
-    platformFeePercentage: 5,
-    minimumPlatformFee: 100,
-    maximumPlatformFee: 5000,
-  }
+  const settings = useQuery(api.admin.getPlatformSettings)
   const stats = useQuery(api.admin.getPlatformStats)
 
-  if (stats === undefined) return <LoadingState message="Loading fee data..." />
+  if (stats === undefined || settings === undefined) return <LoadingState message="Loading fee data..." />
 
   return (
     <div>

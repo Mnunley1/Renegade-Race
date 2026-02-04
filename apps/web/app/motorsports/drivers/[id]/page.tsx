@@ -146,7 +146,7 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
       ? { teamId: userTeams[0]!._id, driverProfileId: profileId }
       : "skip"
   )
-  const hasAcceptedConnection = (firstTeamConnection as any)?.status === "accepted"
+  const hasAcceptedConnection = firstTeamConnection?.status === "accepted"
 
   const createConversation = useMutation(api.conversations.createMotorsportsConversation)
   const recordView = useMutation(api.profileViews.recordView)
@@ -430,11 +430,6 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
                                 "single-race": "Single Race",
                                 "multi-race": "Multi-Race",
                                 "season-commitment": "Season Commitment",
-                                // Legacy support for old values
-                                weekends: "Weekends",
-                                weekdays: "Weekdays",
-                                evenings: "Evenings",
-                                flexible: "Flexible",
                               }
                               const label =
                                 availabilityLabels[availability] ||

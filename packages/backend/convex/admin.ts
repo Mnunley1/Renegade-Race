@@ -1613,3 +1613,558 @@ export const getPaymentForRefund = internalQuery({
   },
   handler: async (ctx, args) => await ctx.db.get(args.paymentId),
 })
+
+// ============================================================================
+// Review Detail
+// ============================================================================
+
+// Get a single review with all related data for admin detail view
+export const getReviewDetail = query({
+  args: {
+    reviewId: v.id("rentalReviews"),
+  },
+  handler: async (ctx, args) => {
+    await checkAdmin(ctx)
+
+    const review = await ctx.db.get(args.reviewId)
+    if (!review) return null
+
+    const [vehicle, reviewer, reviewed, reservation] = await Promise.all([
+      ctx.db.get(review.vehicleId),
+      ctx.db
+        .query("users")
+        .withIndex("by_external_id", (q) => q.eq("externalId", review.reviewerId))
+        .first(),
+      ctx.db
+        .query("users")
+        .withIndex("by_external_id", (q) => q.eq("externalId", review.reviewedId))
+        .first(),
+      ctx.db.get(review.reservationId),
+    ])
+
+    return {
+      ...review,
+      vehicle,
+      reviewer,
+      reviewed,
+      reservation,
+    }
+  },
+})
+
+// ============================================================================
+// Platform Settings
+// ============================================================================
+
+// Get platform fee settings
+export const getPlatformSettings = query({
+  args: {},
+  handler: async (ctx) => {
+    await checkAdmin(ctx)
+
+    const settings = await ctx.db
+      .query("platformSettings")
+      .withIndex("by_active", (q) => q.eq("isActive", true))
+      .first()
+
+    if (!settings) {
+      // Return defaults if no settings exist yet
+      return {
+        platformFeePercentage: 5,
+        minimumPlatformFee: 100,
+        maximumPlatformFee: 5000,
+      }
+    }
+
+    return {
+      platformFeePercentage: settings.platformFeePercentage,
+      minimumPlatformFee: settings.minimumPlatformFee,
+      maximumPlatformFee: settings.maximumPlatformFee ?? 5000,
+    }
+  },
+})
+
+// ============================================================================
+// User Analytics
+// ============================================================================
+
+// Get user growth time series data
+export const getUserGrowthTimeSeries = query({
+  args: {
+    granularity: v.union(v.literal("daily"), v.literal("weekly"), v.literal("monthly")),
+    startDate: v.string(),
+    endDate: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await checkAdmin(ctx)
+
+    const { granularity, startDate, endDate } = args
+    const start = new Date(startDate).getTime()
+    const end = new Date(endDate).getTime()
+
+    const allUsers = await ctx.db.query("users").collect()
+    const usersInRange = allUsers.filter(
+      (u) => u._creationTime >= start && u._creationTime <= end
+    )
+
+    // Build date key helper
+    function getDateKey(timestamp: number): string {
+      const date = new Date(timestamp)
+      if (granularity === "daily") {
+        return date.toISOString().split("T")[0]!
+      }
+      if (granularity === "weekly") {
+        const dayOfWeek = date.getDay()
+        const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
+        const monday = new Date(date)
+        monday.setDate(date.getDate() + diff)
+        return monday.toISOString().split("T")[0]!
+      }
+      return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-01`
+    }
+
+    // Group new users by date
+    const growthMap = new Map<string, { newUsers: number; newHosts: number }>()
+    for (const user of usersInRange) {
+      const key = getDateKey(user._creationTime)
+      const existing = growthMap.get(key) || { newUsers: 0, newHosts: 0 }
+      existing.newUsers += 1
+      if (user.isHost) existing.newHosts += 1
+      growthMap.set(key, existing)
+    }
+
+    // Calculate cumulative totals
+    const usersBeforeRange = allUsers.filter((u) => u._creationTime < start).length
+    const sortedEntries = Array.from(growthMap.entries()).sort((a, b) =>
+      a[0].localeCompare(b[0])
+    )
+
+    let cumulative = usersBeforeRange
+    const result = sortedEntries.map(([date, data]) => {
+      cumulative += data.newUsers
+      return {
+        date,
+        newUsers: data.newUsers,
+        cumulativeTotal: cumulative,
+        newHosts: data.newHosts,
+      }
+    })
+
+    return result
+  },
+})
+
+// Get top renters and hosts
+export const getTopUsers = query({
+  args: {
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    await checkAdmin(ctx)
+
+    const { limit = 10 } = args
+
+    const allUsers = await ctx.db.query("users").collect()
+    const allPayments = await ctx.db.query("payments").collect()
+    const succeededPayments = allPayments.filter((p) => p.status === "succeeded")
+
+    // Top renters by total spend
+    const renterSpend = new Map<string, { total: number; count: number }>()
+    for (const payment of succeededPayments) {
+      const existing = renterSpend.get(payment.renterId) || { total: 0, count: 0 }
+      existing.total += payment.amount
+      existing.count += 1
+      renterSpend.set(payment.renterId, existing)
+    }
+
+    const topRenters = Array.from(renterSpend.entries())
+      .sort((a, b) => b[1].total - a[1].total)
+      .slice(0, limit)
+      .map(([externalId, data]) => {
+        const user = allUsers.find((u) => u.externalId === externalId)
+        return {
+          _id: user?._id || externalId,
+          name: user?.name || "Unknown",
+          email: user?.email || "",
+          totalSpent: data.total,
+          bookingCount: data.count,
+        }
+      })
+
+    // Top hosts by earnings
+    const hostEarnings = new Map<string, { total: number }>()
+    for (const payment of succeededPayments) {
+      const existing = hostEarnings.get(payment.ownerId) || { total: 0 }
+      existing.total += payment.ownerAmount
+      hostEarnings.set(payment.ownerId, existing)
+    }
+
+    const allVehicles = await ctx.db.query("vehicles").collect()
+    const vehicleCountByOwner = new Map<string, number>()
+    for (const vehicle of allVehicles) {
+      if (!vehicle.deletedAt) {
+        vehicleCountByOwner.set(vehicle.ownerId, (vehicleCountByOwner.get(vehicle.ownerId) || 0) + 1)
+      }
+    }
+
+    const topHosts = Array.from(hostEarnings.entries())
+      .sort((a, b) => b[1].total - a[1].total)
+      .slice(0, limit)
+      .map(([externalId, data]) => {
+        const user = allUsers.find((u) => u.externalId === externalId)
+        return {
+          _id: user?._id || externalId,
+          name: user?.name || "Unknown",
+          email: user?.email || "",
+          totalEarnings: data.total,
+          vehicleCount: vehicleCountByOwner.get(externalId) || 0,
+        }
+      })
+
+    return { topRenters, topHosts }
+  },
+})
+
+// ============================================================================
+// Vehicle Analytics
+// ============================================================================
+
+// Get vehicle listings time series data
+export const getVehicleTimeSeries = query({
+  args: {
+    granularity: v.union(v.literal("daily"), v.literal("weekly"), v.literal("monthly")),
+    startDate: v.string(),
+    endDate: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await checkAdmin(ctx)
+
+    const { granularity, startDate, endDate } = args
+    const start = new Date(startDate).getTime()
+    const end = new Date(endDate).getTime()
+
+    const allVehicles = await ctx.db.query("vehicles").collect()
+    const vehiclesInRange = allVehicles.filter(
+      (v) => v.createdAt >= start && v.createdAt <= end
+    )
+
+    function getDateKey(timestamp: number): string {
+      const date = new Date(timestamp)
+      if (granularity === "daily") {
+        return date.toISOString().split("T")[0]!
+      }
+      if (granularity === "weekly") {
+        const dayOfWeek = date.getDay()
+        const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
+        const monday = new Date(date)
+        monday.setDate(date.getDate() + diff)
+        return monday.toISOString().split("T")[0]!
+      }
+      return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-01`
+    }
+
+    const listingsMap = new Map<string, number>()
+    for (const vehicle of vehiclesInRange) {
+      const key = getDateKey(vehicle.createdAt)
+      listingsMap.set(key, (listingsMap.get(key) || 0) + 1)
+    }
+
+    const activeBeforeRange = allVehicles.filter(
+      (v) => v.createdAt < start && v.isActive && !v.deletedAt
+    ).length
+
+    const sortedEntries = Array.from(listingsMap.entries()).sort((a, b) =>
+      a[0].localeCompare(b[0])
+    )
+
+    let cumulative = activeBeforeRange
+    const result = sortedEntries.map(([date, newListings]) => {
+      cumulative += newListings
+      return { date, newListings, totalActive: cumulative }
+    })
+
+    return result
+  },
+})
+
+// Get top vehicles by revenue
+export const getTopVehicles = query({
+  args: {
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    await checkAdmin(ctx)
+
+    const { limit = 10 } = args
+
+    const allReservations = await ctx.db.query("reservations").collect()
+    const completedOrConfirmed = allReservations.filter(
+      (r) => r.status === "completed" || r.status === "confirmed"
+    )
+
+    // Aggregate revenue and booking count per vehicle
+    const vehicleStats = new Map<
+      string,
+      { totalRevenue: number; bookingCount: number }
+    >()
+    for (const reservation of completedOrConfirmed) {
+      const vehicleId = reservation.vehicleId as string
+      const existing = vehicleStats.get(vehicleId) || {
+        totalRevenue: 0,
+        bookingCount: 0,
+      }
+      existing.totalRevenue += reservation.totalAmount
+      existing.bookingCount += 1
+      vehicleStats.set(vehicleId, existing)
+    }
+
+    // Get average rating per vehicle from reviews
+    const allReviews = await ctx.db.query("rentalReviews").collect()
+    const vehicleRatings = new Map<string, { sum: number; count: number }>()
+    for (const review of allReviews) {
+      if (review.isPublic) {
+        const vehicleId = review.vehicleId as string
+        const existing = vehicleRatings.get(vehicleId) || { sum: 0, count: 0 }
+        existing.sum += review.rating
+        existing.count += 1
+        vehicleRatings.set(vehicleId, existing)
+      }
+    }
+
+    // Sort by revenue and take top N
+    const sorted = Array.from(vehicleStats.entries())
+      .sort((a, b) => b[1].totalRevenue - a[1].totalRevenue)
+      .slice(0, limit)
+
+    const topVehicles = await Promise.all(
+      sorted.map(async ([vehicleId, stats]) => {
+        const vehicle = await ctx.db.get(vehicleId as Id<"vehicles">)
+        const rating = vehicleRatings.get(vehicleId)
+        const track = vehicle?.trackId ? await ctx.db.get(vehicle.trackId) : null
+        return {
+          _id: vehicleId,
+          year: vehicle?.year ?? 0,
+          make: vehicle?.make ?? "Unknown",
+          model: vehicle?.model ?? "Unknown",
+          location: track ? { city: track.location } : undefined,
+          totalRevenue: stats.totalRevenue,
+          bookingCount: stats.bookingCount,
+          averageRating: rating ? rating.sum / rating.count : undefined,
+        }
+      })
+    )
+
+    return topVehicles
+  },
+})
+
+// ============================================================================
+// Booking Analytics
+// ============================================================================
+
+// Get booking time series data
+export const getBookingTimeSeries = query({
+  args: {
+    granularity: v.union(v.literal("daily"), v.literal("weekly"), v.literal("monthly")),
+    startDate: v.string(),
+    endDate: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await checkAdmin(ctx)
+
+    const { granularity, startDate, endDate } = args
+    const start = new Date(startDate).getTime()
+    const end = new Date(endDate).getTime()
+
+    const allReservations = await ctx.db.query("reservations").collect()
+    const reservationsInRange = allReservations.filter(
+      (r) => r.createdAt >= start && r.createdAt <= end
+    )
+
+    function getDateKey(timestamp: number): string {
+      const date = new Date(timestamp)
+      if (granularity === "daily") {
+        return date.toISOString().split("T")[0]!
+      }
+      if (granularity === "weekly") {
+        const dayOfWeek = date.getDay()
+        const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
+        const monday = new Date(date)
+        monday.setDate(date.getDate() + diff)
+        return monday.toISOString().split("T")[0]!
+      }
+      return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-01`
+    }
+
+    const bookingMap = new Map<
+      string,
+      { created: number; confirmed: number; completed: number; cancelled: number }
+    >()
+
+    for (const reservation of reservationsInRange) {
+      const key = getDateKey(reservation.createdAt)
+      const existing = bookingMap.get(key) || {
+        created: 0,
+        confirmed: 0,
+        completed: 0,
+        cancelled: 0,
+      }
+      existing.created += 1
+      if (reservation.status === "confirmed") existing.confirmed += 1
+      if (reservation.status === "completed") existing.completed += 1
+      if (reservation.status === "cancelled") existing.cancelled += 1
+      bookingMap.set(key, existing)
+    }
+
+    const result = Array.from(bookingMap.entries())
+      .map(([date, data]) => ({ date, ...data }))
+      .sort((a, b) => a.date.localeCompare(b.date))
+
+    return result
+  },
+})
+
+// Get booking funnel / conversion metrics
+export const getBookingFunnel = query({
+  args: {},
+  handler: async (ctx) => {
+    await checkAdmin(ctx)
+
+    const allReservations = await ctx.db.query("reservations").collect()
+
+    const pending = allReservations.filter((r) => r.status === "pending").length
+    const confirmed = allReservations.filter((r) => r.status === "confirmed").length
+    const completed = allReservations.filter((r) => r.status === "completed").length
+    const cancelled = allReservations.filter((r) => r.status === "cancelled").length
+    const declined = allReservations.filter((r) => r.status === "declined").length
+
+    const total = allReservations.length
+    const conversionRate = total > 0 ? (completed / total) * 100 : 0
+
+    return {
+      pending,
+      confirmed,
+      completed,
+      cancelled,
+      declined,
+      conversionRate,
+    }
+  },
+})
+
+// ============================================================================
+// Admin Conversation Detail
+// ============================================================================
+
+// Get full conversation detail for admin view (any conversation)
+export const getAdminConversationDetail = query({
+  args: {
+    conversationId: v.id("conversations"),
+  },
+  handler: async (ctx, args) => {
+    await checkAdmin(ctx)
+
+    const conversation = await ctx.db.get(args.conversationId)
+    if (!conversation) return null
+
+    // Get all messages in this conversation
+    const messages = await ctx.db
+      .query("messages")
+      .withIndex("by_conversation_created", (q) =>
+        q.eq("conversationId", args.conversationId)
+      )
+      .order("asc")
+      .collect()
+
+    // Get sender info for each message
+    const senderIds = [...new Set(messages.map((m) => m.senderId))]
+    const senderMap = new Map<string, { name: string; email: string }>()
+    await Promise.all(
+      senderIds.map(async (senderId) => {
+        const user = await ctx.db
+          .query("users")
+          .withIndex("by_external_id", (q) => q.eq("externalId", senderId))
+          .first()
+        if (user) {
+          senderMap.set(senderId, { name: user.name, email: user.email || "" })
+        } else {
+          senderMap.set(senderId, { name: "System", email: "" })
+        }
+      })
+    )
+
+    const messagesWithSender = messages.map((msg) => ({
+      ...msg,
+      sender: senderMap.get(msg.senderId) || { name: "Unknown", email: "" },
+    }))
+
+    // Get renter and owner info
+    const [renter, owner] = await Promise.all([
+      ctx.db
+        .query("users")
+        .withIndex("by_external_id", (q) => q.eq("externalId", conversation.renterId))
+        .first(),
+      ctx.db
+        .query("users")
+        .withIndex("by_external_id", (q) => q.eq("externalId", conversation.ownerId))
+        .first(),
+    ])
+
+    // Get vehicle info if present
+    const vehicle = conversation.vehicleId
+      ? await ctx.db.get(conversation.vehicleId)
+      : null
+
+    return {
+      conversation,
+      messages: messagesWithSender,
+      renter,
+      owner,
+      vehicle,
+    }
+  },
+})
+
+// Archive a conversation (set isActive to false)
+export const archiveConversation = mutation({
+  args: {
+    conversationId: v.id("conversations"),
+  },
+  handler: async (ctx, args) => {
+    await checkAdmin(ctx)
+
+    const conversation = await ctx.db.get(args.conversationId)
+    if (!conversation) {
+      throw new Error("Conversation not found")
+    }
+
+    await ctx.db.patch(args.conversationId, {
+      isActive: false,
+      updatedAt: Date.now(),
+    })
+
+    return args.conversationId
+  },
+})
+
+// Unarchive a conversation (set isActive to true)
+export const unarchiveConversation = mutation({
+  args: {
+    conversationId: v.id("conversations"),
+  },
+  handler: async (ctx, args) => {
+    await checkAdmin(ctx)
+
+    const conversation = await ctx.db.get(args.conversationId)
+    if (!conversation) {
+      throw new Error("Conversation not found")
+    }
+
+    await ctx.db.patch(args.conversationId, {
+      isActive: true,
+      updatedAt: Date.now(),
+    })
+
+    return args.conversationId
+  },
+})

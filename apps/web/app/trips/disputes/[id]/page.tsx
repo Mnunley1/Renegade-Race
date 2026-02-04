@@ -13,6 +13,7 @@ import { useParams, useRouter } from "next/navigation"
 import { useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/lib/convex"
+import type { Id } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 
 export default function DisputeDetailPage() {
@@ -25,7 +26,10 @@ export default function DisputeDetailPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Fetch dispute data
-  const dispute = useQuery(api.disputes.getById, disputeId ? { id: disputeId as any } : "skip")
+  const dispute = useQuery(
+    api.disputes.getById,
+    disputeId ? { id: disputeId as Id<"disputes"> } : "skip"
+  )
 
   const addMessage = useMutation(api.disputes.addMessage)
 
@@ -36,7 +40,7 @@ export default function DisputeDetailPage() {
     setIsSubmitting(true)
     try {
       await addMessage({
-        disputeId: disputeId as any,
+        disputeId: disputeId as Id<"disputes">,
         message: message.trim(),
       })
       setMessage("")

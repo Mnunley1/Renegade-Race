@@ -102,9 +102,14 @@ export default function ReservationDetailPage() {
   }
 
   const canCancel = reservation.status !== "cancelled" && reservation.status !== "completed"
+  const vehicleWithImages = reservation.vehicle as
+    | (typeof reservation.vehicle & {
+        images?: Array<{ isPrimary: boolean; cardUrl?: string; imageUrl?: string }>
+        track?: { name: string }
+      })
+    | null
   const primaryImage =
-    (reservation.vehicle as any)?.images?.find((img: any) => img.isPrimary) ||
-    (reservation.vehicle as any)?.images?.[0]
+    vehicleWithImages?.images?.find((img) => img.isPrimary) || vehicleWithImages?.images?.[0]
 
   return (
     <div className="space-y-6">
@@ -160,9 +165,9 @@ export default function ReservationDetailPage() {
               <p className="font-semibold text-lg">
                 {reservation.vehicle?.year} {reservation.vehicle?.make} {reservation.vehicle?.model}
               </p>
-              {(reservation.vehicle as any)?.track && (
+              {vehicleWithImages?.track && (
                 <p className="text-muted-foreground text-sm">
-                  Track: {(reservation.vehicle as any).track.name}
+                  Track: {vehicleWithImages.track.name}
                 </p>
               )}
             </div>

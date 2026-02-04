@@ -91,7 +91,9 @@ export default function DisputesPage() {
               <Select
                 value={statusFilter || "all"}
                 onValueChange={(value) =>
-                  setStatusFilter(value === "all" ? undefined : (value as any))
+                  setStatusFilter(
+                    value === "all" ? undefined : (value as "open" | "resolved" | "closed")
+                  )
                 }
               >
                 <SelectTrigger className="w-40">
