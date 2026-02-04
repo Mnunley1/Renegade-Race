@@ -181,7 +181,9 @@ export default function VehiclesPage() {
               <Select
                 value={statusFilter || "all"}
                 onValueChange={(value) =>
-                  setStatusFilter(value === "all" ? undefined : (value as any))
+                  setStatusFilter(
+                    value === "all" ? undefined : (value as "pending" | "approved")
+                  )
                 }
               >
                 <SelectTrigger className="w-40">

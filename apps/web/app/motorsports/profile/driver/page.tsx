@@ -578,11 +578,11 @@ export default function CreateDriverProfilePage() {
                     ))}
                   </div>
                   {formData.preferredCategories.filter((cat) =>
-                    REAL_WORLD_CATEGORIES.includes(cat as any)
+                    (REAL_WORLD_CATEGORIES as readonly string[]).includes(cat)
                   ).length > 0 && (
                     <div className="flex flex-wrap gap-2">
                       {formData.preferredCategories
-                        .filter((cat) => REAL_WORLD_CATEGORIES.includes(cat as any))
+                        .filter((cat) => (REAL_WORLD_CATEGORIES as readonly string[]).includes(cat))
                         .map((category) => (
                           <span
                             className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-1 text-primary text-xs"
@@ -723,11 +723,11 @@ export default function CreateDriverProfilePage() {
                     ))}
                   </div>
                   {formData.preferredCategories.filter((cat) =>
-                    SIM_RACING_CATEGORIES.includes(cat as any)
+                    (SIM_RACING_CATEGORIES as readonly string[]).includes(cat)
                   ).length > 0 && (
                     <div className="flex flex-wrap gap-2">
                       {formData.preferredCategories
-                        .filter((cat) => SIM_RACING_CATEGORIES.includes(cat as any))
+                        .filter((cat) => (SIM_RACING_CATEGORIES as readonly string[]).includes(cat))
                         .map((category) => (
                           <span
                             className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-1 text-primary text-xs"

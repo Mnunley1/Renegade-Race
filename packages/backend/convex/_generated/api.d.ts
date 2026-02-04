@@ -11,7 +11,6 @@
 import type * as admin from "../admin.js";
 import type * as auditLog from "../auditLog.js";
 import type * as availability from "../availability.js";
-import type * as config from "../config.js";
 import type * as conversations from "../conversations.js";
 import type * as crons from "../crons.js";
 import type * as dateUtils from "../dateUtils.js";
@@ -23,6 +22,7 @@ import type * as endorsements from "../endorsements.js";
 import type * as favorites from "../favorites.js";
 import type * as geocodeExistingVehicles from "../geocodeExistingVehicles.js";
 import type * as geocoding from "../geocoding.js";
+import type * as helpers from "../helpers.js";
 import type * as http from "../http.js";
 import type * as init from "../init.js";
 import type * as logger from "../logger.js";
@@ -73,7 +73,6 @@ declare const fullApi: ApiFromModules<{
   admin: typeof admin;
   auditLog: typeof auditLog;
   availability: typeof availability;
-  config: typeof config;
   conversations: typeof conversations;
   crons: typeof crons;
   dateUtils: typeof dateUtils;
@@ -85,6 +84,7 @@ declare const fullApi: ApiFromModules<{
   favorites: typeof favorites;
   geocodeExistingVehicles: typeof geocodeExistingVehicles;
   geocoding: typeof geocoding;
+  helpers: typeof helpers;
   http: typeof http;
   init: typeof init;
   logger: typeof logger;

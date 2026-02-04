@@ -6,6 +6,7 @@ import {
   sendTransactionalEmail,
   getSupportEmail,
 } from "./emails"
+import { getWebUrl } from "./helpers"
 import { rateLimiter } from "./rateLimiter"
 
 // Create a dispute for a rental completion
@@ -87,7 +88,7 @@ export const create = mutation({
 
       if (vehicle) {
         const vehicleName = `${vehicle.year} ${vehicle.make} ${vehicle.model}`
-        const webUrl = process.env.WEB_URL || "https://renegaderentals.com"
+        const webUrl = getWebUrl()
         const disputeUrl = `${webUrl}/disputes/${disputeId}`
 
         // Email to renter
@@ -393,7 +394,7 @@ export const resolve = mutation({
 
       if (vehicle) {
         const vehicleName = `${vehicle.year} ${vehicle.make} ${vehicle.model}`
-        const webUrl = process.env.WEB_URL || "https://renegaderentals.com"
+        const webUrl = getWebUrl()
         const disputeUrl = `${webUrl}/disputes/${args.disputeId}`
 
         // Email to renter

@@ -48,6 +48,7 @@ import { useMemo, useState } from "react"
 import { toast } from "sonner"
 import { VehicleGallery } from "@/components/vehicle-gallery"
 import { api } from "@/lib/convex"
+import type { Id } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 
 export default function HostVehicleDetailPage() {
@@ -58,12 +59,15 @@ export default function HostVehicleDetailPage() {
   const [isDeleting, setIsDeleting] = useState(false)
 
   // Fetch vehicle from Convex
-  const vehicle = useQuery(api.vehicles.getById, vehicleId ? { id: vehicleId as any } : "skip")
+  const vehicle = useQuery(
+    api.vehicles.getById,
+    vehicleId ? { id: vehicleId as Id<"vehicles"> } : "skip"
+  )
 
   // Check if vehicle can be deleted
   const canDeleteResult = useQuery(
     api.vehicles.canDelete,
-    vehicleId ? { id: vehicleId as any } : "skip"
+    vehicleId ? { id: vehicleId as Id<"vehicles"> } : "skip"
   )
 
   // Delete mutation
@@ -78,7 +82,7 @@ export default function HostVehicleDetailPage() {
   // Fetch analytics for this vehicle
   const analytics = useQuery(
     api.vehicleAnalytics.getVehicleAnalytics,
-    vehicleId && user?.id ? { vehicleId: vehicleId as any } : "skip"
+    vehicleId && user?.id ? { vehicleId: vehicleId as Id<"vehicles"> } : "skip"
   )
 
   // Filter reservations for this vehicle
@@ -224,7 +228,7 @@ export default function HostVehicleDetailPage() {
   const handleDeleteVehicle = async () => {
     setIsDeleting(true)
     try {
-      await deleteVehicle({ id: vehicleId as any })
+      await deleteVehicle({ id: vehicleId as Id<"vehicles"> })
       toast.success("Vehicle deleted successfully")
       router.push("/host/vehicles/list")
     } catch (error) {

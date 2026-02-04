@@ -45,6 +45,7 @@ import { useEffect, useMemo, useState } from "react"
 import type { DateRange } from "react-day-picker"
 import { toast } from "sonner"
 import { api } from "@/lib/convex"
+import type { Id } from "@/lib/convex"
 
 const ADVANCE_NOTICE_OPTIONS = [
   { value: "same-day", label: "Same day" },
@@ -84,7 +85,10 @@ export default function HostVehicleAvailabilityPage() {
   const [rangePriceOverride, setRangePriceOverride] = useState<string>("")
 
   // Fetch vehicle from Convex
-  const vehicle = useQuery(api.vehicles.getById, vehicleId ? { id: vehicleId as any } : "skip")
+  const vehicle = useQuery(
+    api.vehicles.getById,
+    vehicleId ? { id: vehicleId as Id<"vehicles"> } : "skip"
+  )
 
   // Fetch availability data for the current month
   const calendarData = useQuery(
@@ -119,7 +123,7 @@ export default function HostVehicleAvailabilityPage() {
       setAdvanceNotice(vehicle.advanceNotice || "1-day")
       setMinTripDuration(vehicle.minTripDuration || "1-day")
       setMaxTripDuration(vehicle.maxTripDuration || "3-weeks")
-      setRequireWeekendMin((vehicle as any).requireWeekendMin)
+      setRequireWeekendMin(vehicle.requireWeekendMin ?? false)
     }
   }, [vehicle, editSettingsDialogOpen])
 

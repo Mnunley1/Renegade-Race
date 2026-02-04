@@ -10,6 +10,7 @@ import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { Suspense } from "react"
 import { api } from "@/lib/convex"
+import type { Id } from "@/lib/convex"
 import { formatDateForDisplay } from "@/lib/date-utils"
 
 function CheckoutSuccessContent() {
@@ -18,7 +19,7 @@ function CheckoutSuccessContent() {
 
   const reservation = useQuery(
     api.reservations.getById,
-    reservationId ? { id: reservationId as any } : "skip"
+    reservationId ? { id: reservationId as Id<"reservations"> } : "skip"
   )
 
   if (!reservationId) {
@@ -51,9 +52,8 @@ function CheckoutSuccessContent() {
 
   const vehicle = reservation.vehicle
   const primaryImage =
-    (vehicle as any)?.images?.find((img: { isPrimary: boolean; cardUrl?: string }) => img.isPrimary)
-      ?.cardUrl ||
-    (vehicle as any)?.images?.[0]?.cardUrl ||
+    vehicle?.images?.find((img) => img.isPrimary)?.cardUrl ||
+    vehicle?.images?.[0]?.cardUrl ||
     ""
 
   return (
@@ -85,10 +85,10 @@ function CheckoutSuccessContent() {
                     <h2 className="mb-2 font-bold text-2xl">
                       {vehicle.year} {vehicle.make} {vehicle.model}
                     </h2>
-                    {(vehicle as any).location && (
+                    {vehicle.address && (
                       <div className="mb-2 flex items-center gap-2 text-muted-foreground">
                         <MapPin className="size-4" />
-                        <span>{(vehicle as any).location}</span>
+                        <span>{vehicle.address}</span>
                       </div>
                     )}
                   </div>

@@ -1,6 +1,7 @@
 "use client"
 
 import { api } from "@/lib/convex"
+import type { Id } from "@/lib/convex"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent } from "@workspace/ui/components/card"
@@ -33,7 +34,7 @@ export default function ApplicationsPage() {
   const handleWithdraw = async (applicationId: string) => {
     try {
       await updateStatus({
-        applicationId: applicationId as any,
+        applicationId: applicationId as Id<"teamApplications">,
         status: "withdrawn",
       })
       toast.success("Application withdrawn")

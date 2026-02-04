@@ -11,6 +11,7 @@ import {
   getReservationPendingOwnerEmailTemplate,
   sendTransactionalEmail,
 } from "./emails"
+import { getWebUrl } from "./helpers"
 import { rateLimiter } from "./rateLimiter"
 import { sanitizeMessage, sanitizeShortText } from "./sanitize"
 
@@ -399,7 +400,7 @@ export const create = mutation({
       const vehicleName = `${vehicle.year} ${vehicle.make} ${vehicle.model}`
 
       if (ownerEmail) {
-        const webUrl = process.env.WEB_URL || "https://renegaderentals.com"
+        const webUrl = getWebUrl()
         const template = getReservationPendingOwnerEmailTemplate({
           ownerName: owner?.name || "Owner",
           renterName,
@@ -481,7 +482,7 @@ export const approve = mutation({
         const vehicleName = `${vehicle.year} ${vehicle.make} ${vehicle.model}`
 
         if (renterEmail) {
-          const webUrl = process.env.WEB_URL || "https://renegaderentals.com"
+          const webUrl = getWebUrl()
           const template = getReservationConfirmedRenterEmailTemplate({
             renterName: renter.name || "Guest",
             vehicleName,
@@ -789,7 +790,7 @@ export const complete = mutation({
 
       if (vehicle) {
         const vehicleName = `${vehicle.year} ${vehicle.make} ${vehicle.model}`
-        const webUrl = process.env.WEB_URL || "https://renegaderentals.com"
+        const webUrl = getWebUrl()
 
         // Email to renter (prompt to review owner/vehicle)
         if (renter?.email) {

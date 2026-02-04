@@ -48,31 +48,18 @@ export default function UserAnalyticsPage() {
 
   const stats = useQuery(api.admin.getPlatformStats)
   const dateParams = getDateRange(dateRange)
-  // TODO: Implement getUserGrowthTimeSeries and getTopUsers queries
-  const userGrowthData: Array<{
-    date: string
-    newUsers: number
-    cumulativeTotal: number
-    newHosts: number
-  }> = []
-  const topRenters: Array<{
-    userId: string
-    name: string
-    email: string
-    totalSpend: number
-    bookingCount: number
-  }> = []
-  const topHosts: Array<{
-    userId: string
-    name: string
-    email: string
-    totalEarnings: number
-    bookingCount: number
-  }> = []
+  const userGrowthData = useQuery(api.admin.getUserGrowthTimeSeries, {
+    granularity,
+    ...dateParams,
+  })
+  const topUsersData = useQuery(api.admin.getTopUsers, { limit: 10 })
 
-  if (!stats) {
+  if (!stats || !userGrowthData || !topUsersData) {
     return <LoadingState message="Loading user analytics..." />
   }
+
+  const topRenters = topUsersData.topRenters
+  const topHosts = topUsersData.topHosts
 
   const chartData = userGrowthData.map(
     (d: { date: string; newUsers: number; cumulativeTotal: number; newHosts: number }) => ({
@@ -172,7 +159,7 @@ export default function UserAnalyticsPage() {
                 <p className="text-muted-foreground text-sm">No data available</p>
               ) : (
                 <div className="space-y-3">
-                  {topRenters.map((user: any, index: number) => (
+                  {topRenters.map((user, index) => (
                     <div key={user._id} className="flex items-center justify-between border-b pb-3">
                       <div className="flex items-center gap-3">
                         <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 font-semibold text-primary text-sm">
@@ -186,12 +173,12 @@ export default function UserAnalyticsPage() {
                       <div className="text-right">
                         <p className="font-semibold">
                           $
-                          {(((user as any).totalSpent || 0) / 100).toLocaleString("en-US", {
+                          {((user.totalSpent || 0) / 100).toLocaleString("en-US", {
                             minimumFractionDigits: 2,
                           })}
                         </p>
                         <p className="text-muted-foreground text-sm">
-                          {(user as any).bookingCount || 0} bookings
+                          {user.bookingCount || 0} bookings
                         </p>
                       </div>
                     </div>
@@ -212,7 +199,7 @@ export default function UserAnalyticsPage() {
                 <p className="text-muted-foreground text-sm">No data available</p>
               ) : (
                 <div className="space-y-3">
-                  {topHosts.map((user: any, index: number) => (
+                  {topHosts.map((user, index) => (
                     <div key={user._id} className="flex items-center justify-between border-b pb-3">
                       <div className="flex items-center gap-3">
                         <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 font-semibold text-primary text-sm">
@@ -226,12 +213,12 @@ export default function UserAnalyticsPage() {
                       <div className="text-right">
                         <p className="font-semibold">
                           $
-                          {(((user as any).totalEarnings || 0) / 100).toLocaleString("en-US", {
+                          {((user.totalEarnings || 0) / 100).toLocaleString("en-US", {
                             minimumFractionDigits: 2,
                           })}
                         </p>
                         <p className="text-muted-foreground text-sm">
-                          {(user as any).vehicleCount || 0} vehicles
+                          {user.vehicleCount || 0} vehicles
                         </p>
                       </div>
                     </div>

@@ -17,6 +17,7 @@ import { Textarea } from "@workspace/ui/components/textarea"
 import { MessageSquare, Send, Search, Loader2, User } from "lucide-react"
 import { toast } from "sonner"
 import { handleErrorWithContext } from "@/lib/error-handler"
+import type { Id } from "@/lib/convex"
 
 export default function MessagesPage() {
   const [selectedUserId, setSelectedUserId] = useState("")
@@ -51,7 +52,7 @@ export default function MessagesPage() {
       await sendAdminMessage({
         userId: selectedUserId,
         content: messageContent,
-        vehicleId: vehicleId ? (vehicleId as any) : undefined,
+        vehicleId: vehicleId ? (vehicleId as Id<"vehicles">) : undefined,
       })
       toast.success("Message sent successfully")
       setMessageContent("")

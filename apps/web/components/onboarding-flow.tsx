@@ -135,7 +135,15 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
         transmission: draft.vehicleData?.transmission || prev.transmission,
         drivetrain: draft.vehicleData?.drivetrain || prev.drivetrain,
       }))
-      setAddOns((draft.vehicleData?.addOns as any) || [])
+      setAddOns(
+        (draft.vehicleData?.addOns as Array<{
+          name: string
+          price: number
+          description: string
+          isRequired: boolean
+          priceType: "daily" | "one-time"
+        }>) || []
+      )
       if (draft.vehicleData?.advanceNotice) setAdvanceNotice(draft.vehicleData.advanceNotice)
       if (draft.vehicleData.minTripDuration) setMinTripDuration(draft.vehicleData.minTripDuration)
       if (draft.vehicleData.maxTripDuration) setMaxTripDuration(draft.vehicleData.maxTripDuration)
@@ -304,10 +312,6 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
         currentStep: 3,
       })
 
-      if (typeof window !== "undefined") {
-        sessionStorage.setItem("onboarding_images", JSON.stringify(imageData))
-      }
-
       toast.success("Photos uploaded successfully!")
       setCurrentStep(3)
     } catch (error) {
@@ -420,15 +424,6 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
     let imagesData: Array<{ r2Key: string; isPrimary: boolean; order: number }> = []
     if (draft.images && draft.images.length > 0) {
       imagesData = draft.images
-    } else if (typeof window !== "undefined") {
-      const imagesStr = sessionStorage.getItem("onboarding_images")
-      if (imagesStr) {
-        try {
-          imagesData = JSON.parse(imagesStr)
-        } catch {
-          // Invalid JSON
-        }
-      }
     }
 
     if (imagesData.length === 0) {
@@ -472,10 +467,6 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
       })
 
       await completeOnboarding()
-
-      if (typeof window !== "undefined") {
-        sessionStorage.removeItem("onboarding_images")
-      }
 
       toast.success("Vehicle listing submitted successfully!")
       router.push("/host/onboarding/complete")

@@ -154,9 +154,14 @@ export default function PaymentDetailPage() {
     )
   }
 
+  const vehicleWithImages = payment.vehicle as
+    | (typeof payment.vehicle & {
+        images?: Array<{ isPrimary: boolean; cardUrl?: string; imageUrl?: string }>
+        track?: { name: string }
+      })
+    | null
   const primaryImage =
-    (payment.vehicle as any)?.images?.find((img: any) => img.isPrimary) ||
-    (payment.vehicle as any)?.images?.[0]
+    vehicleWithImages?.images?.find((img) => img.isPrimary) || vehicleWithImages?.images?.[0]
 
   return (
     <div className="space-y-6">
@@ -274,11 +279,13 @@ export default function PaymentDetailPage() {
                 <p className="font-medium">{new Date(payment.updatedAt).toLocaleString()}</p>
               </div>
             )}
-            {(payment as any).refundedAt && (
+            {(payment as typeof payment & { refundedAt?: number }).refundedAt && (
               <div>
                 <p className="text-muted-foreground text-sm">Refunded At</p>
                 <p className="font-medium">
-                  {new Date((payment as any).refundedAt).toLocaleString()}
+                  {new Date(
+                    (payment as typeof payment & { refundedAt?: number }).refundedAt!
+                  ).toLocaleString()}
                 </p>
               </div>
             )}
@@ -425,9 +432,9 @@ export default function PaymentDetailPage() {
                 <h3 className="font-semibold text-lg">
                   {payment.vehicle.year} {payment.vehicle.make} {payment.vehicle.model}
                 </h3>
-                {(payment.vehicle as any).track && (
+                {vehicleWithImages?.track && (
                   <p className="text-muted-foreground text-sm">
-                    Track: {(payment.vehicle as any).track.name}
+                    Track: {vehicleWithImages.track.name}
                   </p>
                 )}
                 <div className="mt-2">

@@ -26,6 +26,8 @@ import { Suspense, useEffect, useState } from "react"
 import { api } from "@/lib/convex"
 import { formatDateToISO, parseLocalDate } from "@/lib/date-utils"
 
+import type { Id } from "@/lib/convex"
+
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "")
 
 interface AddOn {
@@ -137,16 +139,19 @@ function CheckoutPageContent() {
   const startDateParam = searchParams.get("startDate")
   const endDateParam = searchParams.get("endDate")
 
-  const vehicle = useQuery(api.vehicles.getById, vehicleId ? { id: vehicleId as any } : "skip")
+  const vehicle = useQuery(
+    api.vehicles.getById,
+    vehicleId ? { id: vehicleId as Id<"vehicles"> } : "skip"
+  )
   const reservation = useQuery(
     api.reservations.getById,
-    reservationId ? { id: reservationId as any } : "skip"
+    reservationId ? { id: reservationId as Id<"reservations"> } : "skip"
   )
 
   // Fetch blocked dates from availability
   const availability = useQuery(
     api.availability.getByVehicle,
-    vehicleId ? { vehicleId: vehicleId as any } : "skip"
+    vehicleId ? { vehicleId: vehicleId as Id<"vehicles"> } : "skip"
   )
 
   const createReservation = useMutation(api.reservations.create)
@@ -370,10 +375,8 @@ function CheckoutPageContent() {
   if (reservation && clientSecret) {
     const vehicle = reservation.vehicle
     const primaryImage =
-      (vehicle as any)?.images?.find(
-        (img: { isPrimary: boolean; cardUrl?: string }) => img.isPrimary
-      )?.cardUrl ||
-      (vehicle as any)?.images?.[0]?.cardUrl ||
+      vehicle?.images?.find((img) => img.isPrimary)?.cardUrl ||
+      vehicle?.images?.[0]?.cardUrl ||
       ""
 
     const options: StripeElementsOptions = {
@@ -538,9 +541,8 @@ function CheckoutPageContent() {
   if (!vehicle) return null
 
   const primaryImage =
-    (vehicle as any)?.images?.find((img: { isPrimary: boolean; cardUrl?: string }) => img.isPrimary)
-      ?.cardUrl ||
-    (vehicle as any)?.images?.[0]?.cardUrl ||
+    vehicle?.images?.find((img) => img.isPrimary)?.cardUrl ||
+    vehicle?.images?.[0]?.cardUrl ||
     ""
   // Check if form is valid and dates don't contain blocked dates
   const isValid =
