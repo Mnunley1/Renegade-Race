@@ -41,20 +41,9 @@ export default function SafetyPage() {
       return
     }
 
-    // Get images from draft (preferred) or sessionStorage (fallback for backward compatibility)
     let images: Array<{ r2Key: string; isPrimary: boolean; order: number }> = []
     if (draft.images && draft.images.length > 0) {
       images = draft.images
-    } else if (typeof window !== "undefined") {
-      // Fallback to sessionStorage for backward compatibility
-      const imagesStr = sessionStorage.getItem("onboarding_images")
-      if (imagesStr) {
-        try {
-          images = JSON.parse(imagesStr)
-        } catch {
-          // Invalid JSON
-        }
-      }
     }
 
     if (images.length === 0) {
@@ -98,11 +87,6 @@ export default function SafetyPage() {
 
       // Complete onboarding
       await completeOnboarding()
-
-      // Clear sessionStorage
-      if (typeof window !== "undefined") {
-        sessionStorage.removeItem("onboarding_images")
-      }
 
       toast.success("Vehicle listing submitted successfully!")
       router.push("/host/onboarding/complete")

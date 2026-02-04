@@ -48,24 +48,13 @@ export default function BookingAnalyticsPage() {
 
   const stats = useQuery(api.admin.getPlatformStats)
   const dateParams = getDateRange(dateRange)
-  // TODO: Implement getBookingTimeSeries and getBookingFunnel queries
-  const bookingData: Array<{
-    date: string
-    created: number
-    confirmed: number
-    completed: number
-    cancelled: number
-  }> = []
-  const bookingFunnel = {
-    pending: 0,
-    confirmed: 0,
-    completed: 0,
-    cancelled: 0,
-    declined: 0,
-    conversionRate: 0,
-  }
+  const bookingData = useQuery(api.admin.getBookingTimeSeries, {
+    granularity,
+    ...dateParams,
+  })
+  const bookingFunnel = useQuery(api.admin.getBookingFunnel)
 
-  if (!stats) {
+  if (!stats || !bookingData || !bookingFunnel) {
     return <LoadingState message="Loading booking analytics..." />
   }
 

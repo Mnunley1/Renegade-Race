@@ -146,8 +146,8 @@ export default function VehicleDetailPage() {
           <p className="mt-2 text-muted-foreground">Vehicle ID: {vehicle._id}</p>
         </div>
         <div className="flex items-center gap-4">
-          {getStatusBadge((vehicle as any).status, vehicle.isActive)}
-          {(vehicle as any).status === "approved" && (
+          {getStatusBadge(vehicle.isApproved ? "approved" : "pending", vehicle.isActive)}
+          {vehicle.isApproved && (
             <Button
               onClick={() => handleSuspend(vehicle.isActive !== false)}
               disabled={isProcessing}

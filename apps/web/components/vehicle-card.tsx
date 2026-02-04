@@ -14,6 +14,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import type { ComponentProps } from "react"
 import { useState } from "react"
 import { api } from "@/lib/convex"
+import type { Id } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 
 interface VehicleCardProps extends ComponentProps<"div"> {
@@ -72,7 +73,7 @@ export function VehicleCard({
 
   const isFavorite = useQuery(
     api.favorites.isVehicleFavorited,
-    isSignedIn && id ? { vehicleId: id as any } : "skip"
+    isSignedIn && id ? { vehicleId: id as Id<"vehicles"> } : "skip"
   )
 
   const toggleFavorite = useMutation(api.favorites.toggleFavorite)
@@ -96,7 +97,7 @@ export function VehicleCard({
     }
 
     try {
-      await toggleFavorite({ vehicleId: id as any })
+      await toggleFavorite({ vehicleId: id as Id<"vehicles"> })
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       if (errorMessage.includes("Not authenticated") || errorMessage.includes("authentication")) {

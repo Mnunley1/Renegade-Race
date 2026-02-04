@@ -18,11 +18,12 @@
   "dependencies": {
     "@clerk/clerk-sdk-node": "^5.1.6",
     "@convex-dev/crons": "^0.1.4",
-    "@convex-dev/rate-limiter": "^0.2.12",
     "@convex-dev/r2": "^0.8.1",
+    "@convex-dev/rate-limiter": "^0.2.12",
     "@convex-dev/resend": "^0.2.1",
     "@convex-dev/stripe": "^0.1.0",
     "convex": "^1.27.0",
+    "csv-parse": "^6.1.0",
     "resend": "^4.0.0",
     "stripe": "^18.5.0",
     "svix": "^1.77.0"

@@ -506,7 +506,7 @@ function VehiclesPageContent() {
           endDate: selectedDates.end || undefined,
           trackId:
             selectedTrack !== "all"
-              ? (tracksData.find((t: any) => t.name === selectedTrack)?._id as any)
+              ? (tracksData.find((t) => t.name === selectedTrack)?._id as Id<"tracks">)
               : undefined,
           limit: 200,
           userLatitude: userLocation && maxDistance > 0 ? userLocation.lat : undefined,

@@ -20,6 +20,7 @@ import {
 import Link from "next/link"
 import { useMemo, useState } from "react"
 import { api } from "@/lib/convex"
+import type { Id } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 
 export default function HostReservationsPage() {
@@ -165,7 +166,7 @@ export default function HostReservationsPage() {
   const handleApprove = async (reservationId: string) => {
     try {
       await approveReservation({
-        reservationId: reservationId as any,
+        reservationId: reservationId as Id<"reservations">,
       })
     } catch (error) {
       handleErrorWithContext(error, {
@@ -180,7 +181,7 @@ export default function HostReservationsPage() {
   const handleDecline = async (reservationId: string) => {
     try {
       await declineReservation({
-        reservationId: reservationId as any,
+        reservationId: reservationId as Id<"reservations">,
       })
     } catch (error) {
       handleErrorWithContext(error, {

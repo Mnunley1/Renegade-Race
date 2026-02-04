@@ -3,6 +3,7 @@ import type { Id } from "./_generated/dataModel"
 import { api } from "./_generated/api"
 import { mutation, query } from "./_generated/server"
 import { getReviewResponseEmailTemplate, sendTransactionalEmail } from "./emails"
+import { getWebUrl } from "./helpers"
 import { sanitizeReview, sanitizeShortText } from "./sanitize"
 
 // Get review by completion ID for current user
@@ -437,7 +438,7 @@ export const submitResponse = mutation({
 
       if (vehicle && reviewer?.email && reviewed) {
         const vehicleName = `${vehicle.year} ${vehicle.make} ${vehicle.model}`
-        const webUrl = process.env.WEB_URL || "https://renegaderentals.com"
+        const webUrl = getWebUrl()
         const template = getReviewResponseEmailTemplate({
           reviewerName: reviewer.name || "Guest",
           reviewedName: reviewed.name || "Guest",

@@ -28,6 +28,7 @@ import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/lib/convex"
+import type { Id } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 
 const ADVANCE_NOTICE_OPTIONS = [
@@ -283,7 +284,7 @@ export default function CreateVehiclePage() {
     setIsSubmitting(true)
     try {
       await createVehicleWithImages({
-        trackId: vehicleFormData.trackId ? (vehicleFormData.trackId as any) : undefined,
+        trackId: vehicleFormData.trackId ? (vehicleFormData.trackId as Id<"tracks">) : undefined,
         make: vehicleFormData.make,
         model: vehicleFormData.model,
         year: Number(vehicleFormData.year),

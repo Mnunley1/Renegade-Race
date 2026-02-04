@@ -93,11 +93,6 @@ export default function PhotosPage() {
         currentStep: 3, // Save next step (amenities)
       })
 
-      // Also store in sessionStorage for backward compatibility during transition
-      if (typeof window !== "undefined") {
-        sessionStorage.setItem("onboarding_images", JSON.stringify(imageData))
-      }
-
       toast.success("Photos uploaded successfully!")
       router.push("/host/onboarding/amenities")
     } catch (error) {
