@@ -187,7 +187,16 @@ export default function ReservationsPage() {
               <Select
                 value={statusFilter || "all"}
                 onValueChange={(value) =>
-                  setStatusFilter(value === "all" ? undefined : (value as any))
+                  setStatusFilter(
+                    value === "all"
+                      ? undefined
+                      : (value as
+                          | "pending"
+                          | "confirmed"
+                          | "cancelled"
+                          | "completed"
+                          | "declined")
+                  )
                 }
               >
                 <SelectTrigger className="w-40">

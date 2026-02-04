@@ -120,3 +120,20 @@ export const deleteTrack = mutation({
     return args.id
   },
 })
+
+// Migration-only mutation for importing tracks (no admin check)
+export const createMigrationTrack = mutation({
+  args: {
+    name: v.string(),
+    location: v.string(),
+    isActive: v.boolean(),
+  },
+  handler: async (ctx, args) => {
+    const trackId = await ctx.db.insert("tracks", {
+      name: args.name,
+      location: args.location,
+      isActive: args.isActive,
+    })
+    return trackId
+  },
+})

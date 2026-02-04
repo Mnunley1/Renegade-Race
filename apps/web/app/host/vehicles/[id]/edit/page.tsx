@@ -40,6 +40,7 @@ import { useParams, useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/lib/convex"
+import type { Id } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 import { imagePresets } from "@/lib/imagekit"
 
@@ -54,7 +55,10 @@ export default function EditVehiclePage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Fetch vehicle and tracks from Convex
-  const vehicle = useQuery(api.vehicles.getById, vehicleId ? { id: vehicleId as any } : "skip")
+  const vehicle = useQuery(
+    api.vehicles.getById,
+    vehicleId ? { id: vehicleId as Id<"vehicles"> } : "skip"
+  )
   const tracks = useQuery(api.tracks.getAll, {})
 
   // Mutations
@@ -137,7 +141,7 @@ export default function EditVehiclePage() {
 
       // Sort images by order
       const sortedImages = [...(vehicle.images || [])].sort((a, b) => a.order - b.order)
-      setImages(sortedImages as any)
+      setImages(sortedImages)
     }
   }, [vehicle])
 
@@ -299,7 +303,7 @@ export default function EditVehiclePage() {
           // Add image to database
           const isPrimary = images.length === 0
           await addImage({
-            vehicleId: vehicleId as any,
+            vehicleId: vehicleId as Id<"vehicles">,
             r2Key,
             isPrimary,
           })
@@ -326,7 +330,7 @@ export default function EditVehiclePage() {
     if (!confirm("Are you sure you want to delete this image?")) return
 
     try {
-      await removeImage({ imageId: imageId as any })
+      await removeImage({ imageId: imageId as Id<"vehicleImages"> })
       toast.success("Image deleted successfully")
     } catch (error) {
       handleErrorWithContext(error, {
@@ -340,7 +344,7 @@ export default function EditVehiclePage() {
 
   const handleSetPrimary = async (imageId: string) => {
     try {
-      await updateImage({ imageId: imageId as any, isPrimary: true })
+      await updateImage({ imageId: imageId as Id<"vehicleImages">, isPrimary: true })
       toast.success("Primary image updated")
     } catch (error) {
       handleErrorWithContext(error, {
@@ -378,12 +382,12 @@ export default function EditVehiclePage() {
     try {
       // Update order in database
       const imageOrders = images.map((img, index) => ({
-        imageId: img._id as any,
+        imageId: img._id as Id<"vehicleImages">,
         order: index,
       }))
 
       await updateImageOrder({
-        vehicleId: vehicleId as any,
+        vehicleId: vehicleId as Id<"vehicles">,
         imageOrders,
       })
 
@@ -398,7 +402,7 @@ export default function EditVehiclePage() {
       // Reload images to revert UI changes
       if (vehicle) {
         const sortedImages = [...(vehicle.images || [])].sort((a, b) => a.order - b.order)
-        setImages(sortedImages as any)
+        setImages(sortedImages)
       }
     } finally {
       setDraggedIndex(null)
@@ -427,8 +431,8 @@ export default function EditVehiclePage() {
         : undefined
 
       await updateVehicle({
-        id: vehicleId as any,
-        trackId: formData.trackId ? (formData.trackId as any) : undefined,
+        id: vehicleId as Id<"vehicles">,
+        trackId: formData.trackId ? (formData.trackId as Id<"tracks">) : undefined,
         make: formData.make || undefined,
         model: formData.model || undefined,
         year: formData.year || undefined,

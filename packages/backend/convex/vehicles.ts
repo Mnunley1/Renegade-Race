@@ -321,7 +321,7 @@ export const searchWithAvailability = query({
   },
 })
 
-// Get all active and approved vehicles (legacy function for backward compatibility)
+// Get all active and approved vehicles
 export const getAll = query({
   args: {
     trackId: v.optional(v.id("tracks")),
@@ -1305,5 +1305,55 @@ export const getPendingVehicles = query({
     )
 
     return vehiclesWithDetails
+  },
+})
+
+// Migration-only mutation for importing Adalo vehicles
+export const createMigrationVehicle = mutation({
+  args: {
+    ownerId: v.string(),
+    trackId: v.id("tracks"),
+    make: v.string(),
+    model: v.string(),
+    year: v.number(),
+    dailyRate: v.number(),
+    description: v.string(),
+    horsepower: v.optional(v.number()),
+    transmission: v.optional(v.string()),
+    drivetrain: v.optional(v.string()),
+    isActive: v.boolean(),
+    isApproved: v.optional(v.boolean()),
+    amenities: v.array(v.string()),
+    addOns: v.array(
+      v.object({
+        name: v.string(),
+        price: v.number(),
+        description: v.optional(v.string()),
+        isRequired: v.optional(v.boolean()),
+        priceType: v.optional(v.union(v.literal("daily"), v.literal("one-time"))),
+      })
+    ),
+    viewCount: v.optional(v.number()),
+    shareCount: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const id = await ctx.db.insert("vehicles", args)
+    return id
+  },
+})
+
+// Migration-only mutation for importing Adalo vehicle images
+export const createMigrationVehicleImage = mutation({
+  args: {
+    vehicleId: v.id("vehicles"),
+    r2Key: v.string(),
+    isPrimary: v.boolean(),
+    order: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const id = await ctx.db.insert("vehicleImages", args)
+    return id
   },
 })

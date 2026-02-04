@@ -2,6 +2,7 @@ import { v } from "convex/values"
 import { api } from "./_generated/api"
 import { mutation, query } from "./_generated/server"
 import { getNewReviewEmailTemplate, sendTransactionalEmail } from "./emails"
+import { getWebUrl } from "./helpers"
 
 // Create a new rental completion record
 export const create = mutation({
@@ -364,7 +365,7 @@ export const submitReview = mutation({
 
       if (vehicle && reviewer && reviewed?.email) {
         const vehicleName = `${vehicle.year} ${vehicle.make} ${vehicle.model}`
-        const webUrl = process.env.WEB_URL || "https://renegaderentals.com"
+        const webUrl = getWebUrl()
         const template = getNewReviewEmailTemplate({
           reviewedName: reviewed.name || "Guest",
           reviewerName: reviewer.name || "Guest",

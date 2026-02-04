@@ -4,6 +4,7 @@ import type { MutationCtx } from "./_generated/server"
 import { components, internal } from "./_generated/api"
 import { internalMutation } from "./_generated/server"
 import { getUnreadMessagesDigestEmailTemplate, resendComponent } from "./emails"
+import { getWebUrl } from "./helpers"
 import { logError } from "./logger"
 
 // Initialize the Crons component
@@ -56,10 +57,6 @@ function getTestEmail(originalEmail: string): string {
   return originalEmail
 }
 
-// Get the base URL for the app
-function getAppBaseUrl(): string {
-  return process.env.NEXT_PUBLIC_SITE_URL || "https://renegaderentals.com"
-}
 
 // Build map of users to their unread conversations
 function buildUserUnreadMap(
@@ -170,7 +167,7 @@ async function sendDigestEmail(
     userName: user.name,
     totalUnreadCount,
     conversations: conversationDetails,
-    messagesUrl: `${getAppBaseUrl()}/messages`,
+    messagesUrl: `${getWebUrl()}/messages`,
   })
 
   try {

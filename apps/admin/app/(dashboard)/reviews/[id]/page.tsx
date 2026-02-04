@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { useMutation } from "convex/react"
+import { useQuery, useMutation } from "convex/react"
 import { api } from "@renegade/backend/convex/_generated/api"
 import type { Id } from "@renegade/backend/convex/_generated/dataModel"
 import { useRouter, useParams } from "next/navigation"
@@ -34,8 +34,7 @@ export default function ReviewDetailPage() {
 
   const [deleteConfirm, setDeleteConfirm] = useState(false)
 
-  // TODO: Implement getReviewDetail query
-  const review: any = undefined
+  const review = useQuery(api.admin.getReviewDetail, { reviewId })
   const toggleVisibility = useMutation(api.admin.toggleReviewVisibility)
   const markModerated = useMutation(api.admin.markReviewAsModerated)
   const deleteReview = useMutation(api.admin.deleteReviewAsAdmin)

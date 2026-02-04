@@ -822,53 +822,6 @@ export const getOnboardingDraft = query({
   },
 })
 
-// Update individual step completion
-export const updateOnboardingStepCompletion = mutation({
-  args: {
-    step: v.union(
-      v.literal("step1_location"),
-      v.literal("step2_vehicleInfo"),
-      v.literal("step3_specifications"),
-      v.literal("step4_amenities"),
-      v.literal("step5_photos"),
-      v.literal("step6_availability"),
-      v.literal("step7_submit")
-    ),
-    completed: v.boolean(),
-  },
-  handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity()
-    if (!identity) {
-      throw new Error("Not authenticated")
-    }
-
-    const user = await userByExternalId(ctx, identity.subject)
-    if (!user) {
-      throw new Error("User not found")
-    }
-
-    // This function is deprecated - hostOnboardingStepCompletion was removed from schema
-    // Just update hostOnboardingSteps instead for now
-    // TODO: Update frontend to use hostOnboardingSteps directly
-    await ctx.db.patch(user._id, {
-      hostOnboardingSteps: {
-        personalInfo:
-          args.step === "step1_location"
-            ? args.completed
-            : user.hostOnboardingSteps?.personalInfo || false,
-        vehicleAdded:
-          args.step === "step2_vehicleInfo" || args.step === "step7_submit"
-            ? args.completed
-            : user.hostOnboardingSteps?.vehicleAdded || false,
-        payoutSetup: user.hostOnboardingSteps?.payoutSetup || false,
-        safetyStandards: user.hostOnboardingSteps?.safetyStandards || false,
-      },
-    })
-
-    return { success: true }
-  },
-})
-
 // Clear onboarding draft
 export const clearOnboardingDraft = mutation({
   args: {},
@@ -945,5 +898,56 @@ export const startOverOnboarding = mutation({
     })
 
     return { success: true }
+  },
+})
+
+// Migration helper: look up user by email
+export const getByEmail = query({
+  args: { email: v.string() },
+  handler: async (ctx, args) => {
+    const users = await ctx.db.query("users").collect()
+    return users.find((u) => u.email?.toLowerCase() === args.email.toLowerCase()) ?? null
+  },
+})
+
+// Migration-only mutation for importing Adalo users
+export const createMigrationUser = mutation({
+  args: {
+    externalId: v.string(),
+    name: v.string(),
+    email: v.string(),
+    phone: v.optional(v.string()),
+    bio: v.optional(v.string()),
+    profileImageR2Key: v.optional(v.string()),
+    userType: v.optional(v.union(v.literal("driver"), v.literal("team"), v.literal("both"))),
+    experience: v.optional(v.string()),
+    location: v.optional(v.string()),
+    stripeAccountId: v.optional(v.string()),
+    memberSince: v.optional(v.string()),
+    rating: v.number(),
+    totalRentals: v.number(),
+    isHost: v.boolean(),
+    isBanned: v.boolean(),
+  },
+  handler: async (ctx, args) => {
+    const id = await ctx.db.insert("users", {
+      externalId: args.externalId,
+      name: args.name,
+      email: args.email,
+      phone: args.phone,
+      bio: args.bio,
+      profileImageR2Key: args.profileImageR2Key,
+      userType: args.userType,
+      experience: args.experience,
+      location: args.location,
+      stripeAccountId: args.stripeAccountId,
+      stripeAccountStatus: args.stripeAccountId ? "pending" as const : undefined,
+      memberSince: args.memberSince,
+      rating: args.rating,
+      totalRentals: args.totalRentals,
+      isHost: args.isHost,
+      isBanned: args.isBanned,
+    })
+    return id
   },
 })
