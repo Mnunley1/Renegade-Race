@@ -1,8 +1,6 @@
 "use client"
 
-import { useQuery, useMutation } from "convex/react"
-import { useState, useMemo } from "react"
-import { api } from "@/lib/convex"
+import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import {
   Card,
@@ -11,6 +9,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@workspace/ui/components/card"
+import { Checkbox } from "@workspace/ui/components/checkbox"
+import { Input } from "@workspace/ui/components/input"
 import {
   Select,
   SelectContent,
@@ -18,14 +18,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select"
-import { Badge } from "@workspace/ui/components/badge"
-import { Input } from "@workspace/ui/components/input"
-import { Checkbox } from "@workspace/ui/components/checkbox"
-import { Star, Search, Trash2, Eye, EyeOff, CheckCircle, Loader2 } from "lucide-react"
+import { useMutation, useQuery } from "convex/react"
+import { CheckCircle, Eye, EyeOff, Loader2, Search, Star, Trash2 } from "lucide-react"
+import { useMemo, useState } from "react"
 import { toast } from "sonner"
-import { handleErrorWithContext } from "@/lib/error-handler"
 import { Pagination } from "@/components/pagination"
 import type { Id } from "@/lib/convex"
+import { api } from "@/lib/convex"
+import { handleErrorWithContext } from "@/lib/error-handler"
 
 export default function ReviewsPage() {
   const [searchQuery, setSearchQuery] = useState("")
@@ -192,10 +192,10 @@ export default function ReviewsPage() {
     <div className="flex items-center gap-1">
       {[1, 2, 3, 4, 5].map((star) => (
         <Star
-          key={star}
           className={`size-4 ${
             star <= rating ? "fill-yellow-400 text-yellow-400" : "text-gray-300"
           }`}
+          key={star}
         />
       ))}
       <span className="ml-1 font-medium text-sm">{rating}</span>
@@ -231,19 +231,19 @@ export default function ReviewsPage() {
             </div>
             <div className="flex gap-2">
               <div className="relative">
-                <Search className="-translate-y-1/2 absolute top-1/2 left-2 size-4 text-muted-foreground" />
+                <Search className="absolute top-1/2 left-2 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   className="w-64 pl-8"
+                  onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search reviews..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
               <Select
-                value={isPublicFilter === undefined ? "all" : isPublicFilter ? "public" : "hidden"}
                 onValueChange={(value) => {
                   setIsPublicFilter(value === "all" ? undefined : value === "public")
                 }}
+                value={isPublicFilter === undefined ? "all" : isPublicFilter ? "public" : "hidden"}
               >
                 <SelectTrigger className="w-40">
                   <SelectValue />
@@ -255,6 +255,9 @@ export default function ReviewsPage() {
                 </SelectContent>
               </Select>
               <Select
+                onValueChange={(value) => {
+                  setIsModeratedFilter(value === "all" ? undefined : value === "moderated")
+                }}
                 value={
                   isModeratedFilter === undefined
                     ? "all"
@@ -262,9 +265,6 @@ export default function ReviewsPage() {
                       ? "moderated"
                       : "unmoderated"
                 }
-                onValueChange={(value) => {
-                  setIsModeratedFilter(value === "all" ? undefined : value === "moderated")
-                }}
               >
                 <SelectTrigger className="w-40">
                   <SelectValue />
@@ -284,10 +284,10 @@ export default function ReviewsPage() {
               <span className="font-medium text-sm">{selectedIds.size} review(s) selected</span>
               <div className="flex gap-2">
                 <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleBulkMarkModerated}
                   disabled={isBulkProcessing}
+                  onClick={handleBulkMarkModerated}
+                  size="sm"
+                  variant="outline"
                 >
                   {isBulkProcessing ? (
                     <Loader2 className="mr-2 size-4 animate-spin" />
@@ -297,28 +297,28 @@ export default function ReviewsPage() {
                   Mark Moderated
                 </Button>
                 <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleBulkToggleVisibility(true)}
                   disabled={isBulkProcessing}
+                  onClick={() => handleBulkToggleVisibility(true)}
+                  size="sm"
+                  variant="outline"
                 >
                   <Eye className="mr-2 size-4" />
                   Show Selected
                 </Button>
                 <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleBulkToggleVisibility(false)}
                   disabled={isBulkProcessing}
+                  onClick={() => handleBulkToggleVisibility(false)}
+                  size="sm"
+                  variant="outline"
                 >
                   <EyeOff className="mr-2 size-4" />
                   Hide Selected
                 </Button>
                 <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={handleBulkDelete}
                   disabled={isBulkProcessing}
+                  onClick={handleBulkDelete}
+                  size="sm"
+                  variant="destructive"
                 >
                   {isBulkProcessing ? (
                     <Loader2 className="mr-2 size-4 animate-spin" />
@@ -327,7 +327,7 @@ export default function ReviewsPage() {
                   )}
                   Delete Selected
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => setSelectedIds(new Set())}>
+                <Button onClick={() => setSelectedIds(new Set())} size="sm" variant="outline">
                   Clear Selection
                 </Button>
               </div>
@@ -349,7 +349,7 @@ export default function ReviewsPage() {
                   const isSelected = selectedIds.has(review._id)
 
                   return (
-                    <Card key={review._id} className="overflow-hidden">
+                    <Card className="overflow-hidden" key={review._id}>
                       <CardContent className="p-6">
                         <div className="flex gap-4">
                           <div className="flex items-start pt-1">
@@ -413,10 +413,10 @@ export default function ReviewsPage() {
                                   <div className="flex gap-2">
                                     {review.photos.slice(0, 3).map((photo: string, idx: number) => (
                                       <img
-                                        key={idx}
-                                        src={photo}
                                         alt={`Review photo ${idx + 1}`}
                                         className="h-20 w-20 rounded-lg object-cover"
+                                        key={idx}
+                                        src={photo}
                                       />
                                     ))}
                                   </div>
@@ -426,10 +426,10 @@ export default function ReviewsPage() {
                             <div className="ml-4 flex flex-col gap-2">
                               {!review.isModerated && (
                                 <Button
-                                  onClick={() => handleMarkModerated(review._id)}
                                   disabled={isProcessing}
-                                  variant="outline"
+                                  onClick={() => handleMarkModerated(review._id)}
                                   size="sm"
+                                  variant="outline"
                                 >
                                   {isProcessing ? (
                                     <Loader2 className="size-4 animate-spin" />
@@ -442,10 +442,10 @@ export default function ReviewsPage() {
                                 </Button>
                               )}
                               <Button
-                                onClick={() => handleToggleVisibility(review._id, review.isPublic)}
                                 disabled={isProcessing}
-                                variant={review.isPublic ? "outline" : "default"}
+                                onClick={() => handleToggleVisibility(review._id, review.isPublic)}
                                 size="sm"
+                                variant={review.isPublic ? "outline" : "default"}
                               >
                                 {isProcessing ? (
                                   <Loader2 className="size-4 animate-spin" />
@@ -462,10 +462,10 @@ export default function ReviewsPage() {
                                 )}
                               </Button>
                               <Button
-                                onClick={() => handleDelete(review._id)}
                                 disabled={isProcessing}
-                                variant="destructive"
+                                onClick={() => handleDelete(review._id)}
                                 size="sm"
+                                variant="destructive"
                               >
                                 {isProcessing ? (
                                   <Loader2 className="size-4 animate-spin" />
@@ -488,8 +488,6 @@ export default function ReviewsPage() {
                 <div className="mt-4">
                   <Pagination
                     currentPage={currentPage}
-                    totalPages={totalPages}
-                    onPageChange={handlePageChange}
                     hasMore={hasMore}
                     onLoadMore={() => {
                       if (result?.nextCursor) {
@@ -497,6 +495,8 @@ export default function ReviewsPage() {
                         setCurrentPage(currentPage + 1)
                       }
                     }}
+                    onPageChange={handlePageChange}
+                    totalPages={totalPages}
                   />
                 </div>
               )}
@@ -518,13 +518,13 @@ export default function ReviewsPage() {
     }
     if (!review.isModerated) {
       return (
-        <Badge variant="default" className="bg-yellow-600">
+        <Badge className="bg-yellow-600" variant="default">
           Unmoderated
         </Badge>
       )
     }
     return (
-      <Badge variant="default" className="bg-green-600">
+      <Badge className="bg-green-600" variant="default">
         Public
       </Badge>
     )

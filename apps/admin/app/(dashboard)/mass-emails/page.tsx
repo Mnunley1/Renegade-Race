@@ -1,7 +1,5 @@
 "use client"
 
-import { useState } from "react"
-import { useMutation } from "convex/react"
 import { Button } from "@workspace/ui/components/button"
 import {
   Card,
@@ -12,7 +10,6 @@ import {
 } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
-import { Textarea } from "@workspace/ui/components/textarea"
 import {
   Select,
   SelectContent,
@@ -20,9 +17,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select"
-import { Send, Loader2 } from "lucide-react"
-import { api } from "@/lib/convex"
+import { Textarea } from "@workspace/ui/components/textarea"
+import { useMutation } from "convex/react"
+import { Loader2, Send } from "lucide-react"
+import { useState } from "react"
 import { toast } from "sonner"
+import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 
 export default function MassEmailsPage() {
@@ -85,14 +85,14 @@ export default function MassEmailsPage() {
           <CardDescription>Select recipients and compose your email message</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form className="space-y-6" onSubmit={handleSubmit}>
             <div className="space-y-2">
               <Label htmlFor="recipientType">Recipients</Label>
               <Select
-                value={recipientType}
                 onValueChange={(value: "all" | "owners" | "renters" | "custom") =>
                   setRecipientType(value)
                 }
+                value={recipientType}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -111,10 +111,10 @@ export default function MassEmailsPage() {
                 <Label htmlFor="customRecipients">Email Addresses (comma-separated)</Label>
                 <Textarea
                   id="customRecipients"
-                  value={customRecipients}
                   onChange={(e) => setCustomRecipients(e.target.value)}
                   placeholder="user1@example.com, user2@example.com"
                   rows={3}
+                  value={customRecipients}
                 />
               </div>
             )}
@@ -123,30 +123,30 @@ export default function MassEmailsPage() {
               <Label htmlFor="subject">Subject *</Label>
               <Input
                 id="subject"
-                value={subject}
                 onChange={(e) => setSubject(e.target.value)}
                 placeholder="Email subject"
                 required
+                value={subject}
               />
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="htmlContent">Email Body (HTML) *</Label>
               <Textarea
+                className="font-mono text-sm"
                 id="htmlContent"
-                value={htmlContent}
                 onChange={(e) => setHtmlContent(e.target.value)}
                 placeholder="<p>Your email content here...</p>"
-                rows={10}
                 required
-                className="font-mono text-sm"
+                rows={10}
+                value={htmlContent}
               />
               <p className="text-muted-foreground text-xs">
                 HTML content is supported. A plain text version will be automatically generated.
               </p>
             </div>
 
-            <Button type="submit" disabled={isSending} size="lg" className="w-full">
+            <Button className="w-full" disabled={isSending} size="lg" type="submit">
               {isSending ? (
                 <>
                   <Loader2 className="mr-2 size-4 animate-spin" />

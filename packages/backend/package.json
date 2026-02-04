@@ -10,9 +10,9 @@
     "convex:deploy": "convex deploy",
     "convex:mcp": "convex mcp start",
     "build": "echo 'Backend build complete'",
-    "lint": "echo 'No linting configured for backend'",
-    "lint:fix": "echo 'No linting configured for backend'",
-    "type-check": "tsc --noEmit",
+    "lint": "biome lint .",
+    "lint:fix": "biome lint --write .",
+    "typecheck": "tsc --noEmit",
     "clean": "rm -rf convex/_generated"
   },
   "dependencies": {
@@ -29,6 +29,7 @@
     "svix": "^1.77.0"
   },
   "devDependencies": {
+    "@types/node": "^20",
     "typescript": "^5.6.2"
   },
   "keywords": [

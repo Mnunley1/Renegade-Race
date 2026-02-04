@@ -1,29 +1,22 @@
 "use client"
 
 import { useUser } from "@clerk/nextjs"
-import type { Id } from "@/lib/convex"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardHeader } from "@workspace/ui/components/card"
 import { cn } from "@workspace/ui/lib/utils"
-import { handleError, handleErrorWithContext } from "@/lib/error-handler"
 import { useMutation, useQuery } from "convex/react"
-import {
-  AlertCircle,
-  ArrowDown,
-  ArrowLeft,
-  Clock,
-  MessageSquare,
-  RefreshCw,
-} from "lucide-react"
+import { AlertCircle, ArrowDown, ArrowLeft, Clock, MessageSquare, RefreshCw } from "lucide-react"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
+import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
+import { handleError, handleErrorWithContext } from "@/lib/error-handler"
 import { ChatHeader } from "./chat-header"
-import { MessageList } from "./message-list"
-import { MessageInput } from "./message-input"
 import { ConfirmationDialogs } from "./confirmation-dialogs"
 import type { MessageData } from "./message-bubble"
+import { MessageInput } from "./message-input"
+import { MessageList } from "./message-list"
 
 function ChatPageContent() {
   const { user, isSignedIn } = useUser()
@@ -33,7 +26,7 @@ function ChatPageContent() {
   const conversationId = params.id as string | undefined
 
   const [newMessage, setNewMessage] = useState("")
-  const [hoveredMessage, setHoveredMessage] = useState<string | null>(null)
+  const [_hoveredMessage, _setHoveredMessage] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const messageInputRef = useRef<HTMLInputElement>(null)
@@ -43,14 +36,16 @@ function ChatPageContent() {
   const prevConversationIdRef = useRef<string | undefined>(undefined)
 
   // Optimistic messages
-  const [optimisticMessages, setOptimisticMessages] = useState<Array<{
-    _id: string
-    content: string
-    senderId: string
-    createdAt: number
-    status: "sending" | "failed"
-    replyTo?: string
-  }>>([])
+  const [optimisticMessages, setOptimisticMessages] = useState<
+    Array<{
+      _id: string
+      content: string
+      senderId: string
+      createdAt: number
+      status: "sending" | "failed"
+      replyTo?: string
+    }>
+  >([])
 
   // Smart scroll state
   const [isNearBottom, setIsNearBottom] = useState(true)
@@ -146,7 +141,9 @@ function ChatPageContent() {
   // Fetch vehicle data for pending conversations
   const pendingVehicle = useQuery(
     api.vehicles.getById,
-    pendingConversation?.vehicleId ? { id: pendingConversation.vehicleId as Id<"vehicles"> } : "skip"
+    pendingConversation?.vehicleId
+      ? { id: pendingConversation.vehicleId as Id<"vehicles"> }
+      : "skip"
   )
 
   // Mutations
@@ -211,8 +208,7 @@ function ChatPageContent() {
     const container = messagesContainerRef.current
     if (!container) return
     const threshold = 100
-    const distanceFromBottom =
-      container.scrollHeight - container.scrollTop - container.clientHeight
+    const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight
     setIsNearBottom(distanceFromBottom <= threshold)
     if (distanceFromBottom <= threshold) {
       setHasNewMessages(false)
@@ -236,8 +232,7 @@ function ChatPageContent() {
       prev.filter((opt) => {
         if (opt.status === "failed") return true
         return !messages.some(
-          (real: any) =>
-            real.content === opt.content && real.senderId === opt.senderId
+          (real: any) => real.content === opt.content && real.senderId === opt.senderId
         )
       })
     )
@@ -389,7 +384,7 @@ function ChatPageContent() {
           replyTo: savedReplyTo,
         })
 
-        if (result && result.conversationId) {
+        if (result?.conversationId) {
           setPendingConversation(null)
           router.replace(`/messages/${result.conversationId}`)
         }
@@ -400,9 +395,7 @@ function ChatPageContent() {
     } catch (error) {
       // Mark optimistic message as failed
       setOptimisticMessages((prev) =>
-        prev.map((msg) =>
-          msg._id === optimisticId ? { ...msg, status: "failed" as const } : msg
-        )
+        prev.map((msg) => (msg._id === optimisticId ? { ...msg, status: "failed" as const } : msg))
       )
       handleErrorWithContext(error, {
         action: "send message",
@@ -420,9 +413,7 @@ function ChatPageContent() {
   }) => {
     // Remove the failed message and re-send
     setOptimisticMessages((prev) =>
-      prev.map((msg) =>
-        msg._id === failedMsg._id ? { ...msg, status: "sending" as const } : msg
-      )
+      prev.map((msg) => (msg._id === failedMsg._id ? { ...msg, status: "sending" as const } : msg))
     )
 
     try {
@@ -436,9 +427,7 @@ function ChatPageContent() {
       // Will be cleaned up by the real-message sync effect
     } catch {
       setOptimisticMessages((prev) =>
-        prev.map((msg) =>
-          msg._id === failedMsg._id ? { ...msg, status: "failed" as const } : msg
-        )
+        prev.map((msg) => (msg._id === failedMsg._id ? { ...msg, status: "failed" as const } : msg))
       )
     }
   }
@@ -661,14 +650,11 @@ function ChatPageContent() {
             {!pendingConversation && optimisticMessages.length > 0 && (
               <div className="space-y-4">
                 {optimisticMessages.map((msg) => (
-                  <div
-                    className="group flex items-start gap-2 justify-end"
-                    key={msg._id}
-                  >
+                  <div className="group flex items-start justify-end gap-2" key={msg._id}>
                     <div className="relative max-w-xs lg:max-w-md">
                       <div
                         className={cn(
-                          "rounded-lg p-3 bg-[#EF1C25] text-white",
+                          "rounded-lg bg-[#EF1C25] p-3 text-white",
                           msg.status === "sending" && "opacity-70",
                           msg.status === "failed" && "opacity-80 ring-2 ring-destructive"
                         )}
@@ -714,8 +700,8 @@ function ChatPageContent() {
 
             {/* Screen reader announcement for new messages */}
             <div aria-live="polite" className="sr-only">
-              {messages && messages.length > 0 && messages[messages.length - 1]?.senderId !== user.id
-                ? `New message from ${otherUser?.name || "User"}: ${messages[messages.length - 1]?.content}`
+              {messages && messages.length > 0 && messages.at(-1)?.senderId !== user.id
+                ? `New message from ${otherUser?.name || "User"}: ${messages.at(-1)?.content}`
                 : ""}
             </div>
 
@@ -724,7 +710,7 @@ function ChatPageContent() {
               <div className="sticky bottom-2 flex justify-center">
                 <button
                   aria-label="Scroll to new messages"
-                  className="flex items-center gap-1.5 rounded-full bg-foreground px-4 py-2 text-background text-sm font-medium shadow-lg transition-transform hover:scale-105"
+                  className="flex items-center gap-1.5 rounded-full bg-foreground px-4 py-2 font-medium text-background text-sm shadow-lg transition-transform hover:scale-105"
                   onClick={scrollToBottom}
                   type="button"
                 >
@@ -739,12 +725,14 @@ function ChatPageContent() {
           <MessageInput
             inputRef={messageInputRef}
             maxLength={MESSAGE_MAX_LENGTH}
-            onChange={setNewMessage}
             onCancelReply={handleCancelReply}
+            onChange={setNewMessage}
             onSend={handleSendMessage}
             replyingTo={
               replyingToMessage
-                ? { content: messages?.find((m: any) => m._id === replyingToMessage)?.content || "" }
+                ? {
+                    content: messages?.find((m: any) => m._id === replyingToMessage)?.content || "",
+                  }
                 : undefined
             }
             value={newMessage}

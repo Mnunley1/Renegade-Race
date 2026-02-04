@@ -1,31 +1,31 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
-import { useParams } from "next/navigation"
-import { useQuery, useMutation } from "convex/react"
 import { api } from "@renegade/backend/convex/_generated/api"
 import type { Id } from "@renegade/backend/convex/_generated/dataModel"
-import { toast } from "sonner"
-import Link from "next/link"
-import { PageHeader } from "@/components/page-header"
-import { UserAvatar } from "@/components/user-avatar"
-import { StatusBadge } from "@/components/status-badge"
-import { LoadingState } from "@/components/loading-state"
-import { ConfirmDialog } from "@/components/confirm-dialog"
-import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
-import { Button } from "@workspace/ui/components/button"
-import { Textarea } from "@workspace/ui/components/textarea"
 import { Badge } from "@workspace/ui/components/badge"
+import { Button } from "@workspace/ui/components/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
+import { Textarea } from "@workspace/ui/components/textarea"
+import { useMutation, useQuery } from "convex/react"
 import {
-  Send,
-  Trash2,
   Archive,
   ArchiveRestore,
-  ExternalLink,
   Car,
-  MessageSquare,
+  ExternalLink,
   Info,
+  MessageSquare,
+  Send,
+  Trash2,
 } from "lucide-react"
+import Link from "next/link"
+import { useParams } from "next/navigation"
+import { useEffect, useRef, useState } from "react"
+import { toast } from "sonner"
+import { ConfirmDialog } from "@/components/confirm-dialog"
+import { LoadingState } from "@/components/loading-state"
+import { PageHeader } from "@/components/page-header"
+import { StatusBadge } from "@/components/status-badge"
+import { UserAvatar } from "@/components/user-avatar"
 
 export default function ConversationPage() {
   const { conversationId } = useParams()
@@ -50,7 +50,7 @@ export default function ConversationPage() {
   }, [data])
 
   const handleSendReply = async () => {
-    if (!replyContent.trim() || !data) return
+    if (!(replyContent.trim() && data)) return
     setSending(true)
     try {
       const targetUserId = data.conversation.renterId
@@ -61,7 +61,7 @@ export default function ConversationPage() {
       })
       setReplyContent("")
       toast.success("Admin message sent")
-    } catch (err) {
+    } catch (_err) {
       toast.error("Failed to send message")
     } finally {
       setSending(false)
@@ -73,7 +73,7 @@ export default function ConversationPage() {
     try {
       await deleteMessage({ messageId: deleteMessageId })
       toast.success("Message deleted")
-    } catch (err) {
+    } catch (_err) {
       toast.error("Failed to delete message")
     } finally {
       setDeleteMessageId(null)
@@ -94,7 +94,7 @@ export default function ConversationPage() {
         })
         toast.success("Conversation unarchived")
       }
-    } catch (err) {
+    } catch (_err) {
       toast.error("Failed to update conversation")
     } finally {
       setShowArchiveConfirm(false)
@@ -105,7 +105,10 @@ export default function ConversationPage() {
   if (data === null) {
     return (
       <div>
-        <PageHeader title="Conversation Not Found" breadcrumbs={[{ label: "Messages", href: "/messages" }]} />
+        <PageHeader
+          breadcrumbs={[{ label: "Messages", href: "/messages" }]}
+          title="Conversation Not Found"
+        />
         <p className="text-muted-foreground">This conversation could not be found.</p>
       </div>
     )
@@ -120,8 +123,8 @@ export default function ConversationPage() {
   return (
     <div>
       <PageHeader
-        title="Conversation"
         breadcrumbs={[{ label: "Messages", href: "/messages" }, { label: "Conversation" }]}
+        title="Conversation"
       />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
@@ -149,23 +152,23 @@ export default function ConversationPage() {
                       (conversation as typeof conversation & { renterId?: string })?.renterId
                     return (
                       <div
-                        key={msg._id}
                         className={`group relative rounded-lg border p-3 ${
                           isSystem
                             ? "border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950"
                             : "bg-card"
                         }`}
+                        key={msg._id}
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex items-center gap-2">
-                            <UserAvatar name={msg.sender.name} email={msg.sender.email} size="sm" />
+                            <UserAvatar email={msg.sender.email} name={msg.sender.name} size="sm" />
                             {isSystem && (
-                              <Badge variant="default" className="bg-blue-600 text-xs">
+                              <Badge className="bg-blue-600 text-xs" variant="default">
                                 Admin
                               </Badge>
                             )}
                             {!isSystem && (
-                              <Badge variant="outline" className="text-[10px]">
+                              <Badge className="text-[10px]" variant="outline">
                                 {isRenter ? "Renter" : "Owner"}
                               </Badge>
                             )}
@@ -180,10 +183,10 @@ export default function ConversationPage() {
                               })}
                             </span>
                             <Button
-                              variant="ghost"
-                              size="sm"
                               className="h-6 w-6 p-0 opacity-0 transition-opacity group-hover:opacity-100"
                               onClick={() => setDeleteMessageId(msg._id)}
+                              size="sm"
+                              variant="ghost"
                             >
                               <Trash2 className="h-3.5 w-3.5 text-destructive" />
                             </Button>
@@ -214,12 +217,12 @@ export default function ConversationPage() {
                 </div>
               </div>
               <Textarea
-                value={replyContent}
                 onChange={(e) => setReplyContent(e.target.value)}
                 placeholder="Type your admin message..."
                 rows={3}
+                value={replyContent}
               />
-              <Button onClick={handleSendReply} disabled={!replyContent.trim() || sending}>
+              <Button disabled={!replyContent.trim() || sending} onClick={handleSendReply}>
                 <Send className="mr-2 h-4 w-4" />
                 {sending ? "Sending..." : "Send as Admin"}
               </Button>
@@ -261,9 +264,9 @@ export default function ConversationPage() {
                 <CardTitle className="text-base">Renter</CardTitle>
               </CardHeader>
               <CardContent>
-                <UserAvatar name={renter.name} email={renter.email} />
+                <UserAvatar email={renter.email} name={renter.name} />
                 <Link href={`/users/${renter._id}`}>
-                  <Button variant="outline" size="sm" className="mt-3 w-full">
+                  <Button className="mt-3 w-full" size="sm" variant="outline">
                     <ExternalLink className="mr-2 h-3.5 w-3.5" />
                     View Profile
                   </Button>
@@ -279,9 +282,9 @@ export default function ConversationPage() {
                 <CardTitle className="text-base">Owner</CardTitle>
               </CardHeader>
               <CardContent>
-                <UserAvatar name={owner.name} email={owner.email} />
+                <UserAvatar email={owner.email} name={owner.name} />
                 <Link href={`/users/${owner._id}`}>
-                  <Button variant="outline" size="sm" className="mt-3 w-full">
+                  <Button className="mt-3 w-full" size="sm" variant="outline">
                     <ExternalLink className="mr-2 h-3.5 w-3.5" />
                     View Profile
                   </Button>
@@ -304,7 +307,7 @@ export default function ConversationPage() {
                   </span>
                 </div>
                 <Link href={`/vehicles/${vehicle._id}`}>
-                  <Button variant="outline" size="sm" className="mt-3 w-full">
+                  <Button className="mt-3 w-full" size="sm" variant="outline">
                     <ExternalLink className="mr-2 h-3.5 w-3.5" />
                     View Vehicle
                   </Button>
@@ -320,9 +323,9 @@ export default function ConversationPage() {
             </CardHeader>
             <CardContent>
               <Button
-                variant="outline"
                 className="w-full"
                 onClick={() => setShowArchiveConfirm(true)}
+                variant="outline"
               >
                 {conversation.isActive ? (
                   <>
@@ -343,29 +346,29 @@ export default function ConversationPage() {
 
       {/* Delete Message Confirmation */}
       <ConfirmDialog
-        open={deleteMessageId !== null}
+        confirmLabel="Delete"
+        description="This will permanently delete this message. This action cannot be undone."
+        onConfirm={handleDeleteMessage}
         onOpenChange={(open) => {
           if (!open) setDeleteMessageId(null)
         }}
+        open={deleteMessageId !== null}
         title="Delete Message"
-        description="This will permanently delete this message. This action cannot be undone."
-        confirmLabel="Delete"
         variant="destructive"
-        onConfirm={handleDeleteMessage}
       />
 
       {/* Archive/Unarchive Confirmation */}
       <ConfirmDialog
-        open={showArchiveConfirm}
-        onOpenChange={setShowArchiveConfirm}
-        title={conversation.isActive ? "Archive Conversation" : "Unarchive Conversation"}
+        confirmLabel={conversation.isActive ? "Archive" : "Unarchive"}
         description={
           conversation.isActive
             ? "This will archive the conversation. Participants will still be able to see past messages."
             : "This will reactivate the conversation."
         }
-        confirmLabel={conversation.isActive ? "Archive" : "Unarchive"}
         onConfirm={handleToggleArchive}
+        onOpenChange={setShowArchiveConfirm}
+        open={showArchiveConfirm}
+        title={conversation.isActive ? "Archive Conversation" : "Unarchive Conversation"}
       />
     </div>
   )

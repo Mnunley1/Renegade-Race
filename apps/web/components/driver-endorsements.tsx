@@ -1,7 +1,6 @@
 "use client"
 
-import type { Id } from "@/lib/convex"
-import { api } from "@/lib/convex"
+import { useUser } from "@clerk/nextjs"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
@@ -24,11 +23,12 @@ import {
 } from "@workspace/ui/components/select"
 import { Separator } from "@workspace/ui/components/separator"
 import { Textarea } from "@workspace/ui/components/textarea"
-import { useUser } from "@clerk/nextjs"
 import { useMutation, useQuery } from "convex/react"
 import { Award } from "lucide-react"
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
+import type { Id } from "@/lib/convex"
+import { api } from "@/lib/convex"
 
 interface DriverEndorsementsProps {
   driverProfileId: Id<"driverProfiles">
@@ -45,10 +45,7 @@ const ENDORSEMENT_TYPES = {
 
 type EndorsementType = keyof typeof ENDORSEMENT_TYPES
 
-export function DriverEndorsements({
-  driverProfileId,
-  isOwner,
-}: DriverEndorsementsProps) {
+export function DriverEndorsements({ driverProfileId, isOwner }: DriverEndorsementsProps) {
   const { user } = useUser()
   const endorsements = useQuery(api.endorsements.getByDriver, { driverProfileId })
   const endorseMutation = useMutation(api.endorsements.endorse)
@@ -66,7 +63,7 @@ export function DriverEndorsements({
   }, [endorsements])
 
   const hasEndorsed = useMemo(() => {
-    if (!endorsements || !user) return false
+    if (!(endorsements && user)) return false
     return endorsements.some((e) => e.endorserId === user.id)
   }, [endorsements, user])
 
@@ -105,12 +102,12 @@ export function DriverEndorsements({
               ? "Share your profile to get endorsements from teammates and fellow drivers."
               : "No endorsements yet. Be the first to endorse this driver!"}
           </p>
-          {!isOwner && !hasEndorsed && user && (
+          {!(isOwner || hasEndorsed) && user && (
             <>
               <Separator />
-              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <Dialog onOpenChange={setIsDialogOpen} open={isDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button variant="outline" className="w-full">
+                  <Button className="w-full" variant="outline">
                     <Award className="mr-2 size-4" />
                     Endorse Driver
                   </Button>
@@ -126,8 +123,8 @@ export function DriverEndorsements({
                     <div>
                       <Label>Endorsement Type</Label>
                       <Select
-                        value={selectedType}
                         onValueChange={(v) => setSelectedType(v as EndorsementType)}
+                        value={selectedType}
                       >
                         <SelectTrigger>
                           <SelectValue />
@@ -144,18 +141,15 @@ export function DriverEndorsements({
                     <div>
                       <Label>Message (optional)</Label>
                       <Textarea
-                        value={message}
                         onChange={(e) => setMessage(e.target.value)}
                         placeholder="Share your experience..."
                         rows={3}
+                        value={message}
                       />
                     </div>
                   </div>
                   <DialogFooter>
-                    <Button
-                      variant="outline"
-                      onClick={() => setIsDialogOpen(false)}
-                    >
+                    <Button onClick={() => setIsDialogOpen(false)} variant="outline">
                       Cancel
                     </Button>
                     <Button onClick={handleEndorse}>Submit</Button>
@@ -170,7 +164,12 @@ export function DriverEndorsements({
   }
 
   // Filter and sort endorsement types by count (descending)
-  const sortedTypes = (Object.entries(ENDORSEMENT_TYPES) as [EndorsementType, (typeof ENDORSEMENT_TYPES)[EndorsementType]][])
+  const sortedTypes = (
+    Object.entries(ENDORSEMENT_TYPES) as [
+      EndorsementType,
+      (typeof ENDORSEMENT_TYPES)[EndorsementType],
+    ][]
+  )
     .filter(([type]) => (typeCounts[type] || 0) > 0)
     .sort((a, b) => (typeCounts[b[0]] || 0) - (typeCounts[a[0]] || 0))
 
@@ -185,18 +184,18 @@ export function DriverEndorsements({
       <CardContent className="space-y-4">
         <div className="flex flex-wrap gap-2">
           {sortedTypes.map(([type, config]) => (
-            <Badge key={type} variant="secondary" className={config.color}>
+            <Badge className={config.color} key={type} variant="secondary">
               {config.label}: {typeCounts[type]}
             </Badge>
           ))}
         </div>
 
-        {!isOwner && !hasEndorsed && user && (
+        {!(isOwner || hasEndorsed) && user && (
           <>
             <Separator />
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <Dialog onOpenChange={setIsDialogOpen} open={isDialogOpen}>
               <DialogTrigger asChild>
-                <Button variant="outline" className="w-full">
+                <Button className="w-full" variant="outline">
                   <Award className="mr-2 size-4" />
                   Endorse Driver
                 </Button>
@@ -212,8 +211,8 @@ export function DriverEndorsements({
                   <div>
                     <Label>Endorsement Type</Label>
                     <Select
-                      value={selectedType}
                       onValueChange={(v) => setSelectedType(v as EndorsementType)}
+                      value={selectedType}
                     >
                       <SelectTrigger>
                         <SelectValue />
@@ -230,18 +229,15 @@ export function DriverEndorsements({
                   <div>
                     <Label>Message (optional)</Label>
                     <Textarea
-                      value={message}
                       onChange={(e) => setMessage(e.target.value)}
                       placeholder="Share your experience..."
                       rows={3}
+                      value={message}
                     />
                   </div>
                 </div>
                 <DialogFooter>
-                  <Button
-                    variant="outline"
-                    onClick={() => setIsDialogOpen(false)}
-                  >
+                  <Button onClick={() => setIsDialogOpen(false)} variant="outline">
                     Cancel
                   </Button>
                   <Button onClick={handleEndorse}>Submit</Button>
@@ -259,19 +255,17 @@ export function DriverEndorsements({
                 .filter((e) => e.message)
                 .slice(0, 5)
                 .map((endorsement) => (
-                  <div key={endorsement._id} className="rounded-lg border p-3">
+                  <div className="rounded-lg border p-3" key={endorsement._id}>
                     <div className="mb-1 flex items-center justify-between">
                       <span className="font-medium text-sm">
                         {endorsement.endorser?.name || "Anonymous"}
                       </span>
-                      <Badge variant="secondary" className="text-xs">
+                      <Badge className="text-xs" variant="secondary">
                         {ENDORSEMENT_TYPES[endorsement.type as EndorsementType]?.label ||
                           endorsement.type}
                       </Badge>
                     </div>
-                    <p className="text-muted-foreground text-sm">
-                      {endorsement.message}
-                    </p>
+                    <p className="text-muted-foreground text-sm">{endorsement.message}</p>
                   </div>
                 ))}
             </div>

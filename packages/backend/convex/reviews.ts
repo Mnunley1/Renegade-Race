@@ -1,6 +1,6 @@
 import { v } from "convex/values"
-import type { Id } from "./_generated/dataModel"
 import { api } from "./_generated/api"
+import type { Id } from "./_generated/dataModel"
 import { mutation, query } from "./_generated/server"
 import { getReviewResponseEmailTemplate, sendTransactionalEmail } from "./emails"
 import { getWebUrl } from "./helpers"
@@ -196,7 +196,7 @@ export const getByVehiclePaginated = query({
     return {
       reviews: reviewsWithDetails,
       hasMore,
-      nextCursor: hasMore ? paginatedReviews[paginatedReviews.length - 1]!._id : null,
+      nextCursor: hasMore ? paginatedReviews.at(-1)?._id : null,
     }
   },
 })
@@ -360,7 +360,7 @@ export const getVehicleStatsBatch = query({
       if (!reviewsByVehicle.has(vehicleId)) {
         reviewsByVehicle.set(vehicleId, [])
       }
-      reviewsByVehicle.get(vehicleId)!.push(review)
+      reviewsByVehicle.get(vehicleId)?.push(review)
     })
 
     // Calculate stats for each vehicle

@@ -44,8 +44,8 @@ import { useParams } from "next/navigation"
 import { useEffect, useMemo, useState } from "react"
 import type { DateRange } from "react-day-picker"
 import { toast } from "sonner"
-import { api } from "@/lib/convex"
 import type { Id } from "@/lib/convex"
+import { api } from "@/lib/convex"
 
 const ADVANCE_NOTICE_OPTIONS = [
   { value: "same-day", label: "Same day" },
@@ -246,7 +246,7 @@ export default function HostVehicleAvailabilityPage() {
           date: dateString,
         })
         toast.success("Date unblocked")
-      } catch (error) {
+      } catch (_error) {
         toast.error("An error occurred")
       }
     } else {
@@ -292,7 +292,7 @@ export default function HostVehicleAvailabilityPage() {
       setSelectedDateForBlock(null)
       setBlockReason("")
       setPriceOverride("")
-    } catch (error) {
+    } catch (_error) {
       toast.error("An error occurred")
     }
   }
@@ -355,7 +355,7 @@ export default function HostVehicleAvailabilityPage() {
         })
         toast.success("Date range unblocked")
         setSelectedRange(undefined)
-      } catch (error) {
+      } catch (_error) {
         toast.error("Failed to unblock date range")
       }
     } else {
@@ -411,7 +411,7 @@ export default function HostVehicleAvailabilityPage() {
       setSelectedRange(undefined)
       setRangeBlockReason("")
       setRangePriceOverride("")
-    } catch (error) {
+    } catch (_error) {
       toast.error("An error occurred")
     }
   }
@@ -722,7 +722,7 @@ export default function HostVehicleAvailabilityPage() {
               <div className="space-y-2">
                 <Label htmlFor="priceOverride">Price Override (Optional)</Label>
                 <div className="relative">
-                  <span className="-translate-y-1/2 absolute top-1/2 left-3 text-muted-foreground">
+                  <span className="absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground">
                     $
                   </span>
                   <Input
@@ -787,7 +787,7 @@ export default function HostVehicleAvailabilityPage() {
               <div className="space-y-2">
                 <Label htmlFor="rangePriceOverride">Price Override (Optional)</Label>
                 <div className="relative">
-                  <span className="-translate-y-1/2 absolute top-1/2 left-3 text-muted-foreground">
+                  <span className="absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground">
                     $
                   </span>
                   <Input
@@ -941,7 +941,7 @@ export default function HostVehicleAvailabilityPage() {
                   })
                   toast.success("Availability settings updated")
                   setEditSettingsDialogOpen(false)
-                } catch (error) {
+                } catch (_error) {
                   toast.error("Failed to update settings")
                 } finally {
                   setIsSavingSettings(false)

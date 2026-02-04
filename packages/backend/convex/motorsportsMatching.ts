@@ -29,9 +29,7 @@ export const getRecommendedTeams = query({
         let score = 0
 
         // Location match
-        if (
-          team.location.toLowerCase() === driverProfile.location.toLowerCase()
-        ) {
+        if (team.location.toLowerCase() === driverProfile.location.toLowerCase()) {
           score += 30
         }
 
@@ -110,9 +108,7 @@ export const getRecommendedDrivers = query({
         }
 
         // Category overlap
-        const overlap = driver.preferredCategories.filter((c) =>
-          team.specialties.includes(c)
-        )
+        const overlap = driver.preferredCategories.filter((c) => team.specialties.includes(c))
         score += overlap.length * 10
 
         // Experience bonus

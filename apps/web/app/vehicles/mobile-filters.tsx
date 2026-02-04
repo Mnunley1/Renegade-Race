@@ -5,7 +5,6 @@ import { Button } from "@workspace/ui/components/button"
 import { Checkbox } from "@workspace/ui/components/checkbox"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
-import { cn } from "@workspace/ui/lib/utils"
 import {
   Select,
   SelectContent,
@@ -21,7 +20,19 @@ import {
   SheetTrigger,
 } from "@workspace/ui/components/sheet"
 import { Slider } from "@workspace/ui/components/slider"
-import { Filter, Loader2, Navigation, X, Star, Shield, Lock, Flame, HardHat, Grid2x2 } from "lucide-react"
+import { cn } from "@workspace/ui/lib/utils"
+import {
+  Filter,
+  Flame,
+  Grid2x2,
+  HardHat,
+  Loader2,
+  Lock,
+  Navigation,
+  Shield,
+  Star,
+  X,
+} from "lucide-react"
 import { useState } from "react"
 import type { FilterActions, FilterState, TrackItem, VehicleItem } from "./types"
 
@@ -42,16 +53,10 @@ type MobileFiltersProps = {
   filteredCount?: number
 }
 
-function FilterSection({
-  title,
-  children,
-}: {
-  title: string
-  children: React.ReactNode
-}) {
+function FilterSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="space-y-2.5">
-      <Label className="font-semibold text-xs uppercase tracking-wide text-muted-foreground">
+      <Label className="font-semibold text-muted-foreground text-xs uppercase tracking-wide">
         {title}
       </Label>
       {children}
@@ -91,10 +96,7 @@ export function MobileFilters({
     const buckets = new Array(bucketCount).fill(0)
 
     for (const price of prices) {
-      const bucketIndex = Math.min(
-        bucketCount - 1,
-        Math.floor((price - minPrice) / bucketSize)
-      )
+      const bucketIndex = Math.min(bucketCount - 1, Math.floor((price - minPrice) / bucketSize))
       buckets[bucketIndex]++
     }
 
@@ -105,15 +107,14 @@ export function MobileFilters({
         {buckets.map((count, i) => {
           const height = maxBucketValue > 0 ? (count / maxBucketValue) * 100 : 0
           const isInRange =
-            minPrice + i * bucketSize >= currentMin &&
-            minPrice + (i + 1) * bucketSize <= currentMax
+            minPrice + i * bucketSize >= currentMin && minPrice + (i + 1) * bucketSize <= currentMax
           return (
             <div
-              key={i}
               className={cn(
                 "flex-1 rounded-t-sm transition-colors",
                 isInRange ? "bg-primary" : "bg-muted"
               )}
+              key={i}
               style={{ height: `${height}%` }}
             />
           )
@@ -125,7 +126,7 @@ export function MobileFilters({
   // Enhancement #6: Safety equipment icon mapping
   const safetyIcons = {
     "Roll Cage": Shield,
-    "Harness": Lock,
+    Harness: Lock,
     "Fire Suppression": Flame,
     "HANS Device": HardHat,
     "Window Net": Grid2x2,
@@ -154,13 +155,17 @@ export function MobileFilters({
           )}
         </Button>
       </SheetTrigger>
-      <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-sm" side="left" onOpenAutoFocus={(e) => e.preventDefault()}>
+      <SheetContent
+        className="flex w-full flex-col gap-0 p-0 sm:max-w-sm"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        side="left"
+      >
         <SheetHeader className="shrink-0 space-y-0 border-b px-5 py-3">
           <div className="flex items-center justify-between">
             <SheetTitle className="text-lg">Filters</SheetTitle>
             {activeFiltersCount > 0 && (
               <button
-                className="text-primary text-sm font-medium hover:underline"
+                className="font-medium text-primary text-sm hover:underline"
                 onClick={actions.clearFilters}
                 type="button"
               >
@@ -170,46 +175,46 @@ export function MobileFilters({
           </div>
         </SheetHeader>
 
-        <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-transparent [&:hover::-webkit-scrollbar-thumb]:bg-muted-foreground/25 [&::-webkit-scrollbar-track]:bg-transparent">
+        <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-transparent [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar]:w-1.5 [&:hover::-webkit-scrollbar-thumb]:bg-muted-foreground/25">
           <div className="divide-y">
             {/* Enhancement #9: Quick Filters */}
             <div className="px-5 pb-4">
               <FilterSection title="Quick Filters">
                 <div className="flex flex-wrap gap-1.5">
                   <button
-                    type="button"
+                    className="rounded-full border border-border px-3 py-1.5 font-medium text-muted-foreground text-xs transition-colors hover:border-primary hover:bg-primary/5"
                     onClick={() => {
                       actions.setMinHorsepower("500")
                       actions.setSelectedDriveType("RWD")
                     }}
-                    className="rounded-full border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-primary hover:bg-primary/5"
+                    type="button"
                   >
                     High Performance
                   </button>
                   <button
-                    type="button"
+                    className="rounded-full border border-border px-3 py-1.5 font-medium text-muted-foreground text-xs transition-colors hover:border-primary hover:bg-primary/5"
                     onClick={() => actions.setSelectedSafetyEquipment(["Roll Cage", "Harness"])}
-                    className="rounded-full border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-primary hover:bg-primary/5"
+                    type="button"
                   >
                     Track Ready
                   </button>
                   <button
-                    type="button"
+                    className="rounded-full border border-border px-3 py-1.5 font-medium text-muted-foreground text-xs transition-colors hover:border-primary hover:bg-primary/5"
                     onClick={() => {
                       actions.setCustomPriceRange([0, 500])
                       actions.setSelectedPriceRange("0-500")
                     }}
-                    className="rounded-full border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-primary hover:bg-primary/5"
+                    type="button"
                   >
                     Under $500/day
                   </button>
                   <button
-                    type="button"
+                    className="rounded-full border border-border px-3 py-1.5 font-medium text-muted-foreground text-xs transition-colors hover:border-primary hover:bg-primary/5"
                     onClick={() => {
                       actions.setSelectedExperienceLevel("beginner")
                       actions.setDeliveryOnly(true)
                     }}
-                    className="rounded-full border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-primary hover:bg-primary/5"
+                    type="button"
                   >
                     Beginner Friendly
                   </button>
@@ -262,15 +267,13 @@ export function MobileFilters({
                     value={filters.locationZipCode}
                   />
                   {isGeocodingZip && (
-                    <div className="-translate-y-1/2 absolute top-1/2 right-3">
+                    <div className="absolute top-1/2 right-3 -translate-y-1/2">
                       <Loader2 className="size-4 animate-spin text-muted-foreground" />
                     </div>
                   )}
                 </div>
 
-                {locationError && (
-                  <p className="text-destructive text-xs">{locationError}</p>
-                )}
+                {locationError && <p className="text-destructive text-xs">{locationError}</p>}
 
                 <button
                   className="flex items-center gap-2 text-primary text-sm hover:underline disabled:opacity-50"
@@ -290,9 +293,7 @@ export function MobileFilters({
                   <div className="flex items-center justify-between rounded-md bg-muted/50 px-3 py-2">
                     <span className="text-muted-foreground text-xs">
                       Near:{" "}
-                      <span className="font-medium text-foreground">
-                        {filters.locationLabel}
-                      </span>
+                      <span className="font-medium text-foreground">{filters.locationLabel}</span>
                     </span>
                     <button
                       aria-label="Clear location"
@@ -336,6 +337,8 @@ export function MobileFilters({
                     <span className="text-muted-foreground">${currentMax}/day</span>
                   </div>
                   <Slider
+                    aria-label="Price range"
+                    aria-valuetext={`$${currentMin} to $${currentMax} per day`}
                     className="w-full"
                     max={maxPrice}
                     min={minPrice}
@@ -351,8 +354,6 @@ export function MobileFilters({
                       }
                     }}
                     step={maxPrice > 1000 ? 100 : 25}
-                    aria-label="Price range"
-                    aria-valuetext={`$${currentMin} to $${currentMax} per day`}
                     value={[currentMin, currentMax]}
                   />
                 </div>
@@ -360,8 +361,8 @@ export function MobileFilters({
                   <Input
                     aria-label="Minimum price"
                     className="h-10"
-                    min={minPrice}
                     max={maxPrice}
+                    min={minPrice}
                     onChange={(e) => {
                       const val = Number(e.target.value)
                       const newMin = Math.max(minPrice, Math.min(val, currentMax))
@@ -380,8 +381,8 @@ export function MobileFilters({
                   <Input
                     aria-label="Maximum price"
                     className="h-10"
-                    min={minPrice}
                     max={maxPrice}
+                    min={minPrice}
                     onChange={(e) => {
                       const val = Number(e.target.value)
                       const newMax = Math.min(maxPrice, Math.max(val, currentMin))
@@ -438,7 +439,7 @@ export function MobileFilters({
             {/* Enhancement #10: Separator label - Vehicle */}
             <div className="flex items-center gap-2 px-5 py-1">
               <div className="h-px flex-1 bg-border" />
-              <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
+              <span className="font-medium text-[10px] text-muted-foreground/60 uppercase tracking-wider">
                 Vehicle
               </span>
               <div className="h-px flex-1 bg-border" />
@@ -495,15 +496,15 @@ export function MobileFilters({
                     { value: "AWD", label: "AWD" },
                   ].map((opt) => (
                     <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => actions.setSelectedDriveType(opt.value)}
                       className={cn(
-                        "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                        "rounded-full border px-3 py-1.5 font-medium text-xs transition-colors",
                         filters.selectedDriveType === opt.value
                           ? "border-primary bg-primary text-primary-foreground"
                           : "border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
                       )}
+                      key={opt.value}
+                      onClick={() => actions.setSelectedDriveType(opt.value)}
+                      type="button"
                     >
                       {opt.label}
                     </button>
@@ -525,15 +526,15 @@ export function MobileFilters({
                     { value: "Paddle Shift", label: "Paddle Shift" },
                   ].map((opt) => (
                     <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => actions.setSelectedTransmission(opt.value)}
                       className={cn(
-                        "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                        "rounded-full border px-3 py-1.5 font-medium text-xs transition-colors",
                         filters.selectedTransmission === opt.value
                           ? "border-primary bg-primary text-primary-foreground"
                           : "border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
                       )}
+                      key={opt.value}
+                      onClick={() => actions.setSelectedTransmission(opt.value)}
+                      type="button"
                     >
                       {opt.label}
                     </button>
@@ -545,7 +546,7 @@ export function MobileFilters({
             {/* Enhancement #10: Separator label - Performance */}
             <div className="flex items-center gap-2 px-5 py-1">
               <div className="h-px flex-1 bg-border" />
-              <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
+              <span className="font-medium text-[10px] text-muted-foreground/60 uppercase tracking-wider">
                 Performance
               </span>
               <div className="h-px flex-1 bg-border" />
@@ -556,7 +557,7 @@ export function MobileFilters({
               <FilterSection title="Horsepower">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <Label className="text-xs text-muted-foreground" htmlFor="mobile-min-hp">
+                    <Label className="text-muted-foreground text-xs" htmlFor="mobile-min-hp">
                       Min HP
                     </Label>
                     <Input
@@ -570,7 +571,7 @@ export function MobileFilters({
                     />
                   </div>
                   <div>
-                    <Label className="text-xs text-muted-foreground" htmlFor="mobile-max-hp">
+                    <Label className="text-muted-foreground text-xs" htmlFor="mobile-max-hp">
                       Max HP
                     </Label>
                     <Input
@@ -584,10 +585,11 @@ export function MobileFilters({
                     />
                   </div>
                 </div>
-                {filters.minHorsepower && filters.maxHorsepower &&
+                {filters.minHorsepower &&
+                  filters.maxHorsepower &&
                   Number(filters.minHorsepower) > Number(filters.maxHorsepower) && (
-                  <p className="text-destructive text-xs">Min must be less than max</p>
-                )}
+                    <p className="text-destructive text-xs">Min must be less than max</p>
+                  )}
               </FilterSection>
             </div>
 
@@ -596,7 +598,7 @@ export function MobileFilters({
               <FilterSection title="Year Range">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <Label className="text-xs text-muted-foreground" htmlFor="mobile-min-year">
+                    <Label className="text-muted-foreground text-xs" htmlFor="mobile-min-year">
                       Min Year
                     </Label>
                     <Input
@@ -611,7 +613,7 @@ export function MobileFilters({
                     />
                   </div>
                   <div>
-                    <Label className="text-xs text-muted-foreground" htmlFor="mobile-max-year">
+                    <Label className="text-muted-foreground text-xs" htmlFor="mobile-max-year">
                       Max Year
                     </Label>
                     <Input
@@ -626,17 +628,18 @@ export function MobileFilters({
                     />
                   </div>
                 </div>
-                {filters.minYear && filters.maxYear &&
+                {filters.minYear &&
+                  filters.maxYear &&
                   Number(filters.minYear) > Number(filters.maxYear) && (
-                  <p className="text-destructive text-xs">Min must be less than max</p>
-                )}
+                    <p className="text-destructive text-xs">Min must be less than max</p>
+                  )}
               </FilterSection>
             </div>
 
             {/* Enhancement #10: Separator label - Track Requirements */}
             <div className="flex items-center gap-2 px-5 py-1">
               <div className="h-px flex-1 bg-border" />
-              <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
+              <span className="font-medium text-[10px] text-muted-foreground/60 uppercase tracking-wider">
                 Track Requirements
               </span>
               <div className="h-px flex-1 bg-border" />
@@ -654,20 +657,24 @@ export function MobileFilters({
                     { value: "4.9", rating: 4.9 },
                   ].map((opt, idx) => (
                     <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => actions.setMinRating(opt.value)}
+                      aria-label={opt.value === "any" ? "Any rating" : `${opt.rating}+ stars`}
                       className={cn(
                         "rounded-md p-1.5 transition-colors hover:bg-muted",
                         filters.minRating === opt.value && "bg-muted"
                       )}
-                      aria-label={opt.value === "any" ? "Any rating" : `${opt.rating}+ stars`}
+                      key={opt.value}
+                      onClick={() => actions.setMinRating(opt.value)}
+                      type="button"
                     >
                       <Star
                         className={cn(
                           "size-6 transition-colors",
-                          filters.minRating !== "any" && idx > 0 && idx <=
-                            ([0, 4, 4.5, 4.7, 4.9].indexOf(parseFloat(filters.minRating)) || 0)
+                          filters.minRating !== "any" &&
+                            idx > 0 &&
+                            idx <=
+                              ([0, 4, 4.5, 4.7, 4.9].indexOf(
+                                Number.parseFloat(filters.minRating)
+                              ) || 0)
                             ? "fill-yellow-400 text-yellow-400"
                             : "text-muted-foreground"
                         )}
@@ -676,9 +683,7 @@ export function MobileFilters({
                   ))}
                 </div>
                 <p className="text-muted-foreground text-xs">
-                  {filters.minRating === "any"
-                    ? "Any rating"
-                    : `${filters.minRating}+ stars`}
+                  {filters.minRating === "any" ? "Any rating" : `${filters.minRating}+ stars`}
                 </p>
               </FilterSection>
             </div>
@@ -687,15 +692,26 @@ export function MobileFilters({
             <div className="px-5 py-4">
               <FilterSection title="Safety Equipment">
                 <div className="space-y-2">
-                  {(["Roll Cage", "Harness", "Fire Suppression", "HANS Device", "Window Net"] as const).map((item) => {
+                  {(
+                    [
+                      "Roll Cage",
+                      "Harness",
+                      "Fire Suppression",
+                      "HANS Device",
+                      "Window Net",
+                    ] as const
+                  ).map((item) => {
                     const Icon = safetyIcons[item]
                     return (
-                      <label key={item} className="flex items-center gap-2 text-sm">
+                      <label className="flex items-center gap-2 text-sm" key={item}>
                         <Checkbox
                           checked={filters.selectedSafetyEquipment.includes(item)}
                           onCheckedChange={(checked) => {
                             if (checked) {
-                              actions.setSelectedSafetyEquipment([...filters.selectedSafetyEquipment, item])
+                              actions.setSelectedSafetyEquipment([
+                                ...filters.selectedSafetyEquipment,
+                                item,
+                              ])
                             } else {
                               actions.setSelectedSafetyEquipment(
                                 filters.selectedSafetyEquipment.filter((e) => e !== item)
@@ -723,15 +739,15 @@ export function MobileFilters({
                     { value: "advanced", label: "Advanced" },
                   ].map((opt) => (
                     <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => actions.setSelectedExperienceLevel(opt.value)}
                       className={cn(
-                        "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                        "rounded-full border px-3 py-1.5 font-medium text-xs transition-colors",
                         filters.selectedExperienceLevel === opt.value
                           ? "border-primary bg-primary text-primary-foreground"
                           : "border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
                       )}
+                      key={opt.value}
+                      onClick={() => actions.setSelectedExperienceLevel(opt.value)}
+                      type="button"
                     >
                       {opt.label}
                     </button>
@@ -751,15 +767,15 @@ export function MobileFilters({
                     { value: "Slick", label: "Slick" },
                   ].map((opt) => (
                     <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => actions.setSelectedTireType(opt.value)}
                       className={cn(
-                        "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                        "rounded-full border px-3 py-1.5 font-medium text-xs transition-colors",
                         filters.selectedTireType === opt.value
                           ? "border-primary bg-primary text-primary-foreground"
                           : "border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
                       )}
+                      key={opt.value}
+                      onClick={() => actions.setSelectedTireType(opt.value)}
+                      type="button"
                     >
                       {opt.label}
                     </button>
@@ -787,20 +803,11 @@ export function MobileFilters({
         <div className="shrink-0 border-t bg-background px-5 py-3">
           <div className="flex items-center gap-3">
             {activeFiltersCount > 0 && (
-              <Button
-                className="text-sm"
-                onClick={actions.clearFilters}
-                size="sm"
-                variant="ghost"
-              >
+              <Button className="text-sm" onClick={actions.clearFilters} size="sm" variant="ghost">
                 Clear all
               </Button>
             )}
-            <Button
-              className="flex-1"
-              onClick={() => setOpen(false)}
-              size="lg"
-            >
+            <Button className="flex-1" onClick={() => setOpen(false)} size="lg">
               Show {filteredCount} vehicle{filteredCount !== 1 ? "s" : ""}
             </Button>
           </div>

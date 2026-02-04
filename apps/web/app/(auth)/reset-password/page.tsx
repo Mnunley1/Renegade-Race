@@ -40,11 +40,11 @@ export default function ResetPasswordPage() {
         <CardContent className="pb-4 sm:pb-6">
           <form className="space-y-4 sm:space-y-6">
             <div className="space-y-1.5 sm:space-y-2">
-              <Label htmlFor="email" className="text-sm">
+              <Label className="text-sm" htmlFor="email">
                 Email address
               </Label>
               <div className="relative">
-                <Mail className="-translate-y-1/2 absolute top-1/2 left-3 size-4 text-muted-foreground" />
+                <Mail className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   className="pl-10"
                   id="email"

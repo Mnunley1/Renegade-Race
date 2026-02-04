@@ -9,8 +9,8 @@
  *   "convex:init": "convex run init:setup"
  */
 
-import { internalMutation } from "./_generated/server"
 import { internal } from "./_generated/api"
+import { internalMutation } from "./_generated/server"
 
 /**
  * Main setup function that initializes all cron jobs and scheduled tasks.

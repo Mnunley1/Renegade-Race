@@ -1,9 +1,6 @@
 "use client"
 
-import { useQuery, useMutation } from "convex/react"
-import { useParams, useRouter } from "next/navigation"
-import { useState } from "react"
-import { api } from "@/lib/convex"
+import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import {
   Card,
@@ -12,8 +9,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@workspace/ui/components/card"
-import { Badge } from "@workspace/ui/components/badge"
-import { Textarea } from "@workspace/ui/components/textarea"
 import { Label } from "@workspace/ui/components/label"
 import {
   Select,
@@ -22,11 +17,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select"
+import { Textarea } from "@workspace/ui/components/textarea"
+import { useMutation, useQuery } from "convex/react"
 import { ArrowLeft, CheckCircle, Loader2 } from "lucide-react"
-import { toast } from "sonner"
 import Link from "next/link"
-import { handleErrorWithContext } from "@/lib/error-handler"
+import { useParams, useRouter } from "next/navigation"
+import { useState } from "react"
+import { toast } from "sonner"
 import type { Id } from "@/lib/convex"
+import { api } from "@/lib/convex"
+import { handleErrorWithContext } from "@/lib/error-handler"
 
 export default function DisputeDetailPage() {
   const params = useParams()
@@ -131,7 +131,7 @@ export default function DisputeDetailPage() {
       <div className="flex items-center justify-between">
         <div>
           <Link href="/disputes">
-            <Button variant="ghost" className="mb-4">
+            <Button className="mb-4" variant="ghost">
               <ArrowLeft className="mr-2 size-4" />
               Back to Disputes
             </Button>
@@ -200,7 +200,7 @@ export default function DisputeDetailPage() {
           <CardContent>
             <div className="space-y-4">
               {dispute.messages.map((msg: any) => (
-                <div key={msg.id} className="rounded-lg border p-4">
+                <div className="rounded-lg border p-4" key={msg.id}>
                   <div className="mb-2 flex items-center justify-between">
                     <span className="font-medium text-sm">
                       {msg.senderId === dispute.renterId
@@ -231,13 +231,13 @@ export default function DisputeDetailPage() {
                 <Label htmlFor="adminMessage">Message</Label>
                 <Textarea
                   id="adminMessage"
-                  value={adminMessage}
                   onChange={(e) => setAdminMessage(e.target.value)}
                   placeholder="Enter your message..."
                   rows={4}
+                  value={adminMessage}
                 />
               </div>
-              <Button onClick={handleAddMessage} disabled={isAddingMessage}>
+              <Button disabled={isAddingMessage} onClick={handleAddMessage}>
                 {isAddingMessage ? (
                   <>
                     <Loader2 className="mr-2 size-4 animate-spin" />
@@ -259,8 +259,8 @@ export default function DisputeDetailPage() {
               <div>
                 <Label htmlFor="resolutionType">Resolution Type</Label>
                 <Select
-                  value={resolutionType}
                   onValueChange={(value: any) => setResolutionType(value)}
+                  value={resolutionType}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -281,18 +281,18 @@ export default function DisputeDetailPage() {
                 <Label htmlFor="resolution">Resolution Details</Label>
                 <Textarea
                   id="resolution"
-                  value={resolution}
                   onChange={(e) => setResolution(e.target.value)}
                   placeholder="Enter resolution details..."
-                  rows={6}
                   required
+                  rows={6}
+                  value={resolution}
                 />
               </div>
               <Button
-                onClick={handleResolve}
-                disabled={isResolving || !resolution.trim()}
-                size="lg"
                 className="w-full"
+                disabled={isResolving || !resolution.trim()}
+                onClick={handleResolve}
+                size="lg"
               >
                 {isResolving ? (
                   <>

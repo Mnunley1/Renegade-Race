@@ -75,8 +75,7 @@ export default function TeamsPage() {
           team.location.toLowerCase().includes(query) ||
           team.description?.toString().toLowerCase().includes(query) ||
           team.specialties.some((spec: string) => spec.toLowerCase().includes(query)) ||
-          (team.requirements &&
-            team.requirements.some((req: string) => req.toLowerCase().includes(query)))
+          team.requirements?.some((req: string) => req.toLowerCase().includes(query))
       )
     }
 
@@ -111,7 +110,7 @@ export default function TeamsPage() {
   return (
     <div className="container mx-auto px-4 py-8">
       <Link href="/motorsports">
-        <Button className="mb-4" variant="ghost" size="sm">
+        <Button className="mb-4" size="sm" variant="ghost">
           <ArrowLeft className="mr-2 size-4" />
           Motorsports Hub
         </Button>
@@ -132,7 +131,7 @@ export default function TeamsPage() {
       {/* Search and Filters */}
       <div className="mb-6 space-y-4">
         <div className="relative">
-          <Search className="-translate-y-1/2 absolute top-1/2 left-3 size-4 text-muted-foreground" />
+          <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             className="pr-4 pl-10"
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -141,7 +140,7 @@ export default function TeamsPage() {
           />
           {searchQuery && (
             <Button
-              className="-translate-y-1/2 absolute top-1/2 right-2"
+              className="absolute top-1/2 right-2 -translate-y-1/2"
               onClick={() => setSearchQuery("")}
               size="sm"
               variant="ghost"
@@ -338,7 +337,7 @@ export default function TeamsPage() {
               </div>
               {paginatedTeams.length < teams.length && (
                 <div className="flex justify-center pt-4">
-                  <Button variant="outline" onClick={() => setPage((p) => p + 1)}>
+                  <Button onClick={() => setPage((p) => p + 1)} variant="outline">
                     Load More ({teams.length - paginatedTeams.length} remaining)
                   </Button>
                 </div>

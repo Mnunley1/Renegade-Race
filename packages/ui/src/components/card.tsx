@@ -1,15 +1,11 @@
-import type * as React from "react"
-
 import { cn } from "@workspace/ui/lib/utils"
+import type * as React from "react"
 
 function Card({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
+      className={cn("rounded-lg border border-border bg-card text-card-foreground", className)}
       data-slot="card"
-      className={cn(
-        "rounded-lg border border-border bg-card text-card-foreground",
-        className
-      )}
       {...props}
     />
   )

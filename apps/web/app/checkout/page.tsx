@@ -23,10 +23,9 @@ import Image from "next/image"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Suspense, useEffect, useState } from "react"
+import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { formatDateToISO, parseLocalDate } from "@/lib/date-utils"
-
-import type { Id } from "@/lib/convex"
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "")
 
@@ -374,10 +373,9 @@ function CheckoutPageContent() {
   // If we have reservation and clientSecret, show payment form
   if (reservation && clientSecret) {
     const vehicle = reservation.vehicle
-    const primaryImage =
-      vehicle?.images?.find((img) => img.isPrimary)?.cardUrl ||
-      vehicle?.images?.[0]?.cardUrl ||
-      ""
+    const vehicleImages = (vehicle as any)?.images as Array<{ isPrimary: boolean; imageUrl?: string; r2Key?: string }> | undefined
+    const primaryImageData = vehicleImages?.find((img) => img.isPrimary) || vehicleImages?.[0]
+    const primaryImage = primaryImageData?.imageUrl || (primaryImageData?.r2Key ? `https://ik.imagekit.io/renegaderace/${primaryImageData.r2Key}?tr=w-320,h-200,q-80,f-auto` : "")
 
     const options: StripeElementsOptions = {
       clientSecret,
@@ -459,16 +457,14 @@ function CheckoutPageContent() {
                       {reservation.totalDays} {reservation.totalDays === 1 ? "day" : "days"}
                     </span>
                   </div>
-                  {reservation.addOns && reservation.addOns.length > 0 && (
-                    <>
-                      {reservation.addOns.map((addOn: AddOn) => (
-                        <div className="flex justify-between text-sm" key={addOn.name}>
-                          <span className="text-muted-foreground">{addOn.name}</span>
-                          <span>+${addOn.price.toLocaleString()}</span>
-                        </div>
-                      ))}
-                    </>
-                  )}
+                  {reservation.addOns &&
+                    reservation.addOns.length > 0 &&
+                    reservation.addOns.map((addOn: AddOn) => (
+                      <div className="flex justify-between text-sm" key={addOn.name}>
+                        <span className="text-muted-foreground">{addOn.name}</span>
+                        <span>+${addOn.price.toLocaleString()}</span>
+                      </div>
+                    ))}
                   <Separator />
                   <div className="flex justify-between">
                     <span className="font-semibold">Total</span>
@@ -540,10 +536,9 @@ function CheckoutPageContent() {
 
   if (!vehicle) return null
 
-  const primaryImage =
-    vehicle?.images?.find((img) => img.isPrimary)?.cardUrl ||
-    vehicle?.images?.[0]?.cardUrl ||
-    ""
+  const vehicleImages = (vehicle as any)?.images as Array<{ isPrimary: boolean; imageUrl?: string; r2Key?: string }> | undefined
+  const primaryImageData = vehicleImages?.find((img) => img.isPrimary) || vehicleImages?.[0]
+  const primaryImage = primaryImageData?.imageUrl || (primaryImageData?.r2Key ? `https://ik.imagekit.io/renegaderace/${primaryImageData.r2Key}?tr=w-320,h-200,q-80,f-auto` : "")
   // Check if form is valid and dates don't contain blocked dates
   const isValid =
     pickupDate &&
@@ -862,16 +857,13 @@ function CheckoutPageContent() {
                     </div>
                   </>
                 )}
-                {selectedAddOns.length > 0 && (
-                  <>
-                    {selectedAddOns.map((addOn) => (
-                      <div className="flex justify-between text-sm" key={addOn.name}>
-                        <span className="text-muted-foreground">{addOn.name}</span>
-                        <span>+${addOn.price.toLocaleString()}</span>
-                      </div>
-                    ))}
-                  </>
-                )}
+                {selectedAddOns.length > 0 &&
+                  selectedAddOns.map((addOn) => (
+                    <div className="flex justify-between text-sm" key={addOn.name}>
+                      <span className="text-muted-foreground">{addOn.name}</span>
+                      <span>+${addOn.price.toLocaleString()}</span>
+                    </div>
+                  ))}
                 <Separator />
                 <div className="flex justify-between">
                   <span className="font-semibold">Total</span>

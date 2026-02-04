@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useMemo } from "react"
 import { Checkbox } from "@workspace/ui/components/checkbox"
-import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
+import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react"
+import { useMemo, useState } from "react"
 
 export interface Column<T> {
   key: string
@@ -56,8 +56,8 @@ export function DataTable<T>({
     if (!column?.sortValue) return data
 
     return [...data].sort((a, b) => {
-      const aVal = column.sortValue!(a)
-      const bVal = column.sortValue!(b)
+      const aVal = column.sortValue?.(a) ?? ""
+      const bVal = column.sortValue?.(b) ?? ""
       const comparison = aVal < bVal ? -1 : aVal > bVal ? 1 : 0
       return sortDirection === "asc" ? comparison : -comparison
     })
@@ -77,7 +77,7 @@ export function DataTable<T>({
   }
 
   const allSelected = data.length > 0 && data.every((row) => selectedIds.has(getRowId(row)))
-  const someSelected = data.some((row) => selectedIds.has(getRowId(row))) && !allSelected
+  const _someSelected = data.some((row) => selectedIds.has(getRowId(row))) && !allSelected
 
   const toggleAll = () => {
     if (!onSelectionChange) return
@@ -117,10 +117,10 @@ export function DataTable<T>({
                 )}
                 {visibleColumns.map((col) => (
                   <th
-                    key={col.key}
                     className={`p-3 text-left font-medium text-muted-foreground ${col.className ?? ""} ${
                       col.sortable ? "cursor-pointer select-none hover:text-foreground" : ""
                     }`}
+                    key={col.key}
                     onClick={col.sortable ? () => handleSort(col.key) : undefined}
                   >
                     <div className="flex items-center gap-1">
@@ -144,14 +144,14 @@ export function DataTable<T>({
             <tbody>
               {isLoading ? (
                 Array.from({ length: 5 }).map((_, i) => (
-                  <tr key={`skeleton-${i}`} className="border-b">
+                  <tr className="border-b" key={`skeleton-${i}`}>
                     {onSelectionChange && (
                       <td className="p-3">
                         <Skeleton className="h-4 w-4" />
                       </td>
                     )}
                     {visibleColumns.map((col) => (
-                      <td key={col.key} className="p-3">
+                      <td className="p-3" key={col.key}>
                         <Skeleton className="h-4 w-24" />
                       </td>
                     ))}
@@ -160,8 +160,8 @@ export function DataTable<T>({
               ) : sortedData.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={visibleColumns.length + (onSelectionChange ? 1 : 0)}
                     className="p-8 text-center text-muted-foreground"
+                    colSpan={visibleColumns.length + (onSelectionChange ? 1 : 0)}
                   >
                     {emptyMessage}
                   </td>
@@ -172,10 +172,10 @@ export function DataTable<T>({
                   const selected = selectedIds.has(id)
                   return (
                     <tr
-                      key={id}
                       className={`border-b transition-colors hover:bg-muted/50 ${
                         selected ? "bg-primary/5" : ""
                       }`}
+                      key={id}
                     >
                       {onSelectionChange && (
                         <td className="p-3">
@@ -183,7 +183,7 @@ export function DataTable<T>({
                         </td>
                       )}
                       {visibleColumns.map((col) => (
-                        <td key={col.key} className={`p-3 ${col.className ?? ""}`}>
+                        <td className={`p-3 ${col.className ?? ""}`} key={col.key}>
                           {col.cell(row)}
                         </td>
                       ))}

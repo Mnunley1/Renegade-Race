@@ -1,16 +1,16 @@
 "use client"
 
-import { useQuery, useMutation } from "convex/react"
-import { useParams, useRouter } from "next/navigation"
-import { useState } from "react"
-import Link from "next/link"
-import { api } from "@/lib/convex"
+import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
-import { Badge } from "@workspace/ui/components/badge"
-import { ArrowLeft, XCircle, Loader2, Calendar, User, Car, DollarSign } from "lucide-react"
+import { useMutation, useQuery } from "convex/react"
+import { ArrowLeft, Calendar, Car, DollarSign, Loader2, User, XCircle } from "lucide-react"
+import Link from "next/link"
+import { useParams, useRouter } from "next/navigation"
+import { useState } from "react"
 import { toast } from "sonner"
 import type { Id } from "@/lib/convex"
+import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 
 export default function ReservationDetailPage() {
@@ -46,7 +46,7 @@ export default function ReservationDetailPage() {
         return <Badge variant="default">Pending</Badge>
       case "confirmed":
         return (
-          <Badge variant="default" className="bg-green-600">
+          <Badge className="bg-green-600" variant="default">
             Confirmed
           </Badge>
         )
@@ -116,7 +116,7 @@ export default function ReservationDetailPage() {
       <div className="flex items-center justify-between">
         <div>
           <Link href="/reservations">
-            <Button variant="ghost" className="mb-4">
+            <Button className="mb-4" variant="ghost">
               <ArrowLeft className="mr-2 size-4" />
               Back to Reservations
             </Button>
@@ -127,7 +127,7 @@ export default function ReservationDetailPage() {
         <div className="flex items-center gap-4">
           {getStatusBadge(reservation.status)}
           {canCancel && (
-            <Button onClick={handleCancel} disabled={isCancelling} variant="destructive">
+            <Button disabled={isCancelling} onClick={handleCancel} variant="destructive">
               {isCancelling ? (
                 <>
                   <Loader2 className="mr-2 size-4 animate-spin" />
@@ -156,9 +156,9 @@ export default function ReservationDetailPage() {
           <CardContent className="space-y-4">
             {primaryImage && (
               <img
-                src={primaryImage.cardUrl || primaryImage.imageUrl}
                 alt={`${reservation.vehicle?.make} ${reservation.vehicle?.model}`}
                 className="h-48 w-full rounded-lg object-cover"
+                src={primaryImage.cardUrl || primaryImage.imageUrl}
               />
             )}
             <div>
@@ -306,8 +306,8 @@ export default function ReservationDetailPage() {
               <div className="space-y-2">
                 {reservation.addOns.map((addon: any, index: number) => (
                   <div
-                    key={index}
                     className="flex items-center justify-between rounded-lg border p-3"
+                    key={index}
                   >
                     <div>
                       <p className="font-medium">{addon.name}</p>

@@ -26,15 +26,13 @@ export function RecommendationCard({
   experience,
   availableSeats,
 }: RecommendationCardProps) {
-  const detailUrl = type === "team"
-    ? `/motorsports/teams/${id}`
-    : `/motorsports/drivers/${id}`
+  const detailUrl = type === "team" ? `/motorsports/teams/${id}` : `/motorsports/drivers/${id}`
 
   return (
     <div className="rounded-lg border bg-card p-6 transition-shadow hover:shadow-lg">
       <div className="mb-4 flex items-start justify-between">
         <div className="flex-1">
-          <h3 className="mb-1 text-lg font-semibold">{name}</h3>
+          <h3 className="mb-1 font-semibold text-lg">{name}</h3>
           <div className="flex items-center gap-1 text-muted-foreground text-sm">
             <MapPin className="h-3.5 w-3.5" />
             <span>{location}</span>
@@ -42,21 +40,17 @@ export function RecommendationCard({
         </div>
         <div className="flex items-center gap-1 rounded-full bg-primary/10 px-3 py-1">
           <Star className="h-4 w-4 fill-primary text-primary" />
-          <span className="font-semibold text-primary text-sm">
-            {Math.round(matchScore)}%
-          </span>
+          <span className="font-semibold text-primary text-sm">{Math.round(matchScore)}%</span>
         </div>
       </div>
 
       <div className="mb-4">
-        <div className="mb-1 text-xs font-medium text-muted-foreground">Match Score</div>
+        <div className="mb-1 font-medium text-muted-foreground text-xs">Match Score</div>
         <div className="h-2 overflow-hidden rounded-full bg-muted">
           <div
             className={cn(
               "h-full rounded-full transition-all",
-              matchScore >= 80 ? "bg-green-500" :
-              matchScore >= 60 ? "bg-blue-500" :
-              "bg-orange-500"
+              matchScore >= 80 ? "bg-green-500" : matchScore >= 60 ? "bg-blue-500" : "bg-orange-500"
             )}
             style={{ width: `${matchScore}%` }}
           />
@@ -65,14 +59,14 @@ export function RecommendationCard({
 
       {type === "driver" && experience && (
         <div className="mb-3">
-          <span className="text-sm font-medium">Experience: </span>
+          <span className="font-medium text-sm">Experience: </span>
           <span className="text-muted-foreground text-sm">{experience}</span>
         </div>
       )}
 
       {type === "team" && availableSeats !== undefined && (
         <div className="mb-3">
-          <span className="text-sm font-medium">Available Seats: </span>
+          <span className="font-medium text-sm">Available Seats: </span>
           <span className="text-muted-foreground text-sm">{availableSeats}</span>
         </div>
       )}
@@ -81,14 +75,14 @@ export function RecommendationCard({
         <div className="mb-4 flex flex-wrap gap-2">
           {specialties.slice(0, 3).map((specialty, index) => (
             <span
+              className="rounded-full bg-secondary px-2.5 py-0.5 font-medium text-xs"
               key={index}
-              className="rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium"
             >
               {specialty}
             </span>
           ))}
           {specialties.length > 3 && (
-            <span className="text-muted-foreground px-2.5 py-0.5 text-xs">
+            <span className="px-2.5 py-0.5 text-muted-foreground text-xs">
               +{specialties.length - 3} more
             </span>
           )}
@@ -96,7 +90,7 @@ export function RecommendationCard({
       )}
 
       <Link href={detailUrl}>
-        <Button variant="outline" className="w-full">
+        <Button className="w-full" variant="outline">
           View Profile
           <ArrowRight className="ml-2 h-4 w-4" />
         </Button>

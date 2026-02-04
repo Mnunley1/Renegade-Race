@@ -1,7 +1,7 @@
 "use client"
 
-import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Button } from "@workspace/ui/components/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Skeleton } from "@workspace/ui/components/skeleton"
 
 type Granularity = "daily" | "weekly" | "monthly"
@@ -43,11 +43,11 @@ export function ChartWrapper({
             <div className="flex rounded-md border">
               {granularities.map((g) => (
                 <Button
-                  key={g}
-                  variant={granularity === g ? "default" : "ghost"}
-                  size="sm"
                   className="h-7 rounded-none px-2 text-xs first:rounded-l-md last:rounded-r-md"
+                  key={g}
                   onClick={() => onGranularityChange(g)}
+                  size="sm"
+                  variant={granularity === g ? "default" : "ghost"}
                 >
                   {g.charAt(0).toUpperCase() + g.slice(1)}
                 </Button>
@@ -58,11 +58,11 @@ export function ChartWrapper({
             <div className="flex rounded-md border">
               {dateRanges.map((r) => (
                 <Button
-                  key={r.value}
-                  variant={dateRange === r.value ? "default" : "ghost"}
-                  size="sm"
                   className="h-7 rounded-none px-2 text-xs first:rounded-l-md last:rounded-r-md"
+                  key={r.value}
                   onClick={() => onDateRangeChange(r.value)}
+                  size="sm"
+                  variant={dateRange === r.value ? "default" : "ghost"}
                 >
                   {r.label}
                 </Button>

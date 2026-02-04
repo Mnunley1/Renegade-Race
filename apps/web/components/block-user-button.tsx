@@ -101,9 +101,7 @@ export function BlockUserButton({
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isLoading}>Cancel</AlertDialogCancel>
             <AlertDialogAction disabled={isLoading} onClick={handleBlockToggle}>
-              {isLoading
-                ? "Processing..."
-                : (isBlocked ? "Unblock" : "Block")}
+              {isLoading ? "Processing..." : isBlocked ? "Unblock" : "Block"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

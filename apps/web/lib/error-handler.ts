@@ -1,5 +1,5 @@
-import { toast } from "sonner"
 import * as Sentry from "@sentry/nextjs"
+import { toast } from "sonner"
 
 export type ErrorType =
   | "authentication"
@@ -132,8 +132,6 @@ export function handleError(error: unknown, options: ErrorHandlerOptions = {}): 
 
   // Log error for debugging
   if (logError) {
-    console.error("Error:", error)
-
     // Send to Sentry in production
     if (process.env.NODE_ENV === "production" && process.env.NEXT_PUBLIC_SENTRY_DSN) {
       Sentry.captureException(error)

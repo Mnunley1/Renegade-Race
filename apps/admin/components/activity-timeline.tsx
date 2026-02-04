@@ -1,6 +1,6 @@
-import Link from "next/link"
-import type { LucideIcon } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
+import type { LucideIcon } from "lucide-react"
+import Link from "next/link"
 
 export interface ActivityItem {
   id: string
@@ -21,7 +21,7 @@ export function ActivityTimeline({ items }: ActivityTimelineProps) {
       {items.map((item, index) => {
         const Icon = item.icon
         return (
-          <div key={item.id} className="flex gap-3">
+          <div className="flex gap-3" key={item.id}>
             <div className="relative flex flex-col items-center">
               <div className={`rounded-full p-1.5 ${item.iconColor ?? "bg-muted"}`}>
                 <Icon className="h-3.5 w-3.5 text-muted-foreground" />
@@ -30,7 +30,7 @@ export function ActivityTimeline({ items }: ActivityTimelineProps) {
             </div>
             <div className="flex-1 pb-4">
               {item.href ? (
-                <Link href={item.href} className="text-sm hover:underline">
+                <Link className="text-sm hover:underline" href={item.href}>
                   {item.description}
                 </Link>
               ) : (

@@ -1,25 +1,25 @@
 "use client"
 
-import { useQuery } from "convex/react"
 import { api } from "@renegade/backend/convex/_generated/api"
-import { PageHeader } from "@/components/page-header"
-import { StatCard } from "@/components/stat-card"
-import { ChartWrapper } from "@/components/chart-wrapper"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
-import { LoadingState } from "@/components/loading-state"
+import { useQuery } from "convex/react"
+import { format } from "date-fns"
+import { Briefcase, UserCheck, UserPlus, Users } from "lucide-react"
+import { useState } from "react"
 import {
-  AreaChart,
   Area,
-  XAxis,
-  YAxis,
+  AreaChart,
   CartesianGrid,
-  Tooltip,
   Legend,
   ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
 } from "recharts"
-import { Users, UserCheck, UserPlus, Briefcase } from "lucide-react"
-import { useState } from "react"
-import { format } from "date-fns"
+import { ChartWrapper } from "@/components/chart-wrapper"
+import { LoadingState } from "@/components/loading-state"
+import { PageHeader } from "@/components/page-header"
+import { StatCard } from "@/components/stat-card"
 
 function getDateRange(range: "7d" | "30d" | "90d" | "ytd"): { startDate: string; endDate: string } {
   const now = new Date()
@@ -54,7 +54,7 @@ export default function UserAnalyticsPage() {
   })
   const topUsersData = useQuery(api.admin.getTopUsers, { limit: 10 })
 
-  if (!stats || !userGrowthData || !topUsersData) {
+  if (!(stats && userGrowthData && topUsersData)) {
     return <LoadingState message="Loading user analytics..." />
   }
 
@@ -73,76 +73,76 @@ export default function UserAnalyticsPage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        title="User Analytics"
-        description="Track user growth and engagement metrics"
         breadcrumbs={[
           { label: "Dashboard", href: "/dashboard" },
           { label: "Analytics", href: "/analytics" },
           { label: "Users" },
         ]}
+        description="Track user growth and engagement metrics"
+        title="User Analytics"
       />
 
       <div className="grid gap-6 md:grid-cols-4">
         <StatCard
+          icon={<Users className="h-4 w-4 text-muted-foreground" />}
           label="Total Users"
           value={stats.users.total.toString()}
-          icon={<Users className="h-4 w-4 text-muted-foreground" />}
         />
         <StatCard
+          icon={<UserCheck className="h-4 w-4 text-muted-foreground" />}
           label="Active Users"
           value={stats.users.active.toString()}
-          icon={<UserCheck className="h-4 w-4 text-muted-foreground" />}
         />
         <StatCard
+          icon={<Briefcase className="h-4 w-4 text-muted-foreground" />}
           label="Total Hosts"
           value={stats.vehicles.total > 0 ? stats.vehicles.total.toString() : "0"}
-          icon={<Briefcase className="h-4 w-4 text-muted-foreground" />}
         />
         <StatCard
+          icon={<UserPlus className="h-4 w-4 text-muted-foreground" />}
           label="New This Month"
           value={stats.users.recent.toString()}
-          icon={<UserPlus className="h-4 w-4 text-muted-foreground" />}
         />
       </div>
 
       <ChartWrapper
-        title="User Growth Over Time"
-        granularity={granularity}
-        onGranularityChange={setGranularity}
         dateRange={dateRange}
+        granularity={granularity}
         onDateRangeChange={setDateRange}
+        onGranularityChange={setGranularity}
+        title="User Growth Over Time"
       >
-        <ResponsiveContainer width="100%" height={400}>
+        <ResponsiveContainer height={400} width="100%">
           <AreaChart data={chartData}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="date" />
             <YAxis yAxisId="left" />
-            <YAxis yAxisId="right" orientation="right" />
+            <YAxis orientation="right" yAxisId="right" />
             <Tooltip />
             <Legend />
             <Area
-              yAxisId="right"
-              type="monotone"
               dataKey="Total Users"
-              stroke="#3b82f6"
               fill="#3b82f6"
               fillOpacity={0.3}
+              stroke="#3b82f6"
+              type="monotone"
+              yAxisId="right"
             />
             <Area
-              yAxisId="left"
-              type="monotone"
               dataKey="New Users"
-              stroke="#10b981"
               fill="#10b981"
               fillOpacity={0.6}
+              stroke="#10b981"
+              type="monotone"
+              yAxisId="left"
             />
             <Area
-              yAxisId="left"
-              type="monotone"
               dataKey="New Hosts"
-              stroke="#8b5cf6"
               fill="#8b5cf6"
               fillOpacity={0.6}
+              stroke="#8b5cf6"
+              type="monotone"
+              yAxisId="left"
             />
           </AreaChart>
         </ResponsiveContainer>
@@ -160,7 +160,7 @@ export default function UserAnalyticsPage() {
               ) : (
                 <div className="space-y-3">
                   {topRenters.map((user, index) => (
-                    <div key={user._id} className="flex items-center justify-between border-b pb-3">
+                    <div className="flex items-center justify-between border-b pb-3" key={user._id}>
                       <div className="flex items-center gap-3">
                         <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 font-semibold text-primary text-sm">
                           {index + 1}
@@ -200,7 +200,7 @@ export default function UserAnalyticsPage() {
               ) : (
                 <div className="space-y-3">
                   {topHosts.map((user, index) => (
-                    <div key={user._id} className="flex items-center justify-between border-b pb-3">
+                    <div className="flex items-center justify-between border-b pb-3" key={user._id}>
                       <div className="flex items-center gap-3">
                         <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 font-semibold text-primary text-sm">
                           {index + 1}

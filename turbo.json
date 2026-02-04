@@ -19,8 +19,8 @@
     "lint:fix": {
       "dependsOn": ["^lint:fix"]
     },
-    "check-types": {
-      "dependsOn": ["^check-types"]
+    "typecheck": {
+      "dependsOn": ["^typecheck"]
     },
     "dev": {
       "cache": false,

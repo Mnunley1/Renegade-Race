@@ -1,32 +1,32 @@
 "use client"
 
-import { useQuery, useMutation } from "convex/react"
-import { useParams, useRouter } from "next/navigation"
-import { useState } from "react"
-import Link from "next/link"
-import { api } from "@/lib/convex"
+import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
-import { Badge } from "@workspace/ui/components/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
+import { useMutation, useQuery } from "convex/react"
 import {
   ArrowLeft,
   Ban,
+  Calendar,
+  Car,
   CheckCircle,
   Loader2,
-  Car,
-  Calendar,
-  Star,
   MapPin,
+  Star,
   User,
 } from "lucide-react"
+import Link from "next/link"
+import { useParams, useRouter } from "next/navigation"
+import { useState } from "react"
 import { toast } from "sonner"
-import { handleErrorWithContext } from "@/lib/error-handler"
 import type { Id } from "@/lib/convex"
+import { api } from "@/lib/convex"
+import { handleErrorWithContext } from "@/lib/error-handler"
 
 export default function VehicleDetailPage() {
   const params = useParams()
-  const router = useRouter()
+  const _router = useRouter()
   const vehicleId = params.id as Id<"vehicles">
   const vehicle = useQuery(api.vehicles.getById, { id: vehicleId })
   const reservations = useQuery(api.admin.getVehicleReservations, {
@@ -58,7 +58,7 @@ export default function VehicleDetailPage() {
         return <Badge variant="default">Pending</Badge>
       case "approved":
         return (
-          <Badge variant="default" className="bg-green-600">
+          <Badge className="bg-green-600" variant="default">
             Approved
           </Badge>
         )
@@ -88,10 +88,10 @@ export default function VehicleDetailPage() {
     <div className="flex items-center gap-1">
       {[1, 2, 3, 4, 5].map((star) => (
         <Star
-          key={star}
           className={`size-4 ${
             star <= rating ? "fill-yellow-400 text-yellow-400" : "text-gray-300"
           }`}
+          key={star}
         />
       ))}
       <span className="ml-1 font-medium text-sm">{rating}</span>
@@ -124,7 +124,7 @@ export default function VehicleDetailPage() {
     )
   }
 
-  const primaryImage = vehicle.images?.find((img: any) => img.isPrimary) || vehicle.images?.[0]
+  const _primaryImage = vehicle.images?.find((img: any) => img.isPrimary) || vehicle.images?.[0]
   const averageRating =
     reviews && reviews.length > 0
       ? reviews.reduce((sum: number, r: any) => sum + r.rating, 0) / reviews.length
@@ -135,7 +135,7 @@ export default function VehicleDetailPage() {
       <div className="flex items-center justify-between">
         <div>
           <Link href="/vehicles">
-            <Button variant="ghost" className="mb-4">
+            <Button className="mb-4" variant="ghost">
               <ArrowLeft className="mr-2 size-4" />
               Back to Vehicles
             </Button>
@@ -149,8 +149,8 @@ export default function VehicleDetailPage() {
           {getStatusBadge(vehicle.isApproved ? "approved" : "pending", vehicle.isActive)}
           {vehicle.isApproved && (
             <Button
-              onClick={() => handleSuspend(vehicle.isActive !== false)}
               disabled={isProcessing}
+              onClick={() => handleSuspend(vehicle.isActive !== false)}
               variant={vehicle.isActive === false ? "default" : "destructive"}
             >
               {isProcessing ? (
@@ -183,11 +183,11 @@ export default function VehicleDetailPage() {
           <CardContent>
             <div className="grid gap-4 md:grid-cols-3">
               {vehicle.images.map((image: any, idx: number) => (
-                <div key={image._id} className="relative">
+                <div className="relative" key={image._id}>
                   <img
-                    src={image.detailUrl || image.cardUrl || image.imageUrl}
                     alt={`${vehicle.make} ${vehicle.model} - Image ${idx + 1}`}
                     className="h-48 w-full rounded-lg object-cover"
+                    src={image.detailUrl || image.cardUrl || image.imageUrl}
                   />
                   {image.isPrimary && <Badge className="absolute top-2 right-2">Primary</Badge>}
                 </div>
@@ -197,14 +197,14 @@ export default function VehicleDetailPage() {
         </Card>
       )}
 
-      <Tabs defaultValue="details" className="space-y-4">
+      <Tabs className="space-y-4" defaultValue="details">
         <TabsList>
           <TabsTrigger value="details">Details</TabsTrigger>
           <TabsTrigger value="reservations">Reservations ({reservations?.length || 0})</TabsTrigger>
           <TabsTrigger value="reviews">Reviews ({reviews?.length || 0})</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="details" className="space-y-4">
+        <TabsContent className="space-y-4" value="details">
           <div className="grid gap-6 md:grid-cols-2">
             {/* Basic Information */}
             <Card>
@@ -351,7 +351,7 @@ export default function VehicleDetailPage() {
           </div>
         </TabsContent>
 
-        <TabsContent value="reservations" className="space-y-4">
+        <TabsContent className="space-y-4" value="reservations">
           {reservations && reservations.length > 0 ? (
             <div className="space-y-4">
               {reservations.map((reservation: any) => (
@@ -362,7 +362,7 @@ export default function VehicleDetailPage() {
                         <div className="mb-2 flex items-center gap-2">
                           {getStatusBadge(reservation.status)}
                           <Link href={`/reservations/${reservation._id}`}>
-                            <Button variant="link" className="h-auto p-0">
+                            <Button className="h-auto p-0" variant="link">
                               View Reservation
                             </Button>
                           </Link>
@@ -402,7 +402,7 @@ export default function VehicleDetailPage() {
           )}
         </TabsContent>
 
-        <TabsContent value="reviews" className="space-y-4">
+        <TabsContent className="space-y-4" value="reviews">
           {reviews && reviews.length > 0 ? (
             <div className="space-y-4">
               {reviews.map((review: any) => (

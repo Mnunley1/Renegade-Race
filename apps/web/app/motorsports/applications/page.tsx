@@ -1,21 +1,23 @@
 "use client"
 
-import { api } from "@/lib/convex"
-import type { Id } from "@/lib/convex"
+import { useUser } from "@clerk/nextjs"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent } from "@workspace/ui/components/card"
-import { cn } from "@workspace/ui/lib/utils"
-import { useUser } from "@clerk/nextjs"
 import { useMutation, useQuery } from "convex/react"
 import { ArrowLeft, Calendar, FileText, X } from "lucide-react"
 import Link from "next/link"
 import { useState } from "react"
 import { toast } from "sonner"
+import type { Id } from "@/lib/convex"
+import { api } from "@/lib/convex"
 
 type ApplicationStatus = "pending" | "accepted" | "declined" | "withdrawn"
 
-const STATUS_CONFIG: Record<ApplicationStatus, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
+const STATUS_CONFIG: Record<
+  ApplicationStatus,
+  { label: string; variant: "default" | "secondary" | "destructive" | "outline" }
+> = {
   pending: { label: "Pending", variant: "secondary" },
   accepted: { label: "Accepted", variant: "default" },
   declined: { label: "Declined", variant: "destructive" },
@@ -24,10 +26,7 @@ const STATUS_CONFIG: Record<ApplicationStatus, { label: string; variant: "defaul
 
 export default function ApplicationsPage() {
   const { user } = useUser()
-  const applications = useQuery(
-    api.teamApplications.getByDriver,
-    user ? {} : "skip"
-  )
+  const applications = useQuery(api.teamApplications.getByDriver, user ? {} : "skip")
   const updateStatus = useMutation(api.teamApplications.updateStatus)
   const [activeFilter, setActiveFilter] = useState<"all" | ApplicationStatus>("all")
 
@@ -58,8 +57,8 @@ export default function ApplicationsPage() {
       <div className="container mx-auto max-w-4xl px-4 py-12">
         <h1 className="mb-6 font-bold text-3xl">My Applications</h1>
         <div className="space-y-4">
-          {[...Array(3)].map((_, i) => (
-            <div key={i} className="h-24 animate-pulse rounded-lg bg-muted" />
+          {[...new Array(3)].map((_, i) => (
+            <div className="h-24 animate-pulse rounded-lg bg-muted" key={i} />
           ))}
         </div>
       </div>
@@ -81,15 +80,13 @@ export default function ApplicationsPage() {
       </Link>
 
       <h1 className="mb-2 font-bold text-3xl">My Applications</h1>
-      <p className="mb-6 text-muted-foreground">
-        Track your team applications and their status
-      </p>
+      <p className="mb-6 text-muted-foreground">Track your team applications and their status</p>
 
       <div className="mb-6 flex flex-wrap gap-2">
         <Button
+          onClick={() => setActiveFilter("all")}
           size="sm"
           variant={activeFilter === "all" ? "default" : "outline"}
-          onClick={() => setActiveFilter("all")}
         >
           All ({applications.length})
         </Button>
@@ -98,9 +95,9 @@ export default function ApplicationsPage() {
           return (
             <Button
               key={status}
+              onClick={() => setActiveFilter(status)}
               size="sm"
               variant={activeFilter === status ? "default" : "outline"}
-              onClick={() => setActiveFilter(status)}
             >
               {STATUS_CONFIG[status].label} ({count})
             </Button>
@@ -131,30 +128,32 @@ export default function ApplicationsPage() {
                       <h3 className="font-semibold text-lg">
                         {application.team?.name || "Unknown Team"}
                       </h3>
-                      <Badge variant={STATUS_CONFIG[application.status as ApplicationStatus]?.variant || "secondary"}>
-                        {STATUS_CONFIG[application.status as ApplicationStatus]?.label || application.status}
+                      <Badge
+                        variant={
+                          STATUS_CONFIG[application.status as ApplicationStatus]?.variant ||
+                          "secondary"
+                        }
+                      >
+                        {STATUS_CONFIG[application.status as ApplicationStatus]?.label ||
+                          application.status}
                       </Badge>
                     </div>
 
                     <div className="mb-3 flex items-center gap-1.5 text-muted-foreground text-sm">
                       <Calendar className="size-4" />
-                      <span>
-                        Applied {new Date(application.createdAt).toLocaleDateString()}
-                      </span>
+                      <span>Applied {new Date(application.createdAt).toLocaleDateString()}</span>
                     </div>
 
                     {application.message && (
-                      <p className="rounded-lg bg-muted/50 p-3 text-sm">
-                        {application.message}
-                      </p>
+                      <p className="rounded-lg bg-muted/50 p-3 text-sm">{application.message}</p>
                     )}
                   </div>
 
                   {application.status === "pending" && (
                     <Button
-                      variant="ghost"
-                      size="sm"
                       onClick={() => handleWithdraw(application._id)}
+                      size="sm"
+                      variant="ghost"
                     >
                       <X className="mr-1 size-4" />
                       Withdraw

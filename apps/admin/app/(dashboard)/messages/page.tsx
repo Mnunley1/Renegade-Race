@@ -1,8 +1,5 @@
 "use client"
 
-import { useQuery, useMutation } from "convex/react"
-import { useState } from "react"
-import { api } from "@/lib/convex"
 import { Button } from "@workspace/ui/components/button"
 import {
   Card,
@@ -14,10 +11,13 @@ import {
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import { Textarea } from "@workspace/ui/components/textarea"
-import { MessageSquare, Send, Search, Loader2, User } from "lucide-react"
+import { useMutation, useQuery } from "convex/react"
+import { Loader2, MessageSquare, Search, Send, User } from "lucide-react"
+import { useState } from "react"
 import { toast } from "sonner"
-import { handleErrorWithContext } from "@/lib/error-handler"
 import type { Id } from "@/lib/convex"
+import { api } from "@/lib/convex"
+import { handleErrorWithContext } from "@/lib/error-handler"
 
 export default function MessagesPage() {
   const [selectedUserId, setSelectedUserId] = useState("")
@@ -79,12 +79,12 @@ export default function MessagesPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="relative">
-              <Search className="-translate-y-1/2 absolute top-1/2 left-2 size-4 text-muted-foreground" />
+              <Search className="absolute top-1/2 left-2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 className="pl-8"
+                onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search users..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
 
@@ -92,14 +92,14 @@ export default function MessagesPage() {
               <div className="max-h-96 space-y-2 overflow-y-auto">
                 {filteredUsers.map((user: any) => (
                   <button
-                    key={user._id}
-                    type="button"
-                    onClick={() => setSelectedUserId(user.externalId)}
                     className={`w-full rounded-lg border p-3 text-left transition-colors ${
                       selectedUserId === user.externalId
                         ? "border-primary bg-primary/10"
                         : "hover:bg-accent"
                     }`}
+                    key={user._id}
+                    onClick={() => setSelectedUserId(user.externalId)}
+                    type="button"
                   >
                     <div className="flex items-center gap-2">
                       <User className="size-4 text-muted-foreground" />
@@ -137,9 +137,9 @@ export default function MessagesPage() {
                   <Label htmlFor="vehicleId">Vehicle ID (Optional)</Label>
                   <Input
                     id="vehicleId"
-                    value={vehicleId}
                     onChange={(e) => setVehicleId(e.target.value)}
                     placeholder="Leave empty for general message"
+                    value={vehicleId}
                   />
                   <p className="mt-1 text-muted-foreground text-xs">
                     If provided, message will be added to the conversation for that vehicle
@@ -150,19 +150,19 @@ export default function MessagesPage() {
                   <Label htmlFor="messageContent">Message *</Label>
                   <Textarea
                     id="messageContent"
-                    value={messageContent}
                     onChange={(e) => setMessageContent(e.target.value)}
                     placeholder="Enter your message..."
-                    rows={8}
                     required
+                    rows={8}
+                    value={messageContent}
                   />
                 </div>
 
                 <Button
-                  onClick={handleSendMessage}
-                  disabled={isSending || !messageContent.trim()}
-                  size="lg"
                   className="w-full"
+                  disabled={isSending || !messageContent.trim()}
+                  onClick={handleSendMessage}
+                  size="lg"
                 >
                   {isSending ? (
                     <>

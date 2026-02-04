@@ -25,14 +25,14 @@ import { ArrowLeft, Check, Loader2, Plus, X } from "lucide-react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
-import { api } from "@/lib/convex"
-import { handleErrorWithContext } from "@/lib/error-handler"
 import {
+  RACING_TYPES,
   REAL_WORLD_CATEGORIES,
   SIM_RACING_CATEGORIES,
   SIM_RACING_PLATFORMS,
-  RACING_TYPES,
 } from "@/lib/constants"
+import { api } from "@/lib/convex"
+import { handleErrorWithContext } from "@/lib/error-handler"
 
 // Combine real-world and sim-racing categories for team specialties
 const COMMON_SPECIALTIES = [...REAL_WORLD_CATEGORIES, "Cup Series", ...SIM_RACING_CATEGORIES]

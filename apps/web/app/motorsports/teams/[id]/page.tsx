@@ -41,9 +41,9 @@ import { TeamApplicationForm } from "@/components/team-application-form"
 import { TeamCalendar } from "@/components/team-calendar"
 import { TeamCard } from "@/components/team-card"
 import { TeamRoster } from "@/components/team-roster"
+import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
-import type { Id } from "@/lib/convex"
 
 type TeamDetailPageProps = {
   params: Promise<{
@@ -77,7 +77,7 @@ function getTwitterUrl(twitter: string): string {
   return `https://twitter.com/${twitter}`
 }
 
-function getWebsiteUrl(website: string): string {
+function _getWebsiteUrl(website: string): string {
   if (website.startsWith("http")) {
     return website
   }
@@ -217,7 +217,9 @@ export default function TeamDetailPage({ params }: TeamDetailPageProps) {
     try {
       await updateTeam({ teamId, isActive: !team.isActive })
       toast.success(
-        team.isActive ? "Team profile hidden successfully" : "Team profile made visible successfully"
+        team.isActive
+          ? "Team profile hidden successfully"
+          : "Team profile made visible successfully"
       )
     } catch (error) {
       handleErrorWithContext(error, {
@@ -268,11 +270,24 @@ export default function TeamDetailPage({ params }: TeamDetailPageProps) {
         <div className="mb-6 flex items-center gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
           <EyeOff className="size-5 text-amber-600" />
           <div className="flex-1">
-            <p className="font-medium text-amber-800 dark:text-amber-200">Your team profile is currently hidden</p>
-            <p className="text-amber-700 text-sm dark:text-amber-300">Other users cannot see this profile.</p>
+            <p className="font-medium text-amber-800 dark:text-amber-200">
+              Your team profile is currently hidden
+            </p>
+            <p className="text-amber-700 text-sm dark:text-amber-300">
+              Other users cannot see this profile.
+            </p>
           </div>
-          <Button size="sm" variant="outline" onClick={handleToggleVisibility} disabled={isToggling}>
-            {isToggling ? <Loader2 className="mr-1 size-3 animate-spin" /> : <Eye className="mr-1 size-3" />}
+          <Button
+            disabled={isToggling}
+            onClick={handleToggleVisibility}
+            size="sm"
+            variant="outline"
+          >
+            {isToggling ? (
+              <Loader2 className="mr-1 size-3 animate-spin" />
+            ) : (
+              <Eye className="mr-1 size-3" />
+            )}
             Make Visible
           </Button>
         </div>
@@ -294,9 +309,7 @@ export default function TeamDetailPage({ params }: TeamDetailPageProps) {
               <div className="flex flex-wrap items-center gap-2">
                 <CardTitle className="text-2xl">{team.name}</CardTitle>
                 {team.racingType && (
-                  <Badge variant="secondary">
-                    {racingTypeLabels[team.racingType]}
-                  </Badge>
+                  <Badge variant="secondary">{racingTypeLabels[team.racingType]}</Badge>
                 )}
               </div>
             </CardHeader>
@@ -313,61 +326,73 @@ export default function TeamDetailPage({ params }: TeamDetailPageProps) {
 
               {((team.specialties && team.specialties.length > 0) ||
                 (team.requirements && team.requirements.length > 0) ||
-                (team.simRacingPlatforms && team.simRacingPlatforms.length > 0 && (team.racingType === "sim-racing" || team.racingType === "both"))) && (
-                <>
-                  <div>
-                    <h3 className="mb-4 font-semibold text-lg">Details</h3>
-                    <div className="grid gap-6 sm:grid-cols-2">
-                      {team.specialties && team.specialties.length > 0 && (
-                        <div>
-                          <p className="mb-2 font-medium text-muted-foreground text-sm">Specialties</p>
-                          <div className="flex flex-wrap gap-2">
-                            {team.specialties.map((specialty: string) => (
-                              <Badge className="px-3 py-1 text-sm" key={specialty} variant="outline">
-                                {specialty}
-                              </Badge>
-                            ))}
-                          </div>
+                (team.simRacingPlatforms &&
+                  team.simRacingPlatforms.length > 0 &&
+                  (team.racingType === "sim-racing" || team.racingType === "both"))) && (
+                <div>
+                  <h3 className="mb-4 font-semibold text-lg">Details</h3>
+                  <div className="grid gap-6 sm:grid-cols-2">
+                    {team.specialties && team.specialties.length > 0 && (
+                      <div>
+                        <p className="mb-2 font-medium text-muted-foreground text-sm">
+                          Specialties
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {team.specialties.map((specialty: string) => (
+                            <Badge className="px-3 py-1 text-sm" key={specialty} variant="outline">
+                              {specialty}
+                            </Badge>
+                          ))}
                         </div>
-                      )}
-                      {team.requirements && team.requirements.length > 0 && (
+                      </div>
+                    )}
+                    {team.requirements && team.requirements.length > 0 && (
+                      <div>
+                        <p className="mb-2 font-medium text-muted-foreground text-sm">
+                          Requirements
+                        </p>
+                        <ul className="space-y-1">
+                          {team.requirements.map((requirement: string) => (
+                            <li
+                              className="flex items-start gap-2 text-muted-foreground text-sm"
+                              key={`requirement-${requirement}`}
+                            >
+                              <span className="text-primary">•</span>
+                              <span>{requirement}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {team.simRacingPlatforms &&
+                      team.simRacingPlatforms.length > 0 &&
+                      (team.racingType === "sim-racing" || team.racingType === "both") && (
                         <div>
-                          <p className="mb-2 font-medium text-muted-foreground text-sm">Requirements</p>
-                          <ul className="space-y-1">
-                            {team.requirements.map((requirement: string) => (
-                              <li
-                                className="flex items-start gap-2 text-muted-foreground text-sm"
-                                key={`requirement-${requirement}`}
-                              >
-                                <span className="text-primary">•</span>
-                                <span>{requirement}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                      {team.simRacingPlatforms && team.simRacingPlatforms.length > 0 && (team.racingType === "sim-racing" || team.racingType === "both") && (
-                        <div>
-                          <p className="mb-2 font-medium text-muted-foreground text-sm">Sim Racing Platforms</p>
+                          <p className="mb-2 font-medium text-muted-foreground text-sm">
+                            Sim Racing Platforms
+                          </p>
                           <div className="flex flex-wrap gap-2">
                             {team.simRacingPlatforms.map((platform: string) => (
-                              <Badge className="px-3 py-1 text-sm" key={platform} variant="secondary">
+                              <Badge
+                                className="px-3 py-1 text-sm"
+                                key={platform}
+                                variant="secondary"
+                              >
                                 🎮 {platform}
                               </Badge>
                             ))}
                           </div>
                         </div>
                       )}
-                    </div>
                   </div>
-                </>
+                </div>
               )}
             </CardContent>
           </Card>
 
-          <TeamRoster teamId={teamId} isOwner={isOwner} />
+          <TeamRoster isOwner={isOwner} teamId={teamId} />
 
-          <TeamCalendar teamId={teamId} isOwner={isOwner} />
+          <TeamCalendar isOwner={isOwner} teamId={teamId} />
 
           <TeamApplicationForm teamId={teamId} />
 
@@ -377,14 +402,14 @@ export default function TeamDetailPage({ params }: TeamDetailPageProps) {
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {similarTeams.map((team: any) => (
                   <TeamCard
-                    key={team._id}
+                    availableSeats={team.availableSeats}
                     id={team._id}
-                    name={team.name}
-                    logoUrl={team.logoUrl}
+                    key={team._id}
                     location={team.location}
+                    logoUrl={team.logoUrl}
+                    name={team.name}
                     racingType={team.racingType}
                     specialties={team.specialties}
-                    availableSeats={team.availableSeats}
                   />
                 ))}
               </div>
@@ -393,9 +418,7 @@ export default function TeamDetailPage({ params }: TeamDetailPageProps) {
         </div>
 
         <div className="space-y-6">
-          {isOwner && (
-            <ProfileAnalytics profileId={teamId} profileType="team" />
-          )}
+          {isOwner && <ProfileAnalytics profileId={teamId} profileType="team" />}
 
           {user && !isOwner && (
             <Card>
@@ -455,7 +478,9 @@ export default function TeamDetailPage({ params }: TeamDetailPageProps) {
                           <Phone className="size-5 text-primary" />
                           <div>
                             <p className="font-semibold">Phone</p>
-                            <p className="text-muted-foreground text-sm">{team.contactInfo.phone}</p>
+                            <p className="text-muted-foreground text-sm">
+                              {team.contactInfo.phone}
+                            </p>
                           </div>
                         </div>
                       </>
@@ -510,10 +535,10 @@ export default function TeamDetailPage({ params }: TeamDetailPageProps) {
                     {team.socialLinks.instagram && (
                       <Button asChild size="sm" type="button" variant="outline">
                         <a
+                          aria-label="Visit Instagram profile"
                           href={getInstagramUrl(team.socialLinks.instagram)}
                           rel="noopener noreferrer"
                           target="_blank"
-                          aria-label="Visit Instagram profile"
                         >
                           <Instagram className="mr-2 size-4" />
                           Instagram
@@ -523,10 +548,10 @@ export default function TeamDetailPage({ params }: TeamDetailPageProps) {
                     {team.socialLinks.twitter && (
                       <Button asChild size="sm" type="button" variant="outline">
                         <a
+                          aria-label="Visit Twitter profile"
                           href={getTwitterUrl(team.socialLinks.twitter)}
                           rel="noopener noreferrer"
                           target="_blank"
-                          aria-label="Visit Twitter profile"
                         >
                           <Twitter className="mr-2 size-4" />
                           Twitter
@@ -545,8 +570,8 @@ export default function TeamDetailPage({ params }: TeamDetailPageProps) {
               </CardHeader>
               <CardContent className="space-y-4">
                 <p className="text-muted-foreground text-sm">
-                  You own this team profile. You can edit it, hide it from public view, or delete
-                  it permanently.
+                  You own this team profile. You can edit it, hide it from public view, or delete it
+                  permanently.
                 </p>
                 <div className="flex flex-col gap-2">
                   <Button asChild variant="outline">
@@ -568,7 +593,11 @@ export default function TeamDetailPage({ params }: TeamDetailPageProps) {
                     })()}
                     {team.isActive ? "Hide Team" : "Show Team"}
                   </Button>
-                  <Button disabled={isDeleting} onClick={() => setShowDeleteDialog(true)} variant="destructive">
+                  <Button
+                    disabled={isDeleting}
+                    onClick={() => setShowDeleteDialog(true)}
+                    variant="destructive"
+                  >
                     <Trash2 className="mr-2 size-4" />
                     Delete Team
                   </Button>
@@ -608,8 +637,8 @@ export default function TeamDetailPage({ params }: TeamDetailPageProps) {
           <DialogHeader>
             <DialogTitle>Delete Team</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete this team? This action cannot be undone.
-              Your team will be permanently removed from the platform.
+              Are you sure you want to delete this team? This action cannot be undone. Your team
+              will be permanently removed from the platform.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

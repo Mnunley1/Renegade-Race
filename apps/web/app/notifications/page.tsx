@@ -1,6 +1,7 @@
 "use client"
 
 import { useUser } from "@clerk/nextjs"
+import type { Id } from "@renegade/backend/convex/_generated/dataModel"
 import { Button } from "@workspace/ui/components/button"
 import {
   Card,
@@ -11,17 +12,9 @@ import {
 } from "@workspace/ui/components/card"
 import { useMutation, useQuery } from "convex/react"
 import { formatDistanceToNow, isToday, isYesterday } from "date-fns"
-import {
-  AlertCircle,
-  Bell,
-  Calendar,
-  Car,
-  CheckCircle2,
-  MessageSquare,
-} from "lucide-react"
+import { AlertCircle, Bell, Calendar, CheckCircle2, MessageSquare } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { api } from "@/lib/convex"
-import type { Id } from "@renegade/backend/convex/_generated/dataModel"
 
 type Notification = {
   _id: Id<"notifications">
@@ -108,9 +101,7 @@ export default function NotificationsPage() {
         <Card>
           <CardContent className="flex flex-col items-center justify-center p-12">
             <AlertCircle className="mb-4 size-12 text-muted-foreground" />
-            <p className="text-muted-foreground">
-              Please sign in to view notifications
-            </p>
+            <p className="text-muted-foreground">Please sign in to view notifications</p>
           </CardContent>
         </Card>
       </div>
@@ -120,9 +111,7 @@ export default function NotificationsPage() {
   if (notifications === undefined) {
     return (
       <div className="flex items-center justify-center p-12">
-        <div className="text-muted-foreground">
-          Loading notifications...
-        </div>
+        <div className="text-muted-foreground">Loading notifications...</div>
       </div>
     )
   }
@@ -134,9 +123,7 @@ export default function NotificationsPage() {
     <div className="mx-auto max-w-4xl space-y-8 px-4 py-12 sm:px-6 lg:px-8">
       <div>
         <h1 className="font-bold text-3xl md:text-4xl">Notifications</h1>
-        <p className="mt-2 text-muted-foreground">
-          Stay updated on your rentals and messages
-        </p>
+        <p className="mt-2 text-muted-foreground">Stay updated on your rentals and messages</p>
       </div>
 
       <Card>
@@ -144,9 +131,7 @@ export default function NotificationsPage() {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>All Notifications</CardTitle>
-              <CardDescription>
-                {notifications.length} notification(s) total
-              </CardDescription>
+              <CardDescription>{notifications.length} notification(s) total</CardDescription>
             </div>
             {hasUnread && (
               <Button onClick={handleMarkAllAsRead} variant="outline">
@@ -185,9 +170,7 @@ export default function NotificationsPage() {
                               </div>
                               <div className="flex-1 space-y-1">
                                 <div className="flex items-start justify-between gap-2">
-                                  <p className="font-medium text-sm">
-                                    {notification.title}
-                                  </p>
+                                  <p className="font-medium text-sm">{notification.title}</p>
                                   {!notification.isRead && (
                                     <span className="mt-1 size-2 shrink-0 rounded-full bg-primary" />
                                   )}
@@ -196,10 +179,9 @@ export default function NotificationsPage() {
                                   {notification.message}
                                 </p>
                                 <p className="text-muted-foreground text-xs">
-                                  {formatDistanceToNow(
-                                    new Date(notification.createdAt),
-                                    { addSuffix: true }
-                                  )}
+                                  {formatDistanceToNow(new Date(notification.createdAt), {
+                                    addSuffix: true,
+                                  })}
                                 </p>
                               </div>
                             </div>

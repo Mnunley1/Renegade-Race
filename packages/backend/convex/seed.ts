@@ -1,5 +1,5 @@
-import { mutation } from "./_generated/server"
 import type { Id } from "./_generated/dataModel"
+import { mutation } from "./_generated/server"
 
 /**
  * Seed the database with fake data for development
@@ -94,7 +94,7 @@ export const seed = mutation({
       },
     ]
 
-    const trackIds: Array<Id<"tracks">> = []
+    const trackIds: Id<"tracks">[] = []
     for (const trackData of tracks) {
       const existing = await ctx.db
         .query("tracks")
@@ -258,7 +258,7 @@ export const seed = mutation({
       },
     ]
 
-    const vehicleIds: Array<Id<"vehicles">> = []
+    const vehicleIds: Id<"vehicles">[] = []
     for (const vehicleData of vehicles) {
       const vehicleId = await ctx.db.insert("vehicles", vehicleData)
       vehicleIds.push(vehicleId)

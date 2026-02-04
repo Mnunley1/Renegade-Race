@@ -1,26 +1,18 @@
 "use client"
 
-import * as React from "react"
 import {
-  Filter,
-  Loader2,
-  MapPin,
-  Navigation,
-  Star,
-  Shield,
-  Lock,
-  Flame,
-  HardHat,
-  Grid2x2,
-  X,
-} from "lucide-react"
-import { Card } from "@workspace/ui/components/card"
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@workspace/ui/components/accordion"
+import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
+import { Card } from "@workspace/ui/components/card"
+import { Checkbox } from "@workspace/ui/components/checkbox"
+import { Combobox } from "@workspace/ui/components/command"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
-import { Badge } from "@workspace/ui/components/badge"
-import { Slider } from "@workspace/ui/components/slider"
-import { Checkbox } from "@workspace/ui/components/checkbox"
 import {
   Select,
   SelectContent,
@@ -28,16 +20,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select"
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@workspace/ui/components/accordion"
-import { Combobox } from "@workspace/ui/components/command"
 import { Skeleton } from "@workspace/ui/components/skeleton"
+import { Slider } from "@workspace/ui/components/slider"
 import { cn } from "@workspace/ui/lib/utils"
-import type { FilterState, FilterActions, TrackItem, VehicleItem } from "./types"
+import {
+  Filter,
+  Flame,
+  Grid2x2,
+  HardHat,
+  Loader2,
+  Lock,
+  MapPin,
+  Navigation,
+  Shield,
+  Star,
+  X,
+} from "lucide-react"
+import * as React from "react"
+import type { FilterActions, FilterState, TrackItem, VehicleItem } from "./types"
 
 type FilterPanelProps = {
   filters: FilterState
@@ -104,13 +104,10 @@ export function FilterPanel({
   const histogramBuckets = React.useMemo(() => {
     const bucketCount = 10
     const bucketSize = (maxPrice - minPrice) / bucketCount
-    const buckets = Array(bucketCount).fill(0)
+    const buckets = new Array(bucketCount).fill(0)
 
     prices.forEach((price) => {
-      const bucketIndex = Math.min(
-        Math.floor((price - minPrice) / bucketSize),
-        bucketCount - 1
-      )
+      const bucketIndex = Math.min(Math.floor((price - minPrice) / bucketSize), bucketCount - 1)
       buckets[bucketIndex]++
     })
 
@@ -159,13 +156,13 @@ export function FilterPanel({
   const horsepowerError =
     filters.minHorsepower &&
     filters.maxHorsepower &&
-    Number.parseInt(filters.minHorsepower) > Number.parseInt(filters.maxHorsepower)
+    Number.parseInt(filters.minHorsepower, 10) > Number.parseInt(filters.maxHorsepower, 10)
 
   // Year validation
   const yearError =
     filters.minYear &&
     filters.maxYear &&
-    Number.parseInt(filters.minYear) > Number.parseInt(filters.maxYear)
+    Number.parseInt(filters.minYear, 10) > Number.parseInt(filters.maxYear, 10)
 
   const handleZipSubmit = () => {
     if (zipInput.length === 5) {
@@ -218,10 +215,8 @@ export function FilterPanel({
         {/* Header */}
         <div className="flex items-center gap-2">
           <Filter className="size-5" />
-          <h2 className="text-lg font-semibold">Filters</h2>
-          {activeFiltersCount > 0 && (
-            <Badge variant="secondary">{activeFiltersCount}</Badge>
-          )}
+          <h2 className="font-semibold text-lg">Filters</h2>
+          {activeFiltersCount > 0 && <Badge variant="secondary">{activeFiltersCount}</Badge>}
         </div>
 
         {/* Quick Presets */}
@@ -229,9 +224,9 @@ export function FilterPanel({
           {QUICK_PRESETS.map((preset) => (
             <Button
               key={preset.label}
-              variant="outline"
-              size="sm"
               onClick={() => applyPreset(preset)}
+              size="sm"
+              variant="outline"
             >
               {preset.label}
             </Button>
@@ -244,54 +239,58 @@ export function FilterPanel({
           <div className="space-y-2">
             <div className="flex gap-2">
               <Input
-                placeholder="Enter ZIP code"
-                value={zipInput}
+                maxLength={5}
                 onChange={(e) => setZipInput(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") handleZipSubmit()
                 }}
-                maxLength={5}
+                placeholder="Enter ZIP code"
+                value={zipInput}
               />
               <Button
-                variant="outline"
-                size="icon"
-                onClick={handleZipSubmit}
                 disabled={isGeocodingZip || zipInput.length !== 5}
+                onClick={handleZipSubmit}
+                size="icon"
+                variant="outline"
               >
-                {isGeocodingZip ? <Loader2 className="size-4 animate-spin" /> : <MapPin className="size-4" />}
+                {isGeocodingZip ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <MapPin className="size-4" />
+                )}
               </Button>
             </div>
             <Button
-              variant="outline"
               className="w-full"
-              onClick={getCurrentLocation}
               disabled={isGettingLocation}
+              onClick={getCurrentLocation}
+              variant="outline"
             >
-              <Navigation className="size-4 mr-2" />
+              <Navigation className="mr-2 size-4" />
               {isGettingLocation ? "Getting location..." : "Use my current location"}
             </Button>
             {filters.locationLabel && (
               <div className="flex items-center justify-between rounded-md bg-muted px-3 py-2 text-sm">
                 <span className="text-muted-foreground">{filters.locationLabel}</span>
                 <Button
-                  variant="ghost"
-                  size="icon"
                   className="size-6"
                   onClick={actions.clearLocationFilter}
+                  size="icon"
+                  variant="ghost"
                 >
                   <X className="size-3" />
                 </Button>
               </div>
             )}
-            {locationError && (
-              <p className="text-sm text-destructive">{locationError}</p>
-            )}
+            {locationError && <p className="text-destructive text-sm">{locationError}</p>}
             <div className="space-y-2">
               <Label>Max Distance</Label>
               <Select
-                value={filters.maxDistance === 0 ? "all" : filters.maxDistance.toString()}
-                onValueChange={(value) => actions.setMaxDistance(value === "all" ? 0 : Number(value))}
                 disabled={!filters.userLocation}
+                onValueChange={(value) =>
+                  actions.setMaxDistance(value === "all" ? 0 : Number(value))
+                }
+                value={filters.maxDistance === 0 ? "all" : filters.maxDistance.toString()}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="All miles" />
@@ -313,7 +312,7 @@ export function FilterPanel({
         {/* Track Select */}
         <div className="space-y-2">
           <Label>Track</Label>
-          <Select value={filters.selectedTrack} onValueChange={actions.setSelectedTrack}>
+          <Select onValueChange={actions.setSelectedTrack} value={filters.selectedTrack}>
             <SelectTrigger>
               <SelectValue placeholder="All tracks" />
             </SelectTrigger>
@@ -333,11 +332,11 @@ export function FilterPanel({
           <Label>Price per Day</Label>
 
           {/* Histogram */}
-          <div className="flex items-end justify-between gap-1 h-16 px-1">
+          <div className="flex h-16 items-end justify-between gap-1 px-1">
             {histogramBuckets.map((height, i) => (
               <div
+                className="flex-1 rounded-t bg-primary/20"
                 key={i}
-                className="flex-1 bg-primary/20 rounded-t"
                 style={{ height: `${height}%` }}
               />
             ))}
@@ -345,32 +344,38 @@ export function FilterPanel({
 
           {/* Slider */}
           <Slider
-            min={minPrice}
+            aria-label="Price range slider"
             max={maxPrice}
+            min={minPrice}
+            onValueChange={handlePriceChange}
             step={priceStep}
             value={[currentPriceMin, currentPriceMax]}
-            onValueChange={handlePriceChange}
-            aria-label="Price range slider"
           />
 
           {/* Manual inputs */}
           <div className="flex items-center gap-2">
             <Input
-              type="number"
-              placeholder="Min"
-              value={currentPriceMin}
               onChange={(e) =>
-                handlePriceChange([Number.parseInt(e.target.value) || minPrice, currentPriceMax])
+                handlePriceChange([
+                  Number.parseInt(e.target.value, 10) || minPrice,
+                  currentPriceMax,
+                ])
               }
+              placeholder="Min"
+              type="number"
+              value={currentPriceMin}
             />
             <span className="text-muted-foreground">-</span>
             <Input
-              type="number"
-              placeholder="Max"
-              value={currentPriceMax}
               onChange={(e) =>
-                handlePriceChange([currentPriceMin, Number.parseInt(e.target.value) || maxPrice])
+                handlePriceChange([
+                  currentPriceMin,
+                  Number.parseInt(e.target.value, 10) || maxPrice,
+                ])
               }
+              placeholder="Max"
+              type="number"
+              value={currentPriceMax}
             />
           </div>
 
@@ -379,9 +384,9 @@ export function FilterPanel({
             {["0-250", "250-500", "500-1000", "1000-2000"].map((range) => (
               <Button
                 key={range}
-                variant={filters.selectedPriceRange === range ? "default" : "outline"}
-                size="sm"
                 onClick={() => handleQuickPrice(range)}
+                size="sm"
+                variant={filters.selectedPriceRange === range ? "default" : "outline"}
               >
                 ${range.replace("-", " - $")}
               </Button>
@@ -390,15 +395,13 @@ export function FilterPanel({
         </div>
 
         {/* Secondary Filters Accordion */}
-        <Accordion type="multiple" className="w-full">
+        <Accordion className="w-full" type="multiple">
           {/* Vehicle Make/Model */}
           <AccordionItem value="make-model">
             <AccordionTrigger>
               <div className="flex items-center gap-2">
                 <span>Vehicle Make & Model</span>
-                {hasMakeModelFilter && (
-                  <div className="size-2 rounded-full bg-primary" />
-                )}
+                {hasMakeModelFilter && <div className="size-2 rounded-full bg-primary" />}
               </div>
             </AccordionTrigger>
             <AccordionContent>
@@ -406,6 +409,7 @@ export function FilterPanel({
                 <div className="space-y-2">
                   <Label>Make</Label>
                   <Combobox
+                    onValueChange={actions.setSelectedMake}
                     options={[
                       { value: "all", label: `All makes (${vehicles.length})` },
                       ...makes.map((make) => ({
@@ -413,19 +417,15 @@ export function FilterPanel({
                         label: `${make} (${makeCounts[make] || 0})`,
                       })),
                     ]}
-                    value={filters.selectedMake}
-                    onValueChange={actions.setSelectedMake}
                     placeholder="All makes"
                     searchPlaceholder="Search makes..."
+                    value={filters.selectedMake}
                   />
                 </div>
 
                 <div className="space-y-2">
                   <Label>Model</Label>
-                  <Select
-                    value={filters.selectedModel}
-                    onValueChange={actions.setSelectedModel}
-                  >
+                  <Select onValueChange={actions.setSelectedModel} value={filters.selectedModel}>
                     <SelectTrigger>
                       <SelectValue placeholder="All models" />
                     </SelectTrigger>
@@ -462,15 +462,13 @@ export function FilterPanel({
                     {DRIVE_TYPES.map((type) => (
                       <Button
                         key={type}
+                        onClick={() => actions.setSelectedDriveType(type === "All" ? "all" : type)}
+                        size="sm"
                         variant={
                           (type === "All" && filters.selectedDriveType === "all") ||
                           filters.selectedDriveType === type
                             ? "default"
                             : "outline"
-                        }
-                        size="sm"
-                        onClick={() =>
-                          actions.setSelectedDriveType(type === "All" ? "all" : type)
                         }
                       >
                         {type}
@@ -484,23 +482,21 @@ export function FilterPanel({
                   <Label>Horsepower</Label>
                   <div className="flex items-center gap-2">
                     <Input
-                      type="number"
-                      placeholder="Min"
-                      value={filters.minHorsepower}
                       onChange={(e) => actions.setMinHorsepower(e.target.value)}
+                      placeholder="Min"
+                      type="number"
+                      value={filters.minHorsepower}
                     />
                     <span className="text-muted-foreground">-</span>
                     <Input
-                      type="number"
-                      placeholder="Max"
-                      value={filters.maxHorsepower}
                       onChange={(e) => actions.setMaxHorsepower(e.target.value)}
+                      placeholder="Max"
+                      type="number"
+                      value={filters.maxHorsepower}
                     />
                   </div>
                   {horsepowerError && (
-                    <p className="text-sm text-destructive">
-                      Min cannot be greater than max
-                    </p>
+                    <p className="text-destructive text-sm">Min cannot be greater than max</p>
                   )}
                 </div>
 
@@ -511,15 +507,15 @@ export function FilterPanel({
                     {TRANSMISSIONS.map((trans) => (
                       <Button
                         key={trans}
+                        onClick={() =>
+                          actions.setSelectedTransmission(trans === "All" ? "all" : trans)
+                        }
+                        size="sm"
                         variant={
                           (trans === "All" && filters.selectedTransmission === "all") ||
                           filters.selectedTransmission === trans
                             ? "default"
                             : "outline"
-                        }
-                        size="sm"
-                        onClick={() =>
-                          actions.setSelectedTransmission(trans === "All" ? "all" : trans)
                         }
                       >
                         {trans}
@@ -548,24 +544,22 @@ export function FilterPanel({
                   <Label>Year</Label>
                   <div className="flex items-center gap-2">
                     <Input
-                      type="number"
-                      placeholder="Min"
                       min={1950}
-                      value={filters.minYear}
                       onChange={(e) => actions.setMinYear(e.target.value)}
+                      placeholder="Min"
+                      type="number"
+                      value={filters.minYear}
                     />
                     <span className="text-muted-foreground">-</span>
                     <Input
-                      type="number"
-                      placeholder="Max"
-                      value={filters.maxYear}
                       onChange={(e) => actions.setMaxYear(e.target.value)}
+                      placeholder="Max"
+                      type="number"
+                      value={filters.maxYear}
                     />
                   </div>
                   {yearError && (
-                    <p className="text-sm text-destructive">
-                      Min cannot be greater than max
-                    </p>
+                    <p className="text-destructive text-sm">Min cannot be greater than max</p>
                   )}
                 </div>
 
@@ -575,19 +569,19 @@ export function FilterPanel({
                   <div className="flex gap-1">
                     {[1, 2, 3, 4, 5].map((rating) => (
                       <button
+                        className="transition-colors hover:scale-110"
                         key={rating}
-                        type="button"
                         onClick={() =>
                           actions.setMinRating(
                             filters.minRating === rating.toString() ? "" : rating.toString()
                           )
                         }
-                        className="transition-colors hover:scale-110"
+                        type="button"
                       >
                         <Star
                           className={cn(
                             "size-6",
-                            Number.parseInt(filters.minRating || "0") >= rating
+                            Number.parseInt(filters.minRating || "0", 10) >= rating
                               ? "fill-yellow-400 text-yellow-400"
                               : "text-muted-foreground"
                           )}
@@ -605,9 +599,10 @@ export function FilterPanel({
             <AccordionTrigger>
               <div className="flex items-center gap-2">
                 <span>Track Requirements</span>
-                {(hasSafetyFilter || hasExperienceFilter || hasTireTypeFilter || hasDeliveryFilter) && (
-                  <div className="size-2 rounded-full bg-primary" />
-                )}
+                {(hasSafetyFilter ||
+                  hasExperienceFilter ||
+                  hasTireTypeFilter ||
+                  hasDeliveryFilter) && <div className="size-2 rounded-full bg-primary" />}
               </div>
             </AccordionTrigger>
             <AccordionContent>
@@ -619,10 +614,10 @@ export function FilterPanel({
                     {SAFETY_EQUIPMENT.map((item) => {
                       const Icon = item.icon
                       return (
-                        <div key={item.value} className="flex items-center gap-2">
+                        <div className="flex items-center gap-2" key={item.value}>
                           <Checkbox
-                            id={item.value}
                             checked={filters.selectedSafetyEquipment.includes(item.value)}
+                            id={item.value}
                             onCheckedChange={(checked) => {
                               if (checked) {
                                 actions.setSelectedSafetyEquipment([
@@ -631,14 +626,12 @@ export function FilterPanel({
                                 ])
                               } else {
                                 actions.setSelectedSafetyEquipment(
-                                  filters.selectedSafetyEquipment.filter(
-                                    (v) => v !== item.value
-                                  )
+                                  filters.selectedSafetyEquipment.filter((v) => v !== item.value)
                                 )
                               }
                             }}
                           />
-                          <Label htmlFor={item.value} className="flex items-center gap-2">
+                          <Label className="flex items-center gap-2" htmlFor={item.value}>
                             <Icon className="size-4" />
                             {item.label}
                           </Label>
@@ -655,15 +648,13 @@ export function FilterPanel({
                     {EXPERIENCE_LEVELS.map((level) => (
                       <Button
                         key={level}
+                        onClick={() => actions.setSelectedExperienceLevel(level)}
+                        size="sm"
                         variant={
                           filters.selectedExperienceLevel === level ||
                           (level === "all" && filters.selectedExperienceLevel === "all")
                             ? "default"
                             : "outline"
-                        }
-                        size="sm"
-                        onClick={() =>
-                          actions.setSelectedExperienceLevel(level)
                         }
                       >
                         {level.charAt(0).toUpperCase() + level.slice(1)}
@@ -679,15 +670,13 @@ export function FilterPanel({
                     {TIRE_TYPES.map((type) => (
                       <Button
                         key={type}
+                        onClick={() => actions.setSelectedTireType(type)}
+                        size="sm"
                         variant={
                           filters.selectedTireType === type ||
                           (type === "all" && filters.selectedTireType === "all")
                             ? "default"
                             : "outline"
-                        }
-                        size="sm"
-                        onClick={() =>
-                          actions.setSelectedTireType(type)
                         }
                       >
                         {type}
@@ -699,11 +688,9 @@ export function FilterPanel({
                 {/* Delivery */}
                 <div className="flex items-center gap-2">
                   <Checkbox
-                    id="delivery"
                     checked={filters.deliveryOnly}
-                    onCheckedChange={(checked) =>
-                      actions.setDeliveryOnly(checked === true)
-                    }
+                    id="delivery"
+                    onCheckedChange={(checked) => actions.setDeliveryOnly(checked === true)}
                   />
                   <Label htmlFor="delivery">Delivery available only</Label>
                 </div>
@@ -714,11 +701,7 @@ export function FilterPanel({
 
         {/* Clear Filters */}
         {activeFiltersCount > 0 && (
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={actions.clearFilters}
-          >
+          <Button className="w-full" onClick={actions.clearFilters} variant="outline">
             Clear All Filters
           </Button>
         )}

@@ -1,7 +1,7 @@
 import { ClerkProvider } from "@clerk/nextjs"
 import { ThemeProvider } from "@workspace/ui/components/theme-provider"
-import { Lato } from "next/font/google"
 import type { Metadata } from "next"
+import { Lato } from "next/font/google"
 import "@workspace/ui/globals.css"
 import "./globals.css"
 import { Providers } from "@/components/providers"

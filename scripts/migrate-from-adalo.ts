@@ -1,4 +1,5 @@
 #!/usr/bin/env tsx
+
 /**
  * Migration Runner Script
  *
@@ -11,10 +12,10 @@
  *   CONVEX_URL=your-url tsx scripts/migrate-from-adalo.ts --data-file adalo-export.json
  */
 
+import * as fs from "node:fs"
+import * as path from "node:path"
 import { ConvexHttpClient } from "convex/browser"
 import { api } from "../packages/backend/convex/_generated/api"
-import * as fs from "fs"
-import * as path from "path"
 
 // Types matching the migration functions
 type AdaloUser = {
@@ -102,10 +103,10 @@ interface MigrationStats {
 }
 
 class MigrationRunner {
-  private client: ConvexHttpClient
-  private userMapping: UserMapping
-  private vehicleMapping: VehicleMapping = {}
-  private stats: MigrationStats = {
+  private readonly client: ConvexHttpClient
+  private readonly userMapping: UserMapping
+  private readonly vehicleMapping: VehicleMapping = {}
+  private readonly stats: MigrationStats = {
     users: { success: 0, failed: 0, errors: [] },
     vehicles: { success: 0, failed: 0, errors: [] },
     reservations: { success: 0, failed: 0, errors: [] },
@@ -259,7 +260,7 @@ class MigrationRunner {
   }
 
   printStats(): void {
-    console.log("\n" + "=".repeat(60))
+    console.log(`\n${"=".repeat(60)}`)
     console.log("📊 Migration Statistics")
     console.log("=".repeat(60))
     console.log(`Users:      ✅ ${this.stats.users.success}  ❌ ${this.stats.users.failed}`)
@@ -288,7 +289,7 @@ class MigrationRunner {
       }
     }
 
-    console.log("\n" + "=".repeat(60))
+    console.log(`\n${"=".repeat(60)}`)
   }
 
   private sleep(ms: number): Promise<void> {

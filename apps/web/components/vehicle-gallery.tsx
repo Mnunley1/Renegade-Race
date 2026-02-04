@@ -291,7 +291,7 @@ export function VehicleGallery({ images, vehicleName }: VehicleGalleryProps) {
                   <Button
                     aria-label="Previous image"
                     className={cn(
-                      "-translate-y-1/2 absolute top-1/2 left-4",
+                      "absolute top-1/2 left-4 -translate-y-1/2",
                       "size-12 rounded-full bg-black/60 text-white",
                       "backdrop-blur-sm hover:bg-black/80",
                       "focus:outline-none focus:ring-2 focus:ring-white"
@@ -305,7 +305,7 @@ export function VehicleGallery({ images, vehicleName }: VehicleGalleryProps) {
                   <Button
                     aria-label="Next image"
                     className={cn(
-                      "-translate-y-1/2 absolute top-1/2 right-4",
+                      "absolute top-1/2 right-4 -translate-y-1/2",
                       "size-12 rounded-full bg-black/60 text-white",
                       "backdrop-blur-sm hover:bg-black/80",
                       "focus:outline-none focus:ring-2 focus:ring-white"

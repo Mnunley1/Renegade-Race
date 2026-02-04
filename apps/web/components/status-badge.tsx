@@ -1,6 +1,6 @@
 import { Badge } from "@workspace/ui/components/badge"
-import { Clock, CheckCircle2, XCircle } from "lucide-react"
 import { cn } from "@workspace/ui/lib/utils"
+import { CheckCircle2, Clock, XCircle } from "lucide-react"
 
 const statusConfig = {
   pending: {
@@ -40,7 +40,7 @@ export function StatusBadge({ status, className }: StatusBadgeProps) {
   const Icon = config.icon
 
   return (
-    <Badge variant={config.variant} className={cn("gap-1", className)}>
+    <Badge className={cn("gap-1", className)} variant={config.variant}>
       <Icon className="size-3" />
       {config.label}
     </Badge>

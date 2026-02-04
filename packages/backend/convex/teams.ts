@@ -130,7 +130,7 @@ export const list = query({
     // Filter by specialties if specified
     if (args.specialties && args.specialties.length > 0) {
       return teams.filter((team) =>
-        args.specialties!.some((specialty) => team.specialties.includes(specialty))
+        args.specialties?.some((specialty) => team.specialties.includes(specialty))
       )
     }
 

@@ -3,7 +3,7 @@
 import { Button } from "@workspace/ui/components/button"
 import { cn } from "@workspace/ui/lib/utils"
 import { Send, X } from "lucide-react"
-import { useCallback, useRef, type RefObject } from "react"
+import { type RefObject, useCallback } from "react"
 
 interface ReplyingToData {
   content: string
@@ -47,16 +47,12 @@ export function MessageInput({
         <div className="mb-3 rounded-lg border-[#EF1C25] border-l-4 bg-muted p-3">
           <div className="flex items-center justify-between">
             <div className="flex-1">
-              <p className="mb-1 text-muted-foreground text-xs">
-                Replying to:
-              </p>
-              <p className="truncate text-foreground text-sm">
-                {replyingTo.content}
-              </p>
+              <p className="mb-1 text-muted-foreground text-xs">Replying to:</p>
+              <p className="truncate text-foreground text-sm">{replyingTo.content}</p>
             </div>
             <Button
               aria-label="Cancel reply"
-              className="ml-2 h-6 w-6 min-h-[44px] min-w-[44px] p-0"
+              className="ml-2 h-6 min-h-[44px] w-6 min-w-[44px] p-0"
               onClick={onCancelReply}
               size="sm"
               variant="ghost"
@@ -82,10 +78,8 @@ export function MessageInput({
             <span
               aria-live="polite"
               className={cn(
-                "absolute right-2 top-1/2 -translate-y-1/2 text-xs tabular-nums",
-                value.length > maxLength
-                  ? "text-destructive font-medium"
-                  : "text-muted-foreground"
+                "absolute top-1/2 right-2 -translate-y-1/2 text-xs tabular-nums",
+                value.length > maxLength ? "font-medium text-destructive" : "text-muted-foreground"
               )}
             >
               {value.length}/{maxLength}

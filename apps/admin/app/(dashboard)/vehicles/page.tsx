@@ -1,9 +1,6 @@
 "use client"
 
-import { useQuery, useMutation } from "convex/react"
-import { useState, useMemo } from "react"
-import Link from "next/link"
-import { api } from "@/lib/convex"
+import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import {
   Card,
@@ -12,6 +9,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@workspace/ui/components/card"
+import { Checkbox } from "@workspace/ui/components/checkbox"
+import { Input } from "@workspace/ui/components/input"
 import {
   Select,
   SelectContent,
@@ -19,14 +18,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select"
-import { Badge } from "@workspace/ui/components/badge"
-import { Input } from "@workspace/ui/components/input"
-import { Checkbox } from "@workspace/ui/components/checkbox"
-import { Car, Search, Ban, CheckCircle, Eye, Loader2 } from "lucide-react"
+import { useMutation, useQuery } from "convex/react"
+import { Ban, Car, CheckCircle, Eye, Loader2, Search } from "lucide-react"
+import Link from "next/link"
+import { useMemo, useState } from "react"
 import { toast } from "sonner"
 import { Pagination } from "@/components/pagination"
-import { handleErrorWithContext } from "@/lib/error-handler"
 import type { Id } from "@/lib/convex"
+import { api } from "@/lib/convex"
+import { handleErrorWithContext } from "@/lib/error-handler"
 
 export default function VehiclesPage() {
   const [statusFilter, setStatusFilter] = useState<"pending" | "approved" | undefined>(undefined)
@@ -123,7 +123,7 @@ export default function VehiclesPage() {
         return <Badge variant="default">Pending</Badge>
       case "approved":
         return (
-          <Badge variant="default" className="bg-green-600">
+          <Badge className="bg-green-600" variant="default">
             Approved
           </Badge>
         )
@@ -170,21 +170,19 @@ export default function VehiclesPage() {
             </div>
             <div className="flex gap-2">
               <div className="relative">
-                <Search className="-translate-y-1/2 absolute top-1/2 left-2 size-4 text-muted-foreground" />
+                <Search className="absolute top-1/2 left-2 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   className="w-64 pl-8"
+                  onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search vehicles..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
               <Select
-                value={statusFilter || "all"}
                 onValueChange={(value) =>
-                  setStatusFilter(
-                    value === "all" ? undefined : (value as "pending" | "approved")
-                  )
+                  setStatusFilter(value === "all" ? undefined : (value as "pending" | "approved"))
                 }
+                value={statusFilter || "all"}
               >
                 <SelectTrigger className="w-40">
                   <SelectValue />
@@ -206,8 +204,7 @@ export default function VehiclesPage() {
                 {approvedVehicles.some((v: any) => selectedIds.has(v._id)) && (
                   <>
                     <Button
-                      variant="default"
-                      size="sm"
+                      disabled={isBulkProcessing}
                       onClick={() => {
                         const selectedApproved = vehicles.filter(
                           (v: any) => selectedIds.has(v._id) && v.status === "approved"
@@ -215,7 +212,8 @@ export default function VehiclesPage() {
                         const allActive = selectedApproved.every((v: any) => v.isActive !== false)
                         handleBulkSuspend(!allActive)
                       }}
-                      disabled={isBulkProcessing}
+                      size="sm"
+                      variant="default"
                     >
                       {isBulkProcessing ? (
                         <>
@@ -230,8 +228,7 @@ export default function VehiclesPage() {
                       )}
                     </Button>
                     <Button
-                      variant="outline"
-                      size="sm"
+                      disabled={isBulkProcessing}
                       onClick={() => {
                         const selectedApproved = vehicles.filter(
                           (v: any) => selectedIds.has(v._id) && v.status === "approved"
@@ -243,14 +240,15 @@ export default function VehiclesPage() {
                           handleBulkSuspend(true)
                         }
                       }}
-                      disabled={isBulkProcessing}
+                      size="sm"
+                      variant="outline"
                     >
                       <CheckCircle className="mr-2 size-4" />
                       Activate Selected
                     </Button>
                   </>
                 )}
-                <Button variant="outline" size="sm" onClick={() => setSelectedIds(new Set())}>
+                <Button onClick={() => setSelectedIds(new Set())} size="sm" variant="outline">
                   Clear Selection
                 </Button>
               </div>
@@ -274,7 +272,7 @@ export default function VehiclesPage() {
                     vehicle.images?.find((img: any) => img.isPrimary) || vehicle.images?.[0]
 
                   return (
-                    <Card key={vehicle._id} className="overflow-hidden">
+                    <Card className="overflow-hidden" key={vehicle._id}>
                       <CardContent className="p-6">
                         <div className="flex gap-4">
                           <div className="flex items-start pt-1">
@@ -287,9 +285,9 @@ export default function VehiclesPage() {
                             {primaryImage && (
                               <div className="flex-shrink-0">
                                 <img
-                                  src={primaryImage.cardUrl || primaryImage.imageUrl}
                                   alt={`${vehicle.make} ${vehicle.model}`}
                                   className="h-32 w-48 rounded-lg object-cover"
+                                  src={primaryImage.cardUrl || primaryImage.imageUrl}
                                 />
                               </div>
                             )}
@@ -310,14 +308,14 @@ export default function VehiclesPage() {
                                 <div className="flex gap-2">
                                   {vehicle.status === "approved" && (
                                     <Button
+                                      disabled={isProcessing}
                                       onClick={() =>
                                         handleSuspend(vehicle._id, vehicle.isActive !== false)
                                       }
-                                      disabled={isProcessing}
+                                      size="sm"
                                       variant={
                                         vehicle.isActive === false ? "default" : "destructive"
                                       }
-                                      size="sm"
                                     >
                                       {isProcessing ? (
                                         <>
@@ -338,7 +336,7 @@ export default function VehiclesPage() {
                                     </Button>
                                   )}
                                   <Link href={`/vehicles/${vehicle._id}`}>
-                                    <Button variant="outline" size="sm">
+                                    <Button size="sm" variant="outline">
                                       <Eye className="mr-2 size-4" />
                                       View Details
                                     </Button>
@@ -407,8 +405,6 @@ export default function VehiclesPage() {
                 <div className="mt-4">
                   <Pagination
                     currentPage={currentPage}
-                    totalPages={totalPages}
-                    onPageChange={handlePageChange}
                     hasMore={hasMore}
                     onLoadMore={() => {
                       if (result?.nextCursor) {
@@ -416,6 +412,8 @@ export default function VehiclesPage() {
                         setCurrentPage(currentPage + 1)
                       }
                     }}
+                    onPageChange={handlePageChange}
+                    totalPages={totalPages}
                   />
                 </div>
               )}

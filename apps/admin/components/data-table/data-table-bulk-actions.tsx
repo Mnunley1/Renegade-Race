@@ -22,9 +22,9 @@ export function DataTableBulkActions({ actions }: DataTableBulkActionsProps) {
         return (
           <Button
             key={action.label}
-            variant={action.variant ?? "outline"}
-            size="sm"
             onClick={action.onClick}
+            size="sm"
+            variant={action.variant ?? "outline"}
           >
             {Icon && <Icon className="mr-2 h-4 w-4" />}
             {action.label}

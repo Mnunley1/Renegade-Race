@@ -1,7 +1,5 @@
 "use client"
 
-import type { Id } from "@/lib/convex"
-import { api } from "@/lib/convex"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import {
@@ -27,16 +25,15 @@ import { Image as ImageIcon, Plus, Trash2, X } from "lucide-react"
 import Image from "next/image"
 import { useState } from "react"
 import { toast } from "sonner"
+import type { Id } from "@/lib/convex"
+import { api } from "@/lib/convex"
 
 interface DriverPortfolioProps {
   driverProfileId: Id<"driverProfiles">
   isOwner: boolean
 }
 
-export function DriverPortfolio({
-  driverProfileId,
-  isOwner,
-}: DriverPortfolioProps) {
+export function DriverPortfolio({ driverProfileId, isOwner }: DriverPortfolioProps) {
   const media = useQuery(api.driverMedia.getByDriver, { driverProfileId })
   const addMedia = useMutation(api.driverMedia.add)
   const removeMedia = useMutation(api.driverMedia.remove)
@@ -95,7 +92,7 @@ export function DriverPortfolio({
             Portfolio
           </CardTitle>
           {isOwner && (
-            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+            <Dialog onOpenChange={setIsAddDialogOpen} open={isAddDialogOpen}>
               <DialogTrigger asChild>
                 <Button size="sm">
                   <Plus className="mr-1 size-4" />
@@ -113,10 +110,10 @@ export function DriverPortfolio({
                   <div>
                     <Label>Type</Label>
                     <Select
-                      value={formData.type}
                       onValueChange={(v) =>
                         setFormData({ ...formData, type: v as "image" | "video" })
                       }
+                      value={formData.type}
                     >
                       <SelectTrigger>
                         <SelectValue />
@@ -130,30 +127,23 @@ export function DriverPortfolio({
                   <div>
                     <Label>URL</Label>
                     <Input
+                      onChange={(e) => setFormData({ ...formData, url: e.target.value })}
+                      placeholder="https://..."
                       type="url"
                       value={formData.url}
-                      onChange={(e) =>
-                        setFormData({ ...formData, url: e.target.value })
-                      }
-                      placeholder="https://..."
                     />
                   </div>
                   <div>
                     <Label>Caption (optional)</Label>
                     <Input
-                      value={formData.caption}
-                      onChange={(e) =>
-                        setFormData({ ...formData, caption: e.target.value })
-                      }
+                      onChange={(e) => setFormData({ ...formData, caption: e.target.value })}
                       placeholder="Describe this media"
+                      value={formData.caption}
                     />
                   </div>
                 </div>
                 <DialogFooter>
-                  <Button
-                    variant="outline"
-                    onClick={() => setIsAddDialogOpen(false)}
-                  >
+                  <Button onClick={() => setIsAddDialogOpen(false)} variant="outline">
                     Cancel
                   </Button>
                   <Button onClick={handleAddMedia}>Add</Button>
@@ -165,46 +155,39 @@ export function DriverPortfolio({
       </CardHeader>
       <CardContent>
         {media.length === 0 ? (
-          <p className="py-4 text-center text-muted-foreground text-sm">
-            No media yet
-          </p>
+          <p className="py-4 text-center text-muted-foreground text-sm">No media yet</p>
         ) : (
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
             {media.map((item) => (
-              <div key={item._id} className="group relative aspect-square">
+              <div className="group relative aspect-square" key={item._id}>
                 <button
-                  type="button"
                   className="size-full cursor-pointer overflow-hidden rounded-lg bg-muted text-left"
                   onClick={() => setSelectedMedia(item.url)}
+                  type="button"
                 >
                   {item.type === "image" ? (
                     <div className="relative size-full">
                       <Image
-                        src={item.url}
                         alt={item.caption || "Portfolio"}
-                        fill
                         className="object-cover"
+                        fill
+                        src={item.url}
                         unoptimized
                       />
                     </div>
                   ) : (
-                    <video
-                      src={item.url}
-                      className="size-full object-cover"
-                      muted
-                      playsInline
-                    />
+                    <video className="size-full object-cover" muted playsInline src={item.url} />
                   )}
                 </button>
                 {isOwner && (
                   <Button
-                    size="icon"
-                    variant="destructive"
                     className="absolute top-1 right-1 size-7 opacity-0 transition-opacity group-hover:opacity-100"
                     onClick={(e) => {
                       e.stopPropagation()
                       handleRemoveMedia(item._id)
                     }}
+                    size="icon"
+                    variant="destructive"
                   >
                     <Trash2 className="size-3" />
                   </Button>
@@ -215,27 +198,27 @@ export function DriverPortfolio({
         )}
       </CardContent>
 
-      <Dialog open={!!selectedMedia} onOpenChange={() => setSelectedMedia(null)}>
+      <Dialog onOpenChange={() => setSelectedMedia(null)} open={!!selectedMedia}>
         <DialogContent className="max-w-4xl">
           <Button
-            size="icon"
-            variant="ghost"
             className="absolute top-4 right-4"
             onClick={() => setSelectedMedia(null)}
+            size="icon"
+            variant="ghost"
           >
             <X className="size-4" />
           </Button>
           {selectedMedia && (
             <div className="mt-6">
               {selectedMedia.match(/\.(mp4|webm|ogg)$/i) ? (
-                <video src={selectedMedia} controls className="w-full rounded-lg" />
+                <video className="w-full rounded-lg" controls src={selectedMedia} />
               ) : (
                 <div className="relative aspect-video w-full">
                   <Image
-                    src={selectedMedia}
                     alt="Portfolio media"
-                    fill
                     className="rounded-lg object-contain"
+                    fill
+                    src={selectedMedia}
                     unoptimized
                   />
                 </div>

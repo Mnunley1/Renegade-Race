@@ -1,7 +1,7 @@
 import { v } from "convex/values"
-import { action, internalMutation, internalQuery, mutation, query } from "./_generated/server"
 import { internal } from "./_generated/api"
 import type { Id } from "./_generated/dataModel"
+import { action, internalMutation, internalQuery, mutation, query } from "./_generated/server"
 
 // Helper function to check if user is admin via Clerk metadata
 // Exported for reuse across all backend files
@@ -77,7 +77,7 @@ export const getAllUsers = query({
     return {
       users: filtered,
       hasMore: finalHasMore,
-      nextCursor: finalHasMore && filtered.length > 0 ? filtered[filtered.length - 1]!._id : null,
+      nextCursor: finalHasMore && filtered.length > 0 ? filtered.at(-1)?._id : null,
     }
   },
 })
@@ -549,7 +549,7 @@ export const getAllReservations = query({
     return {
       reservations: filtered,
       hasMore: finalHasMore,
-      nextCursor: finalHasMore && filtered.length > 0 ? filtered[filtered.length - 1]!._id : null,
+      nextCursor: finalHasMore && filtered.length > 0 ? filtered.at(-1)?._id : null,
     }
   },
 })
@@ -669,7 +669,7 @@ export const getAllReviews = query({
     return {
       reviews: filtered,
       hasMore: finalHasMore,
-      nextCursor: finalHasMore && filtered.length > 0 ? filtered[filtered.length - 1]!._id : null,
+      nextCursor: finalHasMore && filtered.length > 0 ? filtered.at(-1)?._id : null,
     }
   },
 })
@@ -823,7 +823,7 @@ export const getAllVehicles = query({
     return {
       vehicles: filtered,
       hasMore: finalHasMore,
-      nextCursor: finalHasMore && filtered.length > 0 ? filtered[filtered.length - 1]!._id : null,
+      nextCursor: finalHasMore && filtered.length > 0 ? filtered.at(-1)?._id : null,
     }
   },
 })
@@ -883,7 +883,9 @@ export const bulkDeleteReviews = mutation({
 
     const reviews = await Promise.all(args.reviewIds.map((id) => ctx.db.get(id)))
 
-    const reviewedIds = new Set(reviews.filter((r) => r).map((r) => r!.reviewedId))
+    const reviewedIds = new Set(
+      reviews.filter((r): r is NonNullable<typeof r> => r != null).map((r) => r.reviewedId)
+    )
 
     // Delete reviews
     await Promise.all(args.reviewIds.map((id) => ctx.db.delete(id)))
@@ -1042,7 +1044,7 @@ export const getAllPayments = query({
     return {
       payments: filtered,
       hasMore: finalHasMore,
-      nextCursor: finalHasMore && filtered.length > 0 ? filtered[filtered.length - 1]!._id : null,
+      nextCursor: finalHasMore && filtered.length > 0 ? filtered.at(-1)?._id : null,
     }
   },
 })
@@ -1703,9 +1705,7 @@ export const getUserGrowthTimeSeries = query({
     const end = new Date(endDate).getTime()
 
     const allUsers = await ctx.db.query("users").collect()
-    const usersInRange = allUsers.filter(
-      (u) => u._creationTime >= start && u._creationTime <= end
-    )
+    const usersInRange = allUsers.filter((u) => u._creationTime >= start && u._creationTime <= end)
 
     // Build date key helper
     function getDateKey(timestamp: number): string {
@@ -1735,9 +1735,7 @@ export const getUserGrowthTimeSeries = query({
 
     // Calculate cumulative totals
     const usersBeforeRange = allUsers.filter((u) => u._creationTime < start).length
-    const sortedEntries = Array.from(growthMap.entries()).sort((a, b) =>
-      a[0].localeCompare(b[0])
-    )
+    const sortedEntries = Array.from(growthMap.entries()).sort((a, b) => a[0].localeCompare(b[0]))
 
     let cumulative = usersBeforeRange
     const result = sortedEntries.map(([date, data]) => {
@@ -1803,7 +1801,10 @@ export const getTopUsers = query({
     const vehicleCountByOwner = new Map<string, number>()
     for (const vehicle of allVehicles) {
       if (!vehicle.deletedAt) {
-        vehicleCountByOwner.set(vehicle.ownerId, (vehicleCountByOwner.get(vehicle.ownerId) || 0) + 1)
+        vehicleCountByOwner.set(
+          vehicle.ownerId,
+          (vehicleCountByOwner.get(vehicle.ownerId) || 0) + 1
+        )
       }
     }
 
@@ -1844,9 +1845,7 @@ export const getVehicleTimeSeries = query({
     const end = new Date(endDate).getTime()
 
     const allVehicles = await ctx.db.query("vehicles").collect()
-    const vehiclesInRange = allVehicles.filter(
-      (v) => v.createdAt >= start && v.createdAt <= end
-    )
+    const vehiclesInRange = allVehicles.filter((v) => v.createdAt >= start && v.createdAt <= end)
 
     function getDateKey(timestamp: number): string {
       const date = new Date(timestamp)
@@ -1873,9 +1872,7 @@ export const getVehicleTimeSeries = query({
       (v) => v.createdAt < start && v.isActive && !v.deletedAt
     ).length
 
-    const sortedEntries = Array.from(listingsMap.entries()).sort((a, b) =>
-      a[0].localeCompare(b[0])
-    )
+    const sortedEntries = Array.from(listingsMap.entries()).sort((a, b) => a[0].localeCompare(b[0]))
 
     let cumulative = activeBeforeRange
     const result = sortedEntries.map(([date, newListings]) => {
@@ -1903,10 +1900,7 @@ export const getTopVehicles = query({
     )
 
     // Aggregate revenue and booking count per vehicle
-    const vehicleStats = new Map<
-      string,
-      { totalRevenue: number; bookingCount: number }
-    >()
+    const vehicleStats = new Map<string, { totalRevenue: number; bookingCount: number }>()
     for (const reservation of completedOrConfirmed) {
       const vehicleId = reservation.vehicleId as string
       const existing = vehicleStats.get(vehicleId) || {
@@ -2070,9 +2064,7 @@ export const getAdminConversationDetail = query({
     // Get all messages in this conversation
     const messages = await ctx.db
       .query("messages")
-      .withIndex("by_conversation_created", (q) =>
-        q.eq("conversationId", args.conversationId)
-      )
+      .withIndex("by_conversation_created", (q) => q.eq("conversationId", args.conversationId))
       .order("asc")
       .collect()
 
@@ -2111,9 +2103,7 @@ export const getAdminConversationDetail = query({
     ])
 
     // Get vehicle info if present
-    const vehicle = conversation.vehicleId
-      ? await ctx.db.get(conversation.vehicleId)
-      : null
+    const vehicle = conversation.vehicleId ? await ctx.db.get(conversation.vehicleId) : null
 
     return {
       conversation,

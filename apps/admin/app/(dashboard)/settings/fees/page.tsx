@@ -1,42 +1,43 @@
 "use client"
 
-import { useQuery } from "convex/react"
 import { api } from "@renegade/backend/convex/_generated/api"
-import { PageHeader } from "@/components/page-header"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
-import { StatCard } from "@/components/stat-card"
+import { useQuery } from "convex/react"
+import { Calendar, DollarSign, Percent, TrendingUp } from "lucide-react"
 import { LoadingState } from "@/components/loading-state"
-import { DollarSign, Percent, TrendingUp, Calendar } from "lucide-react"
+import { PageHeader } from "@/components/page-header"
+import { StatCard } from "@/components/stat-card"
 
 export default function FeesPage() {
   const settings = useQuery(api.admin.getPlatformSettings)
   const stats = useQuery(api.admin.getPlatformStats)
 
-  if (stats === undefined || settings === undefined) return <LoadingState message="Loading fee data..." />
+  if (stats === undefined || settings === undefined)
+    return <LoadingState message="Loading fee data..." />
 
   return (
     <div>
       <PageHeader
-        title="Fee Management"
-        description="Detailed view of platform fees and revenue"
         breadcrumbs={[{ label: "Settings", href: "/settings" }, { label: "Fees" }]}
+        description="Detailed view of platform fees and revenue"
+        title="Fee Management"
       />
 
       <div className="mb-6 grid gap-4 md:grid-cols-3">
         <StatCard
+          icon={<Percent className="h-4 w-4 text-muted-foreground" />}
           label="Fee Rate"
           value={`${settings?.platformFeePercentage ?? 0}%`}
-          icon={<Percent className="h-4 w-4 text-muted-foreground" />}
         />
         <StatCard
+          icon={<DollarSign className="h-4 w-4 text-muted-foreground" />}
           label="Min Fee"
           value={`$${((settings?.minimumPlatformFee ?? 0) / 100).toFixed(2)}`}
-          icon={<DollarSign className="h-4 w-4 text-muted-foreground" />}
         />
         <StatCard
+          icon={<DollarSign className="h-4 w-4 text-muted-foreground" />}
           label="Max Fee"
           value={`$${((settings?.maximumPlatformFee ?? 0) / 100).toFixed(2)}`}
-          icon={<DollarSign className="h-4 w-4 text-muted-foreground" />}
         />
       </div>
 

@@ -143,11 +143,11 @@ export default function VerifyEmailPage() {
             )}
 
             <div className="space-y-1.5 sm:space-y-2">
-              <Label htmlFor="code" className="text-sm">
+              <Label className="text-sm" htmlFor="code">
                 Verification Code
               </Label>
               <div className="relative">
-                <Mail className="-translate-y-1/2 absolute top-1/2 left-3 size-4 text-muted-foreground" />
+                <Mail className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   className="pl-10 text-center font-mono text-lg tracking-widest"
                   disabled={isLoading}

@@ -47,7 +47,7 @@ export function initSentry() {
     ],
 
     // Filter out sensitive data
-    beforeSend(event, hint) {
+    beforeSend(event, _hint) {
       // Don't send events in development unless explicitly testing
       // Note: In client-side code, only NEXT_PUBLIC_* env vars are available
       const isDebugMode = process.env.NEXT_PUBLIC_SENTRY_DEBUG === "true"

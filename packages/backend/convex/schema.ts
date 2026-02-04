@@ -179,7 +179,9 @@ export default defineSchema({
     minTripDuration: v.optional(v.string()),
     maxTripDuration: v.optional(v.string()),
     requireWeekendMin: v.optional(v.boolean()),
-    experienceLevel: v.optional(v.union(v.literal("beginner"), v.literal("intermediate"), v.literal("advanced"))),
+    experienceLevel: v.optional(
+      v.union(v.literal("beginner"), v.literal("intermediate"), v.literal("advanced"))
+    ),
     tireType: v.optional(v.string()),
     deliveryAvailable: v.optional(v.boolean()),
     // Cancellation policy
@@ -331,12 +333,16 @@ export default defineSchema({
     content: v.string(),
     messageType: v.union(v.literal("text"), v.literal("image"), v.literal("system")),
     replyTo: v.optional(v.id("messages")),
-    attachments: v.optional(v.array(v.object({
-      type: v.union(v.literal("image"), v.literal("pdf")),
-      url: v.string(),
-      fileName: v.string(),
-      fileSize: v.number(),
-    }))),
+    attachments: v.optional(
+      v.array(
+        v.object({
+          type: v.union(v.literal("image"), v.literal("pdf")),
+          url: v.string(),
+          fileName: v.string(),
+          fileSize: v.number(),
+        })
+      )
+    ),
     isRead: v.boolean(),
     readAt: v.optional(v.number()),
     createdAt: v.number(),
@@ -857,12 +863,7 @@ export default defineSchema({
     teamId: v.id("teams"),
     driverProfileId: v.optional(v.id("driverProfiles")),
     userId: v.string(),
-    role: v.union(
-      v.literal("owner"),
-      v.literal("driver"),
-      v.literal("crew"),
-      v.literal("manager")
-    ),
+    role: v.union(v.literal("owner"), v.literal("driver"), v.literal("crew"), v.literal("manager")),
     joinedAt: v.number(),
     status: v.union(v.literal("active"), v.literal("inactive")),
     createdAt: v.number(),

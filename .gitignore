@@ -40,6 +40,16 @@ yarn-error.log*
 # Misc
 .DS_Store
 *.pem
+Thumbs.db
+
+# Large media (served from R2/CDN)
+*.mp4
+
+# Editor
+*.swp
+*.swo
+*~
+.idea/
 
 # Sentry
 sentry.properties

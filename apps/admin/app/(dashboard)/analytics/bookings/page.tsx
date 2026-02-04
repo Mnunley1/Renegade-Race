@@ -1,25 +1,25 @@
 "use client"
 
-import { useQuery } from "convex/react"
 import { api } from "@renegade/backend/convex/_generated/api"
-import { PageHeader } from "@/components/page-header"
-import { StatCard } from "@/components/stat-card"
-import { ChartWrapper } from "@/components/chart-wrapper"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
-import { LoadingState } from "@/components/loading-state"
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-} from "recharts"
+import { useQuery } from "convex/react"
+import { format } from "date-fns"
 import { Calendar, CheckCircle, Clock, XCircle } from "lucide-react"
 import { useState } from "react"
-import { format } from "date-fns"
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  Legend,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts"
+import { ChartWrapper } from "@/components/chart-wrapper"
+import { LoadingState } from "@/components/loading-state"
+import { PageHeader } from "@/components/page-header"
+import { StatCard } from "@/components/stat-card"
 
 function getDateRange(range: "7d" | "30d" | "90d" | "ytd"): { startDate: string; endDate: string } {
   const now = new Date()
@@ -54,7 +54,7 @@ export default function BookingAnalyticsPage() {
   })
   const bookingFunnel = useQuery(api.admin.getBookingFunnel)
 
-  if (!stats || !bookingData || !bookingFunnel) {
+  if (!(stats && bookingData && bookingFunnel)) {
     return <LoadingState message="Loading booking analytics..." />
   }
 
@@ -105,46 +105,46 @@ export default function BookingAnalyticsPage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Booking Analytics"
-        description="Track booking trends and conversion metrics"
         breadcrumbs={[
           { label: "Dashboard", href: "/dashboard" },
           { label: "Analytics", href: "/analytics" },
           { label: "Bookings" },
         ]}
+        description="Track booking trends and conversion metrics"
+        title="Booking Analytics"
       />
 
       <div className="grid gap-6 md:grid-cols-4">
         <StatCard
+          icon={<Calendar className="h-4 w-4 text-muted-foreground" />}
           label="Total Bookings"
           value={stats.reservations.total.toString()}
-          icon={<Calendar className="h-4 w-4 text-muted-foreground" />}
         />
         <StatCard
+          icon={<Clock className="h-4 w-4 text-muted-foreground" />}
           label="Confirmed"
           value={stats.reservations.confirmed.toString()}
-          icon={<Clock className="h-4 w-4 text-muted-foreground" />}
         />
         <StatCard
+          icon={<CheckCircle className="h-4 w-4 text-muted-foreground" />}
           label="Completed"
           value={stats.reservations.completed.toString()}
-          icon={<CheckCircle className="h-4 w-4 text-muted-foreground" />}
         />
         <StatCard
+          icon={<XCircle className="h-4 w-4 text-muted-foreground" />}
           label="Cancelled"
           value={stats.reservations.cancelled.toString()}
-          icon={<XCircle className="h-4 w-4 text-muted-foreground" />}
         />
       </div>
 
       <ChartWrapper
-        title="Booking Trends Over Time"
-        granularity={granularity}
-        onGranularityChange={setGranularity}
         dateRange={dateRange}
+        granularity={granularity}
         onDateRangeChange={setDateRange}
+        onGranularityChange={setGranularity}
+        title="Booking Trends Over Time"
       >
-        <ResponsiveContainer width="100%" height={400}>
+        <ResponsiveContainer height={400} width="100%">
           <AreaChart data={chartData}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="date" />
@@ -152,32 +152,32 @@ export default function BookingAnalyticsPage() {
             <Tooltip />
             <Legend />
             <Area
-              type="monotone"
               dataKey="Created"
-              stroke="#8b5cf6"
               fill="#8b5cf6"
               fillOpacity={0.6}
+              stroke="#8b5cf6"
+              type="monotone"
             />
             <Area
-              type="monotone"
               dataKey="Confirmed"
-              stroke="#3b82f6"
               fill="#3b82f6"
               fillOpacity={0.6}
+              stroke="#3b82f6"
+              type="monotone"
             />
             <Area
-              type="monotone"
               dataKey="Completed"
-              stroke="#10b981"
               fill="#10b981"
               fillOpacity={0.6}
+              stroke="#10b981"
+              type="monotone"
             />
             <Area
-              type="monotone"
               dataKey="Cancelled"
-              stroke="#ef4444"
               fill="#ef4444"
               fillOpacity={0.6}
+              stroke="#ef4444"
+              type="monotone"
             />
           </AreaChart>
         </ResponsiveContainer>
@@ -194,7 +194,7 @@ export default function BookingAnalyticsPage() {
           </div>
           <div className="space-y-4">
             {funnelData.map((item, index) => (
-              <div key={item.label} className="space-y-2">
+              <div className="space-y-2" key={item.label}>
                 <div className="flex items-center justify-between text-sm">
                   <span className="font-medium">{item.label}</span>
                   <span className="text-muted-foreground">

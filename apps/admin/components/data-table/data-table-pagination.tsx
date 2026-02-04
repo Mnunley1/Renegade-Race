@@ -29,10 +29,10 @@ export function DataTablePagination({
       </p>
       <div className="flex items-center gap-2">
         <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onPageChange(page - 1)}
           disabled={page === 0}
+          onClick={() => onPageChange(page - 1)}
+          size="sm"
+          variant="outline"
         >
           <ChevronLeft className="h-4 w-4" />
         </Button>
@@ -41,10 +41,10 @@ export function DataTablePagination({
           {totalPages > 0 ? ` of ${totalPages}` : ""}
         </span>
         <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onPageChange(page + 1)}
           disabled={!hasMore && page >= totalPages - 1}
+          onClick={() => onPageChange(page + 1)}
+          size="sm"
+          variant="outline"
         >
           <ChevronRight className="h-4 w-4" />
         </Button>

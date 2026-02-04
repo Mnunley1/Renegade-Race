@@ -1,11 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { useMutation } from "convex/react"
 import { api } from "@renegade/backend/convex/_generated/api"
 import type { Id } from "@renegade/backend/convex/_generated/dataModel"
-import { Button } from "@workspace/ui/components/button"
-import { Card, CardContent } from "@workspace/ui/components/card"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,14 +13,18 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@workspace/ui/components/alert-dialog"
+import { Button } from "@workspace/ui/components/button"
+import { Card, CardContent } from "@workspace/ui/components/card"
 import { cn } from "@workspace/ui/lib/utils"
+import { useMutation } from "convex/react"
 import { Calendar, Car, ChevronRight, Clock, MapPin, XCircle } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import type { ComponentProps } from "react"
-import { formatDateForDisplay } from "@/lib/date-utils"
-import { StatusBadge } from "@/components/status-badge"
+import { useState } from "react"
 import { toast } from "sonner"
+import { StatusBadge } from "@/components/status-badge"
+import { formatDateForDisplay } from "@/lib/date-utils"
 
 interface TripCardProps extends ComponentProps<"div"> {
   reservationId: string
@@ -69,7 +69,7 @@ function calculateRefundTier(startDate: string): {
   refundAmount: (totalAmount: number) => number
 } {
   const now = new Date()
-  const start = new Date(startDate + "T00:00:00")
+  const start = new Date(`${startDate}T00:00:00`)
 
   // Set both to start of day for comparison
   now.setHours(0, 0, 0, 0)
@@ -172,7 +172,7 @@ export function TripCard({
 
         {/* Status Badge */}
         <div className="absolute top-3 left-3 z-10">
-          <StatusBadge status={status} className="bg-background/90 backdrop-blur-sm" />
+          <StatusBadge className="bg-background/90 backdrop-blur-sm" status={status} />
         </div>
       </div>
 
@@ -273,12 +273,12 @@ export function TripCard({
 
             {/* Cancel Button for pending/confirmed reservations */}
             {canCancel && (
-              <AlertDialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <AlertDialog onOpenChange={setIsDialogOpen} open={isDialogOpen}>
                 <AlertDialogTrigger asChild>
                   <Button
-                    variant="destructive"
                     className="w-full"
                     onClick={(e) => e.stopPropagation()}
+                    variant="destructive"
                   >
                     <XCircle className="mr-2 size-4" />
                     Cancel Reservation
@@ -349,9 +349,9 @@ export function TripCard({
                   <AlertDialogFooter>
                     <AlertDialogCancel disabled={isCancelling}>Keep Reservation</AlertDialogCancel>
                     <AlertDialogAction
-                      onClick={handleCancel}
-                      disabled={isCancelling}
                       className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      disabled={isCancelling}
+                      onClick={handleCancel}
                     >
                       {isCancelling ? "Cancelling..." : "Yes, Cancel Reservation"}
                     </AlertDialogAction>

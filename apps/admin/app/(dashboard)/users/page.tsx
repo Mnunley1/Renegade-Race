@@ -1,9 +1,6 @@
 "use client"
 
-import { useQuery, useMutation } from "convex/react"
-import { useState, useMemo } from "react"
-import Link from "next/link"
-import { api } from "@/lib/convex"
+import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import {
   Card,
@@ -12,13 +9,16 @@ import {
   CardHeader,
   CardTitle,
 } from "@workspace/ui/components/card"
-import { Badge } from "@workspace/ui/components/badge"
 import { Input } from "@workspace/ui/components/input"
-import { Search, Ban, UserCheck, Loader2, Users } from "lucide-react"
+import { useMutation, useQuery } from "convex/react"
+import { Ban, Loader2, Search, UserCheck, Users } from "lucide-react"
+import Link from "next/link"
+import { useMemo, useState } from "react"
 import { toast } from "sonner"
 import { Pagination } from "@/components/pagination"
-import { handleErrorWithContext } from "@/lib/error-handler"
 import type { Id } from "@/lib/convex"
+import { api } from "@/lib/convex"
+import { handleErrorWithContext } from "@/lib/error-handler"
 
 export default function UsersPage() {
   const [searchQuery, setSearchQuery] = useState("")
@@ -107,12 +107,12 @@ export default function UsersPage() {
               </CardDescription>
             </div>
             <div className="relative">
-              <Search className="-translate-y-1/2 absolute top-1/2 left-2 size-4 text-muted-foreground" />
+              <Search className="absolute top-1/2 left-2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 className="w-64 pl-8"
+                onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search users..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
           </div>
@@ -153,16 +153,16 @@ export default function UsersPage() {
                           </div>
                           <div className="flex gap-2">
                             <Link href={`/users/${user._id}`}>
-                              <Button variant="outline" size="sm">
+                              <Button size="sm" variant="outline">
                                 View Details
                               </Button>
                             </Link>
                             {isBanned ? (
                               <Button
-                                onClick={() => handleUnban(user._id)}
                                 disabled={isProcessing}
-                                variant="outline"
+                                onClick={() => handleUnban(user._id)}
                                 size="sm"
+                                variant="outline"
                               >
                                 {isProcessing ? (
                                   <>
@@ -178,10 +178,10 @@ export default function UsersPage() {
                               </Button>
                             ) : (
                               <Button
-                                onClick={() => handleBan(user._id)}
                                 disabled={isProcessing}
-                                variant="destructive"
+                                onClick={() => handleBan(user._id)}
                                 size="sm"
+                                variant="destructive"
                               >
                                 {isProcessing ? (
                                   <>
@@ -207,8 +207,6 @@ export default function UsersPage() {
                 <div className="mt-4">
                   <Pagination
                     currentPage={currentPage}
-                    totalPages={totalPages}
-                    onPageChange={handlePageChange}
                     hasMore={hasMore}
                     onLoadMore={() => {
                       if (result?.nextCursor) {
@@ -216,6 +214,8 @@ export default function UsersPage() {
                         setCurrentPage(currentPage + 1)
                       }
                     }}
+                    onPageChange={handlePageChange}
+                    totalPages={totalPages}
                   />
                 </div>
               )}

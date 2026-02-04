@@ -1,6 +1,7 @@
 "use client"
 
 import { useUser } from "@clerk/nextjs"
+import { Image, ImageKitProvider } from "@imagekit/next"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import {
@@ -29,7 +30,6 @@ import {
   Star,
   XCircle,
 } from "lucide-react"
-import { Image, ImageKitProvider } from "@imagekit/next"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Suspense, useEffect, useMemo, useState } from "react"
@@ -374,10 +374,10 @@ function HostDashboardContent() {
                   </div>
                 </div>
                 <Button
+                  className="shrink-0 bg-amber-600 text-white hover:bg-amber-700 dark:bg-amber-500 dark:hover:bg-amber-600"
                   disabled={isLoadingConnect || !user?.id}
                   onClick={handleOnboarding}
                   size="lg"
-                  className="shrink-0 bg-amber-600 text-white hover:bg-amber-700 dark:bg-amber-500 dark:hover:bg-amber-600"
                 >
                   {isLoadingConnect ? (
                     <>
@@ -533,7 +533,7 @@ function HostDashboardContent() {
                       const hasImage = primaryImage?.cardUrl
 
                       return (
-                        <Link key={reservation._id} href={`/host/reservations/${reservation._id}`}>
+                        <Link href={`/host/reservations/${reservation._id}`} key={reservation._id}>
                           <div className="flex items-center gap-4 rounded-lg border bg-background p-4 transition-colors hover:bg-muted/50">
                             <div className="relative flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted">
                               {hasImage && primaryImage?.cardUrl ? (
@@ -613,7 +613,7 @@ function HostDashboardContent() {
                         bookings: number
                         earnings: number
                       }) => (
-                        <Link key={vehicle.id} href={`/host/vehicles/${vehicle.id}`}>
+                        <Link href={`/host/vehicles/${vehicle.id}`} key={vehicle.id}>
                           <Card className="group overflow-hidden transition-all hover:shadow-lg">
                             <div className="flex flex-col sm:flex-row">
                               {/* Vehicle Image - Larger and more prominent */}
@@ -627,9 +627,9 @@ function HostDashboardContent() {
                                   >
                                     <Image
                                       alt={vehicle.name}
-                                      src={`/${vehicle.imageKey}`}
-                                      fill
                                       className="object-cover transition-transform duration-300 group-hover:scale-105"
+                                      fill
+                                      src={`/${vehicle.imageKey}`}
                                       transformation={[{ width: 400, height: 300, quality: 80 }]}
                                     />
                                   </ImageKitProvider>
@@ -840,14 +840,14 @@ function HostDashboardContent() {
                 <Separator />
                 <div className="flex flex-col gap-2">
                   <Button
-                    disabled={isLoadingConnect || !user?.id}
-                    onClick={handleOnboarding}
-                    size="sm"
                     className={
                       connectStatus && !connectStatus.isComplete
                         ? "bg-red-600 text-white hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600"
                         : ""
                     }
+                    disabled={isLoadingConnect || !user?.id}
+                    onClick={handleOnboarding}
+                    size="sm"
                   >
                     {isLoadingConnect
                       ? "Working..."
@@ -859,8 +859,8 @@ function HostDashboardContent() {
                     <Button
                       disabled={isLoadingConnect || !user?.id}
                       onClick={handleOpenDashboard}
-                      variant="outline"
                       size="sm"
+                      variant="outline"
                     >
                       Stripe Dashboard
                     </Button>

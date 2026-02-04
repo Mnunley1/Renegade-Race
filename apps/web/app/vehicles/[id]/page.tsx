@@ -277,9 +277,7 @@ function VehicleDetailsPageContent() {
       await toggleFavorite({
         vehicleId: id as Id<"vehicles">,
       })
-      toast.success(
-        isFavorite ? "Removed from favorites" : "Added to favorites"
-      )
+      toast.success(isFavorite ? "Removed from favorites" : "Added to favorites")
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : ""
       if (errorMessage.includes("Not authenticated") || errorMessage.includes("authentication")) {
@@ -816,7 +814,6 @@ function VehicleDetailsPageContent() {
                 <Separator />
               </>
             )}
-
 
             {/* ── Reviews ───────────────────────────────────── */}
             <section>

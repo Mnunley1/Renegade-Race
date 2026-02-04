@@ -12,9 +12,9 @@ import {
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import { ArrowRight, Eye, EyeOff, Lock, Mail } from "lucide-react"
-import { useSearchParams, useRouter } from "next/navigation"
-import { Suspense, useEffect, useState, useMemo } from "react"
 import Image from "next/image"
+import { useRouter, useSearchParams } from "next/navigation"
+import { Suspense, useEffect, useMemo, useState } from "react"
 
 type ClerkError = {
   errors?: Array<{ message: string }>
@@ -104,12 +104,12 @@ function AdminSignInPageContent() {
         <div className="text-center">
           <div className="mb-4 flex justify-center">
             <Image
-              src="/logo.png"
               alt="Renegade Rentals Logo"
-              width={120}
-              height={120}
               className="rounded-full"
+              height={120}
               priority
+              src="/logo.png"
+              width={120}
             />
           </div>
           <h1 className="mb-2 font-bold text-3xl">Admin Portal</h1>
@@ -132,7 +132,7 @@ function AdminSignInPageContent() {
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <div className="relative">
-                  <Mail className="-translate-y-1/2 absolute top-1/2 left-3 size-4 text-muted-foreground" />
+                  <Mail className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     className="pl-10"
                     disabled={isLoading}
@@ -149,7 +149,7 @@ function AdminSignInPageContent() {
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
                 <div className="relative">
-                  <Lock className="-translate-y-1/2 absolute top-1/2 left-3 size-4 text-muted-foreground" />
+                  <Lock className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     className="pr-10 pl-10"
                     disabled={isLoading}
@@ -161,7 +161,7 @@ function AdminSignInPageContent() {
                     value={password}
                   />
                   <button
-                    className="-translate-y-1/2 absolute top-1/2 right-3 text-muted-foreground transition-colors hover:text-foreground"
+                    className="absolute top-1/2 right-3 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
                     onClick={(e) => {
                       e.preventDefault()
                       setShowPassword(!showPassword)
@@ -194,12 +194,12 @@ export default function AdminSignInPage() {
             <div className="text-center">
               <div className="mb-4 flex justify-center">
                 <Image
-                  src="/logo.png"
                   alt="Renegade Rentals Logo"
-                  width={120}
-                  height={120}
                   className="rounded-full"
+                  height={120}
                   priority
+                  src="/logo.png"
+                  width={120}
                 />
               </div>
               <h1 className="mb-2 font-bold text-3xl">Admin Portal</h1>

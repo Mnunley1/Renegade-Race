@@ -1,9 +1,9 @@
 "use client"
 
-import { api } from "@/lib/convex"
 import { Card, CardContent } from "@workspace/ui/components/card"
 import { useQuery } from "convex/react"
 import { Eye } from "lucide-react"
+import { api } from "@/lib/convex"
 
 interface ProfileAnalyticsProps {
   profileId: string

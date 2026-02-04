@@ -1,8 +1,6 @@
 "use client"
 
-import { useQuery, useMutation } from "convex/react"
-import { useState } from "react"
-import { api } from "@/lib/convex"
+import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import {
   Card,
@@ -23,10 +21,12 @@ import {
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import { Textarea } from "@workspace/ui/components/textarea"
-import { Badge } from "@workspace/ui/components/badge"
-import { MapPin, Plus, Edit, Trash2, Loader2, Check, X } from "lucide-react"
+import { useMutation, useQuery } from "convex/react"
+import { Check, Edit, Loader2, MapPin, Plus, Trash2, X } from "lucide-react"
+import { useState } from "react"
 import { toast } from "sonner"
 import type { Id } from "@/lib/convex"
+import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 
 export default function TracksPage() {
@@ -154,7 +154,7 @@ export default function TracksPage() {
           <h1 className="font-bold text-3xl">Track Management</h1>
           <p className="mt-2 text-muted-foreground">Manage racing tracks</p>
         </div>
-        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+        <Dialog onOpenChange={setIsCreateOpen} open={isCreateOpen}>
           <DialogTrigger asChild>
             <Button onClick={resetForm}>
               <Plus className="mr-2 size-4" />
@@ -171,57 +171,57 @@ export default function TracksPage() {
                 <Label htmlFor="create-name">Name *</Label>
                 <Input
                   id="create-name"
-                  value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder="Track name"
                   required
+                  value={formData.name}
                 />
               </div>
               <div>
                 <Label htmlFor="create-location">Location *</Label>
                 <Input
                   id="create-location"
-                  value={formData.location}
                   onChange={(e) => setFormData({ ...formData, location: e.target.value })}
                   placeholder="City, State"
                   required
+                  value={formData.location}
                 />
               </div>
               <div>
                 <Label htmlFor="create-description">Description</Label>
                 <Textarea
                   id="create-description"
-                  value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   placeholder="Track description"
                   rows={4}
+                  value={formData.description}
                 />
               </div>
               <div>
                 <Label htmlFor="create-imageUrl">Image URL</Label>
                 <Input
                   id="create-imageUrl"
-                  value={formData.imageUrl}
                   onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
                   placeholder="https://example.com/image.jpg"
+                  value={formData.imageUrl}
                 />
               </div>
               <div className="flex items-center gap-2">
                 <input
-                  type="checkbox"
-                  id="create-active"
                   checked={formData.isActive}
-                  onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
                   className="rounded"
+                  id="create-active"
+                  onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
+                  type="checkbox"
                 />
                 <Label htmlFor="create-active">Active</Label>
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
+              <Button onClick={() => setIsCreateOpen(false)} variant="outline">
                 Cancel
               </Button>
-              <Button onClick={handleCreate} disabled={isProcessing}>
+              <Button disabled={isProcessing} onClick={handleCreate}>
                 {isProcessing ? (
                   <>
                     <Loader2 className="mr-2 size-4 animate-spin" />
@@ -270,22 +270,22 @@ export default function TracksPage() {
                         )}
                         {track.imageUrl && (
                           <img
-                            src={track.imageUrl}
                             alt={track.name}
                             className="mt-3 h-32 w-48 rounded-lg object-cover"
+                            src={track.imageUrl}
                           />
                         )}
                       </div>
                       <div className="flex gap-2">
-                        <Button variant="outline" size="sm" onClick={() => openEditDialog(track)}>
+                        <Button onClick={() => openEditDialog(track)} size="sm" variant="outline">
                           <Edit className="mr-2 size-4" />
                           Edit
                         </Button>
                         <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => handleDelete(track._id)}
                           disabled={isDeleting === track._id}
+                          onClick={() => handleDelete(track._id)}
+                          size="sm"
+                          variant="destructive"
                         >
                           {isDeleting === track._id ? (
                             <>
@@ -314,7 +314,7 @@ export default function TracksPage() {
         </CardContent>
       </Card>
 
-      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+      <Dialog onOpenChange={setIsEditOpen} open={isEditOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Edit Track</DialogTitle>
@@ -325,57 +325,57 @@ export default function TracksPage() {
               <Label htmlFor="edit-name">Name *</Label>
               <Input
                 id="edit-name"
-                value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 placeholder="Track name"
                 required
+                value={formData.name}
               />
             </div>
             <div>
               <Label htmlFor="edit-location">Location *</Label>
               <Input
                 id="edit-location"
-                value={formData.location}
                 onChange={(e) => setFormData({ ...formData, location: e.target.value })}
                 placeholder="City, State"
                 required
+                value={formData.location}
               />
             </div>
             <div>
               <Label htmlFor="edit-description">Description</Label>
               <Textarea
                 id="edit-description"
-                value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 placeholder="Track description"
                 rows={4}
+                value={formData.description}
               />
             </div>
             <div>
               <Label htmlFor="edit-imageUrl">Image URL</Label>
               <Input
                 id="edit-imageUrl"
-                value={formData.imageUrl}
                 onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
                 placeholder="https://example.com/image.jpg"
+                value={formData.imageUrl}
               />
             </div>
             <div className="flex items-center gap-2">
               <input
-                type="checkbox"
-                id="edit-active"
                 checked={formData.isActive}
-                onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
                 className="rounded"
+                id="edit-active"
+                onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
+                type="checkbox"
               />
               <Label htmlFor="edit-active">Active</Label>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEditOpen(false)}>
+            <Button onClick={() => setIsEditOpen(false)} variant="outline">
               Cancel
             </Button>
-            <Button onClick={handleEdit} disabled={isProcessing}>
+            <Button disabled={isProcessing} onClick={handleEdit}>
               {isProcessing ? (
                 <>
                   <Loader2 className="mr-2 size-4 animate-spin" />

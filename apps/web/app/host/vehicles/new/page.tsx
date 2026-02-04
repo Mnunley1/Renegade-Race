@@ -27,8 +27,8 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
-import { api } from "@/lib/convex"
 import type { Id } from "@/lib/convex"
+import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 
 const ADVANCE_NOTICE_OPTIONS = [
@@ -669,7 +669,7 @@ export default function CreateVehiclePage() {
                       )}
                     </div>
                     <Button
-                      className="-right-2 -top-2 absolute size-6 rounded-full p-0"
+                      className="absolute -top-2 -right-2 size-6 rounded-full p-0"
                       onClick={() => removeImage(index)}
                       size="icon"
                       type="button"

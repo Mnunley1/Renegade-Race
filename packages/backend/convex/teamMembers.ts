@@ -7,12 +7,7 @@ export const addMember = mutation({
     teamId: v.id("teams"),
     userId: v.string(),
     driverProfileId: v.optional(v.id("driverProfiles")),
-    role: v.union(
-      v.literal("owner"),
-      v.literal("driver"),
-      v.literal("crew"),
-      v.literal("manager")
-    ),
+    role: v.union(v.literal("owner"), v.literal("driver"), v.literal("crew"), v.literal("manager")),
   },
   handler: async (ctx, args) => {
     const user = await getCurrentUserOrThrow(ctx)
@@ -25,9 +20,7 @@ export const addMember = mutation({
     // Check for existing membership
     const existing = await ctx.db
       .query("teamMembers")
-      .withIndex("by_team_user", (q) =>
-        q.eq("teamId", args.teamId).eq("userId", args.userId)
-      )
+      .withIndex("by_team_user", (q) => q.eq("teamId", args.teamId).eq("userId", args.userId))
       .first()
 
     if (existing) {
@@ -81,11 +74,7 @@ export const removeMember = mutation({
 export const updateRole = mutation({
   args: {
     memberId: v.id("teamMembers"),
-    role: v.union(
-      v.literal("driver"),
-      v.literal("crew"),
-      v.literal("manager")
-    ),
+    role: v.union(v.literal("driver"), v.literal("crew"), v.literal("manager")),
   },
   handler: async (ctx, args) => {
     const user = await getCurrentUserOrThrow(ctx)
@@ -114,9 +103,7 @@ export const getByTeam = query({
   handler: async (ctx, args) => {
     const members = await ctx.db
       .query("teamMembers")
-      .withIndex("by_team_status", (q) =>
-        q.eq("teamId", args.teamId).eq("status", "active")
-      )
+      .withIndex("by_team_status", (q) => q.eq("teamId", args.teamId).eq("status", "active"))
       .collect()
 
     // Enrich with user and driver profile data

@@ -47,8 +47,8 @@ import { useParams, useRouter } from "next/navigation"
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
 import { VehicleGallery } from "@/components/vehicle-gallery"
-import { api } from "@/lib/convex"
 import type { Id } from "@/lib/convex"
+import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 
 export default function HostVehicleDetailPage() {
@@ -268,7 +268,7 @@ export default function HostVehicleDetailPage() {
           </div>
           <div className="flex gap-2">
             <Link href={`/vehicles/${vehicleId}`}>
-              <Button variant="outline" size="sm">
+              <Button size="sm" variant="outline">
                 <Eye className="mr-2 size-4" />
                 View Listing
               </Button>
@@ -358,7 +358,7 @@ export default function HostVehicleDetailPage() {
                     </CardDescription>
                   </div>
                   <Link href={`/host/reservations?status=pending&vehicleId=${vehicleId}`}>
-                    <Button variant="outline" size="sm">
+                    <Button size="sm" variant="outline">
                       View All
                       <ArrowRight className="ml-2 size-4" />
                     </Button>
@@ -370,7 +370,7 @@ export default function HostVehicleDetailPage() {
                   {pendingReservations.slice(0, 3).map((reservation: any) => {
                     const renterName = reservation.renter?.name || "Guest"
                     return (
-                      <Link key={reservation._id} href={`/host/reservations/${reservation._id}`}>
+                      <Link href={`/host/reservations/${reservation._id}`} key={reservation._id}>
                         <div className="flex items-center justify-between rounded-lg border bg-background p-4 transition-colors hover:bg-muted/50">
                           <div className="min-w-0 flex-1">
                             <p className="font-semibold text-sm">{renterName}</p>
@@ -405,7 +405,7 @@ export default function HostVehicleDetailPage() {
                     </CardDescription>
                   </div>
                   <Link href={`/host/reservations?vehicleId=${vehicleId}`}>
-                    <Button variant="outline" size="sm">
+                    <Button size="sm" variant="outline">
                       View All
                       <ArrowRight className="ml-2 size-4" />
                     </Button>
@@ -417,7 +417,7 @@ export default function HostVehicleDetailPage() {
                   {upcomingReservations.map((reservation: any) => {
                     const renterName = reservation.renter?.name || "Guest"
                     return (
-                      <Link key={reservation._id} href={`/host/reservations/${reservation._id}`}>
+                      <Link href={`/host/reservations/${reservation._id}`} key={reservation._id}>
                         <div className="flex items-center justify-between rounded-lg border p-4 transition-colors hover:bg-muted/50">
                           <div className="min-w-0 flex-1">
                             <p className="font-semibold text-sm">{renterName}</p>

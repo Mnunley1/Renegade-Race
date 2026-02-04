@@ -1,6 +1,7 @@
 "use client"
 
 import { useUser } from "@clerk/nextjs"
+import type { Id } from "@renegade/backend/convex/_generated/dataModel"
 import { Button } from "@workspace/ui/components/button"
 import {
   Dialog,
@@ -18,7 +19,6 @@ import { AlertCircle } from "lucide-react"
 import { useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/lib/convex"
-import type { Id } from "@renegade/backend/convex/_generated/dataModel"
 
 type ReportDialogProps = {
   type: "user" | "vehicle" | "review"

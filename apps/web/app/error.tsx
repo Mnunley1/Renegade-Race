@@ -1,11 +1,11 @@
 "use client"
 
+import * as Sentry from "@sentry/nextjs"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
-import { Home, RefreshCw, AlertTriangle } from "lucide-react"
+import { AlertTriangle, Home, RefreshCw } from "lucide-react"
 import Link from "next/link"
 import { useEffect } from "react"
-import * as Sentry from "@sentry/nextjs"
 
 export default function Error({
   error,
@@ -17,7 +17,6 @@ export default function Error({
   useEffect(() => {
     // Log error to console for debugging (in development)
     if (process.env.NODE_ENV === "development") {
-      console.error("Route error:", error)
     }
 
     // Send to Sentry in production
@@ -55,7 +54,7 @@ export default function Error({
           )}
 
           <div className="flex flex-col gap-3 sm:flex-row">
-            <Button onClick={reset} className="flex-1" variant="default">
+            <Button className="flex-1" onClick={reset} variant="default">
               <RefreshCw className="mr-2 size-4" />
               Try Again
             </Button>
@@ -69,7 +68,7 @@ export default function Error({
 
           <p className="text-muted-foreground text-xs">
             If this problem persists, please{" "}
-            <Link href="/contact" className="text-primary underline">
+            <Link className="text-primary underline" href="/contact">
               contact support
             </Link>
             .

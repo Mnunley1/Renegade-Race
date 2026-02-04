@@ -1,12 +1,12 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import Link from "next/link"
 import { Button } from "@workspace/ui/components/button"
 import { Card } from "@workspace/ui/components/card"
+import { cn } from "@workspace/ui/lib/utils"
+import Link from "next/link"
+import { useEffect, useState } from "react"
 import { useCookieConsent } from "@/hooks/useCookieConsent"
 import { loadSentry } from "@/lib/sentry-loader"
-import { cn } from "@workspace/ui/lib/utils"
 
 export function CookieConsentBanner() {
   const { needsConsent, acceptCookies, rejectCookies, isLoading } = useCookieConsent()
@@ -37,13 +37,13 @@ export function CookieConsentBanner() {
 
   return (
     <div
+      aria-label="Cookie consent"
+      aria-modal="false"
       className={cn(
         "slide-in-from-bottom fixed right-0 bottom-0 left-0 z-50 animate-in duration-300",
         "border-border border-t bg-background/95 shadow-lg backdrop-blur-sm"
       )}
       role="dialog"
-      aria-label="Cookie consent"
-      aria-modal="false"
     >
       <Card className="rounded-none border-0 shadow-none">
         <div className="container mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
@@ -53,10 +53,10 @@ export function CookieConsentBanner() {
                 We use cookies to enhance your experience, analyze site usage, and assist in our
                 error tracking efforts. By clicking "Accept", you consent to our use of cookies.{" "}
                 <Link
-                  href="/privacy"
                   className="text-primary underline hover:text-primary/80"
-                  target="_blank"
+                  href="/privacy"
                   rel="noopener noreferrer"
+                  target="_blank"
                 >
                   Learn more in our Privacy Policy
                 </Link>
@@ -65,14 +65,14 @@ export function CookieConsentBanner() {
             </div>
             <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center">
               <Button
-                variant="outline"
-                size="sm"
-                onClick={handleReject}
                 className="w-full sm:w-auto"
+                onClick={handleReject}
+                size="sm"
+                variant="outline"
               >
                 Decline
               </Button>
-              <Button size="sm" onClick={handleAccept} className="w-full sm:w-auto">
+              <Button className="w-full sm:w-auto" onClick={handleAccept} size="sm">
                 Accept
               </Button>
             </div>

@@ -52,7 +52,7 @@ export default function CancellationPolicyPage() {
             key={policy.name}
           >
             {policy.badge && (
-              <div className="-top-3 -translate-x-1/2 absolute left-1/2">
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                 <span className="rounded-full bg-primary px-3 py-1 font-semibold text-primary-foreground text-xs">
                   {policy.badge}
                 </span>
