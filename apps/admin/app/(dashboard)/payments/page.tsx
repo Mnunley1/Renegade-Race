@@ -209,7 +209,11 @@ export default function PaymentsPage() {
               <Select
                 value={statusFilter || "all"}
                 onValueChange={(value) =>
-                  setStatusFilter(value === "all" ? undefined : (value as any))
+                  setStatusFilter(
+                    value === "all"
+                      ? undefined
+                      : (value as "pending" | "succeeded" | "failed" | "refunded")
+                  )
                 }
               >
                 <SelectTrigger className="w-40">

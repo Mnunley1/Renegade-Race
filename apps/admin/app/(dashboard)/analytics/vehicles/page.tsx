@@ -48,20 +48,13 @@ export default function VehicleAnalyticsPage() {
 
   const stats = useQuery(api.admin.getPlatformStats)
   const dateParams = getDateRange(dateRange)
-  // TODO: Implement getVehicleTimeSeries and getTopVehicles queries
-  const vehicleData: Array<{ date: string; newListings: number; totalActive: number }> = []
-  const topVehicles: Array<{
-    _id: string
-    year: number
-    make: string
-    model: string
-    location?: { city: string }
-    totalRevenue?: number
-    bookingCount?: number
-    averageRating?: number
-  }> = []
+  const vehicleData = useQuery(api.admin.getVehicleTimeSeries, {
+    granularity,
+    ...dateParams,
+  })
+  const topVehicles = useQuery(api.admin.getTopVehicles, { limit: 10 })
 
-  if (!stats) {
+  if (!stats || !vehicleData || !topVehicles) {
     return <LoadingState message="Loading vehicle analytics..." />
   }
 

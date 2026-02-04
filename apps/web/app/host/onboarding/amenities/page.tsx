@@ -30,7 +30,14 @@ export default function AmenitiesPage() {
   const [amenities, setAmenities] = useState<string[]>(draft?.vehicleData?.amenities || [])
   const [addOns, setAddOns] = useState<
     Array<{ name: string; price: number; description: string; isRequired: boolean }>
-  >((draft?.vehicleData?.addOns as any) || [])
+  >(
+    (draft?.vehicleData?.addOns as Array<{
+      name: string
+      price: number
+      description: string
+      isRequired: boolean
+    }>) || []
+  )
 
   const [newAddOn, setNewAddOn] = useState({
     name: "",

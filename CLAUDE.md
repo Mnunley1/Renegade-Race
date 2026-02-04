@@ -115,8 +115,9 @@ React:
 
 ## Git Workflow
 
+Do mention Claude Code co-authored commit messages.
 Branch from `dev-build` for new features.
 
 ## Known Issues
 
-`ignoreBuildErrors: true` is set in next.config.mjs - some TypeScript errors exist that need fixing.
+`ignoreBuildErrors` is set to `false` in both next.config.mjs files.

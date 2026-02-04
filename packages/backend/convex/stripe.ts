@@ -11,6 +11,7 @@ import {
   getPaymentSucceededEmailTemplate,
   sendTransactionalEmail,
 } from "./emails"
+import { getWebUrl } from "./helpers"
 import { rateLimiter } from "./rateLimiter"
 
 // ============================================================================
@@ -310,7 +311,7 @@ export const createConnectAccount = action({
 
     // Determine the base URL to use for redirects
     // Priority: client-provided URL > WEB_URL env var > production default
-    let baseUrl = args.returnUrlBase || process.env.WEB_URL || "https://renegaderentals.com"
+    let baseUrl = args.returnUrlBase || getWebUrl()
 
     // Validate the URL is allowed (security check)
     // In development, allow localhost, ngrok, and 127.0.0.1
@@ -653,7 +654,7 @@ export const createCheckoutSession = action({
       })
     }
 
-    const webUrl = process.env.WEB_URL || "https://renegaderentals.com"
+    const webUrl = getWebUrl()
 
     // Create checkout session using Stripe directly (component doesn't support Connect)
     // but we use the component's customer management
@@ -1090,7 +1091,7 @@ export const handlePaymentSuccess = mutation({
 
       if (reservation && vehicle && renter?.email) {
         const vehicleName = `${vehicle.year} ${vehicle.make} ${vehicle.model}`
-        const webUrl = process.env.WEB_URL || "https://renegaderentals.com"
+        const webUrl = getWebUrl()
 
         const template = getPaymentSucceededEmailTemplate({
           renterName: renter.name || "Guest",
@@ -1156,7 +1157,7 @@ export const handlePaymentFailure = mutation({
 
       if (reservation && vehicle && renter?.email) {
         const vehicleName = `${vehicle.year} ${vehicle.make} ${vehicle.model}`
-        const webUrl = process.env.WEB_URL || "https://renegaderentals.com"
+        const webUrl = getWebUrl()
 
         const template = getPaymentFailedEmailTemplate({
           renterName: renter.name || "Guest",

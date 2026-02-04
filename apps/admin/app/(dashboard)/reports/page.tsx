@@ -164,7 +164,11 @@ export default function ReportsPage() {
                 </div>
                 <Select
                   onValueChange={(value) =>
-                    setStatusFilter(value === "all" ? undefined : (value as any))
+                    setStatusFilter(
+                      value === "all"
+                        ? undefined
+                        : (value as "pending" | "reviewed" | "resolved" | "dismissed")
+                    )
                   }
                   value={statusFilter || "all"}
                 >

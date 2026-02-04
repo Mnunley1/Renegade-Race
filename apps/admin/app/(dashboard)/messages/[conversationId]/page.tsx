@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react"
 import { useParams } from "next/navigation"
-import { useMutation } from "convex/react"
+import { useQuery, useMutation } from "convex/react"
 import { api } from "@renegade/backend/convex/_generated/api"
 import type { Id } from "@renegade/backend/convex/_generated/dataModel"
 import { toast } from "sonner"
@@ -35,14 +35,14 @@ export default function ConversationPage() {
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  // TODO: Create admin-specific query for viewing any conversation
-  const data = undefined
+  const data = useQuery(api.admin.getAdminConversationDetail, {
+    conversationId: conversationId as Id<"conversations">,
+  })
 
-  const sendAdminMessage = useMutation(api.messages.sendAdminMessage)
+  const sendAdminMessageMutation = useMutation(api.admin.sendAdminMessage)
   const deleteMessage = useMutation(api.messages.deleteMessage)
-  // TODO: Implement archiveConversation and unarchiveConversation mutations
-  const archiveConversation = useMutation(api.messages.deleteMessage)
-  const unarchiveConversation = useMutation(api.messages.deleteMessage)
+  const archiveConversationMutation = useMutation(api.admin.archiveConversation)
+  const unarchiveConversationMutation = useMutation(api.admin.unarchiveConversation)
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -50,11 +50,17 @@ export default function ConversationPage() {
   }, [data])
 
   const handleSendReply = async () => {
-    if (!replyContent.trim()) return
+    if (!replyContent.trim() || !data) return
     setSending(true)
     try {
-      // TODO: Implement proper admin message sending
-      toast.error("Admin message sending not yet implemented")
+      const targetUserId = data.conversation.renterId
+      await sendAdminMessageMutation({
+        userId: targetUserId,
+        content: replyContent.trim(),
+        vehicleId: data.conversation.vehicleId ?? undefined,
+      })
+      setReplyContent("")
+      toast.success("Admin message sent")
     } catch (err) {
       toast.error("Failed to send message")
     } finally {
@@ -75,9 +81,19 @@ export default function ConversationPage() {
   }
 
   const handleToggleArchive = async () => {
+    if (!data) return
     try {
-      // TODO: Implement admin archive/unarchive conversation
-      toast.error("Archive/unarchive not yet implemented")
+      if (data.conversation.isActive) {
+        await archiveConversationMutation({
+          conversationId: conversationId as Id<"conversations">,
+        })
+        toast.success("Conversation archived")
+      } else {
+        await unarchiveConversationMutation({
+          conversationId: conversationId as Id<"conversations">,
+        })
+        toast.success("Conversation unarchived")
+      }
     } catch (err) {
       toast.error("Failed to update conversation")
     } finally {
@@ -86,19 +102,20 @@ export default function ConversationPage() {
   }
 
   if (data === undefined) return <LoadingState message="Loading conversation..." />
-
-  // TODO: Implement admin conversation view
-  const conversation: any = {
-    renterId: "",
-    ownerId: "",
-    isActive: true,
-    createdAt: 0,
-    lastMessageAt: 0,
+  if (data === null) {
+    return (
+      <div>
+        <PageHeader title="Conversation Not Found" breadcrumbs={[{ label: "Messages", href: "/messages" }]} />
+        <p className="text-muted-foreground">This conversation could not be found.</p>
+      </div>
+    )
   }
-  const messages: any[] = []
-  const renter: any = null
-  const owner: any = null
-  const vehicle: any = null
+
+  const conversation = data.conversation
+  const messages = data.messages
+  const renter = data.renter
+  const owner = data.owner
+  const vehicle = data.vehicle
 
   return (
     <div>
@@ -127,7 +144,9 @@ export default function ConversationPage() {
                 ) : (
                   messages.map((msg: any) => {
                     const isSystem = msg.messageType === "system"
-                    const isRenter = msg.senderId === (conversation as any)?.renterId
+                    const isRenter =
+                      msg.senderId ===
+                      (conversation as typeof conversation & { renterId?: string })?.renterId
                     return (
                       <div
                         key={msg._id}

@@ -72,9 +72,9 @@ function MessagesPageContent() {
         : conversation.unreadCountOwner
 
     if (filterTab === "unread") return unreadCount > 0
-    if (filterTab === "archived") return (conversation as any).isActive === false
+    if (filterTab === "archived") return conversation.isActive === false
     // "all" = active non-deleted
-    return (conversation as any).isActive !== false
+    return conversation.isActive !== false
   })
 
   // Filter conversations based on search query
@@ -89,8 +89,8 @@ function MessagesPageContent() {
       conversation.vehicle?.make?.toLowerCase().includes(searchLower) ||
       conversation.vehicle?.model?.toLowerCase().includes(searchLower) ||
       conversation.lastMessageText?.toLowerCase().includes(searchLower) ||
-      (conversation as any).team?.name?.toLowerCase().includes(searchLower) ||
-      (conversation as any).driverProfile?.name?.toLowerCase().includes(searchLower)
+      conversation.team?.name?.toLowerCase().includes(searchLower) ||
+      conversation.driverProfile?.name?.toLowerCase().includes(searchLower)
     )
   })
 
@@ -330,7 +330,7 @@ function MessagesPageContent() {
                     <div className="flex items-start space-x-3">
                       <UserAvatar
                         name={otherUser?.name || "Unknown"}
-                        imageUrl={(otherUser as any)?.imageUrl}
+                        imageUrl={otherUser?.profileImage}
                         size="md"
                       />
                       <div className="min-w-0 flex-1">
@@ -352,10 +352,10 @@ function MessagesPageContent() {
                         <p className="mb-1 truncate text-muted-foreground text-xs">
                           {conversation.vehicle
                             ? `${conversation.vehicle.year} ${conversation.vehicle.make} ${conversation.vehicle.model}`
-                            : (conversation as any).team
-                              ? `Team: ${(conversation as any).team.name}`
-                              : (conversation as any).driverProfile
-                                ? `Driver: ${(conversation as any).driverProfile?.name || "Driver conversation"}`
+                            : conversation.team
+                              ? `Team: ${conversation.team.name}`
+                              : conversation.driverProfile
+                                ? `Driver: ${conversation.driverProfile?.name || "Driver conversation"}`
                                 : "Conversation"}
                         </p>
                         <p
