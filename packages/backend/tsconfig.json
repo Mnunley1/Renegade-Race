@@ -18,5 +18,5 @@
     }
   },
   "include": ["**/*.ts", "**/*.tsx"],
-  "exclude": ["node_modules", "convex/_generated"]
+  "exclude": ["node_modules", "convex/_generated", "scripts"]
 }
