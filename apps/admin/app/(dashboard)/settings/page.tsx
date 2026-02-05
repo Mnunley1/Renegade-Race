@@ -1,8 +1,5 @@
 "use client"
 
-import { useQuery, useMutation } from "convex/react"
-import { useState, useEffect } from "react"
-import { api } from "@/lib/convex"
 import { Button } from "@workspace/ui/components/button"
 import {
   Card,
@@ -13,8 +10,11 @@ import {
 } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
-import { Loader2, Save, Settings as SettingsIcon, DollarSign } from "lucide-react"
+import { useMutation, useQuery } from "convex/react"
+import { DollarSign, Loader2, Save, Settings as SettingsIcon } from "lucide-react"
+import { useEffect, useState } from "react"
 import { toast } from "sonner"
+import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 
 export default function SettingsPage() {
@@ -47,17 +47,17 @@ export default function SettingsPage() {
     const minFee = Number.parseFloat(minimumPlatformFee)
     const maxFee = maximumPlatformFee ? Number.parseFloat(maximumPlatformFee) : undefined
 
-    if (isNaN(feePercentage) || feePercentage < 0 || feePercentage > 100) {
+    if (Number.isNaN(feePercentage) || feePercentage < 0 || feePercentage > 100) {
       toast.error("Platform fee percentage must be between 0 and 100")
       return
     }
 
-    if (isNaN(minFee) || minFee < 0) {
+    if (Number.isNaN(minFee) || minFee < 0) {
       toast.error("Minimum platform fee must be a positive number")
       return
     }
 
-    if (maxFee !== undefined && (isNaN(maxFee) || maxFee < minFee)) {
+    if (maxFee !== undefined && (Number.isNaN(maxFee) || maxFee < minFee)) {
       toast.error("Maximum platform fee must be greater than or equal to minimum fee")
       return
     }
@@ -111,17 +111,17 @@ export default function SettingsPage() {
             </Label>
             <div className="relative">
               <Input
+                className="pr-8"
                 id="feePercentage"
-                type="number"
-                min="0"
                 max="100"
-                step="0.1"
-                value={platformFeePercentage}
+                min="0"
                 onChange={(e) => setPlatformFeePercentage(e.target.value)}
                 placeholder="5.0"
-                className="pr-8"
+                step="0.1"
+                type="number"
+                value={platformFeePercentage}
               />
-              <span className="-translate-y-1/2 absolute top-1/2 right-3 text-muted-foreground">
+              <span className="absolute top-1/2 right-3 -translate-y-1/2 text-muted-foreground">
                 %
               </span>
             </div>
@@ -135,18 +135,18 @@ export default function SettingsPage() {
               Minimum Platform Fee <span className="text-destructive">*</span>
             </Label>
             <div className="relative">
-              <span className="-translate-y-1/2 absolute top-1/2 left-3 text-muted-foreground">
+              <span className="absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground">
                 $
               </span>
               <Input
+                className="pl-7"
                 id="minFee"
-                type="number"
                 min="0"
-                step="0.01"
-                value={minimumPlatformFee}
                 onChange={(e) => setMinimumPlatformFee(e.target.value)}
                 placeholder="1.00"
-                className="pl-7"
+                step="0.01"
+                type="number"
+                value={minimumPlatformFee}
               />
             </div>
             <p className="text-muted-foreground text-sm">
@@ -158,18 +158,18 @@ export default function SettingsPage() {
           <div className="space-y-2">
             <Label htmlFor="maxFee">Maximum Platform Fee (Optional)</Label>
             <div className="relative">
-              <span className="-translate-y-1/2 absolute top-1/2 left-3 text-muted-foreground">
+              <span className="absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground">
                 $
               </span>
               <Input
+                className="pl-7"
                 id="maxFee"
-                type="number"
                 min="0"
-                step="0.01"
-                value={maximumPlatformFee}
                 onChange={(e) => setMaximumPlatformFee(e.target.value)}
                 placeholder="50.00"
-                className="pl-7"
+                step="0.01"
+                type="number"
+                value={maximumPlatformFee}
               />
             </div>
             <p className="text-muted-foreground text-sm">
@@ -203,7 +203,7 @@ export default function SettingsPage() {
           )}
 
           <div className="flex justify-end gap-4 pt-4">
-            <Button onClick={handleSave} disabled={isSaving} className="min-w-[120px]">
+            <Button className="min-w-[120px]" disabled={isSaving} onClick={handleSave}>
               {isSaving ? (
                 <>
                   <Loader2 className="mr-2 size-4 animate-spin" />

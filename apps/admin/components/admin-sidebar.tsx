@@ -11,19 +11,19 @@ import {
 } from "@workspace/ui/components/dropdown-menu"
 import { cn } from "@workspace/ui/lib/utils"
 import {
+  Calendar,
   Car,
+  DollarSign,
+  LayoutDashboard,
   LogOut,
   Mail,
   MapPin,
   MessageSquare,
   Settings,
   Shield,
+  Star,
   User,
   Users,
-  LayoutDashboard,
-  Calendar,
-  Star,
-  DollarSign,
 } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
@@ -70,7 +70,7 @@ export function AdminSidebar() {
 
       <nav className="flex-1 space-y-1 p-4">
         {navigation.map((item) => {
-          const isActive = pathname === item.href || pathname?.startsWith(item.href + "/")
+          const isActive = pathname === item.href || pathname?.startsWith(`${item.href}/`)
           return (
             <Link
               className={cn(

@@ -3,8 +3,8 @@ import { v } from "convex/values"
 import { Resend } from "resend"
 import { components, internal } from "./_generated/api"
 import { type MutationCtx, mutation, query } from "./_generated/server"
-import { rateLimiter } from "./rateLimiter"
 import { checkAdmin } from "./admin"
+import { rateLimiter } from "./rateLimiter"
 
 // Initialize Resend client (legacy - for sendMassEmail)
 function getResendClient() {
@@ -22,7 +22,7 @@ export const resendComponent = new ResendComponent(components.resend, {
 })
 
 // Helper function to get user email from Clerk identity or database
-async function getUserEmail(ctx: MutationCtx, userId: string): Promise<string | null> {
+async function _getUserEmail(ctx: MutationCtx, userId: string): Promise<string | null> {
   // First try to get from database
   const user = await ctx.db
     .query("users")
@@ -47,7 +47,7 @@ function isTestMode(): boolean {
 // Helper function to get test domain
 // Note: @convex-dev/resend library only accepts @resend.dev addresses in test mode
 // Use @resend.dev for test mode, then configure Resend to forward to your custom domain
-function getTestDomain(): string {
+function _getTestDomain(): string {
   // Library requires @resend.dev in test mode - use that and forward to custom domain
   return "resend.dev"
 }
@@ -788,7 +788,7 @@ export function getUnreadMessagesDigestEmailTemplate(data: {
       <div style="background-color: #f5f5f5; padding: 15px; border-radius: 8px; margin-bottom: 10px;">
         <p style="margin: 0 0 5px 0;"><strong>${conv.senderName}</strong> about <strong>${conv.vehicleName}</strong></p>
         <p style="margin: 0 0 5px 0; color: #666; font-size: 14px;">${conv.unreadCount} unread message${conv.unreadCount > 1 ? "s" : ""}</p>
-        <p style="margin: 0; color: #888; font-style: italic; font-size: 14px;">"${conv.lastMessagePreview.length > 100 ? conv.lastMessagePreview.substring(0, 100) + "..." : conv.lastMessagePreview}"</p>
+        <p style="margin: 0; color: #888; font-style: italic; font-size: 14px;">"${conv.lastMessagePreview.length > 100 ? `${conv.lastMessagePreview.substring(0, 100)}...` : conv.lastMessagePreview}"</p>
       </div>
     `
     )
@@ -798,7 +798,7 @@ export function getUnreadMessagesDigestEmailTemplate(data: {
   const conversationListText = data.conversations
     .map(
       (conv) =>
-        `- ${conv.senderName} about ${conv.vehicleName} (${conv.unreadCount} unread)\n  "${conv.lastMessagePreview.length > 80 ? conv.lastMessagePreview.substring(0, 80) + "..." : conv.lastMessagePreview}"`
+        `- ${conv.senderName} about ${conv.vehicleName} (${conv.unreadCount} unread)\n  "${conv.lastMessagePreview.length > 80 ? `${conv.lastMessagePreview.substring(0, 80)}...` : conv.lastMessagePreview}"`
     )
     .join("\n\n")
 
@@ -985,7 +985,7 @@ export const getEmailHistory = query({
   args: {
     limit: v.optional(v.number()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, _args) => {
     await checkAdmin(ctx)
 
     // This is a placeholder - in production you'd want to store email history in a table

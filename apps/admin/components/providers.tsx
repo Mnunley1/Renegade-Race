@@ -1,10 +1,10 @@
 "use client"
 
 import { useAuth } from "@clerk/nextjs"
+import { Toaster } from "@workspace/ui/components/sonner"
 import { ConvexReactClient } from "convex/react"
 import { ConvexProviderWithClerk } from "convex/react-clerk"
 import { ThemeProvider as NextThemesProvider } from "next-themes"
-import { Toaster } from "@workspace/ui/components/sonner"
 import type * as React from "react"
 
 if (!process.env.NEXT_PUBLIC_CONVEX_URL) {

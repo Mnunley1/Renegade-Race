@@ -1,7 +1,7 @@
 import { Crons } from "@convex-dev/crons"
+import { components, internal } from "./_generated/api"
 import type { Id } from "./_generated/dataModel"
 import type { MutationCtx } from "./_generated/server"
-import { components, internal } from "./_generated/api"
 import { internalMutation } from "./_generated/server"
 import { getUnreadMessagesDigestEmailTemplate, resendComponent } from "./emails"
 import { getWebUrl } from "./helpers"
@@ -57,7 +57,6 @@ function getTestEmail(originalEmail: string): string {
   return originalEmail
 }
 
-
 // Build map of users to their unread conversations
 function buildUserUnreadMap(
   conversations: Array<{
@@ -112,9 +111,7 @@ function buildConversationDetails(ctx: MutationCtx, unreadConversations: UnreadC
         .withIndex("by_external_id", (q) => q.eq("externalId", conv.otherUserId))
         .first()
 
-      const vehicle = conv.vehicleId
-        ? await ctx.db.get(conv.vehicleId as Id<"vehicles">)
-        : null
+      const vehicle = conv.vehicleId ? await ctx.db.get(conv.vehicleId as Id<"vehicles">) : null
 
       return {
         senderName: otherUser?.name || "Unknown User",

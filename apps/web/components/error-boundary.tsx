@@ -1,11 +1,11 @@
 "use client"
 
+import * as Sentry from "@sentry/nextjs"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
-import { Home, RefreshCw, AlertTriangle } from "lucide-react"
+import { AlertTriangle, Home, RefreshCw } from "lucide-react"
 import Link from "next/link"
 import { Component, type ReactNode } from "react"
-import * as Sentry from "@sentry/nextjs"
 
 interface ErrorBoundaryProps {
   children: ReactNode
@@ -30,7 +30,6 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     // Log error to console for debugging (in development)
     if (process.env.NODE_ENV === "development") {
-      console.error("ErrorBoundary caught an error:", error, errorInfo)
     }
 
     // Send to Sentry in production
@@ -83,7 +82,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
               )}
 
               <div className="flex flex-col gap-3 sm:flex-row">
-                <Button onClick={this.handleReset} className="flex-1" variant="default">
+                <Button className="flex-1" onClick={this.handleReset} variant="default">
                   <RefreshCw className="mr-2 size-4" />
                   Try Again
                 </Button>
@@ -97,7 +96,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
               <p className="text-muted-foreground text-xs">
                 If this problem persists, please{" "}
-                <Link href="/contact" className="text-primary underline">
+                <Link className="text-primary underline" href="/contact">
                   contact support
                 </Link>
                 .

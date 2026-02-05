@@ -1,35 +1,35 @@
 "use client"
 
-import { useQuery, useMutation } from "convex/react"
-import { useParams, useRouter } from "next/navigation"
-import { useState } from "react"
-import Link from "next/link"
-import { api } from "@/lib/convex"
+import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
-import { Badge } from "@workspace/ui/components/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
+import { useMutation, useQuery } from "convex/react"
 import {
   ArrowLeft,
   Ban,
-  UserCheck,
-  Loader2,
-  User,
   Calendar,
-  Star,
   Car,
-  Shield,
+  Loader2,
   Mail,
-  Phone,
   MapPin,
+  Phone,
+  Shield,
+  Star,
+  User,
+  UserCheck,
 } from "lucide-react"
+import Link from "next/link"
+import { useParams, useRouter } from "next/navigation"
+import { useState } from "react"
 import { toast } from "sonner"
 import type { Id } from "@/lib/convex"
+import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 
 export default function UserDetailPage() {
   const params = useParams()
-  const router = useRouter()
+  const _router = useRouter()
   const userId = params.id as Id<"users">
   const allUsers = useQuery(api.admin.getAllUsers, { limit: 1000 })
   const user: any = allUsers?.users?.find((u: any) => u._id === userId)
@@ -100,10 +100,10 @@ export default function UserDetailPage() {
     <div className="flex items-center gap-1">
       {[1, 2, 3, 4, 5].map((star) => (
         <Star
-          key={star}
           className={`size-4 ${
             star <= rating ? "fill-yellow-400 text-yellow-400" : "text-gray-300"
           }`}
+          key={star}
         />
       ))}
       <span className="ml-1 font-medium text-sm">{rating}</span>
@@ -143,7 +143,7 @@ export default function UserDetailPage() {
       <div className="flex items-center justify-between">
         <div>
           <Link href="/users">
-            <Button variant="ghost" className="mb-4">
+            <Button className="mb-4" variant="ghost">
               <ArrowLeft className="mr-2 size-4" />
               Back to Users
             </Button>
@@ -155,7 +155,7 @@ export default function UserDetailPage() {
           {isBanned && <Badge variant="destructive">Banned</Badge>}
           {user.role && <Badge variant="outline">{user.role}</Badge>}
           {isBanned ? (
-            <Button onClick={handleUnban} disabled={isProcessing} variant="default">
+            <Button disabled={isProcessing} onClick={handleUnban} variant="default">
               {isProcessing ? (
                 <>
                   <Loader2 className="mr-2 size-4 animate-spin" />
@@ -169,7 +169,7 @@ export default function UserDetailPage() {
               )}
             </Button>
           ) : (
-            <Button onClick={handleBan} disabled={isProcessing} variant="destructive">
+            <Button disabled={isProcessing} onClick={handleBan} variant="destructive">
               {isProcessing ? (
                 <>
                   <Loader2 className="mr-2 size-4 animate-spin" />
@@ -239,7 +239,7 @@ export default function UserDetailPage() {
         </Card>
       </div>
 
-      <Tabs defaultValue="profile" className="space-y-4">
+      <Tabs className="space-y-4" defaultValue="profile">
         <TabsList>
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="reservations">
@@ -251,7 +251,7 @@ export default function UserDetailPage() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="profile" className="space-y-4">
+        <TabsContent className="space-y-4" value="profile">
           <div className="grid gap-6 md:grid-cols-2">
             {/* Basic Information */}
             <Card>
@@ -353,7 +353,7 @@ export default function UserDetailPage() {
           </div>
         </TabsContent>
 
-        <TabsContent value="reservations" className="space-y-4">
+        <TabsContent className="space-y-4" value="reservations">
           {renterReservations && renterReservations.length > 0 && (
             <div className="space-y-4">
               <h3 className="font-semibold">As Renter</h3>
@@ -365,7 +365,7 @@ export default function UserDetailPage() {
                         <div className="mb-2 flex items-center gap-2">
                           <Badge variant="outline">{reservation.status}</Badge>
                           <Link href={`/reservations/${reservation._id}`}>
-                            <Button variant="link" className="h-auto p-0">
+                            <Button className="h-auto p-0" variant="link">
                               View Reservation
                             </Button>
                           </Link>
@@ -409,7 +409,7 @@ export default function UserDetailPage() {
                         <div className="mb-2 flex items-center gap-2">
                           <Badge variant="outline">{reservation.status}</Badge>
                           <Link href={`/reservations/${reservation._id}`}>
-                            <Button variant="link" className="h-auto p-0">
+                            <Button className="h-auto p-0" variant="link">
                               View Reservation
                             </Button>
                           </Link>
@@ -453,7 +453,7 @@ export default function UserDetailPage() {
             )}
         </TabsContent>
 
-        <TabsContent value="vehicles" className="space-y-4">
+        <TabsContent className="space-y-4" value="vehicles">
           {vehicles && vehicles.length > 0 ? (
             <div className="space-y-4">
               {vehicles.map((vehicle: any) => {
@@ -466,9 +466,9 @@ export default function UserDetailPage() {
                         {primaryImage && (
                           <div className="flex-shrink-0">
                             <img
-                              src={primaryImage.cardUrl || primaryImage.imageUrl}
                               alt={`${vehicle.make} ${vehicle.model}`}
                               className="h-24 w-32 rounded-lg object-cover"
+                              src={primaryImage.cardUrl || primaryImage.imageUrl}
                             />
                           </div>
                         )}
@@ -476,7 +476,7 @@ export default function UserDetailPage() {
                           <div className="mb-2 flex items-center gap-2">
                             <Badge variant="outline">{vehicle.status}</Badge>
                             <Link href={`/vehicles/${vehicle._id}`}>
-                              <Button variant="link" className="h-auto p-0">
+                              <Button className="h-auto p-0" variant="link">
                                 View Vehicle
                               </Button>
                             </Link>
@@ -504,7 +504,7 @@ export default function UserDetailPage() {
           )}
         </TabsContent>
 
-        <TabsContent value="reviews" className="space-y-4">
+        <TabsContent className="space-y-4" value="reviews">
           {reviewsGiven && reviewsGiven.length > 0 ? (
             <div className="space-y-4">
               <h3 className="font-semibold">Reviews Given</h3>

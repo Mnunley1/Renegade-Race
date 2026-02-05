@@ -1,21 +1,21 @@
 "use client"
 
-import type React from "react"
-import { useQuery } from "convex/react"
-import { api } from "@/lib/convex"
+import { Badge } from "@workspace/ui/components/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
+import { useQuery } from "convex/react"
 import {
-  Users,
-  Car,
+  AlertCircle,
   Calendar,
+  Car,
   DollarSign,
+  MapPin,
   Shield,
   Star,
-  MapPin,
   TrendingUp,
-  AlertCircle,
+  Users,
 } from "lucide-react"
-import { Badge } from "@workspace/ui/components/badge"
+import type React from "react"
+import { api } from "@/lib/convex"
 
 export default function DashboardPage() {
   const stats = useQuery(api.admin.getPlatformStats, {})
@@ -146,7 +146,7 @@ export default function DashboardPage() {
               <div className="flex items-center gap-2">
                 <div className="font-bold text-2xl">{alert.value}</div>
                 {alert.value > 0 && alert.variant !== "secondary" && (
-                  <Badge variant={alert.variant} className="text-xs">
+                  <Badge className="text-xs" variant={alert.variant}>
                     <AlertCircle className="mr-1 size-3" />
                     Action Required
                   </Badge>

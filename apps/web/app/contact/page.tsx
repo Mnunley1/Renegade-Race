@@ -11,12 +11,12 @@ import {
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import { Textarea } from "@workspace/ui/components/textarea"
-import { Handshake, Mail, Send, Loader2 } from "lucide-react"
+import { useMutation } from "convex/react"
+import { Handshake, Loader2, Mail, Send } from "lucide-react"
 import Link from "next/link"
 import { useState } from "react"
-import { useMutation } from "convex/react"
-import { api } from "@/lib/convex"
 import { toast } from "sonner"
+import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 
 export default function ContactPage() {
@@ -158,7 +158,7 @@ export default function ContactPage() {
                     value={formData.message}
                   />
                 </div>
-                <Button className="w-full gap-2" size="lg" type="submit" disabled={isSubmitting}>
+                <Button className="w-full gap-2" disabled={isSubmitting} size="lg" type="submit">
                   {isSubmitting ? (
                     <>
                       <Loader2 className="size-4 animate-spin" />

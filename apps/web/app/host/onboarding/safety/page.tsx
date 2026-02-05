@@ -15,8 +15,8 @@ import { ArrowRight, Loader2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { toast } from "sonner"
-import { api } from "@/lib/convex"
 import type { Id } from "@/lib/convex"
+import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 
 export default function SafetyPage() {
@@ -55,7 +55,7 @@ export default function SafetyPage() {
     setIsSubmitting(true)
     try {
       // Create vehicle with all data
-      const vehicleId = await createVehicleWithImages({
+      const _vehicleId = await createVehicleWithImages({
         trackId: draft.vehicleData.trackId
           ? (draft.vehicleData.trackId as Id<"tracks">)
           : undefined,

@@ -1,27 +1,27 @@
 "use client"
 
-import { useQuery } from "convex/react"
 import { api } from "@renegade/backend/convex/_generated/api"
-import { PageHeader } from "@/components/page-header"
-import { StatCard } from "@/components/stat-card"
-import { ChartWrapper } from "@/components/chart-wrapper"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
-import { LoadingState } from "@/components/loading-state"
+import { useQuery } from "convex/react"
+import { format } from "date-fns"
+import { CreditCard, DollarSign, TrendingUp } from "lucide-react"
+import { useState } from "react"
 import {
-  AreaChart,
   Area,
-  BarChart,
+  AreaChart,
   Bar,
-  XAxis,
-  YAxis,
+  BarChart,
   CartesianGrid,
-  Tooltip,
   Legend,
   ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
 } from "recharts"
-import { DollarSign, TrendingUp, CreditCard } from "lucide-react"
-import { useState } from "react"
-import { format } from "date-fns"
+import { ChartWrapper } from "@/components/chart-wrapper"
+import { LoadingState } from "@/components/loading-state"
+import { PageHeader } from "@/components/page-header"
+import { StatCard } from "@/components/stat-card"
 
 function getDateRange(range: "7d" | "30d" | "90d" | "ytd"): { startDate: string; endDate: string } {
   const now = new Date()
@@ -81,41 +81,41 @@ export default function RevenueAnalyticsPage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Revenue Analytics"
-        description="Track revenue trends and platform fees"
         breadcrumbs={[
           { label: "Dashboard", href: "/dashboard" },
           { label: "Analytics", href: "/analytics" },
           { label: "Revenue" },
         ]}
+        description="Track revenue trends and platform fees"
+        title="Revenue Analytics"
       />
 
       <div className="grid gap-6 md:grid-cols-3">
         <StatCard
+          icon={<DollarSign className="h-4 w-4 text-muted-foreground" />}
           label="Total Revenue"
           value={`$${totalRevenue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-          icon={<DollarSign className="h-4 w-4 text-muted-foreground" />}
         />
         <StatCard
+          icon={<CreditCard className="h-4 w-4 text-muted-foreground" />}
           label="Platform Fees"
           value={`$${totalPlatformFees.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-          icon={<CreditCard className="h-4 w-4 text-muted-foreground" />}
         />
         <StatCard
+          icon={<TrendingUp className="h-4 w-4 text-muted-foreground" />}
           label="Avg Booking Value"
           value={`$${avgBookingValue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-          icon={<TrendingUp className="h-4 w-4 text-muted-foreground" />}
         />
       </div>
 
       <ChartWrapper
-        title="Revenue Over Time"
-        granularity={granularity}
-        onGranularityChange={setGranularity}
         dateRange={dateRange}
+        granularity={granularity}
         onDateRangeChange={setDateRange}
+        onGranularityChange={setGranularity}
+        title="Revenue Over Time"
       >
-        <ResponsiveContainer width="100%" height={400}>
+        <ResponsiveContainer height={400} width="100%">
           <AreaChart data={chartData}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="date" />
@@ -133,20 +133,20 @@ export default function RevenueAnalyticsPage() {
             />
             <Legend />
             <Area
-              type="monotone"
               dataKey="Gross Revenue"
-              stackId="1"
-              stroke="#3b82f6"
               fill="#3b82f6"
               fillOpacity={0.6}
+              stackId="1"
+              stroke="#3b82f6"
+              type="monotone"
             />
             <Area
-              type="monotone"
               dataKey="Platform Fees"
-              stackId="2"
-              stroke="#10b981"
               fill="#10b981"
               fillOpacity={0.6}
+              stackId="2"
+              stroke="#10b981"
+              type="monotone"
             />
           </AreaChart>
         </ResponsiveContainer>
@@ -157,7 +157,7 @@ export default function RevenueAnalyticsPage() {
           <CardTitle>Daily Revenue Breakdown</CardTitle>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={300}>
+          <ResponsiveContainer height={300} width="100%">
             <BarChart data={barChartData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="date" />

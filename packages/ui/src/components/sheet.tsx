@@ -1,10 +1,9 @@
 "use client"
 
-import * as React from "react"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
-import { X } from "lucide-react"
-
 import { cn } from "@workspace/ui/lib/utils"
+import { X } from "lucide-react"
+import * as React from "react"
 
 const Sheet = DialogPrimitive.Root
 
@@ -19,11 +18,11 @@ const SheetOverlay = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Overlay
-    ref={ref}
     className={cn(
       "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-50 bg-black/80 data-[state=closed]:animate-out data-[state=open]:animate-in",
       className
     )}
+    ref={ref}
     {...props}
   />
 ))
@@ -40,7 +39,6 @@ const SheetContent = React.forwardRef<
   <SheetPortal>
     <SheetOverlay />
     <DialogPrimitive.Content
-      ref={ref}
       className={cn(
         "fixed z-50 gap-4 bg-background p-6 shadow-lg transition ease-in-out data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:duration-300 data-[state=open]:duration-500",
         side === "top" &&
@@ -53,6 +51,7 @@ const SheetContent = React.forwardRef<
           "data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right inset-y-0 right-0 h-full w-3/4 border-l sm:max-w-sm",
         className
       )}
+      ref={ref}
       {...props}
     >
       {children}
@@ -83,8 +82,8 @@ const SheetTitle = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Title>
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Title
-    ref={ref}
     className={cn("font-semibold text-foreground text-lg", className)}
+    ref={ref}
     {...props}
   />
 ))
@@ -95,8 +94,8 @@ const SheetDescription = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Description>
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Description
-    ref={ref}
     className={cn("text-muted-foreground text-sm", className)}
+    ref={ref}
     {...props}
   />
 ))

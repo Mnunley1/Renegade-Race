@@ -41,7 +41,8 @@ const PLATFORM_TEMPLATES = [
   },
   {
     label: "Safety Briefing Required",
-    content: "We'll need to do a quick safety briefing before you take the vehicle out on track. When works best for you?",
+    content:
+      "We'll need to do a quick safety briefing before you take the vehicle out on track. When works best for you?",
     category: "logistics" as const,
   },
 ]
@@ -50,7 +51,9 @@ const PLATFORM_TEMPLATES = [
 export const list = query({
   args: {
     userId: v.string(),
-    category: v.optional(v.union(v.literal("inquiry"), v.literal("response"), v.literal("logistics"))),
+    category: v.optional(
+      v.union(v.literal("inquiry"), v.literal("response"), v.literal("logistics"))
+    ),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()
@@ -107,7 +110,7 @@ export const create = mutation({
     const now = Date.now()
 
     // Validate input
-    if (!args.label.trim() || !args.content.trim()) {
+    if (!(args.label.trim() && args.content.trim())) {
       throw new Error("Label and content are required")
     }
 
@@ -178,9 +181,11 @@ export const deleteTemplate = mutation({
 // Get platform templates only
 export const getPlatformTemplates = query({
   args: {
-    category: v.optional(v.union(v.literal("inquiry"), v.literal("response"), v.literal("logistics"))),
+    category: v.optional(
+      v.union(v.literal("inquiry"), v.literal("response"), v.literal("logistics"))
+    ),
   },
-  handler: async (ctx, args) => {
+  handler: async (_ctx, args) => {
     let templates = PLATFORM_TEMPLATES
     if (args.category) {
       templates = templates.filter((t) => t.category === args.category)
@@ -195,7 +200,9 @@ export const update = mutation({
     templateId: v.id("messageTemplates"),
     label: v.optional(v.string()),
     content: v.optional(v.string()),
-    category: v.optional(v.union(v.literal("inquiry"), v.literal("response"), v.literal("logistics"))),
+    category: v.optional(
+      v.union(v.literal("inquiry"), v.literal("response"), v.literal("logistics"))
+    ),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()

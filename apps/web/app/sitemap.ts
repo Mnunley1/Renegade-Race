@@ -1,6 +1,6 @@
-import type { MetadataRoute } from "next"
-import { ConvexHttpClient } from "convex/browser"
 import { api } from "@renegade/backend/convex/_generated/api"
+import { ConvexHttpClient } from "convex/browser"
+import type { MetadataRoute } from "next"
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://renegaderentals.com"
@@ -36,9 +36,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }))
 
     return [...staticRoutes, ...vehicleRoutes]
-  } catch (error) {
-    // If query fails (e.g., Convex URL not set), return static routes only
-    console.error("Failed to fetch vehicles for sitemap:", error)
+  } catch (_error) {
     return staticRoutes
   }
 }

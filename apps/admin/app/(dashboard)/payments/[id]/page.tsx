@@ -1,12 +1,8 @@
 "use client"
 
-import { useQuery, useMutation, useAction } from "convex/react"
-import { useParams } from "next/navigation"
-import Link from "next/link"
-import { api } from "@/lib/convex"
+import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
-import { Badge } from "@workspace/ui/components/badge"
 import {
   Dialog,
   DialogContent,
@@ -19,20 +15,24 @@ import {
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import { Textarea } from "@workspace/ui/components/textarea"
+import { useAction, useQuery } from "convex/react"
 import {
   ArrowLeft,
-  DollarSign,
   Calendar,
-  User,
   Car,
   CheckCircle,
-  XCircle,
   Clock,
+  DollarSign,
   RefreshCw,
+  User,
+  XCircle,
 } from "lucide-react"
-import type { Id } from "@/lib/convex"
+import Link from "next/link"
+import { useParams } from "next/navigation"
 import { useState } from "react"
 import { toast } from "sonner"
+import type { Id } from "@/lib/convex"
+import { api } from "@/lib/convex"
 
 export default function PaymentDetailPage() {
   const params = useParams()
@@ -49,14 +49,14 @@ export default function PaymentDetailPage() {
     switch (status) {
       case "pending":
         return (
-          <Badge variant="default" className="bg-yellow-600">
+          <Badge className="bg-yellow-600" variant="default">
             <Clock className="mr-1 size-3" />
             Pending
           </Badge>
         )
       case "succeeded":
         return (
-          <Badge variant="default" className="bg-green-600">
+          <Badge className="bg-green-600" variant="default">
             <CheckCircle className="mr-1 size-3" />
             Succeeded
           </Badge>
@@ -91,7 +91,7 @@ export default function PaymentDetailPage() {
     if (!payment) return
 
     const amountInCents = Math.round(Number.parseFloat(refundAmount) * 100)
-    if (isNaN(amountInCents) || amountInCents <= 0) {
+    if (Number.isNaN(amountInCents) || amountInCents <= 0) {
       toast.error("Please enter a valid refund amount")
       return
     }
@@ -168,7 +168,7 @@ export default function PaymentDetailPage() {
       <div className="flex items-center justify-between">
         <div>
           <Link href="/payments">
-            <Button variant="ghost" className="mb-4">
+            <Button className="mb-4" variant="ghost">
               <ArrowLeft className="mr-2 size-4" />
               Back to Payments
             </Button>
@@ -179,7 +179,7 @@ export default function PaymentDetailPage() {
         <div className="flex items-center gap-3">
           {getStatusBadge(payment.status)}
           {canRefund && (
-            <Dialog open={refundDialogOpen} onOpenChange={setRefundDialogOpen}>
+            <Dialog onOpenChange={setRefundDialogOpen} open={refundDialogOpen}>
               <DialogTrigger asChild>
                 <Button variant="destructive">
                   <RefreshCw className="mr-2 size-4" />
@@ -198,38 +198,38 @@ export default function PaymentDetailPage() {
                   <div className="space-y-2">
                     <Label htmlFor="refund-amount">Refund Amount (USD)</Label>
                     <Input
-                      id="refund-amount"
-                      type="number"
-                      step="0.01"
-                      min="0.01"
-                      max={(payment.amount - (payment.refundAmount || 0)) / 100}
-                      placeholder="0.00"
-                      value={refundAmount}
-                      onChange={(e) => setRefundAmount(e.target.value)}
                       disabled={isProcessing}
+                      id="refund-amount"
+                      max={(payment.amount - (payment.refundAmount || 0)) / 100}
+                      min="0.01"
+                      onChange={(e) => setRefundAmount(e.target.value)}
+                      placeholder="0.00"
+                      step="0.01"
+                      type="number"
+                      value={refundAmount}
                     />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="refund-reason">Reason for Refund</Label>
                     <Textarea
-                      id="refund-reason"
-                      placeholder="Enter reason for refund..."
-                      value={refundReason}
-                      onChange={(e) => setRefundReason(e.target.value)}
                       disabled={isProcessing}
+                      id="refund-reason"
+                      onChange={(e) => setRefundReason(e.target.value)}
+                      placeholder="Enter reason for refund..."
                       rows={3}
+                      value={refundReason}
                     />
                   </div>
                 </div>
                 <DialogFooter>
                   <Button
-                    variant="outline"
-                    onClick={() => setRefundDialogOpen(false)}
                     disabled={isProcessing}
+                    onClick={() => setRefundDialogOpen(false)}
+                    variant="outline"
                   >
                     Cancel
                   </Button>
-                  <Button variant="destructive" onClick={handleRefund} disabled={isProcessing}>
+                  <Button disabled={isProcessing} onClick={handleRefund} variant="destructive">
                     {isProcessing ? "Processing..." : "Process Refund"}
                   </Button>
                 </DialogFooter>
@@ -313,7 +313,7 @@ export default function PaymentDetailPage() {
               <div>
                 <p className="text-muted-foreground text-sm">Reservation ID</p>
                 <Link href={`/reservations/${payment.reservation._id}`}>
-                  <Button variant="link" className="h-auto p-0 font-mono text-sm">
+                  <Button className="h-auto p-0 font-mono text-sm" variant="link">
                     {payment.reservation._id}
                   </Button>
                 </Link>
@@ -367,7 +367,7 @@ export default function PaymentDetailPage() {
             )}
             {payment.renter?._id && (
               <Link href={`/users/${payment.renter._id}`}>
-                <Button variant="outline" size="sm">
+                <Button size="sm" variant="outline">
                   View User Profile
                 </Button>
               </Link>
@@ -399,7 +399,7 @@ export default function PaymentDetailPage() {
             )}
             {payment.owner?._id && (
               <Link href={`/users/${payment.owner._id}`}>
-                <Button variant="outline" size="sm">
+                <Button size="sm" variant="outline">
                   View User Profile
                 </Button>
               </Link>
@@ -422,9 +422,9 @@ export default function PaymentDetailPage() {
               {primaryImage && (
                 <div className="flex-shrink-0">
                   <img
-                    src={primaryImage.cardUrl || primaryImage.imageUrl}
                     alt={`${payment.vehicle.make} ${payment.vehicle.model}`}
                     className="h-32 w-48 rounded-lg object-cover"
+                    src={primaryImage.cardUrl || primaryImage.imageUrl}
                   />
                 </div>
               )}
@@ -439,7 +439,7 @@ export default function PaymentDetailPage() {
                 )}
                 <div className="mt-2">
                   <Link href={`/vehicles/${payment.vehicle._id}`}>
-                    <Button variant="outline" size="sm">
+                    <Button size="sm" variant="outline">
                       View Vehicle Details
                     </Button>
                   </Link>

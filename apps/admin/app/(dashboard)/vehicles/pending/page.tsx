@@ -1,8 +1,6 @@
 "use client"
 
-import { useQuery, useMutation } from "convex/react"
-import { useState } from "react"
-import { api } from "@/lib/convex"
+import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import {
   Card,
@@ -11,10 +9,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@workspace/ui/components/card"
-import { Badge } from "@workspace/ui/components/badge"
-import { CheckCircle, XCircle, Loader2, Car } from "lucide-react"
+import { useMutation, useQuery } from "convex/react"
+import { Car, CheckCircle, Loader2, XCircle } from "lucide-react"
+import { useState } from "react"
 import { toast } from "sonner"
 import type { Id } from "@/lib/convex"
+import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 
 export default function VehicleApprovalsPage() {
@@ -78,15 +78,15 @@ export default function VehicleApprovalsPage() {
                   vehicle.images?.find((img: any) => img.isPrimary) || vehicle.images?.[0]
 
                 return (
-                  <Card key={vehicle._id} className="overflow-hidden">
+                  <Card className="overflow-hidden" key={vehicle._id}>
                     <CardContent className="p-6">
                       <div className="flex gap-6">
                         {primaryImage && (
                           <div className="flex-shrink-0">
                             <img
-                              src={primaryImage.imageUrl}
                               alt={`${vehicle.make} ${vehicle.model}`}
                               className="h-32 w-48 rounded-lg object-cover"
+                              src={primaryImage.imageUrl}
                             />
                           </div>
                         )}
@@ -151,10 +151,10 @@ export default function VehicleApprovalsPage() {
 
                           <div className="flex gap-2 pt-4">
                             <Button
-                              onClick={() => handleApprove(vehicle._id)}
                               disabled={isProcessing}
-                              variant="default"
+                              onClick={() => handleApprove(vehicle._id)}
                               size="sm"
+                              variant="default"
                             >
                               {isProcessing ? (
                                 <>
@@ -169,10 +169,10 @@ export default function VehicleApprovalsPage() {
                               )}
                             </Button>
                             <Button
-                              onClick={() => handleReject(vehicle._id)}
                               disabled={isProcessing}
-                              variant="destructive"
+                              onClick={() => handleReject(vehicle._id)}
                               size="sm"
+                              variant="destructive"
                             >
                               {isProcessing ? (
                                 <>

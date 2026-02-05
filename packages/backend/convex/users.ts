@@ -1,8 +1,8 @@
 // @ts-expect-error - @clerk/backend module resolution issue
 import type { UserJSON } from "@clerk/backend"
 import { type Validator, v } from "convex/values"
-import { action, internalMutation, mutation, type QueryCtx, query } from "./_generated/server"
 import { api, internal } from "./_generated/api"
+import { action, internalMutation, mutation, type QueryCtx, query } from "./_generated/server"
 import { getWelcomeEmailTemplate, sendTransactionalEmail } from "./emails"
 import { imagePresets, r2 } from "./r2"
 
@@ -594,7 +594,7 @@ export const updateOnboardingAddressCoordinates = internalMutation({
   },
   handler: async (ctx, args) => {
     const user = await ctx.db.get(args.userId)
-    if (!(user && user.onboardingVehicleAddress)) {
+    if (!user?.onboardingVehicleAddress) {
       return
     }
 
@@ -901,53 +901,3 @@ export const startOverOnboarding = mutation({
   },
 })
 
-// Migration helper: look up user by email
-export const getByEmail = query({
-  args: { email: v.string() },
-  handler: async (ctx, args) => {
-    const users = await ctx.db.query("users").collect()
-    return users.find((u) => u.email?.toLowerCase() === args.email.toLowerCase()) ?? null
-  },
-})
-
-// Migration-only mutation for importing Adalo users
-export const createMigrationUser = mutation({
-  args: {
-    externalId: v.string(),
-    name: v.string(),
-    email: v.string(),
-    phone: v.optional(v.string()),
-    bio: v.optional(v.string()),
-    profileImageR2Key: v.optional(v.string()),
-    userType: v.optional(v.union(v.literal("driver"), v.literal("team"), v.literal("both"))),
-    experience: v.optional(v.string()),
-    location: v.optional(v.string()),
-    stripeAccountId: v.optional(v.string()),
-    memberSince: v.optional(v.string()),
-    rating: v.number(),
-    totalRentals: v.number(),
-    isHost: v.boolean(),
-    isBanned: v.boolean(),
-  },
-  handler: async (ctx, args) => {
-    const id = await ctx.db.insert("users", {
-      externalId: args.externalId,
-      name: args.name,
-      email: args.email,
-      phone: args.phone,
-      bio: args.bio,
-      profileImageR2Key: args.profileImageR2Key,
-      userType: args.userType,
-      experience: args.experience,
-      location: args.location,
-      stripeAccountId: args.stripeAccountId,
-      stripeAccountStatus: args.stripeAccountId ? "pending" as const : undefined,
-      memberSince: args.memberSince,
-      rating: args.rating,
-      totalRentals: args.totalRentals,
-      isHost: args.isHost,
-      isBanned: args.isBanned,
-    })
-    return id
-  },
-})

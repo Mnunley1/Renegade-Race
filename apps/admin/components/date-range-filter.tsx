@@ -20,11 +20,11 @@ export function DateRangeFilter({ dateRange, onDateRangeChange, className }: Dat
       <Popover>
         <PopoverTrigger asChild>
           <Button
-            variant="outline"
             className={cn(
               "w-[280px] justify-start text-left font-normal",
               !dateRange && "text-muted-foreground"
             )}
+            variant="outline"
           >
             <CalendarIcon className="mr-2 size-4" />
             {dateRange?.from ? (
@@ -40,19 +40,19 @@ export function DateRangeFilter({ dateRange, onDateRangeChange, className }: Dat
             )}
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" align="start">
+        <PopoverContent align="start" className="w-auto p-0">
           <Calendar
+            defaultMonth={dateRange?.from}
             initialFocus
             mode="range"
-            defaultMonth={dateRange?.from}
-            selected={dateRange}
-            onSelect={onDateRangeChange}
             numberOfMonths={2}
+            onSelect={onDateRangeChange}
+            selected={dateRange}
           />
         </PopoverContent>
       </Popover>
       {dateRange && (dateRange.from || dateRange.to) && (
-        <Button variant="ghost" size="sm" onClick={() => onDateRangeChange(undefined)}>
+        <Button onClick={() => onDateRangeChange(undefined)} size="sm" variant="ghost">
           <X className="size-4" />
         </Button>
       )}

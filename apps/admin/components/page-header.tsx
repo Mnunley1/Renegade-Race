@@ -1,5 +1,5 @@
-import Link from "next/link"
 import { ChevronRight } from "lucide-react"
+import Link from "next/link"
 
 interface Breadcrumb {
   label: string
@@ -19,10 +19,10 @@ export function PageHeader({ title, description, breadcrumbs, actions }: PageHea
       {breadcrumbs && breadcrumbs.length > 0 && (
         <nav className="mb-2 flex items-center gap-1 text-muted-foreground text-sm">
           {breadcrumbs.map((crumb, i) => (
-            <span key={crumb.label} className="flex items-center gap-1">
+            <span className="flex items-center gap-1" key={crumb.label}>
               {i > 0 && <ChevronRight className="h-3 w-3" />}
               {crumb.href ? (
-                <Link href={crumb.href} className="transition-colors hover:text-foreground">
+                <Link className="transition-colors hover:text-foreground" href={crumb.href}>
                   {crumb.label}
                 </Link>
               ) : (

@@ -1,31 +1,31 @@
 "use client"
 
-import { useState } from "react"
-import { useQuery, useMutation } from "convex/react"
 import { api } from "@renegade/backend/convex/_generated/api"
 import type { Id } from "@renegade/backend/convex/_generated/dataModel"
-import { useRouter, useParams } from "next/navigation"
-import { toast } from "sonner"
-import { format, formatDistanceToNow } from "date-fns"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Separator } from "@workspace/ui/components/separator"
-import { DetailPageLayout } from "@/components/detail-page-layout"
-import { StatusBadge } from "@/components/status-badge"
-import { UserAvatar } from "@/components/user-avatar"
-import { ConfirmDialog } from "@/components/confirm-dialog"
-import { LoadingState } from "@/components/loading-state"
+import { useMutation, useQuery } from "convex/react"
+import { format, formatDistanceToNow } from "date-fns"
 import {
-  Star,
+  Calendar,
+  Car,
+  CheckCircle,
   Eye,
   EyeOff,
-  CheckCircle,
+  MessageSquare,
+  Star,
   Trash2,
   User,
-  Car,
-  Calendar,
-  MessageSquare,
 } from "lucide-react"
+import { useParams, useRouter } from "next/navigation"
+import { useState } from "react"
+import { toast } from "sonner"
+import { ConfirmDialog } from "@/components/confirm-dialog"
+import { DetailPageLayout } from "@/components/detail-page-layout"
+import { LoadingState } from "@/components/loading-state"
+import { StatusBadge } from "@/components/status-badge"
+import { UserAvatar } from "@/components/user-avatar"
 
 export default function ReviewDetailPage() {
   const router = useRouter()
@@ -44,7 +44,7 @@ export default function ReviewDetailPage() {
     try {
       await toggleVisibility({ reviewId, isPublic: !review.isPublic })
       toast.success(review.isPublic ? "Review hidden" : "Review published")
-    } catch (err) {
+    } catch (_err) {
       toast.error("Failed to update visibility")
     }
   }
@@ -53,7 +53,7 @@ export default function ReviewDetailPage() {
     try {
       await markModerated({ reviewId })
       toast.success("Review marked as moderated")
-    } catch (err) {
+    } catch (_err) {
       toast.error("Failed to mark as moderated")
     }
   }
@@ -63,7 +63,7 @@ export default function ReviewDetailPage() {
       await deleteReview({ reviewId })
       toast.success("Review deleted")
       router.push("/reviews")
-    } catch (err) {
+    } catch (_err) {
       toast.error("Failed to delete review")
     }
   }
@@ -83,8 +83,8 @@ export default function ReviewDetailPage() {
     <div className="flex items-center gap-1">
       {Array.from({ length: 5 }).map((_, i) => (
         <Star
-          key={i}
           className={`h-5 w-5 ${i < rating ? "fill-yellow-400 text-yellow-400" : "text-gray-300"}`}
+          key={i}
         />
       ))}
       <span className="ml-2 font-semibold text-lg">{rating}/5</span>
@@ -93,16 +93,9 @@ export default function ReviewDetailPage() {
 
   return (
     <DetailPageLayout
-      title={review.title}
-      badges={
-        <div className="flex items-center gap-2">
-          <StatusBadge status={review.isPublic ? "published" : "hidden"} />
-          <StatusBadge status={review.isModerated ? "moderated" : "unmoderated"} />
-        </div>
-      }
       actions={
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={handleToggleVisibility}>
+          <Button onClick={handleToggleVisibility} variant="outline">
             {review.isPublic ? (
               <EyeOff className="mr-2 h-4 w-4" />
             ) : (
@@ -111,17 +104,24 @@ export default function ReviewDetailPage() {
             {review.isPublic ? "Hide" : "Publish"}
           </Button>
           {!review.isModerated && (
-            <Button variant="outline" onClick={handleMarkModerated}>
+            <Button onClick={handleMarkModerated} variant="outline">
               <CheckCircle className="mr-2 h-4 w-4" />
               Mark Moderated
             </Button>
           )}
-          <Button variant="destructive" onClick={() => setDeleteConfirm(true)}>
+          <Button onClick={() => setDeleteConfirm(true)} variant="destructive">
             <Trash2 className="mr-2 h-4 w-4" />
             Delete
           </Button>
         </div>
       }
+      badges={
+        <div className="flex items-center gap-2">
+          <StatusBadge status={review.isPublic ? "published" : "hidden"} />
+          <StatusBadge status={review.isModerated ? "moderated" : "unmoderated"} />
+        </div>
+      }
+      title={review.title}
     >
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="space-y-6">
@@ -232,11 +232,11 @@ export default function ReviewDetailPage() {
             <CardContent>
               {review.reviewer && (
                 <div className="flex items-center justify-between">
-                  <UserAvatar name={review.reviewer.name} email={review.reviewer.email || ""} />
+                  <UserAvatar email={review.reviewer.email || ""} name={review.reviewer.name} />
                   <Button
-                    variant="outline"
+                    onClick={() => router.push(`/users/${review.reviewer?.externalId}`)}
                     size="sm"
-                    onClick={() => router.push(`/users/${review.reviewer!.externalId}`)}
+                    variant="outline"
                   >
                     View Profile
                   </Button>
@@ -255,11 +255,11 @@ export default function ReviewDetailPage() {
             <CardContent>
               {review.reviewed && (
                 <div className="flex items-center justify-between">
-                  <UserAvatar name={review.reviewed.name} email={review.reviewed.email || ""} />
+                  <UserAvatar email={review.reviewed.email || ""} name={review.reviewed.name} />
                   <Button
-                    variant="outline"
+                    onClick={() => router.push(`/users/${review.reviewed?.externalId}`)}
                     size="sm"
-                    onClick={() => router.push(`/users/${review.reviewed!.externalId}`)}
+                    variant="outline"
                   >
                     View Profile
                   </Button>
@@ -282,10 +282,10 @@ export default function ReviewDetailPage() {
                     {review.vehicle.year} {review.vehicle.make} {review.vehicle.model}
                   </p>
                   <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => router.push(`/vehicles/${review.vehicle!._id}`)}
                     className="mt-2"
+                    onClick={() => router.push(`/vehicles/${review.vehicle?._id}`)}
+                    size="sm"
+                    variant="outline"
                   >
                     View Vehicle
                   </Button>
@@ -319,10 +319,10 @@ export default function ReviewDetailPage() {
                   </span>
                 </div>
                 <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => router.push(`/reservations/${review.reservation!._id}`)}
                   className="mt-2 w-full"
+                  onClick={() => router.push(`/reservations/${review.reservation?._id}`)}
+                  size="sm"
+                  variant="outline"
                 >
                   View Reservation
                 </Button>
@@ -333,12 +333,12 @@ export default function ReviewDetailPage() {
       </div>
 
       <ConfirmDialog
-        open={deleteConfirm}
-        onOpenChange={setDeleteConfirm}
-        title="Delete Review"
-        description="Are you sure you want to delete this review? This action cannot be undone."
         confirmLabel="Delete"
+        description="Are you sure you want to delete this review? This action cannot be undone."
         onConfirm={handleDelete}
+        onOpenChange={setDeleteConfirm}
+        open={deleteConfirm}
+        title="Delete Review"
       />
     </DetailPageLayout>
   )

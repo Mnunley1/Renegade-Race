@@ -57,9 +57,7 @@ export const getByUser = query({
         ])
 
         // Get team/driver info for motorsports conversations
-        const team = conversation.teamId
-          ? await ctx.db.get(conversation.teamId)
-          : null
+        const team = conversation.teamId ? await ctx.db.get(conversation.teamId) : null
         const driverProfile = conversation.driverProfileId
           ? await ctx.db.get(conversation.driverProfileId)
           : null
@@ -73,7 +71,7 @@ export const getByUser = query({
           totalAmount: number
         } | null = null
         if (conversation.reservationId) {
-          const res = await ctx.db.get(conversation.reservationId) as any
+          const res = (await ctx.db.get(conversation.reservationId)) as any
           if (res) {
             reservation = {
               _id: String(res._id),
@@ -175,9 +173,7 @@ export const getById = query({
         .first(),
     ])
 
-    const team = conversation.teamId
-      ? await ctx.db.get(conversation.teamId)
-      : null
+    const team = conversation.teamId ? await ctx.db.get(conversation.teamId) : null
     const driverProfile = conversation.driverProfileId
       ? await ctx.db.get(conversation.driverProfileId)
       : null
@@ -390,19 +386,13 @@ export const createMotorsportsConversation = mutation({
     const userId = identity.subject
     // Use consistent ordering: lower ID is renterId, higher is ownerId
     const [renterId, ownerId] =
-      userId < args.participantId
-        ? [userId, args.participantId]
-        : [args.participantId, userId]
+      userId < args.participantId ? [userId, args.participantId] : [args.participantId, userId]
 
     // Check for existing motorsports conversation between these users
     const existing = await ctx.db
       .query("conversations")
-      .withIndex("by_participants", (q) =>
-        q.eq("renterId", renterId).eq("ownerId", ownerId)
-      )
-      .filter((q) =>
-        q.eq(q.field("conversationType"), args.conversationType)
-      )
+      .withIndex("by_participants", (q) => q.eq("renterId", renterId).eq("ownerId", ownerId))
+      .filter((q) => q.eq(q.field("conversationType"), args.conversationType))
       .first()
 
     if (existing) {

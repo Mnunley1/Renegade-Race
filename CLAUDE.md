@@ -23,10 +23,8 @@ pnpm lint             # Run Biome linting
 pnpm lint:fix         # Auto-fix lint issues
 pnpm format           # Format code with Biome
 
-# Type checking (per-app)
-pnpm --filter web typecheck
-pnpm --filter admin typecheck
-pnpm --filter @renegade/backend type-check
+# Type checking
+pnpm typecheck            # All packages via turbo
 
 # Convex backend
 pnpm --filter @renegade/backend convex:deploy  # Deploy to production
@@ -115,8 +113,9 @@ React:
 
 ## Git Workflow
 
-Do mention Claude Code co-authored commit messages.
-Branch from `dev-build` for new features.
+Do not mention Claude Code co-authored commit messages.
+Branch from `dev` for new features. PRs target `dev`; `dev` merges into `main` for releases.
+Pre-commit hooks run Biome via lint-staged. CI runs lint, typecheck, and build on PRs to `main` and `dev`.
 
 ## Known Issues
 

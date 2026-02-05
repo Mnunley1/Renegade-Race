@@ -2,15 +2,10 @@
 
 import { Button } from "@workspace/ui/components/button"
 import { Calendar as CalendarComponent } from "@workspace/ui/components/calendar"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@workspace/ui/components/popover"
+import { Popover, PopoverContent, PopoverTrigger } from "@workspace/ui/components/popover"
 import { cn } from "@workspace/ui/lib/utils"
 import { format } from "date-fns"
 import { Search, X } from "lucide-react"
-import { useState } from "react"
 import type { DateRange } from "react-day-picker"
 import type { FilterActions, FilterState, TrackItem } from "./types"
 
@@ -50,10 +45,9 @@ export function SearchHero({
                   type="button"
                 >
                   <span className="font-semibold text-xs">Start date</span>
-                  <span className={cn(
-                    "truncate text-sm",
-                    !dateRange?.from && "text-muted-foreground"
-                  )}>
+                  <span
+                    className={cn("truncate text-sm", !dateRange?.from && "text-muted-foreground")}
+                  >
                     {dateRange?.from ? format(dateRange.from, "MMM d, yyyy") : "Add date"}
                   </span>
                 </button>
@@ -66,10 +60,9 @@ export function SearchHero({
                   type="button"
                 >
                   <span className="font-semibold text-xs">End date</span>
-                  <span className={cn(
-                    "truncate text-sm",
-                    !dateRange?.to && "text-muted-foreground"
-                  )}>
+                  <span
+                    className={cn("truncate text-sm", !dateRange?.to && "text-muted-foreground")}
+                  >
                     {dateRange?.to ? format(dateRange.to, "MMM d, yyyy") : "Add date"}
                   </span>
                 </button>

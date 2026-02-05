@@ -40,6 +40,16 @@ yarn-error.log*
 # Misc
 .DS_Store
 *.pem
+Thumbs.db
+
+# Large media (served from R2/CDN)
+*.mp4
+
+# Editor
+*.swp
+*.swo
+*~
+.idea/
 
 # Sentry
 sentry.properties
@@ -48,5 +58,9 @@ sentry.properties
 # Clerk
 .clerk/.tmp
 
-# Claude Code local settings
-.claude/settings.local.json
+# Claude Code
+.claude/
+
+# Migration scripts (kept locally, not tracked)
+scripts/
+packages/backend/scripts/

@@ -1,22 +1,21 @@
 "use client"
 
-import { useQuery } from "convex/react"
 import { api } from "@renegade/backend/convex/_generated/api"
-import { useState, useMemo } from "react"
-import { format, formatDistanceToNow } from "date-fns"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
+import { useQuery } from "convex/react"
+import { format, formatDistanceToNow } from "date-fns"
+import { Download, RefreshCcw, Search } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { useMemo, useState } from "react"
+import type { Column } from "@/components/data-table"
+import { DataTable, exportToCSV } from "@/components/data-table"
+import { EmptyState } from "@/components/empty-state"
+import { LoadingState } from "@/components/loading-state"
 import { PageHeader } from "@/components/page-header"
-import { DataTable } from "@/components/data-table"
-import { exportToCSV } from "@/components/data-table"
 import { StatusBadge } from "@/components/status-badge"
 import { UserAvatar } from "@/components/user-avatar"
-import { LoadingState } from "@/components/loading-state"
-import { EmptyState } from "@/components/empty-state"
-import { useRouter } from "next/navigation"
-import { Download, RefreshCcw, Search } from "lucide-react"
-import type { Column } from "@/components/data-table"
 
 export default function RefundsPage() {
   const router = useRouter()
@@ -58,9 +57,9 @@ export default function RefundsPage() {
       header: "Payment ID",
       cell: (row) => (
         <Button
-          variant="link"
           className="h-auto p-0 font-mono text-sm"
           onClick={() => router.push(`/payments/${row._id}`)}
+          variant="link"
         >
           {row._id.slice(0, 8)}
         </Button>
@@ -73,7 +72,7 @@ export default function RefundsPage() {
       sortValue: (row) => row.renter?.name || "",
       cell: (row) => {
         if (!row.renter) return <span className="text-muted-foreground">N/A</span>
-        return <UserAvatar name={row.renter.name} email={row.renter.email} />
+        return <UserAvatar email={row.renter.email} name={row.renter.name} />
       },
     },
     {
@@ -83,7 +82,7 @@ export default function RefundsPage() {
       sortValue: (row) => row.owner?.name || "",
       cell: (row) => {
         if (!row.owner) return <span className="text-muted-foreground">N/A</span>
-        return <UserAvatar name={row.owner.name} email={row.owner.email} />
+        return <UserAvatar email={row.owner.email} name={row.owner.name} />
       },
     },
     {
@@ -177,7 +176,7 @@ export default function RefundsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Refunds" description="View refund history and process new refunds" />
+      <PageHeader description="View refund history and process new refunds" title="Refunds" />
 
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
@@ -227,12 +226,12 @@ export default function RefundsPage() {
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div className="max-w-md flex-1">
                 <div className="relative">
-                  <Search className="-translate-y-1/2 absolute top-1/2 left-3 h-4 w-4 text-muted-foreground" />
+                  <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
+                    className="pl-9"
+                    onChange={(e) => setSearch(e.target.value)}
                     placeholder="Search refunds..."
                     value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="pl-9"
                   />
                 </div>
               </div>
@@ -244,13 +243,13 @@ export default function RefundsPage() {
 
             {filteredPayments.length === 0 ? (
               <EmptyState
-                icon={RefreshCcw}
-                title="No refunds found"
                 description={
                   search
                     ? "Try adjusting your search criteria"
                     : "No refunds have been processed yet"
                 }
+                icon={RefreshCcw}
+                title="No refunds found"
               />
             ) : (
               <DataTable columns={columns} data={filteredPayments} getRowId={(row) => row._id} />

@@ -3,8 +3,8 @@ import { mutation, query } from "./_generated/server"
 import {
   getDisputeCreatedEmailTemplate,
   getDisputeResolvedEmailTemplate,
-  sendTransactionalEmail,
   getSupportEmail,
+  sendTransactionalEmail,
 } from "./emails"
 import { getWebUrl } from "./helpers"
 import { rateLimiter } from "./rateLimiter"

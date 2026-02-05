@@ -92,11 +92,7 @@ export function TeamCard({
                     {specialty}
                   </Badge>
                 ))}
-                {racingType && (
-                  <Badge variant="outline">
-                    {getRacingTypeLabel(racingType)}
-                  </Badge>
-                )}
+                {racingType && <Badge variant="outline">{getRacingTypeLabel(racingType)}</Badge>}
               </div>
             </div>
           </div>

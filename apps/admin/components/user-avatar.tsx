@@ -35,7 +35,7 @@ export function UserAvatar({ name, email, role, size = "md", showInfo = true }: 
           <div className="flex items-center gap-2">
             <p className="truncate font-medium text-sm">{name ?? "Unknown"}</p>
             {role && (
-              <Badge variant="outline" className="px-1.5 py-0 text-[10px]">
+              <Badge className="px-1.5 py-0 text-[10px]" variant="outline">
                 {role}
               </Badge>
             )}

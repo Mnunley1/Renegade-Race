@@ -1,5 +1,5 @@
-import { dirname, resolve } from "path"
-import { fileURLToPath } from "url"
+import { dirname, resolve } from "node:path"
+import { fileURLToPath } from "node:url"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -37,7 +37,7 @@ const nextConfig = {
           {
             key: "Content-Security-Policy",
             value:
-              "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.clerk.com https://*.clerk.accounts.dev https://*.renegaderace.com https://*.stripe.com https://*.sentry.io https://maps.googleapis.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.r2.dev https://ik.imagekit.io https://images.unsplash.com https://*.clerk.com https://*.clerk.accounts.dev https://*.renegaderace.com https://*.stripe.com; font-src 'self' data:; connect-src 'self' https://*.convex.cloud https://*.clerk.com https://*.clerk.accounts.dev https://*.renegaderace.com https://*.stripe.com https://maps.googleapis.com https://*.sentry.io wss://*.convex.cloud; frame-src https://*.stripe.com https://*.clerk.com https://*.clerk.accounts.dev https://*.renegaderace.com; worker-src 'self' blob:;",
+              "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.clerk.com https://*.clerk.accounts.dev https://*.renegaderace.com https://*.stripe.com https://*.sentry.io https://maps.googleapis.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.r2.dev https://ik.imagekit.io https://images.unsplash.com https://*.clerk.com https://*.clerk.accounts.dev https://*.renegaderace.com https://*.stripe.com; font-src 'self' data:; connect-src 'self' https://*.convex.cloud https://*.clerk.com https://*.clerk.accounts.dev https://*.renegaderace.com https://*.stripe.com https://maps.googleapis.com https://*.sentry.io wss://*.convex.cloud; media-src 'self' https://ik.imagekit.io https://*.r2.dev; frame-src https://*.stripe.com https://*.clerk.com https://*.clerk.accounts.dev https://*.renegaderace.com; worker-src 'self' blob:;",
           },
         ],
       },

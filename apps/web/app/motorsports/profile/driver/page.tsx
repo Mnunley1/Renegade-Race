@@ -27,17 +27,17 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
-import { api } from "@/lib/convex"
-import { imagePresets } from "@/lib/imagekit"
 import {
+  AVAILABILITY_OPTIONS,
   COMMON_LICENSES,
   EXPERIENCE_LEVELS,
+  RACING_TYPES,
   REAL_WORLD_CATEGORIES,
   SIM_RACING_CATEGORIES,
   SIM_RACING_PLATFORMS,
-  RACING_TYPES,
-  AVAILABILITY_OPTIONS,
 } from "@/lib/constants"
+import { api } from "@/lib/convex"
+import { imagePresets } from "@/lib/imagekit"
 
 export default function CreateDriverProfilePage() {
   const router = useRouter()
@@ -94,7 +94,7 @@ export default function CreateDriverProfilePage() {
   // Redirect to existing profile if user already has one
   useEffect(() => {
     if (existingProfile && existingProfile.length > 0) {
-      router.push(`/motorsports/drivers/${existingProfile[0]!._id}`)
+      router.push(`/motorsports/drivers/${existingProfile[0]?._id}`)
     }
   }, [existingProfile, router])
 
@@ -330,7 +330,7 @@ export default function CreateDriverProfilePage() {
                       <Image alt="Driver avatar" className="object-cover" fill src={avatarUrl} />
                     </div>
                     <Button
-                      className="-right-2 -top-2 absolute size-8 rounded-full p-0"
+                      className="absolute -top-2 -right-2 size-8 rounded-full p-0"
                       onClick={handleRemoveAvatar}
                       type="button"
                       variant="destructive"

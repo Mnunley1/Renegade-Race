@@ -1,8 +1,8 @@
 import { useUploadFile } from "@convex-dev/r2/react"
 import { useRef, useState } from "react"
 import { toast } from "sonner"
-import { api } from "@/lib/convex"
 import { MAX_FILE_SIZE_BYTES, UPLOAD_DELAY_MS } from "@/lib/constants"
+import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 
 type UsePhotoUploadOptions = {

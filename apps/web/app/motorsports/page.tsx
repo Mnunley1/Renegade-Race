@@ -1,9 +1,9 @@
 "use client"
 
+import { useUser } from "@clerk/nextjs"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent } from "@workspace/ui/components/card"
-import { useUser } from "@clerk/nextjs"
 import { useQuery } from "convex/react"
 import { FileText, Flag, User, Users } from "lucide-react"
 import Image from "next/image"
@@ -42,18 +42,18 @@ export default function MotorsportsPage() {
                   </span>
                 </h1>
                 <p className="text-base text-muted-foreground leading-relaxed md:text-lg">
-                  Find your perfect match and accelerate your racing career in real-world racing
-                  or sim racing.
+                  Find your perfect match and accelerate your racing career in real-world racing or
+                  sim racing.
                 </p>
               </div>
               <div className="flex flex-wrap gap-3">
-                <Button asChild size="lg" className="shadow-md">
+                <Button asChild className="shadow-md" size="lg">
                   <Link href="/motorsports/profile/driver">
                     <User className="mr-2 size-4" />
                     Join as Driver
                   </Link>
                 </Button>
-                <Button asChild size="lg" variant="outline" className="shadow-md">
+                <Button asChild className="shadow-md" size="lg" variant="outline">
                   <Link href="/motorsports/profile/team">
                     <Users className="mr-2 size-4" />
                     Join as Team
@@ -79,7 +79,7 @@ export default function MotorsportsPage() {
 
       {/* Navigation Cards */}
       <div className="mb-10 grid gap-6 md:grid-cols-2">
-        <Link href="/motorsports/teams" className="group/card">
+        <Link className="group/card" href="/motorsports/teams">
           <Card className="h-full transition-shadow hover:shadow-lg">
             <CardContent className="flex items-center gap-4 p-6">
               <div className="flex size-14 items-center justify-center rounded-xl bg-primary/10">
@@ -96,7 +96,7 @@ export default function MotorsportsPage() {
             </CardContent>
           </Card>
         </Link>
-        <Link href="/motorsports/drivers" className="group/card">
+        <Link className="group/card" href="/motorsports/drivers">
           <Card className="h-full transition-shadow hover:shadow-lg">
             <CardContent className="flex items-center gap-4 p-6">
               <div className="flex size-14 items-center justify-center rounded-xl bg-primary/10">
@@ -134,14 +134,14 @@ export default function MotorsportsPage() {
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {recommendedTeams.map((team: any) => (
               <RecommendationCard
-                key={team._id}
-                type="team"
+                availableSeats={team.availableSeats}
                 id={team._id}
-                name={team.name}
+                key={team._id}
                 location={team.location}
                 matchScore={team.matchScore}
+                name={team.name}
                 specialties={team.specialties}
-                availableSeats={team.availableSeats}
+                type="team"
               />
             ))}
           </div>

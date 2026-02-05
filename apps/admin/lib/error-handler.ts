@@ -131,7 +131,6 @@ export function handleError(error: unknown, options: ErrorHandlerOptions = {}): 
 
   // Log error for debugging
   if (logError) {
-    console.error("Error:", error)
   }
 
   // Get user-friendly message

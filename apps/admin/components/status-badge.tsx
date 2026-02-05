@@ -82,7 +82,7 @@ interface StatusBadgeProps {
 export function StatusBadge({ status, className }: StatusBadgeProps) {
   const config = statusConfig[status] ?? { variant: "secondary" as const }
   return (
-    <Badge variant={config.variant} className={`${config.className ?? ""} ${className ?? ""}`}>
+    <Badge className={`${config.className ?? ""} ${className ?? ""}`} variant={config.variant}>
       {status.replace(/_/g, " ")}
     </Badge>
   )

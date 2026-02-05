@@ -39,10 +39,10 @@ export function Pagination({
       </div>
       <div className="flex items-center gap-2">
         <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onPageChange(currentPage - 1)}
           disabled={currentPage === 1}
+          onClick={() => onPageChange(currentPage - 1)}
+          size="sm"
+          variant="outline"
         >
           <ChevronLeft className="size-4" />
           Previous
@@ -50,7 +50,7 @@ export function Pagination({
 
         {startPage > 1 && (
           <>
-            <Button variant="outline" size="sm" onClick={() => onPageChange(1)}>
+            <Button onClick={() => onPageChange(1)} size="sm" variant="outline">
               1
             </Button>
             {startPage > 2 && <span className="text-muted-foreground">...</span>}
@@ -60,9 +60,9 @@ export function Pagination({
         {pages.map((page) => (
           <Button
             key={page}
-            variant={currentPage === page ? "default" : "outline"}
-            size="sm"
             onClick={() => onPageChange(page)}
+            size="sm"
+            variant={currentPage === page ? "default" : "outline"}
           >
             {page}
           </Button>
@@ -71,24 +71,24 @@ export function Pagination({
         {endPage < totalPages && (
           <>
             {endPage < totalPages - 1 && <span className="text-muted-foreground">...</span>}
-            <Button variant="outline" size="sm" onClick={() => onPageChange(totalPages)}>
+            <Button onClick={() => onPageChange(totalPages)} size="sm" variant="outline">
               {totalPages}
             </Button>
           </>
         )}
 
         <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onPageChange(currentPage + 1)}
           disabled={currentPage >= totalPages}
+          onClick={() => onPageChange(currentPage + 1)}
+          size="sm"
+          variant="outline"
         >
           Next
           <ChevronRight className="size-4" />
         </Button>
 
         {hasMore && onLoadMore && (
-          <Button variant="outline" size="sm" onClick={onLoadMore}>
+          <Button onClick={onLoadMore} size="sm" variant="outline">
             Load More
           </Button>
         )}

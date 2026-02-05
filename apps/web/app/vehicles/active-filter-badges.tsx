@@ -28,14 +28,14 @@ function FilterBadge({
   return (
     <div
       className={cn(
-        "inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors",
+        "inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-0.5 font-medium text-xs transition-colors",
         colorClass
       )}
     >
       {children}
       <button
         aria-label={dismissLabel}
-        className="inline-flex shrink-0 cursor-pointer opacity-60 hover:opacity-100 transition-opacity"
+        className="inline-flex shrink-0 cursor-pointer opacity-60 transition-opacity hover:opacity-100"
         onClick={onDismiss}
         type="button"
       >
@@ -56,8 +56,8 @@ export function ActiveFilterBadges({
   }
 
   return (
-    <div className="flex items-center gap-1.5 overflow-x-auto pb-2 sm:flex-wrap sm:gap-2 sm:overflow-visible sm:pb-0 scrollbar-hide border-t pt-2">
-      <div className="inline-flex shrink-0 items-center rounded-full bg-primary px-2.5 py-0.5 text-xs font-semibold text-primary-foreground">
+    <div className="scrollbar-hide flex items-center gap-1.5 overflow-x-auto border-t pt-2 pb-2 sm:flex-wrap sm:gap-2 sm:overflow-visible sm:pb-0">
+      <div className="inline-flex shrink-0 items-center rounded-full bg-primary px-2.5 py-0.5 font-semibold text-primary-foreground text-xs">
         {activeFiltersCount} filter{activeFiltersCount !== 1 ? "s" : ""}
       </div>
 

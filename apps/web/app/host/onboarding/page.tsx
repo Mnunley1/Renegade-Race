@@ -5,8 +5,8 @@ import { useQuery } from "convex/react"
 import { Loader2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useEffect } from "react"
-import { api } from "@/lib/convex"
 import { OnboardingFlow } from "@/components/onboarding-flow"
+import { api } from "@/lib/convex"
 
 export default function HostOnboardingPage() {
   const { user } = useUser()

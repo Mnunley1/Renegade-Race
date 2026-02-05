@@ -387,7 +387,7 @@ export default function ProfilePage() {
             }}
           />
           <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent" />
-          <div className="-top-24 -right-24 absolute size-64 rounded-full bg-primary/5 blur-3xl" />
+          <div className="absolute -top-24 -right-24 size-64 rounded-full bg-primary/5 blur-3xl" />
 
           <CardContent className="relative p-8">
             <div className="flex flex-col items-start gap-6 md:flex-row md:items-center">
@@ -402,7 +402,7 @@ export default function ProfilePage() {
                   {!isEditing && (
                     <button
                       aria-label="Edit profile picture"
-                      className="-right-1 -bottom-1 absolute flex size-9 items-center justify-center rounded-full border-2 border-background bg-primary text-primary-foreground shadow-md transition-transform hover:scale-105"
+                      className="absolute -right-1 -bottom-1 flex size-9 items-center justify-center rounded-full border-2 border-background bg-primary text-primary-foreground shadow-md transition-transform hover:scale-105"
                       onClick={handleEditProfilePicture}
                       type="button"
                     >
@@ -504,7 +504,7 @@ export default function ProfilePage() {
                   <Sparkles className="size-6 text-primary" />
                   <svg
                     aria-hidden="true"
-                    className="-rotate-90 absolute inset-0"
+                    className="absolute inset-0 -rotate-90"
                     viewBox="0 0 56 56"
                   >
                     <title>Profile completion</title>
@@ -675,7 +675,7 @@ export default function ProfilePage() {
                       Location
                     </Label>
                     <div className="relative">
-                      <MapPin className="-translate-y-1/2 absolute top-1/2 left-3 size-4 text-muted-foreground" />
+                      <MapPin className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
                       <Input
                         className="pl-9"
                         id="location"
@@ -821,7 +821,7 @@ export default function ProfilePage() {
         {/* Quick Links */}
         <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
           <Link href="/settings">
-            <Card className="hover:-translate-y-0.5 cursor-pointer transition-all hover:shadow-md">
+            <Card className="cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md">
               <CardContent className="flex items-center gap-3 p-4">
                 <div className="flex size-10 items-center justify-center rounded-lg bg-muted">
                   <Settings className="size-5 text-muted-foreground" />
@@ -835,7 +835,7 @@ export default function ProfilePage() {
           </Link>
 
           <Link href="/vehicles">
-            <Card className="hover:-translate-y-0.5 cursor-pointer transition-all hover:shadow-md">
+            <Card className="cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md">
               <CardContent className="flex items-center gap-3 p-4">
                 <div className="flex size-10 items-center justify-center rounded-lg bg-muted">
                   <Car className="size-5 text-muted-foreground" />
@@ -849,7 +849,7 @@ export default function ProfilePage() {
           </Link>
 
           <Link href="/trips">
-            <Card className="hover:-translate-y-0.5 cursor-pointer transition-all hover:shadow-md">
+            <Card className="cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md">
               <CardContent className="flex items-center gap-3 p-4">
                 <div className="flex size-10 items-center justify-center rounded-lg bg-muted">
                   <Calendar className="size-5 text-muted-foreground" />
@@ -863,7 +863,7 @@ export default function ProfilePage() {
           </Link>
 
           <Link href="/favorites">
-            <Card className="hover:-translate-y-0.5 cursor-pointer transition-all hover:shadow-md">
+            <Card className="cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md">
               <CardContent className="flex items-center gap-3 p-4">
                 <div className="flex size-10 items-center justify-center rounded-lg bg-muted">
                   <Heart className="size-5 text-muted-foreground" />

@@ -39,8 +39,8 @@ import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
-import { api } from "@/lib/convex"
 import type { Id } from "@/lib/convex"
+import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 import { imagePresets } from "@/lib/imagekit"
 
@@ -72,8 +72,8 @@ export default function EditVehiclePage() {
   // Image management state
   const [images, setImages] = useState<
     Array<{
-      _id: string
-      r2Key: string | undefined
+      _id: Id<"vehicleImages">
+      r2Key?: string
       isPrimary: boolean
       order: number
     }>
@@ -141,7 +141,12 @@ export default function EditVehiclePage() {
 
       // Sort images by order
       const sortedImages = [...(vehicle.images || [])].sort((a, b) => a.order - b.order)
-      setImages(sortedImages)
+      setImages(sortedImages.map((img: any) => ({
+        _id: img._id,
+        r2Key: img.r2Key,
+        isPrimary: img.isPrimary,
+        order: img.order
+      })))
     }
   }, [vehicle])
 
@@ -401,8 +406,15 @@ export default function EditVehiclePage() {
       })
       // Reload images to revert UI changes
       if (vehicle) {
-        const sortedImages = [...(vehicle.images || [])].sort((a, b) => a.order - b.order)
-        setImages(sortedImages)
+        const sortedImages = [...(vehicle.images || [])].sort(
+          (a: { order: number }, b: { order: number }) => a.order - b.order
+        )
+        setImages(sortedImages.map((img: any) => ({
+          _id: img._id,
+          r2Key: img.r2Key,
+          isPrimary: img.isPrimary,
+          order: img.order
+        })))
       }
     } finally {
       setDraggedIndex(null)

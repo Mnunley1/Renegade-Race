@@ -1,22 +1,21 @@
 "use client"
 
-import { useQuery } from "convex/react"
 import { api } from "@renegade/backend/convex/_generated/api"
-import { useState, useMemo } from "react"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
+import { useQuery } from "convex/react"
+import { CheckCircle, Clock, DollarSign, Download, ExternalLink, Search, Users } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { useMemo, useState } from "react"
+import type { Column } from "@/components/data-table"
+import { DataTable, exportToCSV } from "@/components/data-table"
+import { EmptyState } from "@/components/empty-state"
+import { LoadingState } from "@/components/loading-state"
 import { PageHeader } from "@/components/page-header"
-import { DataTable } from "@/components/data-table"
-import { exportToCSV } from "@/components/data-table"
+import { StatCard } from "@/components/stat-card"
 import { StatusBadge } from "@/components/status-badge"
 import { UserAvatar } from "@/components/user-avatar"
-import { LoadingState } from "@/components/loading-state"
-import { StatCard } from "@/components/stat-card"
-import { EmptyState } from "@/components/empty-state"
-import { useRouter } from "next/navigation"
-import { Users, CheckCircle, Clock, DollarSign, Download, Search, ExternalLink } from "lucide-react"
-import type { Column } from "@/components/data-table"
 
 export default function PayoutsPage() {
   const router = useRouter()
@@ -79,11 +78,11 @@ export default function PayoutsPage() {
         if (!row.user) return <span className="text-muted-foreground">N/A</span>
         return (
           <div className="flex items-center gap-2">
-            <UserAvatar name={row.user.name} email={row.user.email} />
+            <UserAvatar email={row.user.email} name={row.user.name} />
             <Button
-              variant="link"
               className="h-auto p-0"
-              onClick={() => router.push(`/users/${row.user!._id}`)}
+              onClick={() => router.push(`/users/${row.user?._id}`)}
+              variant="link"
             >
               <ExternalLink className="h-3 w-3" />
             </Button>
@@ -127,11 +126,11 @@ export default function PayoutsPage() {
         return (
           <div className="flex items-center gap-2">
             <span className="font-mono text-xs">{stripeId.slice(0, 16)}...</span>
-            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" asChild>
+            <Button asChild className="h-6 w-6 p-0" size="sm" variant="ghost">
               <a
                 href={`https://dashboard.stripe.com/connect/accounts/${stripeId}`}
-                target="_blank"
                 rel="noopener noreferrer"
+                target="_blank"
               >
                 <ExternalLink className="h-3 w-3" />
               </a>
@@ -174,30 +173,30 @@ export default function PayoutsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Host Payouts"
         description="Overview of host earnings and Stripe Connect status"
+        title="Host Payouts"
       />
 
       <div className="grid gap-4 md:grid-cols-4">
         <StatCard
+          icon={<Users className="h-5 w-5 text-muted-foreground" />}
           label="Total Hosts"
           value={stats.totalHosts.toString()}
-          icon={<Users className="h-5 w-5 text-muted-foreground" />}
         />
         <StatCard
+          icon={<CheckCircle className="h-5 w-5 text-muted-foreground" />}
           label="Active Stripe Accounts"
           value={stats.activeStripeAccounts.toString()}
-          icon={<CheckCircle className="h-5 w-5 text-muted-foreground" />}
         />
         <StatCard
+          icon={<Clock className="h-5 w-5 text-muted-foreground" />}
           label="Pending Setup"
           value={stats.pendingSetup.toString()}
-          icon={<Clock className="h-5 w-5 text-muted-foreground" />}
         />
         <StatCard
+          icon={<DollarSign className="h-5 w-5 text-muted-foreground" />}
           label="Total Paid Out"
           value={`$${(stats.totalPaidOut / 100).toFixed(2)}`}
-          icon={<DollarSign className="h-5 w-5 text-muted-foreground" />}
         />
       </div>
 
@@ -210,12 +209,12 @@ export default function PayoutsPage() {
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div className="max-w-md flex-1">
                 <div className="relative">
-                  <Search className="-translate-y-1/2 absolute top-1/2 left-3 h-4 w-4 text-muted-foreground" />
+                  <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
+                    className="pl-9"
+                    onChange={(e) => setSearch(e.target.value)}
                     placeholder="Search by host name, email, or Stripe ID..."
                     value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="pl-9"
                   />
                 </div>
               </div>
@@ -227,11 +226,11 @@ export default function PayoutsPage() {
 
             {filteredHosts.length === 0 ? (
               <EmptyState
-                icon={Users}
-                title="No hosts found"
                 description={
                   search ? "Try adjusting your search criteria" : "No hosts with earnings yet"
                 }
+                icon={Users}
+                title="No hosts found"
               />
             ) : (
               <DataTable

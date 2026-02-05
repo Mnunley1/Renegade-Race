@@ -25,7 +25,7 @@ export default function PhotosPage() {
 
   const uploadFile = useUploadFile(api.r2)
   const saveDraft = useMutation(api.users.saveOnboardingDraft)
-  const draft = useQuery(api.users.getOnboardingDraft, {})
+  const _draft = useQuery(api.users.getOnboardingDraft, {})
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
@@ -150,7 +150,7 @@ export default function PhotosPage() {
                     )}
                   </div>
                   <Button
-                    className="-right-2 -top-2 absolute size-6 rounded-full p-0"
+                    className="absolute -top-2 -right-2 size-6 rounded-full p-0"
                     onClick={() => removeImage(index)}
                     size="icon"
                     type="button"
