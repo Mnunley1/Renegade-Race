@@ -100,7 +100,10 @@ export default function HomePage() {
             playsInline
             poster="/images/hero-vid-thumbnail.png"
           >
-            <source src="https://ik.imagekit.io/renegaderace/site-media/renegade-hero-video.mp4" type="video/mp4" />
+            <source
+              src="https://ik.imagekit.io/renegaderace/site-media/renegade-hero-video.mp4"
+              type="video/mp4"
+            />
           </video>
         )}
 
@@ -318,15 +321,18 @@ export default function HomePage() {
               />
             ) : (
               <video
+                autoPlay
                 className="h-full w-full object-cover"
                 controls
                 loop
                 muted
                 onError={() => setVideoError(true)}
                 playsInline
-                preload="metadata"
               >
-                <source src="https://ik.imagekit.io/renegaderace/site-media/Renegade_promo_video.mp4" type="video/mp4" />
+                <source
+                  src="https://ik.imagekit.io/renegaderace/site-media/Renegade_promo_video.mp4"
+                  type="video/mp4"
+                />
                 Your browser does not support the video tag.
               </video>
             )}
