@@ -60,6 +60,13 @@ sentry.properties
 
 # Claude Code
 .claude/
+CLAUDE.md
+
+# Cursor
+.cursorrules
+
+# Data files (migration exports)
+*.csv
 
 # Migration scripts (kept locally, not tracked)
 scripts/
