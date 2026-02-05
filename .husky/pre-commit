@@ -1,1 +1,17 @@
 npx lint-staged
+
+# Block files larger than 5MB from being committed
+MAX_SIZE=5242880
+oversized=""
+for file in $(git diff --cached --name-only --diff-filter=ACM); do
+  if [ -f "$file" ]; then
+    size=$(wc -c < "$file" | tr -d ' ')
+    if [ "$size" -gt "$MAX_SIZE" ]; then
+      oversized="$oversized\n  $file ($(( size / 1024 / 1024 ))MB)"
+    fi
+  fi
+done
+if [ -n "$oversized" ]; then
+  echo "Blocked: files exceed 5MB limit. Use R2/CDN instead:$oversized"
+  exit 1
+fi
