@@ -101,7 +101,7 @@ export default function HomePage() {
             poster="/images/hero-vid-thumbnail.png"
           >
             <source
-              src="https://ik.imagekit.io/renegaderace/site-media/renegade-hero-video.mp4"
+              src="https://pub-a50e44fe83ed433f81cb9d89aa0e106b.r2.dev/site-media/renegade-hero-video.mp4"
               type="video/mp4"
             />
           </video>
@@ -330,7 +330,7 @@ export default function HomePage() {
                 playsInline
               >
                 <source
-                  src="https://ik.imagekit.io/renegaderace/site-media/Renegade_promo_video.mp4"
+                  src="https://pub-a50e44fe83ed433f81cb9d89aa0e106b.r2.dev/site-media/Renegade_promo_video.mp4"
                   type="video/mp4"
                 />
                 Your browser does not support the video tag.
