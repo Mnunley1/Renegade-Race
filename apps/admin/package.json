@@ -15,6 +15,7 @@
   "dependencies": {
     "@clerk/nextjs": "^6.36.5",
     "@renegade/backend": "workspace:*",
+    "@sentry/nextjs": "^8.45.0",
     "@workspace/ui": "workspace:*",
     "convex": "^1.27.0",
     "date-fns": "^4.1.0",

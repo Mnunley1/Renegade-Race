@@ -12,4 +12,13 @@ crons.interval(
   api.reservations.cleanupStalePendingReservations
 )
 
+// Clean up old webhook events every 24 hours
+// Removes webhook events older than 7 days to prevent table bloat
+// Webhook idempotency only needs to track recent events
+crons.daily(
+  "cleanup old webhook events",
+  { hourUTC: 3, minuteUTC: 0 }, // Run at 3 AM UTC daily
+  api.webhookIdempotency.cleanupOldWebhookEvents
+)
+
 export default crons

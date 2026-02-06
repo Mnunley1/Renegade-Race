@@ -967,4 +967,17 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_category", ["category"])
     .index("by_user_category", ["userId", "category"]),
+
+  // Webhook idempotency tracking
+  webhookEvents: defineTable({
+    eventId: v.string(),
+    source: v.union(v.literal("stripe"), v.literal("clerk"), v.literal("resend")),
+    eventType: v.string(),
+    processedAt: v.number(),
+    expiresAt: v.optional(v.number()), // For cleanup - events older than 7 days
+  })
+    .index("by_event_id", ["eventId"])
+    .index("by_source", ["source"])
+    .index("by_expires_at", ["expiresAt"])
+    .index("by_source_event_id", ["source", "eventId"]),
 })
