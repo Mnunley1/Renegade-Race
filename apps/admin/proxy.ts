@@ -45,6 +45,7 @@ export default clerkMiddleware(
       directives: {
         "script-src": ["*.sentry.io"],
         "connect-src": [
+          "accounts.renegaderace.com",
           "*.convex.cloud",
           "wss://*.convex.cloud",
           "*.sentry.io",
