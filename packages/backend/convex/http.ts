@@ -28,6 +28,17 @@ registerRoutes(http, components.stripe, {
   events: {
     // Custom handler for payment_intent.succeeded
     "payment_intent.succeeded": async (ctx, event: Stripe.PaymentIntentSucceededEvent) => {
+      // Check idempotency
+      const alreadyProcessed = await ctx.runQuery(internal.webhookIdempotency.checkWebhookEvent, {
+        eventId: event.id,
+        source: "stripe",
+      })
+
+      if (alreadyProcessed) {
+        // Already processed, skip silently
+        return
+      }
+
       const paymentIntent = event.data.object
 
       // Find payment by Stripe payment intent ID
@@ -42,10 +53,27 @@ registerRoutes(http, components.stripe, {
           stripeChargeId: paymentIntent.latest_charge as string,
         })
       }
+
+      // Record successful processing
+      await ctx.runMutation(internal.webhookIdempotency.recordWebhookEvent, {
+        eventId: event.id,
+        source: "stripe",
+        eventType: event.type,
+      })
     },
 
     // Custom handler for payment_intent.payment_failed
     "payment_intent.payment_failed": async (ctx, event: Stripe.PaymentIntentPaymentFailedEvent) => {
+      // Check idempotency
+      const alreadyProcessed = await ctx.runQuery(internal.webhookIdempotency.checkWebhookEvent, {
+        eventId: event.id,
+        source: "stripe",
+      })
+
+      if (alreadyProcessed) {
+        return
+      }
+
       const paymentIntent = event.data.object
 
       const payment = await ctx.runQuery(api.stripe.findPaymentByStripeIntent, {
@@ -58,10 +86,27 @@ registerRoutes(http, components.stripe, {
           failureReason: paymentIntent.last_payment_error?.message,
         })
       }
+
+      // Record successful processing
+      await ctx.runMutation(internal.webhookIdempotency.recordWebhookEvent, {
+        eventId: event.id,
+        source: "stripe",
+        eventType: event.type,
+      })
     },
 
     // Handle charge.dispute.created
     "charge.dispute.created": async (ctx, event: Stripe.ChargeDisputeCreatedEvent) => {
+      // Check idempotency
+      const alreadyProcessed = await ctx.runQuery(internal.webhookIdempotency.checkWebhookEvent, {
+        eventId: event.id,
+        source: "stripe",
+      })
+
+      if (alreadyProcessed) {
+        return
+      }
+
       const dispute = event.data.object
       const paymentIntentId = dispute.payment_intent as string
 
@@ -73,10 +118,27 @@ registerRoutes(http, components.stripe, {
           disputeAmount: dispute.amount,
         })
       }
+
+      // Record successful processing
+      await ctx.runMutation(internal.webhookIdempotency.recordWebhookEvent, {
+        eventId: event.id,
+        source: "stripe",
+        eventType: event.type,
+      })
     },
 
     // Handle charge.refunded
     "charge.refunded": async (ctx, event: Stripe.ChargeRefundedEvent) => {
+      // Check idempotency
+      const alreadyProcessed = await ctx.runQuery(internal.webhookIdempotency.checkWebhookEvent, {
+        eventId: event.id,
+        source: "stripe",
+      })
+
+      if (alreadyProcessed) {
+        return
+      }
+
       const charge = event.data.object
       const paymentIntentId = charge.payment_intent as string
 
@@ -87,21 +149,55 @@ registerRoutes(http, components.stripe, {
           refundId: charge.refunds?.data[0]?.id || "unknown",
         })
       }
+
+      // Record successful processing
+      await ctx.runMutation(internal.webhookIdempotency.recordWebhookEvent, {
+        eventId: event.id,
+        source: "stripe",
+        eventType: event.type,
+      })
     },
 
     // Handle transfer.failed
     // @ts-expect-error - StripeEventHandlers type doesn't include transfer.failed
     "transfer.failed": async (ctx, event: Stripe.TransferUpdatedEvent) => {
+      // Check idempotency
+      const alreadyProcessed = await ctx.runQuery(internal.webhookIdempotency.checkWebhookEvent, {
+        eventId: event.id,
+        source: "stripe",
+      })
+
+      if (alreadyProcessed) {
+        return
+      }
+
       const transfer = event.data.object
 
       await ctx.runMutation(api.stripe.handleTransferFailed, {
         stripeTransferId: transfer.id,
         failureReason: (transfer as unknown as { failure_message?: string }).failure_message,
       })
+
+      // Record successful processing
+      await ctx.runMutation(internal.webhookIdempotency.recordWebhookEvent, {
+        eventId: event.id,
+        source: "stripe",
+        eventType: event.type,
+      })
     },
 
     // Handle payout.failed
     "payout.failed": async (ctx, event: Stripe.PayoutFailedEvent) => {
+      // Check idempotency
+      const alreadyProcessed = await ctx.runQuery(internal.webhookIdempotency.checkWebhookEvent, {
+        eventId: event.id,
+        source: "stripe",
+      })
+
+      if (alreadyProcessed) {
+        return
+      }
+
       const payout = event.data.object
 
       await ctx.runMutation(api.stripe.handlePayoutFailed, {
@@ -109,14 +205,38 @@ registerRoutes(http, components.stripe, {
         payoutId: payout.id,
         failureReason: payout.failure_message || undefined,
       })
+
+      // Record successful processing
+      await ctx.runMutation(internal.webhookIdempotency.recordWebhookEvent, {
+        eventId: event.id,
+        source: "stripe",
+        eventType: event.type,
+      })
     },
 
     // Handle payment_intent.canceled
     "payment_intent.canceled": async (ctx, event: Stripe.PaymentIntentCanceledEvent) => {
+      // Check idempotency
+      const alreadyProcessed = await ctx.runQuery(internal.webhookIdempotency.checkWebhookEvent, {
+        eventId: event.id,
+        source: "stripe",
+      })
+
+      if (alreadyProcessed) {
+        return
+      }
+
       const paymentIntent = event.data.object
 
       await ctx.runMutation(api.stripe.handlePaymentCanceled, {
         stripePaymentIntentId: paymentIntent.id,
+      })
+
+      // Record successful processing
+      await ctx.runMutation(internal.webhookIdempotency.recordWebhookEvent, {
+        eventId: event.id,
+        source: "stripe",
+        eventType: event.type,
       })
     },
 
@@ -125,6 +245,16 @@ registerRoutes(http, components.stripe, {
       ctx,
       event: Stripe.AccountApplicationDeauthorizedEvent
     ) => {
+      // Check idempotency
+      const alreadyProcessed = await ctx.runQuery(internal.webhookIdempotency.checkWebhookEvent, {
+        eventId: event.id,
+        source: "stripe",
+      })
+
+      if (alreadyProcessed) {
+        return
+      }
+
       const _application = event.data.object
       // The account ID is in the event's account field for connected accounts
       const accountId = event.account
@@ -134,10 +264,27 @@ registerRoutes(http, components.stripe, {
           stripeAccountId: accountId,
         })
       }
+
+      // Record successful processing
+      await ctx.runMutation(internal.webhookIdempotency.recordWebhookEvent, {
+        eventId: event.id,
+        source: "stripe",
+        eventType: event.type,
+      })
     },
 
     // Handle checkout.session.completed
     "checkout.session.completed": async (ctx, event: Stripe.CheckoutSessionCompletedEvent) => {
+      // Check idempotency
+      const alreadyProcessed = await ctx.runQuery(internal.webhookIdempotency.checkWebhookEvent, {
+        eventId: event.id,
+        source: "stripe",
+      })
+
+      if (alreadyProcessed) {
+        return
+      }
+
       const session = event.data.object
       const paymentIntentId = session.payment_intent as string
 
@@ -151,14 +298,37 @@ registerRoutes(http, components.stripe, {
           // But we can add additional logic here if needed
         }
       }
+
+      // Record successful processing
+      await ctx.runMutation(internal.webhookIdempotency.recordWebhookEvent, {
+        eventId: event.id,
+        source: "stripe",
+        eventType: event.type,
+      })
     },
 
     // Handle account.updated - updates Stripe Connect account status
     "account.updated": async (ctx, event: Stripe.AccountUpdatedEvent) => {
+      // Check idempotency
+      const alreadyProcessed = await ctx.runQuery(internal.webhookIdempotency.checkWebhookEvent, {
+        eventId: event.id,
+        source: "stripe",
+      })
+
+      if (alreadyProcessed) {
+        return
+      }
+
       const account = event.data.object
 
       // Only process Connect accounts (Express accounts)
       if (account.type !== "express") {
+        // Record even if skipped to prevent reprocessing
+        await ctx.runMutation(internal.webhookIdempotency.recordWebhookEvent, {
+          eventId: event.id,
+          source: "stripe",
+          eventType: event.type,
+        })
         return
       }
 
@@ -168,6 +338,12 @@ registerRoutes(http, components.stripe, {
       })
 
       if (!user) {
+        // Record even if user not found to prevent reprocessing
+        await ctx.runMutation(internal.webhookIdempotency.recordWebhookEvent, {
+          eventId: event.id,
+          source: "stripe",
+          eventType: event.type,
+        })
         return
       }
 
@@ -205,6 +381,13 @@ registerRoutes(http, components.stripe, {
         stripeAccountId: account.id,
         status,
       })
+
+      // Record successful processing
+      await ctx.runMutation(internal.webhookIdempotency.recordWebhookEvent, {
+        eventId: event.id,
+        source: "stripe",
+        eventType: event.type,
+      })
     },
   },
 })
@@ -237,6 +420,21 @@ http.route({
     if (!event) {
       return new Response("Error occured", { status: 400 })
     }
+
+    // Check idempotency using svix-id header
+    const svixId = request.headers.get("svix-id")
+    if (svixId) {
+      const alreadyProcessed = await ctx.runQuery(internal.webhookIdempotency.checkWebhookEvent, {
+        eventId: svixId,
+        source: "clerk",
+      })
+
+      if (alreadyProcessed) {
+        // Already processed, return 200 to acknowledge
+        return new Response(null, { status: 200 })
+      }
+    }
+
     switch (event.type) {
       case "user.created": // intentional fallthrough
       case "user.updated":
@@ -251,8 +449,17 @@ http.route({
         break
       }
       default:
-        // Ignored Clerk webhook event
+        // Ignored Clerk webhook event - still record to prevent reprocessing
         break
+    }
+
+    // Record successful processing
+    if (svixId) {
+      await ctx.runMutation(internal.webhookIdempotency.recordWebhookEvent, {
+        eventId: svixId,
+        source: "clerk",
+        eventType: event.type,
+      })
     }
 
     return new Response(null, { status: 200 })

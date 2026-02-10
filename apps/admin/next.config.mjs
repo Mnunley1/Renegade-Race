@@ -37,7 +37,7 @@ const nextConfig = {
           {
             key: "Content-Security-Policy",
             value:
-              "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.clerk.com https://*.clerk.accounts.dev https://*.renegaderace.com https://*.sentry.io; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.r2.dev https://*.r2.cloudflarestorage.com https://ik.imagekit.io https://images.unsplash.com https://api.dicebear.com https://*.clerk.com https://*.clerk.accounts.dev https://*.renegaderace.com; font-src 'self' data:; connect-src 'self' https://*.convex.cloud https://*.clerk.com https://*.clerk.accounts.dev https://*.renegaderace.com https://*.sentry.io wss://*.convex.cloud; frame-src https://*.clerk.com https://*.clerk.accounts.dev https://*.renegaderace.com; worker-src 'self' blob:;",
+              "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.clerk.com https://*.clerk.accounts.dev https://*.renegaderace.com https://*.sentry.io; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.r2.dev https://*.r2.cloudflarestorage.com https://ik.imagekit.io https://images.unsplash.com https://api.dicebear.com https://*.clerk.com https://*.clerk.accounts.dev https://*.renegaderace.com https://*.vercel.app; font-src 'self' data:; connect-src 'self' https://*.convex.cloud https://*.clerk.com https://*.clerk.accounts.dev https://*.renegaderace.com https://*.sentry.io https://*.r2.cloudflarestorage.com https://*.r2.dev https://*.vercel.app wss://*.convex.cloud; frame-src https://*.clerk.com https://*.clerk.accounts.dev https://*.renegaderace.com; worker-src 'self' blob:;",
           },
         ],
       },

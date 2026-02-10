@@ -12,6 +12,7 @@ import {
   sendTransactionalEmail,
 } from "./emails"
 import { getWebUrl } from "./helpers"
+import { ErrorCode, throwError } from "./errors"
 import { rateLimiter } from "./rateLimiter"
 
 // ============================================================================
@@ -96,7 +97,7 @@ const stripeClient = new StripeSubscriptions(components.stripe, {})
 function getStripe(): Stripe {
   const secretKey = process.env.STRIPE_SECRET_KEY
   if (!secretKey) {
-    throw new Error("STRIPE_SECRET_KEY environment variable is not set")
+    throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE, "STRIPE_SECRET_KEY environment variable is not set")
   }
   return new Stripe(secretKey, {
     apiVersion: "2025-08-27.basil",
@@ -114,7 +115,7 @@ export const calculatePlatformFee = mutation({
   handler: async (ctx, args) => {
     // Validate amount
     if (args.amount <= 0) {
-      throw new Error("Amount must be positive")
+      throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE, "Amount must be positive")
     }
 
     const settings = await ctx.db
@@ -135,7 +136,7 @@ export const calculatePlatformFee = mutation({
 
     // Validate fee percentage (should already be validated on insert, but double-check)
     if (feePercentage < 0 || feePercentage > 100) {
-      throw new Error("Platform fee percentage must be between 0 and 100")
+      throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE, "Platform fee percentage must be between 0 and 100")
     }
     const calculatedFee = Math.round((args.amount * feePercentage) / 100)
 
@@ -201,22 +202,22 @@ export const updatePlatformSettings = mutation({
     maximumPlatformFee: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    await checkAdmin(ctx)
+    const identity = await checkAdmin(ctx)
 
     // Validate inputs
     if (args.platformFeePercentage < 0 || args.platformFeePercentage > 100) {
-      throw new Error("Platform fee percentage must be between 0 and 100")
+      throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE, "Platform fee percentage must be between 0 and 100")
     }
 
     if (args.minimumPlatformFee < 0) {
-      throw new Error("Minimum platform fee must be positive")
+      throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE, "Minimum platform fee must be positive")
     }
 
     if (
       args.maximumPlatformFee !== undefined &&
       args.maximumPlatformFee < args.minimumPlatformFee
     ) {
-      throw new Error("Maximum platform fee must be greater than or equal to minimum fee")
+      throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE, "Maximum platform fee must be greater than or equal to minimum fee")
     }
 
     // Deactivate old settings
@@ -242,6 +243,30 @@ export const updatePlatformSettings = mutation({
       updatedAt: Date.now(),
     })
 
+    // Audit log for platform settings change
+    await ctx.runMutation(internal.auditLog.create, {
+      entityType: "payment",
+      entityId: newSettingsId,
+      action: "update_platform_settings",
+      userId: identity.subject,
+      previousState: oldSettings
+        ? {
+            platformFeePercentage: oldSettings.platformFeePercentage,
+            minimumPlatformFee: oldSettings.minimumPlatformFee,
+            maximumPlatformFee: oldSettings.maximumPlatformFee,
+          }
+        : undefined,
+      newState: {
+        platformFeePercentage: args.platformFeePercentage,
+        minimumPlatformFee: args.minimumPlatformFee,
+        maximumPlatformFee: args.maximumPlatformFee,
+      },
+      metadata: {
+        oldSettingsId: oldSettings?._id,
+        newSettingsId,
+      },
+    })
+
     return newSettingsId
   },
 })
@@ -262,7 +287,7 @@ export const createConnectAccount = action({
   ): Promise<{ accountId: string; onboardingUrl: string | null; isComplete: boolean }> => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity || identity.subject !== args.ownerId) {
-      throw new Error("Not authorized")
+      throwError(ErrorCode.FORBIDDEN, "Not authorized")
     }
 
     // Check if user already has a Connect account
@@ -332,7 +357,7 @@ export const createConnectAccount = action({
     if (!isDevelopment) {
       const isAllowed = allowedProductionDomains.some((domain) => baseUrl.startsWith(domain))
       if (!isAllowed) {
-        throw new Error(
+        throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE, 
           `Invalid return URL: ${baseUrl}. ` +
             `Allowed domains: ${allowedProductionDomains.join(", ")}`
         )
@@ -485,7 +510,7 @@ export const createConnectLoginLink = action({
   handler: async (ctx, args): Promise<{ url: string }> => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity || identity.subject !== args.ownerId) {
-      throw new Error("Not authorized")
+      throwError(ErrorCode.FORBIDDEN, "Not authorized")
     }
 
     const user = await ctx.runQuery(api.users.getByExternalId, {
@@ -493,7 +518,7 @@ export const createConnectLoginLink = action({
     })
 
     if (!user?.stripeAccountId) {
-      throw new Error("No Stripe Connect account found")
+      throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE, "No Stripe Connect account found")
     }
 
     const stripe = getStripe()
@@ -521,22 +546,22 @@ export const createCheckoutSession = action({
   ): Promise<{ paymentId: any; sessionId: string; url: string | null }> => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) {
-      throw new Error("Not authenticated")
+      throwError(ErrorCode.AUTH_REQUIRED, "Not authenticated")
     }
 
     const reservation = await ctx.runQuery(api.reservations.getById, {
       id: args.reservationId,
     })
     if (!reservation) {
-      throw new Error("Reservation not found")
+      throwError(ErrorCode.NOT_FOUND, "Reservation not found")
     }
 
     if (reservation.renterId !== identity.subject) {
-      throw new Error("Not authorized to create payment for this reservation")
+      throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE, "Not authorized to create payment for this reservation")
     }
 
     if (reservation.status !== "pending") {
-      throw new Error("Reservation must be pending to create payment")
+      throwError(ErrorCode.INVALID_STATUS, "Reservation must be pending to create payment")
     }
 
     // Monetary validation
@@ -544,11 +569,11 @@ export const createCheckoutSession = action({
     const MIN_AMOUNT_CENTS = 100 // $1 min
 
     if (args.amount <= 0 || args.amount < MIN_AMOUNT_CENTS) {
-      throw new Error("Payment amount must be at least $1.00")
+      throwError(ErrorCode.INVALID_AMOUNT, "Payment amount must be at least $1.00")
     }
 
     if (args.amount > MAX_AMOUNT_CENTS) {
-      throw new Error("Payment amount cannot exceed $10,000.00")
+      throwError(ErrorCode.INVALID_AMOUNT, "Payment amount cannot exceed $10,000.00")
     }
 
     // Get current vehicle pricing to validate payment amount
@@ -557,7 +582,7 @@ export const createCheckoutSession = action({
     })
 
     if (!vehicle) {
-      throw new Error("Vehicle not found")
+      throwError(ErrorCode.NOT_FOUND, "Vehicle not found")
     }
 
     // Recalculate total from current pricing (server-side validation)
@@ -570,10 +595,10 @@ export const createCheckoutSession = action({
       for (const reservationAddOn of reservation.addOns) {
         const vehicleAddOn = vehicle.addOns?.find((va: any) => va.name === reservationAddOn.name)
         if (!vehicleAddOn) {
-          throw new Error(`Add-on "${reservationAddOn.name}" is no longer available`)
+          throwError(ErrorCode.INVALID_INPUT, `Add-on "${reservationAddOn.name}" is no longer available`)
         }
         if (vehicleAddOn.price !== reservationAddOn.price) {
-          throw new Error(
+          throwError(ErrorCode.PRICE_CHANGED, 
             `Add-on "${reservationAddOn.name}" price has changed from ${reservationAddOn.price} to ${vehicleAddOn.price} cents`
           )
         }
@@ -591,7 +616,7 @@ export const createCheckoutSession = action({
 
     // Validate that the payment amount matches the recalculated total
     if (args.amount !== expectedTotal) {
-      throw new Error(
+      throwError(ErrorCode.PRICE_CHANGED, 
         `Payment amount mismatch: expected ${expectedTotal} cents (based on current pricing), got ${args.amount} cents. ` +
           "Vehicle daily rate may have changed."
       )
@@ -603,7 +628,7 @@ export const createCheckoutSession = action({
     })
 
     if (!owner?.stripeAccountId) {
-      throw new Error("Owner must complete Stripe onboarding before accepting payments")
+      throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE, "Owner must complete Stripe onboarding before accepting payments")
     }
 
     // Verify Connect account is ready
@@ -611,13 +636,13 @@ export const createCheckoutSession = action({
     const connectAccount = await stripe.accounts.retrieve(owner.stripeAccountId)
 
     if (!connectAccount.details_submitted) {
-      throw new Error(
+      throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE, 
         "Owner account onboarding is not complete. Please complete Stripe onboarding."
       )
     }
 
     if (!connectAccount.charges_enabled) {
-      throw new Error("Owner account cannot accept charges yet. Please complete Stripe onboarding.")
+      throwError(ErrorCode.STRIPE_ACCOUNT_DISABLED, "Owner account cannot accept charges yet. Please complete Stripe onboarding.")
     }
 
     // Check if transfers capability is enabled (required for destination payments)
@@ -626,7 +651,7 @@ export const createCheckoutSession = action({
       capabilities?.transfers === "active" || capabilities?.legacy_payments === "active"
 
     if (!transfersEnabled) {
-      throw new Error(
+      throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE, 
         "Owner account does not have transfers enabled. Please complete Stripe onboarding to enable transfers capability."
       )
     }
@@ -738,7 +763,7 @@ export const createPaymentIntent = action({
   handler: async (ctx, args): Promise<{ paymentId: Id<"payments">; clientSecret: string }> => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) {
-      throw new Error("Not authenticated")
+      throwError(ErrorCode.AUTH_REQUIRED, "Not authenticated")
     }
 
     // Rate limit: 20 payment operations per hour per user
@@ -751,15 +776,15 @@ export const createPaymentIntent = action({
       id: args.reservationId,
     })
     if (!reservation) {
-      throw new Error("Reservation not found")
+      throwError(ErrorCode.NOT_FOUND, "Reservation not found")
     }
 
     if (reservation.renterId !== identity.subject) {
-      throw new Error("Not authorized to create payment for this reservation")
+      throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE, "Not authorized to create payment for this reservation")
     }
 
     if (reservation.status !== "pending") {
-      throw new Error("Reservation must be pending to create payment")
+      throwError(ErrorCode.INVALID_STATUS, "Reservation must be pending to create payment")
     }
 
     // Monetary validation
@@ -767,11 +792,11 @@ export const createPaymentIntent = action({
     const MIN_AMOUNT_CENTS = 100 // $1 min
 
     if (args.amount <= 0 || args.amount < MIN_AMOUNT_CENTS) {
-      throw new Error("Payment amount must be at least $1.00")
+      throwError(ErrorCode.INVALID_AMOUNT, "Payment amount must be at least $1.00")
     }
 
     if (args.amount > MAX_AMOUNT_CENTS) {
-      throw new Error("Payment amount cannot exceed $10,000.00")
+      throwError(ErrorCode.INVALID_AMOUNT, "Payment amount cannot exceed $10,000.00")
     }
 
     // Get current vehicle pricing to validate payment amount
@@ -780,7 +805,7 @@ export const createPaymentIntent = action({
     })
 
     if (!vehicle) {
-      throw new Error("Vehicle not found")
+      throwError(ErrorCode.NOT_FOUND, "Vehicle not found")
     }
 
     // Recalculate total from current pricing (server-side validation)
@@ -793,10 +818,10 @@ export const createPaymentIntent = action({
       for (const reservationAddOn of reservation.addOns) {
         const vehicleAddOn = vehicle.addOns?.find((va: any) => va.name === reservationAddOn.name)
         if (!vehicleAddOn) {
-          throw new Error(`Add-on "${reservationAddOn.name}" is no longer available`)
+          throwError(ErrorCode.INVALID_INPUT, `Add-on "${reservationAddOn.name}" is no longer available`)
         }
         if (vehicleAddOn.price !== reservationAddOn.price) {
-          throw new Error(
+          throwError(ErrorCode.PRICE_CHANGED, 
             `Add-on "${reservationAddOn.name}" price has changed from ${reservationAddOn.price} to ${vehicleAddOn.price} cents`
           )
         }
@@ -814,7 +839,7 @@ export const createPaymentIntent = action({
 
     // Validate that the payment amount matches the recalculated total
     if (args.amount !== expectedTotal) {
-      throw new Error(
+      throwError(ErrorCode.PRICE_CHANGED, 
         `Payment amount mismatch: expected ${expectedTotal} cents (based on current pricing), got ${args.amount} cents. ` +
           "Vehicle daily rate may have changed."
       )
@@ -826,7 +851,7 @@ export const createPaymentIntent = action({
     })
 
     if (!owner?.stripeAccountId) {
-      throw new Error("Owner must complete Stripe onboarding before accepting payments")
+      throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE, "Owner must complete Stripe onboarding before accepting payments")
     }
 
     // Verify Connect account is ready and has required capabilities
@@ -834,13 +859,13 @@ export const createPaymentIntent = action({
     const connectAccount = await stripe.accounts.retrieve(owner.stripeAccountId)
 
     if (!connectAccount.details_submitted) {
-      throw new Error(
+      throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE, 
         "Owner account onboarding is not complete. Please complete Stripe onboarding."
       )
     }
 
     if (!connectAccount.charges_enabled) {
-      throw new Error("Owner account cannot accept charges yet. Please complete Stripe onboarding.")
+      throwError(ErrorCode.STRIPE_ACCOUNT_DISABLED, "Owner account cannot accept charges yet. Please complete Stripe onboarding.")
     }
 
     // Check if transfers capability is enabled (required for destination payments)
@@ -849,7 +874,7 @@ export const createPaymentIntent = action({
       capabilities?.transfers === "active" || capabilities?.legacy_payments === "active"
 
     if (!transfersEnabled) {
-      throw new Error(
+      throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE, 
         "Owner account does not have transfers enabled. Please complete Stripe onboarding to enable transfers capability."
       )
     }
@@ -1187,7 +1212,7 @@ export const createCustomerPortalSession = action({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) {
-      throw new Error("Not authenticated")
+      throwError(ErrorCode.AUTH_REQUIRED, "Not authenticated")
     }
 
     // Get or create customer
@@ -1240,7 +1265,7 @@ export const processRefundOnCancellation = internalAction({
     })
 
     if (!payment?.stripeChargeId) {
-      throw new Error("Payment not found or charge ID missing")
+      throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE, "Payment not found or charge ID missing")
     }
 
     // Only refund if payment is succeeded
@@ -1254,7 +1279,7 @@ export const processRefundOnCancellation = internalAction({
     })
 
     if (!reservation) {
-      throw new Error("Reservation not found")
+      throwError(ErrorCode.NOT_FOUND, "Reservation not found")
     }
 
     // Get vehicle to fetch cancellation policy
@@ -1263,13 +1288,13 @@ export const processRefundOnCancellation = internalAction({
     })
 
     if (!vehicle) {
-      throw new Error("Vehicle not found")
+      throwError(ErrorCode.NOT_FOUND, "Vehicle not found")
     }
 
     // Get the reservation start date to calculate refund tier
     const startDate = payment.metadata?.startDate
     if (!startDate) {
-      throw new Error("Payment metadata missing start date")
+      throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE, "Payment metadata missing start date")
     }
 
     // If forceFullRefund is true (owner cancellation), apply 100% refund
@@ -1321,7 +1346,7 @@ export const processRefundOnCancellation = internalAction({
 
     // Validate refund amount
     if (refundAmount <= 0 || refundAmount > payment.amount) {
-      throw new Error("Invalid refund amount")
+      throwError(ErrorCode.INVALID_REFUND_AMOUNT, "Invalid refund amount")
     }
 
     // Refund with Connect - automatically reverses transfer proportionally
@@ -1405,19 +1430,19 @@ export const processRefund: ReturnType<typeof action> = action({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) {
-      throw new Error("Not authenticated")
+      throwError(ErrorCode.AUTH_REQUIRED, "Not authenticated")
     }
 
     const payment = await ctx.runQuery(api.stripe.getPaymentById, {
       paymentId: args.paymentId,
     })
     if (!payment?.stripeChargeId) {
-      throw new Error("Payment not found")
+      throwError(ErrorCode.NOT_FOUND, "Payment not found")
     }
 
     // Check authorization (owner or admin can refund)
     if (payment.ownerId !== identity.subject) {
-      throw new Error("Not authorized to refund this payment")
+      throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE, "Not authorized to refund this payment")
     }
 
     const stripe = getStripe()
@@ -1425,7 +1450,7 @@ export const processRefund: ReturnType<typeof action> = action({
     // Validate refund amount if provided
     const refundAmount = args.amount || payment.amount
     if (refundAmount <= 0 || refundAmount > payment.amount) {
-      throw new Error("Invalid refund amount")
+      throwError(ErrorCode.INVALID_REFUND_AMOUNT, "Invalid refund amount")
     }
 
     // Refund with Connect - automatically reverses transfer
@@ -1631,7 +1656,7 @@ export const getCustomerPaymentMethods = action({
   > => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) {
-      throw new Error("Not authenticated")
+      throwError(ErrorCode.AUTH_REQUIRED, "Not authenticated")
     }
 
     // Verify the customer belongs to the current user
@@ -1640,7 +1665,7 @@ export const getCustomerPaymentMethods = action({
     })
 
     if (!user || user.stripeCustomerId !== args.customerId) {
-      throw new Error("Not authorized")
+      throwError(ErrorCode.FORBIDDEN, "Not authorized")
     }
 
     const stripe = getStripe()
@@ -1691,7 +1716,7 @@ export const getCustomerInvoices = action({
   > => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) {
-      throw new Error("Not authenticated")
+      throwError(ErrorCode.AUTH_REQUIRED, "Not authenticated")
     }
 
     // Verify the customer belongs to the current user
@@ -1700,7 +1725,7 @@ export const getCustomerInvoices = action({
     })
 
     if (!user || user.stripeCustomerId !== args.customerId) {
-      throw new Error("Not authorized")
+      throwError(ErrorCode.FORBIDDEN, "Not authorized")
     }
 
     const stripe = getStripe()
@@ -1743,7 +1768,7 @@ export const getCustomerDetails = action({
   }> => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) {
-      throw new Error("Not authenticated")
+      throwError(ErrorCode.AUTH_REQUIRED, "Not authenticated")
     }
 
     // Verify the customer belongs to the current user
@@ -1752,14 +1777,14 @@ export const getCustomerDetails = action({
     })
 
     if (!user || user.stripeCustomerId !== args.customerId) {
-      throw new Error("Not authorized")
+      throwError(ErrorCode.FORBIDDEN, "Not authorized")
     }
 
     const stripe = getStripe()
     const customer = await stripe.customers.retrieve(args.customerId)
 
     if (customer.deleted) {
-      throw new Error("Customer not found")
+      throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE, "Customer not found")
     }
 
     return {

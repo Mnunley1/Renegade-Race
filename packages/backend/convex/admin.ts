@@ -3,13 +3,14 @@ import { internal } from "./_generated/api"
 import type { Id } from "./_generated/dataModel"
 import { action, internalMutation, internalQuery, mutation, query } from "./_generated/server"
 
+import { ErrorCode, throwError } from "./errors"
 // Helper function to check if user is admin via Clerk metadata
 // Exported for reuse across all backend files
 // biome-ignore lint: ctx type is provided by Convex
 export async function checkAdmin(ctx: any) {
   const identity = await ctx.auth.getUserIdentity()
   if (!identity) {
-    throw new Error("Not authenticated")
+    throwError(ErrorCode.AUTH_REQUIRED, "Not authenticated")
   }
 
   // Check all possible locations where admin role can be stored
@@ -17,7 +18,7 @@ export async function checkAdmin(ctx: any) {
   const role = metadata.metadata?.role || metadata.publicMetadata?.role || metadata.orgRole
 
   if (role !== "admin") {
-    throw new Error("Admin access required")
+    throwError(ErrorCode.ADMIN_REQUIRED, "Admin access required")
   }
 
   return identity
@@ -86,9 +87,10 @@ export const getAllUsers = query({
 export const banUser = mutation({
   args: {
     userId: v.id("users"),
+    reason: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await checkAdmin(ctx)
+    const identity = await checkAdmin(ctx)
 
     const user = await ctx.db.get(args.userId)
     if (!user) {
@@ -99,6 +101,21 @@ export const banUser = mutation({
       isBanned: true,
     })
 
+    // Audit log
+    await ctx.runMutation(internal.auditLog.create, {
+      entityType: "user",
+      entityId: args.userId,
+      action: "ban_user",
+      userId: identity.subject,
+      previousState: { isBanned: user.isBanned || false },
+      newState: { isBanned: true },
+      metadata: {
+        reason: args.reason || "No reason provided",
+        userEmail: user.email,
+        userName: user.name,
+      },
+    })
+
     return args.userId
   },
 })
@@ -107,9 +124,10 @@ export const banUser = mutation({
 export const unbanUser = mutation({
   args: {
     userId: v.id("users"),
+    reason: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await checkAdmin(ctx)
+    const identity = await checkAdmin(ctx)
 
     const user = await ctx.db.get(args.userId)
     if (!user) {
@@ -118,6 +136,21 @@ export const unbanUser = mutation({
 
     await ctx.db.patch(args.userId, {
       isBanned: false,
+    })
+
+    // Audit log
+    await ctx.runMutation(internal.auditLog.create, {
+      entityType: "user",
+      entityId: args.userId,
+      action: "unban_user",
+      userId: identity.subject,
+      previousState: { isBanned: user.isBanned || false },
+      newState: { isBanned: false },
+      metadata: {
+        reason: args.reason || "No reason provided",
+        userEmail: user.email,
+        userName: user.name,
+      },
     })
 
     return args.userId
@@ -216,6 +249,29 @@ export const resolveDisputeAsAdmin = mutation({
         updatedAt: Date.now(),
       })
     }
+
+    // Audit log
+    await ctx.runMutation(internal.auditLog.create, {
+      entityType: "dispute",
+      entityId: args.disputeId,
+      action: "resolve_dispute",
+      userId: identity.subject,
+      previousState: {
+        status: dispute.status,
+        resolutionType: dispute.resolutionType,
+      },
+      newState: {
+        status: "resolved",
+        resolutionType: args.resolutionType,
+      },
+      metadata: {
+        resolution: args.resolution,
+        reservationId: dispute.reservationId,
+        renterId: dispute.renterId,
+        ownerId: dispute.ownerId,
+        disputeReason: dispute.reason,
+      },
+    })
 
     return args.disputeId
   },
@@ -561,7 +617,7 @@ export const cancelReservationAsAdmin = mutation({
     reason: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await checkAdmin(ctx)
+    const identity = await checkAdmin(ctx)
 
     const reservation = await ctx.db.get(args.reservationId)
     if (!reservation) {
@@ -580,6 +636,29 @@ export const cancelReservationAsAdmin = mutation({
     await ctx.db.patch(args.reservationId, {
       status: "cancelled",
       updatedAt: Date.now(),
+    })
+
+    // Audit log
+    await ctx.runMutation(internal.auditLog.create, {
+      entityType: "reservation",
+      entityId: args.reservationId,
+      action: "cancel_reservation_admin",
+      userId: identity.subject,
+      previousState: {
+        status: reservation.status,
+      },
+      newState: {
+        status: "cancelled",
+      },
+      metadata: {
+        reason: args.reason || "Admin cancellation",
+        renterId: reservation.renterId,
+        ownerId: reservation.ownerId,
+        vehicleId: reservation.vehicleId,
+        totalAmount: reservation.totalAmount,
+        startDate: reservation.startDate,
+        endDate: reservation.endDate,
+      },
     })
 
     return args.reservationId
@@ -678,9 +757,10 @@ export const getAllReviews = query({
 export const deleteReviewAsAdmin = mutation({
   args: {
     reviewId: v.id("rentalReviews"),
+    reason: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await checkAdmin(ctx)
+    const identity = await checkAdmin(ctx)
 
     const review = await ctx.db.get(args.reviewId)
     if (!review) {
@@ -688,6 +768,29 @@ export const deleteReviewAsAdmin = mutation({
     }
 
     const reviewedId = review.reviewedId
+
+    // Audit log before deletion
+    await ctx.runMutation(internal.auditLog.create, {
+      entityType: "user",
+      entityId: args.reviewId,
+      action: "delete_review_admin",
+      userId: identity.subject,
+      previousState: {
+        rating: review.rating,
+        review: review.review,
+        isPublic: review.isPublic,
+        reviewerId: review.reviewerId,
+        reviewedId: review.reviewedId,
+      },
+      newState: { deleted: true },
+      metadata: {
+        reason: args.reason || "Content moderation",
+        vehicleId: review.vehicleId,
+        reservationId: review.reservationId,
+        reviewTitle: review.title,
+      },
+    })
+
     await ctx.db.delete(args.reviewId)
 
     // Update user rating after deletion
@@ -877,15 +980,40 @@ export const bulkSuspendVehicles = mutation({
 export const bulkDeleteReviews = mutation({
   args: {
     reviewIds: v.array(v.id("rentalReviews")),
+    reason: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await checkAdmin(ctx)
+    const identity = await checkAdmin(ctx)
 
     const reviews = await Promise.all(args.reviewIds.map((id) => ctx.db.get(id)))
 
     const reviewedIds = new Set(
       reviews.filter((r): r is NonNullable<typeof r> => r != null).map((r) => r.reviewedId)
     )
+
+    // Audit log for bulk deletion
+    const reviewSummaries = reviews
+      .filter((r): r is NonNullable<typeof r> => r != null)
+      .map((r) => ({
+        reviewId: r._id,
+        reviewerId: r.reviewerId,
+        reviewedId: r.reviewedId,
+        rating: r.rating,
+      }))
+
+    await ctx.runMutation(internal.auditLog.create, {
+      entityType: "user",
+      entityId: args.reviewIds[0], // Use first review ID as reference
+      action: "bulk_delete_reviews_admin",
+      userId: identity.subject,
+      previousState: { reviewCount: args.reviewIds.length },
+      newState: { deleted: true },
+      metadata: {
+        reason: args.reason || "Bulk content moderation",
+        reviewIds: args.reviewIds,
+        reviewSummaries,
+      },
+    })
 
     // Delete reviews
     await Promise.all(args.reviewIds.map((id) => ctx.db.delete(id)))
@@ -1476,12 +1604,12 @@ export const initiateRefund: ReturnType<typeof action> = action({
     // Verify admin access
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) {
-      throw new Error("Not authenticated")
+      throwError(ErrorCode.AUTH_REQUIRED, "Not authenticated")
     }
 
     const role = (identity as any).metadata?.role
     if (role !== "admin") {
-      throw new Error("Admin access required")
+      throwError(ErrorCode.ADMIN_REQUIRED, "Admin access required")
     }
 
     // Get payment details

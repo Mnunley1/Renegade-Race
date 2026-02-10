@@ -2,7 +2,14 @@
 import type { UserJSON } from "@clerk/backend"
 import { type Validator, v } from "convex/values"
 import { api, internal } from "./_generated/api"
-import { action, internalMutation, mutation, type QueryCtx, query } from "./_generated/server"
+import {
+  action,
+  internalMutation,
+  internalQuery,
+  mutation,
+  type QueryCtx,
+  query,
+} from "./_generated/server"
 import { getWelcomeEmailTemplate, sendTransactionalEmail } from "./emails"
 import { imagePresets, r2 } from "./r2"
 
@@ -83,72 +90,229 @@ export const upsertFromClerk = internalMutation({
   },
 })
 
+// Helper function to check Stripe balance
+async function checkStripeBalance(stripeAccountId: string): Promise<string | null> {
+  try {
+    const stripe = await import("stripe").then((mod) => {
+      const secretKey = process.env.STRIPE_SECRET_KEY
+      if (!secretKey) {
+        throw new Error("STRIPE_SECRET_KEY environment variable is not set")
+      }
+      return new mod.default(secretKey, {
+        apiVersion: "2025-08-27.basil",
+      })
+    })
+
+    const balance = await stripe.balance.retrieve({
+      stripeAccount: stripeAccountId,
+    })
+
+    const hasPendingBalance = balance.pending.some((pendingBalance) => {
+      const totalPending =
+        pendingBalance.amount +
+        (pendingBalance.source_types?.card || 0) +
+        (pendingBalance.source_types?.bank_account || 0)
+      return totalPending > 0
+    })
+
+    const hasAvailableBalance = balance.available.some((availableBalance) => {
+      const totalAvailable =
+        availableBalance.amount +
+        (availableBalance.source_types?.card || 0) +
+        (availableBalance.source_types?.bank_account || 0)
+      return totalAvailable > 0
+    })
+
+    if (hasPendingBalance || hasAvailableBalance) {
+      const balanceDetails: string[] = []
+      if (hasPendingBalance) {
+        const pendingUSD = balance.pending.find((b) => b.currency === "usd")
+        if (pendingUSD && pendingUSD.amount > 0) {
+          balanceDetails.push(`$${(pendingUSD.amount / 100).toFixed(2)} pending`)
+        }
+      }
+      if (hasAvailableBalance) {
+        const availableUSD = balance.available.find((b) => b.currency === "usd")
+        if (availableUSD && availableUSD.amount > 0) {
+          balanceDetails.push(`$${(availableUSD.amount / 100).toFixed(2)} available`)
+        }
+      }
+
+      return `Stripe account has non-zero balance (${balanceDetails.join(", ")}). Please wait for all payouts to complete before deleting your account.`
+    }
+
+    return null
+  } catch (error) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { logError } = require("./logger")
+    logError(error, "Failed to check Stripe balance for user deletion")
+
+    return "Unable to verify Stripe account balance. Please try again later or contact support."
+  }
+}
+
+// Internal action to check if user can be safely deleted
+// This includes checking Stripe balance for users with Connect accounts
+export const checkUserDeletionEligibility = action({
+  args: { clerkUserId: v.string() },
+  async handler(
+    ctx,
+    { clerkUserId }
+  ): Promise<{
+    canDelete: boolean
+    reason?: string
+    blockingFactors: string[]
+  }> {
+    const user = await ctx.runQuery(api.users.getByExternalId, {
+      externalId: clerkUserId,
+    })
+
+    if (!user) {
+      return {
+        canDelete: true,
+        blockingFactors: [],
+      }
+    }
+
+    const blockingFactors: string[] = []
+    const today = new Date().toISOString().split("T")[0] as string
+
+    // Check for active reservations as a renter
+    const renterReservations = await ctx.runQuery(internal.users.getActiveReservationsAsRenter, {
+      clerkUserId,
+      today,
+    })
+
+    if (renterReservations.length > 0) {
+      blockingFactors.push(
+        `${renterReservations.length} active booking(s) as a renter. Please cancel them first.`
+      )
+    }
+
+    // Check for active reservations on owned vehicles
+    const activeHostReservations = await ctx.runQuery(internal.users.getActiveReservationsAsHost, {
+      clerkUserId,
+      today,
+    })
+
+    if (activeHostReservations.count > 0) {
+      blockingFactors.push(
+        `${activeHostReservations.count} active reservation(s) on your vehicles.`
+      )
+    }
+
+    // Check Stripe balance if user has a Connect account
+    if (user.stripeAccountId) {
+      const balanceError = await checkStripeBalance(user.stripeAccountId)
+      if (balanceError) {
+        blockingFactors.push(balanceError)
+      }
+    }
+
+    return {
+      canDelete: blockingFactors.length === 0,
+      reason:
+        blockingFactors.length > 0
+          ? `Cannot delete account: ${blockingFactors.join(" ")}`
+          : undefined,
+      blockingFactors,
+    }
+  },
+})
+
+// Internal query to get active reservations as renter
+export const getActiveReservationsAsRenter = internalQuery({
+  args: {
+    clerkUserId: v.string(),
+    today: v.string(),
+  },
+  handler: async (ctx, args) =>
+    await ctx.db
+      .query("reservations")
+      .withIndex("by_renter", (q) => q.eq("renterId", args.clerkUserId))
+      .filter((q) =>
+        q.and(
+          q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "confirmed")),
+          q.gte(q.field("endDate"), args.today)
+        )
+      )
+      .collect(),
+})
+
+// Internal query to get active reservations on owned vehicles
+export const getActiveReservationsAsHost = internalQuery({
+  args: {
+    clerkUserId: v.string(),
+    today: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const ownedVehicles = await ctx.db
+      .query("vehicles")
+      .withIndex("by_owner", (q) => q.eq("ownerId", args.clerkUserId))
+      .collect()
+
+    let reservationsCount = 0
+    for (const vehicle of ownedVehicles) {
+      const activeReservations = await ctx.db
+        .query("reservations")
+        .withIndex("by_vehicle", (q) => q.eq("vehicleId", vehicle._id))
+        .filter((q) =>
+          q.and(
+            q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "confirmed")),
+            q.gte(q.field("endDate"), args.today)
+          )
+        )
+        .collect()
+
+      reservationsCount += activeReservations.length
+    }
+
+    return { count: reservationsCount }
+  },
+})
+
 export const deleteFromClerk = internalMutation({
   args: { clerkUserId: v.string() },
   async handler(ctx, { clerkUserId }) {
     const user = await userByExternalId(ctx, clerkUserId)
 
     if (user !== null) {
-      const today = new Date().toISOString().split("T")[0] as string
+      // Schedule eligibility check action first
+      // This will perform all validation including Stripe balance check
+      await ctx.scheduler.runAfter(0, api.users.performUserDeletionWithChecks, {
+        clerkUserId,
+      })
+    }
+  },
+})
 
-      // Check if this user has active reservations as a RENTER
-      const renterReservations = await ctx.db
-        .query("reservations")
-        .withIndex("by_renter", (q) => q.eq("renterId", clerkUserId))
-        .filter((q) =>
-          q.and(
-            q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "confirmed")),
-            q.gte(q.field("endDate"), today)
-          )
-        )
-        .collect()
+// Action that performs the full deletion with eligibility checks
+export const performUserDeletionWithChecks = action({
+  args: { clerkUserId: v.string() },
+  async handler(ctx, { clerkUserId }) {
+    // Check eligibility (includes Stripe balance check)
+    const eligibility = await ctx.runAction(api.users.checkUserDeletionEligibility, {
+      clerkUserId,
+    })
 
-      if (renterReservations.length > 0) {
-        throw new Error(
-          `Cannot delete account with active or upcoming rentals. You have ${renterReservations.length} active booking(s) as a renter. Please cancel them first.`
-        )
-      }
+    if (!eligibility.canDelete) {
+      throw new Error(eligibility.reason || "Cannot delete user account")
+    }
 
-      // Check if this user is a host with active or upcoming rentals
-      // Get all vehicles owned by this user
-      const ownedVehicles = await ctx.db
-        .query("vehicles")
-        .withIndex("by_owner", (q) => q.eq("ownerId", clerkUserId))
-        .collect()
+    // If eligible, perform the actual deletion
+    await ctx.runMutation(internal.users.performUserDeletion, {
+      clerkUserId,
+    })
+  },
+})
 
-      // Check for active or upcoming reservations on any of their vehicles
-      for (const vehicle of ownedVehicles) {
-        const activeReservations = await ctx.db
-          .query("reservations")
-          .withIndex("by_vehicle", (q) => q.eq("vehicleId", vehicle._id))
-          .filter((q) =>
-            q.and(
-              // Only check pending or confirmed reservations
-              q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "confirmed")),
-              // Check if reservation end date is in the future (active or upcoming)
-              q.gte(q.field("endDate"), today)
-            )
-          )
-          .collect()
+// Internal mutation to actually delete the user (only called after checks pass)
+export const performUserDeletion = internalMutation({
+  args: { clerkUserId: v.string() },
+  async handler(ctx, { clerkUserId }) {
+    const user = await userByExternalId(ctx, clerkUserId)
 
-        if (activeReservations.length > 0) {
-          throw new Error(
-            `Cannot delete host account with active or upcoming rentals. User has ${activeReservations.length} active reservation(s) on vehicle ${vehicle.make} ${vehicle.model}.`
-          )
-        }
-      }
-
-      // WARNING: Stripe balance check required
-      // If the user has a Stripe Connect account, they may have pending balance
-      // that needs to be paid out before account deletion. This requires an external
-      // API call to Stripe, which mutations cannot perform. Admin approval should be
-      // required for deletion of users with Stripe Connect accounts.
-      if (user.stripeAccountId) {
-        throw new Error(
-          "Cannot delete user with Stripe Connect account. Please verify account balance is zero and all payouts are complete before deletion. Contact admin for approval."
-        )
-      }
-
+    if (user !== null) {
       await ctx.db.delete(user._id)
     }
   },
@@ -900,4 +1064,3 @@ export const startOverOnboarding = mutation({
     return { success: true }
   },
 })
-

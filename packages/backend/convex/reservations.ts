@@ -11,6 +11,7 @@ import {
   getReservationPendingOwnerEmailTemplate,
   sendTransactionalEmail,
 } from "./emails"
+import { ErrorCode, throwError } from "./errors"
 import { getWebUrl } from "./helpers"
 import { rateLimiter } from "./rateLimiter"
 import { sanitizeMessage, sanitizeShortText } from "./sanitize"
@@ -161,7 +162,7 @@ export const create = mutation({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) {
-      throw new Error("Not authenticated")
+      throwError(ErrorCode.AUTH_REQUIRED, "Not authenticated")
     }
 
     // Rate limit: 10 reservations per hour per user
@@ -176,11 +177,11 @@ export const create = mutation({
     // Get vehicle details
     const vehicle = await ctx.db.get(args.vehicleId)
     if (!vehicle) {
-      throw new Error("Vehicle not found")
+      throwError(ErrorCode.NOT_FOUND, "Vehicle not found", { vehicleId: args.vehicleId })
     }
 
     if (vehicle.ownerId === renterId) {
-      throw new Error("Cannot book your own vehicle")
+      throwError(ErrorCode.CANNOT_BOOK_OWN_VEHICLE, "Cannot book your own vehicle")
     }
 
     // Check if either party has blocked the other
@@ -199,7 +200,7 @@ export const create = mutation({
       .first()
 
     if (block1 || block2) {
-      throw new Error("Cannot book vehicles from blocked users")
+      throwError(ErrorCode.USER_BLOCKED, "Cannot book vehicles from blocked users")
     }
 
     // Calculate total days and amount
@@ -207,7 +208,10 @@ export const create = mutation({
     const totalDays = calculateDaysBetween(args.startDate, args.endDate)
 
     if (totalDays <= 0) {
-      throw new Error("Invalid date range")
+      throwError(ErrorCode.INVALID_DATE_RANGE, "Invalid date range", {
+        startDate: args.startDate,
+        endDate: args.endDate,
+      })
     }
 
     // Monetary validation for daily rate
@@ -215,11 +219,15 @@ export const create = mutation({
     const MIN_DAILY_RATE_CENTS = 100 // $1 per day min
 
     if (vehicle.dailyRate <= 0 || vehicle.dailyRate < MIN_DAILY_RATE_CENTS) {
-      throw new Error("Daily rate must be at least $1.00")
+      throwError(ErrorCode.INVALID_AMOUNT, "Daily rate must be at least $1.00", {
+        dailyRate: vehicle.dailyRate,
+      })
     }
 
     if (vehicle.dailyRate > MAX_DAILY_RATE_CENTS) {
-      throw new Error("Daily rate cannot exceed $50,000.00 per day")
+      throwError(ErrorCode.INVALID_AMOUNT, "Daily rate cannot exceed $50,000.00 per day", {
+        dailyRate: vehicle.dailyRate,
+      })
     }
 
     // Calculate base amount from daily rate
@@ -231,12 +239,15 @@ export const create = mutation({
       // Validate all add-on prices are non-negative
       for (const addOn of args.addOns) {
         if (addOn.price < 0) {
-          throw new Error(`Add-on price for ${addOn.name} cannot be negative`)
+          throwError(ErrorCode.INVALID_AMOUNT, `Add-on price for ${addOn.name} cannot be negative`)
         }
         // Validate reasonable max for add-ons
         if (addOn.price > 100_000) {
           // $1,000 max per add-on
-          throw new Error(`Add-on price for ${addOn.name} cannot exceed $1,000.00`)
+          throwError(
+            ErrorCode.INVALID_AMOUNT,
+            `Add-on price for ${addOn.name} cannot exceed $1,000.00`
+          )
         }
       }
       addOnsTotal = args.addOns.reduce((sum, addOn) => sum + addOn.price, 0)
@@ -249,11 +260,13 @@ export const create = mutation({
     const MIN_TOTAL_AMOUNT_CENTS = 100 // $1 min
 
     if (totalAmount < MIN_TOTAL_AMOUNT_CENTS) {
-      throw new Error("Total amount must be at least $1.00")
+      throwError(ErrorCode.INVALID_AMOUNT, "Total amount must be at least $1.00", { totalAmount })
     }
 
     if (totalAmount > MAX_TOTAL_AMOUNT_CENTS) {
-      throw new Error("Total amount cannot exceed $10,000.00")
+      throwError(ErrorCode.INVALID_AMOUNT, "Total amount cannot exceed $10,000.00", {
+        totalAmount,
+      })
     }
 
     // Check availability
@@ -267,7 +280,9 @@ export const create = mutation({
 
     const blockedDates = availability.filter((a) => !a.isAvailable)
     if (blockedDates.length > 0) {
-      throw new Error("Selected dates are not available")
+      throwError(ErrorCode.DATES_UNAVAILABLE, "Selected dates are not available", {
+        blockedDates: blockedDates.map((d) => d.date),
+      })
     }
 
     // Check for conflicting reservations
@@ -311,7 +326,11 @@ export const create = mutation({
     })
 
     if (conflictingReservations.length > 0) {
-      throw new Error("Selected dates conflict with existing reservations")
+      throwError(ErrorCode.DATES_CONFLICT, "Selected dates conflict with existing reservations", {
+        startDate: args.startDate,
+        endDate: args.endDate,
+        conflictCount: conflictingReservations.length,
+      })
     }
 
     // Create the reservation with sanitized content
@@ -338,7 +357,7 @@ export const create = mutation({
     // Fetch our own reservation to get its _creationTime (set by Convex during insert)
     const ourReservation = await ctx.db.get(reservationId)
     if (!ourReservation) {
-      throw new Error("Failed to create reservation")
+      throwError(ErrorCode.INTERNAL_ERROR, "Failed to create reservation")
     }
     const ourCreationTime = ourReservation._creationTime
 
@@ -377,7 +396,8 @@ export const create = mutation({
     if (actualConflicts.length > 0) {
       // Roll back our reservation - another user won the race
       await ctx.db.delete(reservationId)
-      throw new Error(
+      throwError(
+        ErrorCode.DATES_CONFLICT,
         "Selected dates conflict with a reservation that was just created. Please try different dates."
       )
     }
@@ -433,20 +453,24 @@ export const approve = mutation({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) {
-      throw new Error("Not authenticated")
+      throwError(ErrorCode.AUTH_REQUIRED, "Not authenticated")
     }
 
     const reservation = await ctx.db.get(args.reservationId)
     if (!reservation) {
-      throw new Error("Reservation not found")
+      throwError(ErrorCode.NOT_FOUND, "Reservation not found", {
+        reservationId: args.reservationId,
+      })
     }
 
     if (reservation.ownerId !== identity.subject) {
-      throw new Error("Not authorized to approve this reservation")
+      throwError(ErrorCode.FORBIDDEN, "Not authorized to approve this reservation")
     }
 
     if (reservation.status !== "pending") {
-      throw new Error("Reservation is not pending")
+      throwError(ErrorCode.INVALID_STATUS, "Reservation is not pending", {
+        currentStatus: reservation.status,
+      })
     }
 
     await ctx.db.patch(args.reservationId, {
@@ -515,20 +539,24 @@ export const decline = mutation({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) {
-      throw new Error("Not authenticated")
+      throwError(ErrorCode.AUTH_REQUIRED, "Not authenticated")
     }
 
     const reservation = await ctx.db.get(args.reservationId)
     if (!reservation) {
-      throw new Error("Reservation not found")
+      throwError(ErrorCode.NOT_FOUND, "Reservation not found", {
+        reservationId: args.reservationId,
+      })
     }
 
     if (reservation.ownerId !== identity.subject) {
-      throw new Error("Not authorized to decline this reservation")
+      throwError(ErrorCode.FORBIDDEN, "Not authorized to decline this reservation")
     }
 
     if (reservation.status !== "pending") {
-      throw new Error("Reservation is not pending")
+      throwError(ErrorCode.INVALID_STATUS, "Reservation is not pending", {
+        currentStatus: reservation.status,
+      })
     }
 
     await ctx.db.patch(args.reservationId, {
@@ -592,20 +620,24 @@ export const cancel = mutation({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) {
-      throw new Error("Not authenticated")
+      throwError(ErrorCode.AUTH_REQUIRED, "Not authenticated")
     }
 
     const reservation = await ctx.db.get(args.reservationId)
     if (!reservation) {
-      throw new Error("Reservation not found")
+      throwError(ErrorCode.NOT_FOUND, "Reservation not found", {
+        reservationId: args.reservationId,
+      })
     }
 
     if (reservation.renterId !== identity.subject && reservation.ownerId !== identity.subject) {
-      throw new Error("Not authorized to cancel this reservation")
+      throwError(ErrorCode.FORBIDDEN, "Not authorized to cancel this reservation")
     }
 
     if (reservation.status !== "pending" && reservation.status !== "confirmed") {
-      throw new Error("Reservation cannot be cancelled")
+      throwError(ErrorCode.INVALID_STATUS, "Reservation cannot be cancelled", {
+        currentStatus: reservation.status,
+      })
     }
 
     await ctx.db.patch(args.reservationId, {
@@ -730,20 +762,24 @@ export const complete = mutation({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) {
-      throw new Error("Not authenticated")
+      throwError(ErrorCode.AUTH_REQUIRED, "Not authenticated")
     }
 
     const reservation = await ctx.db.get(args.reservationId)
     if (!reservation) {
-      throw new Error("Reservation not found")
+      throwError(ErrorCode.NOT_FOUND, "Reservation not found", {
+        reservationId: args.reservationId,
+      })
     }
 
     if (reservation.ownerId !== identity.subject) {
-      throw new Error("Not authorized to complete this reservation")
+      throwError(ErrorCode.FORBIDDEN, "Not authorized to complete this reservation")
     }
 
     if (reservation.status !== "confirmed") {
-      throw new Error("Reservation is not confirmed")
+      throwError(ErrorCode.INVALID_STATUS, "Reservation is not confirmed", {
+        currentStatus: reservation.status,
+      })
     }
 
     await ctx.db.patch(args.reservationId, {

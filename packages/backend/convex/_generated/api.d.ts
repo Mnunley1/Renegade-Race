@@ -19,6 +19,7 @@ import type * as driverMedia from "../driverMedia.js";
 import type * as driverProfiles from "../driverProfiles.js";
 import type * as emails from "../emails.js";
 import type * as endorsements from "../endorsements.js";
+import type * as errors from "../errors.js";
 import type * as favorites from "../favorites.js";
 import type * as geocoding from "../geocoding.js";
 import type * as helpers from "../helpers.js";
@@ -51,6 +52,7 @@ import type * as userBlocks from "../userBlocks.js";
 import type * as users from "../users.js";
 import type * as vehicleAnalytics from "../vehicleAnalytics.js";
 import type * as vehicles from "../vehicles.js";
+import type * as webhookIdempotency from "../webhookIdempotency.js";
 
 import type {
   ApiFromModules,
@@ -78,6 +80,7 @@ declare const fullApi: ApiFromModules<{
   driverProfiles: typeof driverProfiles;
   emails: typeof emails;
   endorsements: typeof endorsements;
+  errors: typeof errors;
   favorites: typeof favorites;
   geocoding: typeof geocoding;
   helpers: typeof helpers;
@@ -110,6 +113,7 @@ declare const fullApi: ApiFromModules<{
   users: typeof users;
   vehicleAnalytics: typeof vehicleAnalytics;
   vehicles: typeof vehicles;
+  webhookIdempotency: typeof webhookIdempotency;
 }>;
 declare const fullApiWithMounts: typeof fullApi;
 

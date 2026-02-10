@@ -1227,7 +1227,7 @@ export const getTracks = query({
 export const approveVehicle = mutation({
   args: { vehicleId: v.id("vehicles") },
   handler: async (ctx, args) => {
-    await checkAdmin(ctx)
+    const identity = await checkAdmin(ctx)
 
     const vehicle = await ctx.db.get(args.vehicleId)
     if (!vehicle) {
@@ -1239,15 +1239,34 @@ export const approveVehicle = mutation({
       updatedAt: Date.now(),
     })
 
+    // Audit log
+    await ctx.runMutation(internal.auditLog.create, {
+      entityType: "vehicle",
+      entityId: args.vehicleId,
+      action: "approve_vehicle",
+      userId: identity.subject,
+      previousState: { isApproved: vehicle.isApproved ?? false },
+      newState: { isApproved: true },
+      metadata: {
+        ownerId: vehicle.ownerId,
+        vehicleMake: vehicle.make,
+        vehicleModel: vehicle.model,
+        vehicleYear: vehicle.year,
+      },
+    })
+
     return args.vehicleId
   },
 })
 
 // Admin function to reject a vehicle
 export const rejectVehicle = mutation({
-  args: { vehicleId: v.id("vehicles") },
+  args: {
+    vehicleId: v.id("vehicles"),
+    reason: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
-    await checkAdmin(ctx)
+    const identity = await checkAdmin(ctx)
 
     const vehicle = await ctx.db.get(args.vehicleId)
     if (!vehicle) {
@@ -1257,6 +1276,23 @@ export const rejectVehicle = mutation({
     await ctx.db.patch(args.vehicleId, {
       isApproved: false,
       updatedAt: Date.now(),
+    })
+
+    // Audit log
+    await ctx.runMutation(internal.auditLog.create, {
+      entityType: "vehicle",
+      entityId: args.vehicleId,
+      action: "reject_vehicle",
+      userId: identity.subject,
+      previousState: { isApproved: vehicle.isApproved ?? false },
+      newState: { isApproved: false },
+      metadata: {
+        reason: args.reason || "Did not meet approval criteria",
+        ownerId: vehicle.ownerId,
+        vehicleMake: vehicle.make,
+        vehicleModel: vehicle.model,
+        vehicleYear: vehicle.year,
+      },
     })
 
     return args.vehicleId
