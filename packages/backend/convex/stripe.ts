@@ -560,8 +560,8 @@ export const createCheckoutSession = action({
       throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE, "Not authorized to create payment for this reservation")
     }
 
-    if (reservation.status !== "pending") {
-      throwError(ErrorCode.INVALID_STATUS, "Reservation must be pending to create payment")
+    if (reservation.status !== "approved") {
+      throwError(ErrorCode.INVALID_STATUS, "Reservation must be approved to create payment")
     }
 
     // Monetary validation
@@ -783,8 +783,8 @@ export const createPaymentIntent = action({
       throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE, "Not authorized to create payment for this reservation")
     }
 
-    if (reservation.status !== "pending") {
-      throwError(ErrorCode.INVALID_STATUS, "Reservation must be pending to create payment")
+    if (reservation.status !== "approved") {
+      throwError(ErrorCode.INVALID_STATUS, "Reservation must be approved to create payment")
     }
 
     // Monetary validation
@@ -1527,7 +1527,13 @@ export const updateReservationStatus = mutation({
   },
   handler: async (ctx, args) => {
     await ctx.db.patch(args.reservationId, {
-      status: args.status as "pending" | "cancelled" | "confirmed" | "completed" | "declined",
+      status: args.status as
+        | "pending"
+        | "approved"
+        | "cancelled"
+        | "confirmed"
+        | "completed"
+        | "declined",
       paymentStatus: args.paymentStatus as "pending" | "paid" | "failed" | "refunded",
       updatedAt: Date.now(),
     })

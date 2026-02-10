@@ -250,11 +250,13 @@ export default defineSchema({
     totalAmount: v.number(),
     status: v.union(
       v.literal("pending"),
+      v.literal("approved"),
       v.literal("confirmed"),
       v.literal("cancelled"),
       v.literal("completed"),
       v.literal("declined")
     ),
+    approvedAt: v.optional(v.number()),
     renterMessage: v.optional(v.string()),
     ownerMessage: v.optional(v.string()),
     cancellationReason: v.optional(v.string()),

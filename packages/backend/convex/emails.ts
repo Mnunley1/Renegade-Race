@@ -293,6 +293,75 @@ Renegade Race Rentals
   return { subject, html, text }
 }
 
+// Email template: Reservation approved - notify renter to pay
+export function getReservationApprovedRenterEmailTemplate(data: {
+  renterName: string
+  vehicleName: string
+  startDate: string
+  endDate: string
+  totalAmount: number
+  ownerMessage?: string
+  paymentUrl: string
+}): { subject: string; html: string; text: string } {
+  const subject = `Reservation Approved: ${data.vehicleName} - Complete Payment`
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+      <div style="text-align: center; margin-bottom: 30px;">
+        <h1 style="color: #28a745;">Your Request Was Approved!</h1>
+      </div>
+      <p>Hi ${data.renterName},</p>
+      <p>Great news! Your reservation request for <strong>${data.vehicleName}</strong> has been approved by the host.</p>
+      <div style="background-color: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+        <p><strong>Vehicle:</strong> ${data.vehicleName}</p>
+        <p><strong>Dates:</strong> ${formatDate(data.startDate)} - ${formatDate(data.endDate)}</p>
+        <p><strong>Total Amount:</strong> ${formatCurrency(data.totalAmount)}</p>
+        ${data.ownerMessage ? `<p><strong>Message from owner:</strong><br>${data.ownerMessage}</p>` : ""}
+      </div>
+      <div style="background-color: #fff3cd; padding: 15px; border-radius: 8px; margin: 20px 0; border: 1px solid #ffc107;">
+        <p style="margin: 0;"><strong>Please complete payment within 48 hours</strong> to confirm your booking. If payment is not received in time, the reservation will be automatically cancelled.</p>
+      </div>
+      <p style="text-align: center; margin: 30px 0;">
+        <a href="${data.paymentUrl}" style="background-color: #28a745; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">Complete Payment</a>
+      </p>
+      <p>We're excited for your track day experience! If you have any questions, please don't hesitate to reach out.</p>
+      <p style="margin-top: 30px;">
+        Best regards,<br>
+        Renegade Race Rentals
+      </p>
+    </body>
+    </html>
+  `
+  const text = `
+Your Request Was Approved!
+
+Hi ${data.renterName},
+
+Great news! Your reservation request for ${data.vehicleName} has been approved by the host.
+
+Vehicle: ${data.vehicleName}
+Dates: ${formatDate(data.startDate)} - ${formatDate(data.endDate)}
+Total Amount: ${formatCurrency(data.totalAmount)}
+${data.ownerMessage ? `\nMessage from owner:\n${data.ownerMessage}\n` : ""}
+
+IMPORTANT: Please complete payment within 48 hours to confirm your booking.
+
+Complete payment: ${data.paymentUrl}
+
+We're excited for your track day experience! If you have any questions, please don't hesitate to reach out.
+
+Best regards,
+Renegade Race Rentals
+  `.trim()
+
+  return { subject, html, text }
+}
+
 // Email template: Reservation declined - notify renter
 export function getReservationDeclinedRenterEmailTemplate(data: {
   renterName: string

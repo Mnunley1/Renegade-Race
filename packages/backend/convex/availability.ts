@@ -53,8 +53,8 @@ export const checkAvailability = query({
       .withIndex("by_vehicle", (q) => q.eq("vehicleId", vehicleId))
       .filter((q) =>
         q.and(
-          // Only check active reservations (pending or confirmed)
-          q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "confirmed")),
+          // Only confirmed reservations block availability
+          q.eq(q.field("status"), "confirmed"),
           // Check for date overlap: existing reservation overlaps if
           // existingStart <= newEnd AND existingEnd >= newStart
           q.and(q.lte(q.field("startDate"), endDate), q.gte(q.field("endDate"), startDate))
@@ -301,7 +301,7 @@ export const getCalendarData = query({
       .withIndex("by_vehicle", (q) => q.eq("vehicleId", vehicleId))
       .filter((q) =>
         q.and(
-          q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "confirmed")),
+          q.eq(q.field("status"), "confirmed"),
           q.or(q.and(q.lte(q.field("startDate"), endDate), q.gte(q.field("endDate"), startDate)))
         )
       )

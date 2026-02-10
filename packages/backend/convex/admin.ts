@@ -420,6 +420,7 @@ export const getPlatformStats = query({
     const allReservations = await ctx.db.query("reservations").collect()
     const totalReservations = allReservations.length
     const pendingReservations = allReservations.filter((r) => r.status === "pending").length
+    const approvedReservations = allReservations.filter((r) => r.status === "approved").length
     const confirmedReservations = allReservations.filter((r) => r.status === "confirmed").length
     const completedReservations = allReservations.filter((r) => r.status === "completed").length
     const cancelledReservations = allReservations.filter((r) => r.status === "cancelled").length
@@ -469,6 +470,7 @@ export const getPlatformStats = query({
       reservations: {
         total: totalReservations,
         pending: pendingReservations,
+        approved: approvedReservations,
         confirmed: confirmedReservations,
         completed: completedReservations,
         cancelled: cancelledReservations,
@@ -502,6 +504,7 @@ export const getAllReservations = query({
     status: v.optional(
       v.union(
         v.literal("pending"),
+        v.literal("approved"),
         v.literal("confirmed"),
         v.literal("cancelled"),
         v.literal("completed"),
@@ -2155,6 +2158,7 @@ export const getBookingFunnel = query({
     const allReservations = await ctx.db.query("reservations").collect()
 
     const pending = allReservations.filter((r) => r.status === "pending").length
+    const approved = allReservations.filter((r) => r.status === "approved").length
     const confirmed = allReservations.filter((r) => r.status === "confirmed").length
     const completed = allReservations.filter((r) => r.status === "completed").length
     const cancelled = allReservations.filter((r) => r.status === "cancelled").length
@@ -2165,6 +2169,7 @@ export const getBookingFunnel = query({
 
     return {
       pending,
+      approved,
       confirmed,
       completed,
       cancelled,

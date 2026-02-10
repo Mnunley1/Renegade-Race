@@ -17,7 +17,7 @@ import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent } from "@workspace/ui/components/card"
 import { cn } from "@workspace/ui/lib/utils"
 import { useMutation } from "convex/react"
-import { Calendar, Car, ChevronRight, Clock, MapPin, XCircle } from "lucide-react"
+import { Calendar, Car, ChevronRight, Clock, CreditCard, MapPin, XCircle } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import type { ComponentProps } from "react"
@@ -42,7 +42,7 @@ interface TripCardProps extends ComponentProps<"div"> {
   totalDays: number
   dailyRate: number
   totalAmount: number
-  status: "pending" | "confirmed" | "cancelled" | "completed" | "declined"
+  status: "pending" | "approved" | "confirmed" | "cancelled" | "completed" | "declined"
   addOns?: Array<{ name: string; price: number; description?: string }>
 }
 
@@ -124,7 +124,7 @@ export function TripCard({
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const cancelReservation = useMutation(api.reservations.cancel)
 
-  const canCancel = status === "pending" || status === "confirmed"
+  const canCancel = status === "pending" || status === "approved" || status === "confirmed"
   const refundTier = canCancel ? calculateRefundTier(startDate) : null
 
   const handleCancel = async () => {
@@ -271,7 +271,17 @@ export function TripCard({
               </Link>
             </Button>
 
-            {/* Cancel Button for pending/confirmed reservations */}
+            {/* Pay Now Button for approved reservations */}
+            {status === "approved" && (
+              <Button asChild className="w-full" onClick={(e) => e.stopPropagation()}>
+                <Link href={`/checkout/pay?reservationId=${reservationId}`}>
+                  <CreditCard className="mr-2 size-4" />
+                  Pay Now
+                </Link>
+              </Button>
+            )}
+
+            {/* Cancel Button for pending/approved/confirmed reservations */}
             {canCancel && (
               <AlertDialog onOpenChange={setIsDialogOpen} open={isDialogOpen}>
                 <AlertDialogTrigger asChild>
@@ -297,8 +307,8 @@ export function TripCard({
                           ?
                         </p>
 
-                        {/* Refund Information */}
-                        {refundTier && (
+                        {/* Refund Information - only show for confirmed (paid) reservations */}
+                        {refundTier && status === "confirmed" && (
                           <div className="rounded-lg border bg-muted/50 p-4">
                             <div className="font-medium text-foreground text-sm">Refund Policy</div>
                             <div className="mt-2 space-y-1 text-sm">

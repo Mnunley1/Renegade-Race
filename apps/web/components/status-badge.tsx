@@ -1,12 +1,17 @@
 import { Badge } from "@workspace/ui/components/badge"
 import { cn } from "@workspace/ui/lib/utils"
-import { CheckCircle2, Clock, XCircle } from "lucide-react"
+import { CheckCircle2, Clock, CreditCard, XCircle } from "lucide-react"
 
 const statusConfig = {
   pending: {
     icon: Clock,
     variant: "secondary" as const,
     label: "Pending",
+  },
+  approved: {
+    icon: CreditCard,
+    variant: "default" as const,
+    label: "Approved - Pay Now",
   },
   confirmed: {
     icon: CheckCircle2,
