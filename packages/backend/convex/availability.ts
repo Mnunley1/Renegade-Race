@@ -76,7 +76,6 @@ export const blockDate = mutation({
     vehicleId: v.id("vehicles"),
     date: v.string(),
     reason: v.optional(v.string()),
-    price: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()
@@ -104,7 +103,6 @@ export const blockDate = mutation({
       await ctx.db.patch(existing._id, {
         isAvailable: false,
         reason: args.reason,
-        price: args.price,
       })
       return existing._id
     }
@@ -114,7 +112,6 @@ export const blockDate = mutation({
       date: args.date,
       isAvailable: false,
       reason: args.reason,
-      price: args.price,
       createdAt: Date.now(),
     })
   },
@@ -127,7 +124,6 @@ export const blockDateRange = mutation({
     startDate: v.string(),
     endDate: v.string(),
     reason: v.optional(v.string()),
-    price: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()
@@ -155,7 +151,6 @@ export const blockDateRange = mutation({
           date,
           isAvailable: false,
           reason: args.reason,
-          price: args.price,
           createdAt: Date.now(),
         })
       )

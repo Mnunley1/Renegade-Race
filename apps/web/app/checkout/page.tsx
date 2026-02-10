@@ -235,18 +235,15 @@ function CheckoutPageContent() {
   const blockedDates =
     availability
       ?.filter((item: { isAvailable: boolean; date: string }) => !item.isAvailable)
-      .map((item: { date: string }) => {
-        const date = new Date(item.date)
-        date.setHours(0, 0, 0, 0)
-        return date
-      }) || []
+      .map((item: { date: string }) => parseLocalDate(item.date))
+      .filter((d): d is Date => d !== null) || []
 
   // Combine blocked dates (availability already accounts for reservations)
-  const unavailableDates = new Set(blockedDates.map((d: Date) => d.toISOString().split("T")[0]))
+  const unavailableDates = new Set(blockedDates.map((d: Date) => formatDateToISO(d)))
 
   // Function to check if a date is unavailable
   const isDateUnavailable = (date: Date): boolean => {
-    const dateStr = date.toISOString().split("T")[0]
+    const dateStr = formatDateToISO(date)
     return unavailableDates.has(dateStr)
   }
 
@@ -373,9 +370,15 @@ function CheckoutPageContent() {
   // If we have reservation and clientSecret, show payment form
   if (reservation && clientSecret) {
     const vehicle = reservation.vehicle
-    const vehicleImages = (vehicle as any)?.images as Array<{ isPrimary: boolean; imageUrl?: string; r2Key?: string }> | undefined
+    const vehicleImages = (vehicle as any)?.images as
+      | Array<{ isPrimary: boolean; imageUrl?: string; r2Key?: string }>
+      | undefined
     const primaryImageData = vehicleImages?.find((img) => img.isPrimary) || vehicleImages?.[0]
-    const primaryImage = primaryImageData?.imageUrl || (primaryImageData?.r2Key ? `https://ik.imagekit.io/renegaderace/${primaryImageData.r2Key}?tr=w-320,h-200,q-80,f-auto` : "")
+    const primaryImage =
+      primaryImageData?.imageUrl ||
+      (primaryImageData?.r2Key
+        ? `https://ik.imagekit.io/renegaderace/${primaryImageData.r2Key}?tr=w-320,h-200,q-80,f-auto`
+        : "")
 
     const options: StripeElementsOptions = {
       clientSecret,
@@ -536,9 +539,15 @@ function CheckoutPageContent() {
 
   if (!vehicle) return null
 
-  const vehicleImages = (vehicle as any)?.images as Array<{ isPrimary: boolean; imageUrl?: string; r2Key?: string }> | undefined
+  const vehicleImages = (vehicle as any)?.images as
+    | Array<{ isPrimary: boolean; imageUrl?: string; r2Key?: string }>
+    | undefined
   const primaryImageData = vehicleImages?.find((img) => img.isPrimary) || vehicleImages?.[0]
-  const primaryImage = primaryImageData?.imageUrl || (primaryImageData?.r2Key ? `https://ik.imagekit.io/renegaderace/${primaryImageData.r2Key}?tr=w-320,h-200,q-80,f-auto` : "")
+  const primaryImage =
+    primaryImageData?.imageUrl ||
+    (primaryImageData?.r2Key
+      ? `https://ik.imagekit.io/renegaderace/${primaryImageData.r2Key}?tr=w-320,h-200,q-80,f-auto`
+      : "")
   // Check if form is valid and dates don't contain blocked dates
   const isValid =
     pickupDate &&

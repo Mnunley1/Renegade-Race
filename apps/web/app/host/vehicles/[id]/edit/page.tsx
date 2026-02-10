@@ -87,6 +87,7 @@ export default function EditVehiclePage() {
     price: "",
     description: "",
     isRequired: false,
+    priceType: "daily" as "daily" | "one-time",
   })
   const [editingAddOnIndex, setEditingAddOnIndex] = useState<number | null>(null)
 
@@ -141,12 +142,14 @@ export default function EditVehiclePage() {
 
       // Sort images by order
       const sortedImages = [...(vehicle.images || [])].sort((a, b) => a.order - b.order)
-      setImages(sortedImages.map((img: any) => ({
-        _id: img._id,
-        r2Key: img.r2Key,
-        isPrimary: img.isPrimary,
-        order: img.order
-      })))
+      setImages(
+        sortedImages.map((img: any) => ({
+          _id: img._id,
+          r2Key: img.r2Key,
+          isPrimary: img.isPrimary,
+          order: img.order,
+        }))
+      )
     }
   }, [vehicle])
 
@@ -217,10 +220,11 @@ export default function EditVehiclePage() {
             price: Number(newAddOn.price),
             description: newAddOn.description || undefined,
             isRequired: newAddOn.isRequired,
+            priceType: newAddOn.priceType,
           },
         ],
       })
-      setNewAddOn({ name: "", price: "", description: "", isRequired: false })
+      setNewAddOn({ name: "", price: "", description: "", isRequired: false, priceType: "daily" })
       toast.success("Add-on added")
     } else {
       toast.error("Please provide a name and price for the add-on")
@@ -248,6 +252,7 @@ export default function EditVehiclePage() {
       price: addOn.price.toString(),
       description: addOn.description || "",
       isRequired: addOn.isRequired ?? false,
+      priceType: addOn.priceType ?? "daily",
     })
     setEditingAddOnIndex(index)
   }
@@ -264,19 +269,20 @@ export default function EditVehiclePage() {
       price: Number(newAddOn.price),
       description: newAddOn.description || undefined,
       isRequired: newAddOn.isRequired,
+      priceType: newAddOn.priceType,
     }
 
     setFormData({
       ...formData,
       addOns: updatedAddOns,
     })
-    setNewAddOn({ name: "", price: "", description: "", isRequired: false })
+    setNewAddOn({ name: "", price: "", description: "", isRequired: false, priceType: "daily" })
     setEditingAddOnIndex(null)
     toast.success("Add-on updated")
   }
 
   const cancelEditingAddOn = () => {
-    setNewAddOn({ name: "", price: "", description: "", isRequired: false })
+    setNewAddOn({ name: "", price: "", description: "", isRequired: false, priceType: "daily" })
     setEditingAddOnIndex(null)
   }
 
@@ -409,12 +415,14 @@ export default function EditVehiclePage() {
         const sortedImages = [...(vehicle.images || [])].sort(
           (a: { order: number }, b: { order: number }) => a.order - b.order
         )
-        setImages(sortedImages.map((img: any) => ({
-          _id: img._id,
-          r2Key: img.r2Key,
-          isPrimary: img.isPrimary,
-          order: img.order
-        })))
+        setImages(
+          sortedImages.map((img: any) => ({
+            _id: img._id,
+            r2Key: img.r2Key,
+            isPrimary: img.isPrimary,
+            order: img.order,
+          }))
+        )
       }
     } finally {
       setDraggedIndex(null)
@@ -900,7 +908,10 @@ export default function EditVehiclePage() {
                         {addOn.description && (
                           <p className="text-muted-foreground text-sm">{addOn.description}</p>
                         )}
-                        <p className="font-semibold text-primary">${addOn.price}/day</p>
+                        <p className="font-semibold text-primary">
+                          ${addOn.price}
+                          {addOn.priceType === "one-time" ? " one-time" : "/day"}
+                        </p>
                       </div>
                       <div className="flex gap-2">
                         <Button
@@ -929,7 +940,7 @@ export default function EditVehiclePage() {
                 <h4 className="font-medium">
                   {editingAddOnIndex !== null ? "Edit Add-on" : "Add New Add-on"}
                 </h4>
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-4 sm:grid-cols-3">
                   <div className="space-y-2">
                     <Label htmlFor="addOnName">Add-on Name *</Label>
                     <Input
@@ -940,7 +951,7 @@ export default function EditVehiclePage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="addOnPrice">Price ($/day) *</Label>
+                    <Label htmlFor="addOnPrice">Price ($) *</Label>
                     <Input
                       id="addOnPrice"
                       onChange={(e) => setNewAddOn({ ...newAddOn, price: e.target.value })}
@@ -948,6 +959,23 @@ export default function EditVehiclePage() {
                       type="number"
                       value={newAddOn.price}
                     />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="editAddOnPriceType">Price Type *</Label>
+                    <Select
+                      onValueChange={(value: "daily" | "one-time") =>
+                        setNewAddOn({ ...newAddOn, priceType: value })
+                      }
+                      value={newAddOn.priceType}
+                    >
+                      <SelectTrigger id="editAddOnPriceType">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="daily">Per Day</SelectItem>
+                        <SelectItem value="one-time">One-Time</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
                 <div className="space-y-2">

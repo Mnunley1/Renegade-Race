@@ -553,7 +553,8 @@ export default function HostVehicleDetailPage() {
                             )}
                           </div>
                           <p className="font-semibold text-primary">
-                            ${Math.round(addOn.price / 100)}/day
+                            ${addOn.price}
+                            {addOn.priceType === "one-time" ? " one-time" : "/day"}
                           </p>
                         </div>
                       ))}

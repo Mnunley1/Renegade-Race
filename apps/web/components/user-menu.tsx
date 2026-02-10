@@ -49,31 +49,24 @@ export function UserMenu() {
       <DropdownMenuTrigger asChild>
         <Button className="relative flex items-center gap-2 px-3 py-5" variant="ghost">
           <Menu className="size-5" />
-          <div className="relative">
-            <Avatar className="size-8">
-              {isSignedIn ? (
-                <>
-                  <AvatarImage alt={user?.firstName || "User"} src={user?.imageUrl} />
-                  <AvatarFallback>
-                    {(
-                      user?.firstName?.[0] ||
-                      user?.emailAddresses?.[0]?.emailAddress?.[0] ||
-                      "U"
-                    ).toUpperCase()}
-                  </AvatarFallback>
-                </>
-              ) : (
+          <Avatar className="size-8">
+            {isSignedIn ? (
+              <>
+                <AvatarImage alt={user?.firstName || "User"} src={user?.imageUrl} />
                 <AvatarFallback>
-                  <User className="size-5" />
+                  {(
+                    user?.firstName?.[0] ||
+                    user?.emailAddresses?.[0]?.emailAddress?.[0] ||
+                    "U"
+                  ).toUpperCase()}
                 </AvatarFallback>
-              )}
-            </Avatar>
-            {unreadCount !== undefined && unreadCount > 0 && (
-              <span className="absolute -top-1 -right-1 flex min-w-[1.25rem] items-center justify-center rounded-full bg-primary px-1 py-0.5 font-semibold text-primary-foreground text-xs leading-none">
-                {unreadCount > 99 ? "99+" : unreadCount}
-              </span>
+              </>
+            ) : (
+              <AvatarFallback>
+                <User className="size-5" />
+              </AvatarFallback>
             )}
-          </div>
+          </Avatar>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">
