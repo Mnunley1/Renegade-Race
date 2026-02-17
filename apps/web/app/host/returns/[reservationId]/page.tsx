@@ -20,7 +20,7 @@ import { handleErrorWithContext } from "@/lib/error-handler"
 import { getImageKitUrl } from "@/lib/imagekit"
 
 export default function ReturnReviewPage() {
-  const { user } = useUser()
+  const { user: _user } = useUser()
   const params = useParams()
   const router = useRouter()
   const reservationId = params.reservationId as string
@@ -33,8 +33,14 @@ export default function ReturnReviewPage() {
   const [notes, setNotes] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const { photos, setPhotos, isUploading, fileInputRef, handlePhotoUpload, handleRemovePhoto } =
-    usePhotoUpload()
+  const {
+    photos,
+    setPhotos: _setPhotos,
+    isUploading,
+    fileInputRef,
+    handlePhotoUpload,
+    handleRemovePhoto,
+  } = usePhotoUpload()
 
   // Fetch completion data
   const completion = useQuery(

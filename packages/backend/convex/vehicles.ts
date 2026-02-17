@@ -1343,4 +1343,3 @@ export const getPendingVehicles = query({
     return vehiclesWithDetails
   },
 })
-

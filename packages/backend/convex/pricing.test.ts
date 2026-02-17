@@ -80,9 +80,7 @@ describe("calculateReservationTotal", () => {
       { price: 500, priceType: "one-time" as const },
       { price: 100 }, // defaults to one-time
     ]
-    expect(calculateReservationTotal(3000, 5, addOns)).toBe(
-      3000 * 5 + 200 * 5 + 500 + 100
-    )
+    expect(calculateReservationTotal(3000, 5, addOns)).toBe(3000 * 5 + 200 * 5 + 500 + 100)
   })
 
   it("handles 1 day rental", () => {
@@ -154,58 +152,40 @@ describe("calculatePlatformFeeAmount", () => {
 
 describe("datesOverlap", () => {
   it("returns false when A is entirely before B", () => {
-    expect(datesOverlap("2024-01-01", "2024-01-05", "2024-01-10", "2024-01-15")).toBe(
-      false
-    )
+    expect(datesOverlap("2024-01-01", "2024-01-05", "2024-01-10", "2024-01-15")).toBe(false)
   })
 
   it("returns false when A is entirely after B", () => {
-    expect(datesOverlap("2024-02-01", "2024-02-05", "2024-01-01", "2024-01-05")).toBe(
-      false
-    )
+    expect(datesOverlap("2024-02-01", "2024-02-05", "2024-01-01", "2024-01-05")).toBe(false)
   })
 
   it("returns true for identical date ranges", () => {
-    expect(datesOverlap("2024-01-01", "2024-01-05", "2024-01-01", "2024-01-05")).toBe(
-      true
-    )
+    expect(datesOverlap("2024-01-01", "2024-01-05", "2024-01-01", "2024-01-05")).toBe(true)
   })
 
   it("returns true when A starts during B", () => {
-    expect(datesOverlap("2024-01-03", "2024-01-10", "2024-01-01", "2024-01-05")).toBe(
-      true
-    )
+    expect(datesOverlap("2024-01-03", "2024-01-10", "2024-01-01", "2024-01-05")).toBe(true)
   })
 
   it("returns true when A ends during B", () => {
-    expect(datesOverlap("2024-01-01", "2024-01-03", "2024-01-02", "2024-01-05")).toBe(
-      true
-    )
+    expect(datesOverlap("2024-01-01", "2024-01-03", "2024-01-02", "2024-01-05")).toBe(true)
   })
 
   it("returns true for adjacent dates (end == start)", () => {
     // endA == startB means they share one day
-    expect(datesOverlap("2024-01-01", "2024-01-05", "2024-01-05", "2024-01-10")).toBe(
-      true
-    )
+    expect(datesOverlap("2024-01-01", "2024-01-05", "2024-01-05", "2024-01-10")).toBe(true)
   })
 
   it("returns false when ranges are one day apart", () => {
-    expect(datesOverlap("2024-01-01", "2024-01-04", "2024-01-05", "2024-01-10")).toBe(
-      false
-    )
+    expect(datesOverlap("2024-01-01", "2024-01-04", "2024-01-05", "2024-01-10")).toBe(false)
   })
 
   it("returns true when one range contains the other", () => {
-    expect(datesOverlap("2024-01-01", "2024-01-31", "2024-01-10", "2024-01-15")).toBe(
-      true
-    )
+    expect(datesOverlap("2024-01-01", "2024-01-31", "2024-01-10", "2024-01-15")).toBe(true)
   })
 
   it("returns true when inner contains outer", () => {
-    expect(datesOverlap("2024-01-10", "2024-01-15", "2024-01-01", "2024-01-31")).toBe(
-      true
-    )
+    expect(datesOverlap("2024-01-10", "2024-01-15", "2024-01-01", "2024-01-31")).toBe(true)
   })
 })
 

@@ -185,7 +185,7 @@ export const getPlatformTemplates = query({
       v.union(v.literal("inquiry"), v.literal("response"), v.literal("logistics"))
     ),
   },
-  handler: async (_ctx, args) => {
+  handler: (_ctx, args) => {
     let templates = PLATFORM_TEMPLATES
     if (args.category) {
       templates = templates.filter((t) => t.category === args.category)

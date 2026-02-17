@@ -28,6 +28,8 @@ import { toast } from "sonner"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 
+const VIDEO_FILE_REGEX = /\.(mp4|webm|ogg)$/i
+
 interface DriverPortfolioProps {
   driverProfileId: Id<"driverProfiles">
   isOwner: boolean
@@ -210,7 +212,7 @@ export function DriverPortfolio({ driverProfileId, isOwner }: DriverPortfolioPro
           </Button>
           {selectedMedia && (
             <div className="mt-6">
-              {selectedMedia.match(/\.(mp4|webm|ogg)$/i) ? (
+              {selectedMedia.match(VIDEO_FILE_REGEX) ? (
                 <video className="w-full rounded-lg" controls src={selectedMedia} />
               ) : (
                 <div className="relative aspect-video w-full">

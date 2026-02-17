@@ -51,9 +51,15 @@ function CheckoutSuccessContent() {
   }
 
   const vehicle = reservation.vehicle
-  const vehicleImages = (vehicle as any)?.images as Array<{ isPrimary: boolean; imageUrl?: string; r2Key?: string }> | undefined
+  const vehicleImages = (vehicle as any)?.images as
+    | Array<{ isPrimary: boolean; imageUrl?: string; r2Key?: string }>
+    | undefined
   const primaryImageData = vehicleImages?.find((img) => img.isPrimary) || vehicleImages?.[0]
-  const primaryImage = primaryImageData?.imageUrl || (primaryImageData?.r2Key ? `https://ik.imagekit.io/renegaderace/${primaryImageData.r2Key}?tr=w-320,h-200,q-80,f-auto` : "")
+  const primaryImage =
+    primaryImageData?.imageUrl ||
+    (primaryImageData?.r2Key
+      ? `https://ik.imagekit.io/renegaderace/${primaryImageData.r2Key}?tr=w-320,h-200,q-80,f-auto`
+      : "")
 
   return (
     <div className="container mx-auto max-w-4xl px-4 py-8">

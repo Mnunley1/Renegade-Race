@@ -6,11 +6,7 @@ import type { Id } from "./_generated/dataModel"
 import { action, internalAction, mutation, query } from "./_generated/server"
 import { checkAdmin } from "./admin"
 import { calculateDaysBetween, parseLocalDate } from "./dateUtils"
-import {
-  calculateAddOnsTotal,
-  calculatePlatformFeeAmount,
-  calculateRefundAmount,
-} from "./pricing"
+import { calculateAddOnsTotal, calculatePlatformFeeAmount, calculateRefundAmount } from "./pricing"
 import {
   getPaymentFailedEmailTemplate,
   getPaymentSucceededEmailTemplate,
@@ -102,7 +98,10 @@ const stripeClient = new StripeSubscriptions(components.stripe, {})
 function getStripe(): Stripe {
   const secretKey = process.env.STRIPE_SECRET_KEY
   if (!secretKey) {
-    throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE, "STRIPE_SECRET_KEY environment variable is not set")
+    throwError(
+      ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,
+      "STRIPE_SECRET_KEY environment variable is not set"
+    )
   }
   return new Stripe(secretKey, {
     apiVersion: "2025-08-27.basil",
@@ -137,7 +136,10 @@ export const calculatePlatformFee = mutation({
 
     // Validate fee percentage (should already be validated on insert, but double-check)
     if (feePercentage < 0 || feePercentage > 100) {
-      throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE, "Platform fee percentage must be between 0 and 100")
+      throwError(
+        ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,
+        "Platform fee percentage must be between 0 and 100"
+      )
     }
 
     return calculatePlatformFeeAmount(
@@ -203,7 +205,10 @@ export const updatePlatformSettings = mutation({
 
     // Validate inputs
     if (args.platformFeePercentage < 0 || args.platformFeePercentage > 100) {
-      throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE, "Platform fee percentage must be between 0 and 100")
+      throwError(
+        ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,
+        "Platform fee percentage must be between 0 and 100"
+      )
     }
 
     if (args.minimumPlatformFee < 0) {
@@ -214,7 +219,10 @@ export const updatePlatformSettings = mutation({
       args.maximumPlatformFee !== undefined &&
       args.maximumPlatformFee < args.minimumPlatformFee
     ) {
-      throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE, "Maximum platform fee must be greater than or equal to minimum fee")
+      throwError(
+        ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,
+        "Maximum platform fee must be greater than or equal to minimum fee"
+      )
     }
 
     // Deactivate old settings
@@ -354,7 +362,8 @@ export const createConnectAccount = action({
     if (!isDevelopment) {
       const isAllowed = allowedProductionDomains.some((domain) => baseUrl.startsWith(domain))
       if (!isAllowed) {
-        throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE, 
+        throwError(
+          ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,
           `Invalid return URL: ${baseUrl}. ` +
             `Allowed domains: ${allowedProductionDomains.join(", ")}`
         )
@@ -554,7 +563,10 @@ export const createCheckoutSession = action({
     }
 
     if (reservation.renterId !== identity.subject) {
-      throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE, "Not authorized to create payment for this reservation")
+      throwError(
+        ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,
+        "Not authorized to create payment for this reservation"
+      )
     }
 
     if (reservation.status !== "approved") {
@@ -592,10 +604,14 @@ export const createCheckoutSession = action({
       for (const reservationAddOn of reservation.addOns) {
         const vehicleAddOn = vehicle.addOns?.find((va: any) => va.name === reservationAddOn.name)
         if (!vehicleAddOn) {
-          throwError(ErrorCode.INVALID_INPUT, `Add-on "${reservationAddOn.name}" is no longer available`)
+          throwError(
+            ErrorCode.INVALID_INPUT,
+            `Add-on "${reservationAddOn.name}" is no longer available`
+          )
         }
         if (vehicleAddOn.price !== reservationAddOn.price) {
-          throwError(ErrorCode.PRICE_CHANGED,
+          throwError(
+            ErrorCode.PRICE_CHANGED,
             `Add-on "${reservationAddOn.name}" price has changed from ${reservationAddOn.price} to ${vehicleAddOn.price} cents`
           )
         }
@@ -609,7 +625,8 @@ export const createCheckoutSession = action({
 
     // Validate that the payment amount matches the recalculated total
     if (args.amount !== expectedTotal) {
-      throwError(ErrorCode.PRICE_CHANGED,
+      throwError(
+        ErrorCode.PRICE_CHANGED,
         `Payment amount mismatch: expected ${expectedTotal} cents (based on current pricing), got ${args.amount} cents. ` +
           "Vehicle daily rate may have changed."
       )
@@ -621,7 +638,10 @@ export const createCheckoutSession = action({
     })
 
     if (!owner?.stripeAccountId) {
-      throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE, "Owner must complete Stripe onboarding before accepting payments")
+      throwError(
+        ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,
+        "Owner must complete Stripe onboarding before accepting payments"
+      )
     }
 
     // Verify Connect account is ready
@@ -629,13 +649,17 @@ export const createCheckoutSession = action({
     const connectAccount = await stripe.accounts.retrieve(owner.stripeAccountId)
 
     if (!connectAccount.details_submitted) {
-      throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,
+      throwError(
+        ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,
         "Owner account onboarding is not complete. Please complete Stripe onboarding."
       )
     }
 
     if (!connectAccount.charges_enabled) {
-      throwError(ErrorCode.STRIPE_ACCOUNT_DISABLED, "Owner account cannot accept charges yet. Please complete Stripe onboarding.")
+      throwError(
+        ErrorCode.STRIPE_ACCOUNT_DISABLED,
+        "Owner account cannot accept charges yet. Please complete Stripe onboarding."
+      )
     }
 
     // Check if transfers capability is enabled (required for destination payments)
@@ -644,7 +668,8 @@ export const createCheckoutSession = action({
       capabilities?.transfers === "active" || capabilities?.legacy_payments === "active"
 
     if (!transfersEnabled) {
-      throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,
+      throwError(
+        ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,
         "Owner account does not have transfers enabled. Please complete Stripe onboarding to enable transfers capability."
       )
     }
@@ -773,7 +798,10 @@ export const createPaymentIntent = action({
     }
 
     if (reservation.renterId !== identity.subject) {
-      throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE, "Not authorized to create payment for this reservation")
+      throwError(
+        ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,
+        "Not authorized to create payment for this reservation"
+      )
     }
 
     if (reservation.status !== "approved") {
@@ -811,10 +839,14 @@ export const createPaymentIntent = action({
       for (const reservationAddOn of reservation.addOns) {
         const vehicleAddOn = vehicle.addOns?.find((va: any) => va.name === reservationAddOn.name)
         if (!vehicleAddOn) {
-          throwError(ErrorCode.INVALID_INPUT, `Add-on "${reservationAddOn.name}" is no longer available`)
+          throwError(
+            ErrorCode.INVALID_INPUT,
+            `Add-on "${reservationAddOn.name}" is no longer available`
+          )
         }
         if (vehicleAddOn.price !== reservationAddOn.price) {
-          throwError(ErrorCode.PRICE_CHANGED,
+          throwError(
+            ErrorCode.PRICE_CHANGED,
             `Add-on "${reservationAddOn.name}" price has changed from ${reservationAddOn.price} to ${vehicleAddOn.price} cents`
           )
         }
@@ -828,7 +860,8 @@ export const createPaymentIntent = action({
 
     // Validate that the payment amount matches the recalculated total
     if (args.amount !== expectedTotal) {
-      throwError(ErrorCode.PRICE_CHANGED,
+      throwError(
+        ErrorCode.PRICE_CHANGED,
         `Payment amount mismatch: expected ${expectedTotal} cents (based on current pricing), got ${args.amount} cents. ` +
           "Vehicle daily rate may have changed."
       )
@@ -840,7 +873,10 @@ export const createPaymentIntent = action({
     })
 
     if (!owner?.stripeAccountId) {
-      throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE, "Owner must complete Stripe onboarding before accepting payments")
+      throwError(
+        ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,
+        "Owner must complete Stripe onboarding before accepting payments"
+      )
     }
 
     // Verify Connect account is ready and has required capabilities
@@ -848,13 +884,17 @@ export const createPaymentIntent = action({
     const connectAccount = await stripe.accounts.retrieve(owner.stripeAccountId)
 
     if (!connectAccount.details_submitted) {
-      throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE, 
+      throwError(
+        ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,
         "Owner account onboarding is not complete. Please complete Stripe onboarding."
       )
     }
 
     if (!connectAccount.charges_enabled) {
-      throwError(ErrorCode.STRIPE_ACCOUNT_DISABLED, "Owner account cannot accept charges yet. Please complete Stripe onboarding.")
+      throwError(
+        ErrorCode.STRIPE_ACCOUNT_DISABLED,
+        "Owner account cannot accept charges yet. Please complete Stripe onboarding."
+      )
     }
 
     // Check if transfers capability is enabled (required for destination payments)
@@ -863,7 +903,8 @@ export const createPaymentIntent = action({
       capabilities?.transfers === "active" || capabilities?.legacy_payments === "active"
 
     if (!transfersEnabled) {
-      throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE, 
+      throwError(
+        ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,
         "Owner account does not have transfers enabled. Please complete Stripe onboarding to enable transfers capability."
       )
     }
@@ -1875,6 +1916,7 @@ export const handlePayoutFailed = mutation({
     const user = users.find((u) => u.stripeAccountId === args.stripeAccountId)
 
     if (user) {
+      // TODO: handle payout failure notification
     }
   },
 })
@@ -1962,6 +2004,7 @@ export const handleDisputeCreated = mutation({
     if (payment.reservationId) {
       const reservation = await ctx.db.get(payment.reservationId)
       if (reservation) {
+        // TODO: flag reservation for review
       }
     }
   },

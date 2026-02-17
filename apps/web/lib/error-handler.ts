@@ -131,11 +131,9 @@ export function handleError(error: unknown, options: ErrorHandlerOptions = {}): 
   } = options
 
   // Log error for debugging
-  if (logError) {
-    // Send to Sentry in production
-    if (process.env.NODE_ENV === "production" && process.env.NEXT_PUBLIC_SENTRY_DSN) {
-      Sentry.captureException(error)
-    }
+  // Log error and send to Sentry in production
+  if (logError && process.env.NODE_ENV === "production" && process.env.NEXT_PUBLIC_SENTRY_DSN) {
+    Sentry.captureException(error)
   }
 
   // Get user-friendly message

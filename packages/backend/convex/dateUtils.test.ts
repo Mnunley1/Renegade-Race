@@ -9,23 +9,23 @@ describe("parseLocalDate", () => {
   it("parses a valid date string", () => {
     const date = parseLocalDate("2024-06-15")
     expect(date).toBeInstanceOf(Date)
-    expect(date!.getFullYear()).toBe(2024)
-    expect(date!.getMonth()).toBe(5) // 0-indexed
-    expect(date!.getDate()).toBe(15)
+    expect(date?.getFullYear()).toBe(2024)
+    expect(date?.getMonth()).toBe(5) // 0-indexed
+    expect(date?.getDate()).toBe(15)
   })
 
   it("parses Jan 1st correctly", () => {
     const date = parseLocalDate("2024-01-01")
     expect(date).toBeInstanceOf(Date)
-    expect(date!.getMonth()).toBe(0)
-    expect(date!.getDate()).toBe(1)
+    expect(date?.getMonth()).toBe(0)
+    expect(date?.getDate()).toBe(1)
   })
 
   it("parses Dec 31st correctly", () => {
     const date = parseLocalDate("2024-12-31")
     expect(date).toBeInstanceOf(Date)
-    expect(date!.getMonth()).toBe(11)
-    expect(date!.getDate()).toBe(31)
+    expect(date?.getMonth()).toBe(11)
+    expect(date?.getDate()).toBe(31)
   })
 
   it("returns null for invalid date Feb 30", () => {
@@ -39,7 +39,7 @@ describe("parseLocalDate", () => {
   it("parses Feb 29 in a leap year", () => {
     const date = parseLocalDate("2024-02-29")
     expect(date).toBeInstanceOf(Date)
-    expect(date!.getDate()).toBe(29)
+    expect(date?.getDate()).toBe(29)
   })
 
   it("returns null for malformed strings", () => {
@@ -120,11 +120,6 @@ describe("generateDateRange", () => {
 
   it("generates range across month boundary", () => {
     const range = generateDateRange("2024-01-30", "2024-02-02")
-    expect(range).toEqual([
-      "2024-01-30",
-      "2024-01-31",
-      "2024-02-01",
-      "2024-02-02",
-    ])
+    expect(range).toEqual(["2024-01-30", "2024-01-31", "2024-02-01", "2024-02-02"])
   })
 })

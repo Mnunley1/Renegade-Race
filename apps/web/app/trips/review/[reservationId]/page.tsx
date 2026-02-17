@@ -19,7 +19,7 @@ import { handleErrorWithContext } from "@/lib/error-handler"
 import { getImageKitUrl } from "@/lib/imagekit"
 
 export default function ReviewSubmissionPage() {
-  const { user } = useUser()
+  const { user: _user } = useUser()
   const params = useParams()
   const router = useRouter()
   const reservationId = params.reservationId as string

@@ -3,7 +3,7 @@ import { internal } from "./_generated/api"
 import type { Id } from "./_generated/dataModel"
 import { mutation, query } from "./_generated/server"
 import { calculateDaysBetween } from "./dateUtils"
-import { calculateAddOnsTotal, calculateReservationTotal } from "./pricing"
+import { calculateReservationTotal } from "./pricing"
 import {
   getReservationApprovedRenterEmailTemplate,
   getReservationCancelledEmailTemplate,

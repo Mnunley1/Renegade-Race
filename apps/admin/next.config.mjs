@@ -9,7 +9,7 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: false,
   },
-  async headers() {
+  headers() {
     return [
       {
         source: "/:path*",

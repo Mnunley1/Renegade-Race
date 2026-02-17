@@ -36,6 +36,8 @@ import {
 import { useState } from "react"
 import type { FilterActions, FilterState, TrackItem, VehicleItem } from "./types"
 
+const ZIP_CODE_REGEX = /^\d{5}$/
+
 type MobileFiltersProps = {
   filters: FilterState
   actions: FilterActions
@@ -259,7 +261,7 @@ export function MobileFilters({
                     onChange={(e) => {
                       const value = e.target.value
                       actions.setLocationZipCode(value)
-                      if (value.length === 5 && /^\d{5}$/.test(value)) {
+                      if (value.length === 5 && ZIP_CODE_REGEX.test(value)) {
                         geocodeZipCode(value)
                       }
                     }}

@@ -1,34 +1,5 @@
 import { Badge } from "@workspace/ui/components/badge"
 
-type StatusType =
-  | "pending"
-  | "confirmed"
-  | "completed"
-  | "cancelled"
-  | "declined"
-  | "open"
-  | "resolved"
-  | "closed"
-  | "approved"
-  | "rejected"
-  | "succeeded"
-  | "failed"
-  | "processing"
-  | "refunded"
-  | "partially_refunded"
-  | "enabled"
-  | "restricted"
-  | "disabled"
-  | "active"
-  | "inactive"
-  | "banned"
-  | "published"
-  | "hidden"
-  | "moderated"
-  | "unmoderated"
-  | "sending"
-  | "archived"
-
 const statusConfig: Record<
   string,
   { variant: "default" | "secondary" | "destructive" | "outline"; className?: string }

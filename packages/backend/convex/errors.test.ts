@@ -21,26 +21,22 @@ describe("throwError", () => {
   })
 
   it("logs details to console.error when provided", () => {
-    const spy = vi.spyOn(console, "error").mockImplementation(() => {})
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {
+      // no-op mock
+    })
     try {
       throwError(ErrorCode.NOT_FOUND, "User not found", { userId: "123" })
     } catch {
       // expected
     }
-    expect(spy).toHaveBeenCalledWith(
-      "Error NOT_FOUND:",
-      "User not found",
-      { userId: "123" }
-    )
+    expect(spy).toHaveBeenCalledWith("Error NOT_FOUND:", "User not found", { userId: "123" })
     spy.mockRestore()
   })
 })
 
 describe("parseErrorCode", () => {
   it("extracts a known error code from a formatted message", () => {
-    expect(parseErrorCode("AUTH_REQUIRED: Not authenticated")).toBe(
-      "AUTH_REQUIRED"
-    )
+    expect(parseErrorCode("AUTH_REQUIRED: Not authenticated")).toBe("AUTH_REQUIRED")
   })
 
   it("extracts code when message is just the code", () => {
@@ -56,9 +52,7 @@ describe("parseErrorCode", () => {
   })
 
   it("extracts various error codes correctly", () => {
-    expect(parseErrorCode("PAYMENT_FAILED: Card declined")).toBe(
-      "PAYMENT_FAILED"
-    )
+    expect(parseErrorCode("PAYMENT_FAILED: Card declined")).toBe("PAYMENT_FAILED")
     expect(parseErrorCode("RATE_LIMITED")).toBe("RATE_LIMITED")
     expect(parseErrorCode("INVALID_INPUT: Bad data")).toBe("INVALID_INPUT")
   })
@@ -66,21 +60,15 @@ describe("parseErrorCode", () => {
 
 describe("hasErrorCode", () => {
   it("returns true when error has the specified code", () => {
-    expect(
-      hasErrorCode("AUTH_REQUIRED: Please log in", ErrorCode.AUTH_REQUIRED)
-    ).toBe(true)
+    expect(hasErrorCode("AUTH_REQUIRED: Please log in", ErrorCode.AUTH_REQUIRED)).toBe(true)
   })
 
   it("returns false when error has a different code", () => {
-    expect(
-      hasErrorCode("AUTH_REQUIRED: Please log in", ErrorCode.FORBIDDEN)
-    ).toBe(false)
+    expect(hasErrorCode("AUTH_REQUIRED: Please log in", ErrorCode.FORBIDDEN)).toBe(false)
   })
 
   it("returns false for unstructured error messages", () => {
-    expect(
-      hasErrorCode("Something went wrong", ErrorCode.INTERNAL_ERROR)
-    ).toBe(false)
+    expect(hasErrorCode("Something went wrong", ErrorCode.INTERNAL_ERROR)).toBe(false)
   })
 
   it("works with code-only messages", () => {

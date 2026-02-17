@@ -131,6 +131,7 @@ export function handleError(error: unknown, options: ErrorHandlerOptions = {}): 
 
   // Log error for debugging
   if (logError) {
+    // Error logging handled by monitoring service
   }
 
   // Get user-friendly message

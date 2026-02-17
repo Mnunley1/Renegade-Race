@@ -7,7 +7,7 @@ import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Separator } from "@workspace/ui/components/separator"
 import { useAction, useQuery } from "convex/react"
-import { Calendar, Clock, CreditCard, Loader2, MapPin } from "lucide-react"
+import { Calendar, Clock, Loader2, MapPin } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
@@ -111,7 +111,7 @@ function PaymentForm({
 
 function PayPageContent() {
   const searchParams = useSearchParams()
-  const router = useRouter()
+  const _router = useRouter()
   const { isSignedIn } = useUser()
   const reservationId = searchParams.get("reservationId")
 

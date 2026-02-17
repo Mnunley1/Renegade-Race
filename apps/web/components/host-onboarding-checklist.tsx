@@ -34,7 +34,7 @@ export function HostOnboardingChecklist({ open, onOpenChange }: HostOnboardingCh
     return null
   }
 
-  const { status, steps } = onboardingStatus
+  const { status: _status, steps } = onboardingStatus
 
   // Determine which steps are complete based on backend tracking
   const stepStatus = {

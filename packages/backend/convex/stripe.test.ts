@@ -168,11 +168,7 @@ describe("calculateRefundTier - strict policy", () => {
   })
 
   it("returns 0% on same day as start", () => {
-    const result = calculateRefundTier(
-      "2024-06-15",
-      "strict",
-      new Date(2024, 5, 15)
-    )
+    const result = calculateRefundTier("2024-06-15", "strict", new Date(2024, 5, 15))
     expect(result.percentage).toBe(0)
     expect(result.policy).toBe("none")
   })
