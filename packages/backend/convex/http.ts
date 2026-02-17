@@ -1,4 +1,3 @@
-// @ts-expect-error - @clerk/backend module resolution issue
 import type { WebhookEvent } from "@clerk/backend"
 import { registerRoutes } from "@convex-dev/stripe"
 import { httpRouter } from "convex/server"
