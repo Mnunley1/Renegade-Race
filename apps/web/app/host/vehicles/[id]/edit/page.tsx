@@ -109,6 +109,7 @@ export default function EditVehiclePage() {
       price: number
       description?: string
       isRequired?: boolean
+      priceType?: "daily" | "one-time"
     }>,
     // Pickup location fields
     street: "",
