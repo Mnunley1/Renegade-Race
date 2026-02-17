@@ -668,7 +668,7 @@ function VehicleDetailsPageContent() {
                           )}
                         </div>
                         <div className="shrink-0 text-right">
-                          <p className="font-semibold text-sm">${(addOn.price / 100).toFixed(0)}</p>
+                          <p className="font-semibold text-sm">${addOn.price}</p>
                           <p className="text-[10px] text-muted-foreground">
                             {addOn.priceType === "daily" ? "per day" : "one-time"}
                           </p>

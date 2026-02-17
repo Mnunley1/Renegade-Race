@@ -3,13 +3,12 @@ import { api } from "./_generated/api"
 
 const crons = cronJobs()
 
-// Clean up stale pending reservations every 5 minutes
-// This cancels pending reservations without payment that are older than 15 minutes
-// Prevents abandoned checkouts from permanently blocking vehicle availability
+// Clean up approved reservations that weren't paid within 48 hours
+// This cancels approved reservations without payment to free up availability
 crons.interval(
-  "cleanup stale pending reservations",
-  { minutes: 5 },
-  api.reservations.cleanupStalePendingReservations
+  "cleanup expired approved reservations",
+  { hours: 1 },
+  api.reservations.cleanupExpiredApprovedReservations
 )
 
 // Clean up old webhook events every 24 hours

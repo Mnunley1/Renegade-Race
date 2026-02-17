@@ -1,8 +1,6 @@
 "use client"
 
 import { useUser } from "@clerk/nextjs"
-import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js"
-import { loadStripe, type StripeElementsOptions } from "@stripe/stripe-js"
 import { Button } from "@workspace/ui/components/button"
 import { Calendar } from "@workspace/ui/components/calendar"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
@@ -16,8 +14,9 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select"
 import { Separator } from "@workspace/ui/components/separator"
+import { Textarea } from "@workspace/ui/components/textarea"
 import { cn } from "@workspace/ui/lib/utils"
-import { useAction, useMutation, useQuery } from "convex/react"
+import { useMutation, useQuery } from "convex/react"
 import { Calendar as CalendarIcon, Check, ChevronDown, Clock, Loader2 } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
@@ -27,8 +26,6 @@ import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { formatDateToISO, parseLocalDate } from "@/lib/date-utils"
 
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "")
-
 interface AddOn {
   name: string
   price: number
@@ -36,115 +33,17 @@ interface AddOn {
   isRequired?: boolean
 }
 
-function PaymentForm({
-  reservationId,
-  totalAmount,
-}: {
-  reservationId: string
-  totalAmount: number
-}) {
-  const stripe = useStripe()
-  const elements = useElements()
-  const router = useRouter()
-
-  const [isProcessing, setIsProcessing] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-
-    if (!(stripe && elements)) {
-      return
-    }
-
-    setIsProcessing(true)
-    setError(null)
-
-    try {
-      const { error: submitError } = await elements.submit()
-      if (submitError) {
-        setError(submitError.message || "Payment failed")
-        setIsProcessing(false)
-        return
-      }
-
-      const { error: confirmError } = await stripe.confirmPayment({
-        elements,
-        confirmParams: {
-          return_url: `${window.location.origin}/checkout/success?reservationId=${reservationId}`,
-        },
-        redirect: "if_required",
-      })
-
-      if (confirmError) {
-        setError(confirmError.message || "Payment failed")
-        setIsProcessing(false)
-      } else {
-        // Payment succeeded - redirect to success page
-        router.push(`/checkout/success?reservationId=${reservationId}`)
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Payment failed")
-      setIsProcessing(false)
-    }
-  }
-
-  return (
-    <form className="space-y-6" onSubmit={handleSubmit}>
-      <div className="rounded-lg border bg-muted/50 p-4">
-        <h3 className="mb-4 font-semibold text-lg">Payment Details</h3>
-        <PaymentElement />
-      </div>
-
-      {error && (
-        <div className="rounded-lg border border-destructive bg-destructive/10 p-3 text-destructive text-sm">
-          {error}
-        </div>
-      )}
-
-      <div className="space-y-4">
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-muted-foreground">Subtotal</span>
-          <span className="font-medium">${totalAmount.toLocaleString()}</span>
-        </div>
-        <Separator />
-        <div className="flex items-center justify-between">
-          <span className="font-semibold text-lg">Total</span>
-          <span className="font-bold text-2xl">${totalAmount.toLocaleString()}</span>
-        </div>
-      </div>
-
-      <Button className="w-full" disabled={!stripe || isProcessing} size="lg" type="submit">
-        {isProcessing ? (
-          <>
-            <Loader2 className="mr-2 size-4 animate-spin" />
-            Processing...
-          </>
-        ) : (
-          `Pay $${totalAmount.toLocaleString()}`
-        )}
-      </Button>
-    </form>
-  )
-}
-
 function CheckoutPageContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const { isSignedIn, user } = useUser()
   const vehicleId = searchParams.get("vehicleId")
-  const reservationId = searchParams.get("reservationId")
-  const clientSecret = searchParams.get("clientSecret")
   const startDateParam = searchParams.get("startDate")
   const endDateParam = searchParams.get("endDate")
 
   const vehicle = useQuery(
     api.vehicles.getById,
     vehicleId ? { id: vehicleId as Id<"vehicles"> } : "skip"
-  )
-  const reservation = useQuery(
-    api.reservations.getById,
-    reservationId ? { id: reservationId as Id<"reservations"> } : "skip"
   )
 
   // Fetch blocked dates from availability
@@ -154,7 +53,6 @@ function CheckoutPageContent() {
   )
 
   const createReservation = useMutation(api.reservations.create)
-  const createPaymentIntent = useAction(api.stripe.createPaymentIntent)
 
   const [pickupDate, setPickupDate] = useState<Date | undefined>(undefined)
   const [pickupTime, setPickupTime] = useState("")
@@ -162,11 +60,12 @@ function CheckoutPageContent() {
   const [dropoffTime, setDropoffTime] = useState("")
   const [openPickupDate, setOpenPickupDate] = useState(false)
   const [openDropoffDate, setOpenDropoffDate] = useState(false)
+  const [renterMessage, setRenterMessage] = useState("")
   const [selectedAddOns, setSelectedAddOns] = useState<AddOn[]>(() => {
     // Auto-select required add-ons if vehicle is loaded
     return vehicle?.addOns?.filter((addOn: AddOn) => addOn.isRequired) || []
   })
-  const [isCreatingReservation, setIsCreatingReservation] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   // Update selected add-ons when vehicle loads
@@ -235,18 +134,15 @@ function CheckoutPageContent() {
   const blockedDates =
     availability
       ?.filter((item: { isAvailable: boolean; date: string }) => !item.isAvailable)
-      .map((item: { date: string }) => {
-        const date = new Date(item.date)
-        date.setHours(0, 0, 0, 0)
-        return date
-      }) || []
+      .map((item: { date: string }) => parseLocalDate(item.date))
+      .filter((d): d is Date => d !== null) || []
 
   // Combine blocked dates (availability already accounts for reservations)
-  const unavailableDates = new Set(blockedDates.map((d: Date) => d.toISOString().split("T")[0]))
+  const unavailableDates = new Set(blockedDates.map((d: Date) => formatDateToISO(d)))
 
   // Function to check if a date is unavailable
   const isDateUnavailable = (date: Date): boolean => {
-    const dateStr = date.toISOString().split("T")[0]
+    const dateStr = formatDateToISO(date)
     return unavailableDates.has(dateStr)
   }
 
@@ -302,7 +198,7 @@ function CheckoutPageContent() {
 
   const { days, total } = calculateTotal()
 
-  const handleProceedToPayment = async () => {
+  const handleSubmitRequest = async () => {
     if (!(isSignedIn && user?.id)) {
       router.push(`/sign-in?redirect_url=${encodeURIComponent(window.location.href)}`)
       return
@@ -316,11 +212,10 @@ function CheckoutPageContent() {
     // Validate that the selected date range doesn't contain blocked dates
     if (isDateRangeUnavailable(pickupDate, dropoffDate)) {
       setError("The selected dates include unavailable dates. Please select different dates.")
-      setIsCreatingReservation(false)
       return
     }
 
-    setIsCreatingReservation(true)
+    setIsSubmitting(true)
     setError(null)
 
     try {
@@ -339,166 +234,23 @@ function CheckoutPageContent() {
       const startDateString = formatDateToISO(pickupDate)
       const endDateString = formatDateToISO(dropoffDate)
 
-      // Create reservation
+      // Create reservation request (no payment at this stage)
       const newReservationId = await createReservation({
         vehicleId: vehicle._id,
         startDate: startDateString,
         endDate: endDateString,
         pickupTime,
         dropoffTime,
+        renterMessage: renterMessage.trim() || undefined,
         addOns: reservationAddOns,
       })
 
-      // Convert total to cents for Stripe (amount in cents)
-      const amountInCents = Math.round(total * 100)
-
-      // Create payment intent
-      const { clientSecret: newClientSecret } = await createPaymentIntent({
-        reservationId: newReservationId,
-        amount: amountInCents,
-      })
-
-      // Redirect to payment step
-      router.push(
-        `/checkout?vehicleId=${vehicle._id}&reservationId=${newReservationId}&clientSecret=${newClientSecret}`
-      )
+      // Redirect to request confirmation page
+      router.push(`/checkout/request-sent?reservationId=${newReservationId}`)
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to create reservation. Please try again."
-      )
-      setIsCreatingReservation(false)
+      setError(err instanceof Error ? err.message : "Failed to submit request. Please try again.")
+      setIsSubmitting(false)
     }
-  }
-
-  // If we have reservation and clientSecret, show payment form
-  if (reservation && clientSecret) {
-    const vehicle = reservation.vehicle
-    const vehicleImages = (vehicle as any)?.images as Array<{ isPrimary: boolean; imageUrl?: string; r2Key?: string }> | undefined
-    const primaryImageData = vehicleImages?.find((img) => img.isPrimary) || vehicleImages?.[0]
-    const primaryImage = primaryImageData?.imageUrl || (primaryImageData?.r2Key ? `https://ik.imagekit.io/renegaderace/${primaryImageData.r2Key}?tr=w-320,h-200,q-80,f-auto` : "")
-
-    const options: StripeElementsOptions = {
-      clientSecret,
-      appearance: {
-        theme: "stripe",
-      },
-    }
-
-    return (
-      <div className="container mx-auto max-w-6xl px-4 py-8">
-        <h1 className="mb-8 font-bold text-4xl">Complete Your Reservation</h1>
-
-        <div className="grid gap-8 lg:grid-cols-5">
-          <div className="space-y-6 lg:col-span-3">
-            <Card>
-              <CardHeader>
-                <CardTitle>Reservation Summary</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {vehicle && (
-                  <div className="flex gap-4">
-                    {primaryImage && primaryImage.trim() !== "" ? (
-                      <div className="relative h-24 w-40 shrink-0 overflow-hidden rounded-lg">
-                        <Image
-                          alt={`${vehicle.year} ${vehicle.make} ${vehicle.model}`}
-                          className="object-cover"
-                          fill
-                          sizes="160px"
-                          src={primaryImage}
-                        />
-                      </div>
-                    ) : null}
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-lg">
-                        {vehicle.year} {vehicle.make} {vehicle.model}
-                      </h3>
-                      <p className="text-muted-foreground text-sm">
-                        {new Date(reservation.startDate).toLocaleDateString()} -{" "}
-                        {new Date(reservation.endDate).toLocaleDateString()}
-                      </p>
-                      <p className="text-muted-foreground text-sm">
-                        {reservation.totalDays} {reservation.totalDays === 1 ? "day" : "days"}
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Payment Information</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Elements options={options} stripe={stripePromise}>
-                  <PaymentForm
-                    reservationId={reservationId!}
-                    totalAmount={reservation.totalAmount || 0}
-                  />
-                </Elements>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="lg:col-span-2">
-            <Card className="sticky top-20">
-              <CardHeader>
-                <CardTitle>Order Summary</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Daily Rate</span>
-                    <span>${(reservation.dailyRate || 0).toLocaleString()}/day</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Duration</span>
-                    <span>
-                      {reservation.totalDays} {reservation.totalDays === 1 ? "day" : "days"}
-                    </span>
-                  </div>
-                  {reservation.addOns &&
-                    reservation.addOns.length > 0 &&
-                    reservation.addOns.map((addOn: AddOn) => (
-                      <div className="flex justify-between text-sm" key={addOn.name}>
-                        <span className="text-muted-foreground">{addOn.name}</span>
-                        <span>+${addOn.price.toLocaleString()}</span>
-                      </div>
-                    ))}
-                  <Separator />
-                  <div className="flex justify-between">
-                    <span className="font-semibold">Total</span>
-                    <span className="font-bold text-lg">
-                      ${(reservation.totalAmount || 0).toLocaleString()}
-                    </span>
-                  </div>
-                </div>
-
-                {reservation.pickupTime && (
-                  <div className="rounded-lg border bg-muted/50 p-4">
-                    <h4 className="mb-2 font-semibold text-sm">Pickup Details</h4>
-                    <p className="text-muted-foreground text-sm">
-                      {new Date(reservation.startDate).toLocaleDateString()} at{" "}
-                      {formatTimeForDisplay(reservation.pickupTime)}
-                    </p>
-                  </div>
-                )}
-
-                {reservation.dropoffTime && (
-                  <div className="rounded-lg border bg-muted/50 p-4">
-                    <h4 className="mb-2 font-semibold text-sm">Dropoff Details</h4>
-                    <p className="text-muted-foreground text-sm">
-                      {new Date(reservation.endDate).toLocaleDateString()} at{" "}
-                      {formatTimeForDisplay(reservation.dropoffTime)}
-                    </p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      </div>
-    )
   }
 
   // Show loading state
@@ -536,9 +288,15 @@ function CheckoutPageContent() {
 
   if (!vehicle) return null
 
-  const vehicleImages = (vehicle as any)?.images as Array<{ isPrimary: boolean; imageUrl?: string; r2Key?: string }> | undefined
+  const vehicleImages = (vehicle as any)?.images as
+    | Array<{ isPrimary: boolean; imageUrl?: string; r2Key?: string }>
+    | undefined
   const primaryImageData = vehicleImages?.find((img) => img.isPrimary) || vehicleImages?.[0]
-  const primaryImage = primaryImageData?.imageUrl || (primaryImageData?.r2Key ? `https://ik.imagekit.io/renegaderace/${primaryImageData.r2Key}?tr=w-320,h-200,q-80,f-auto` : "")
+  const primaryImage =
+    primaryImageData?.imageUrl ||
+    (primaryImageData?.r2Key
+      ? `https://ik.imagekit.io/renegaderace/${primaryImageData.r2Key}?tr=w-320,h-200,q-80,f-auto`
+      : "")
   // Check if form is valid and dates don't contain blocked dates
   const isValid =
     pickupDate &&
@@ -550,7 +308,7 @@ function CheckoutPageContent() {
 
   return (
     <div className="container mx-auto max-w-6xl px-4 py-8">
-      <h1 className="mb-8 font-bold text-4xl">Complete Your Reservation</h1>
+      <h1 className="mb-8 font-bold text-4xl">Request a Rental</h1>
 
       <div className="grid gap-8 lg:grid-cols-5">
         <div className="space-y-6 lg:col-span-3">
@@ -828,6 +586,24 @@ function CheckoutPageContent() {
                   </div>
                 </>
               )}
+
+              <Separator />
+
+              {/* Message to Host */}
+              <div className="space-y-2">
+                <Label htmlFor="renter-message">Message to Host (Optional)</Label>
+                <Textarea
+                  className="min-h-[100px]"
+                  id="renter-message"
+                  maxLength={1000}
+                  onChange={(e) => setRenterMessage(e.target.value)}
+                  placeholder="Introduce yourself, share your experience level, or ask any questions about the vehicle..."
+                  value={renterMessage}
+                />
+                <p className="text-muted-foreground text-xs">
+                  {renterMessage.length}/1000 characters
+                </p>
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -835,7 +611,7 @@ function CheckoutPageContent() {
         <div className="lg:col-span-2">
           <Card className="sticky top-20">
             <CardHeader>
-              <CardTitle>Order Summary</CardTitle>
+              <CardTitle>Request Summary</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
@@ -866,9 +642,14 @@ function CheckoutPageContent() {
                   ))}
                 <Separator />
                 <div className="flex justify-between">
-                  <span className="font-semibold">Total</span>
+                  <span className="font-semibold">Estimated Total</span>
                   <span className="font-bold text-lg">${total.toLocaleString()}</span>
                 </div>
+              </div>
+
+              <div className="rounded-lg border bg-muted/50 p-3 text-muted-foreground text-sm">
+                No payment required now. The host will review your request and you'll only pay if
+                approved.
               </div>
 
               {error && (
@@ -879,17 +660,17 @@ function CheckoutPageContent() {
 
               <Button
                 className="w-full"
-                disabled={!isValid || isCreatingReservation}
-                onClick={handleProceedToPayment}
+                disabled={!isValid || isSubmitting}
+                onClick={handleSubmitRequest}
                 size="lg"
               >
-                {isCreatingReservation ? (
+                {isSubmitting ? (
                   <>
                     <Loader2 className="mr-2 size-4 animate-spin" />
-                    Processing...
+                    Submitting...
                   </>
                 ) : (
-                  "Proceed to Payment"
+                  "Submit Request"
                 )}
               </Button>
             </CardContent>

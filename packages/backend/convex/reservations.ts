@@ -3,10 +3,11 @@ import { internal } from "./_generated/api"
 import type { Id } from "./_generated/dataModel"
 import { mutation, query } from "./_generated/server"
 import { calculateDaysBetween } from "./dateUtils"
+import { calculateAddOnsTotal, calculateReservationTotal } from "./pricing"
 import {
+  getReservationApprovedRenterEmailTemplate,
   getReservationCancelledEmailTemplate,
   getReservationCompletedEmailTemplate,
-  getReservationConfirmedRenterEmailTemplate,
   getReservationDeclinedRenterEmailTemplate,
   getReservationPendingOwnerEmailTemplate,
   sendTransactionalEmail,
@@ -24,6 +25,7 @@ export const getByUser = query({
     status: v.optional(
       v.union(
         v.literal("pending"),
+        v.literal("approved"),
         v.literal("confirmed"),
         v.literal("cancelled"),
         v.literal("completed"),
@@ -230,13 +232,8 @@ export const create = mutation({
       })
     }
 
-    // Calculate base amount from daily rate
-    const baseAmount = totalDays * vehicle.dailyRate
-
-    // Add add-ons to total amount
-    let addOnsTotal = 0
+    // Validate add-on prices before calculating totals
     if (args.addOns && args.addOns.length > 0) {
-      // Validate all add-on prices are non-negative
       for (const addOn of args.addOns) {
         if (addOn.price < 0) {
           throwError(ErrorCode.INVALID_AMOUNT, `Add-on price for ${addOn.name} cannot be negative`)
@@ -250,10 +247,9 @@ export const create = mutation({
           )
         }
       }
-      addOnsTotal = args.addOns.reduce((sum, addOn) => sum + addOn.price, 0)
     }
 
-    const totalAmount = baseAmount + addOnsTotal
+    const totalAmount = calculateReservationTotal(vehicle.dailyRate, totalDays, args.addOns)
 
     // Validate total amount
     const MAX_TOTAL_AMOUNT_CENTS = 1_000_000 // $10,000 max
@@ -285,15 +281,14 @@ export const create = mutation({
       })
     }
 
-    // Check for conflicting reservations
-    // Two date ranges overlap if: existingStart <= newEnd AND existingEnd >= newStart
-    const potentialConflicts = await ctx.db
+    // Check for conflicting confirmed reservations only
+    // Pending/approved requests do NOT block — only confirmed (paid) reservations block
+    const conflictingReservations = await ctx.db
       .query("reservations")
       .withIndex("by_vehicle", (q) => q.eq("vehicleId", args.vehicleId))
       .filter((q) =>
         q.and(
-          // Only check active reservations (pending or confirmed)
-          q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "confirmed")),
+          q.eq(q.field("status"), "confirmed"),
           // Check for date overlap: existing reservation overlaps if
           // existingStart <= newEnd AND existingEnd >= newStart
           q.and(
@@ -303,27 +298,6 @@ export const create = mutation({
         )
       )
       .collect()
-
-    // Filter out stale pending reservations without payment
-    // For pending reservations without payment, only block if created recently (15 min grace period)
-    // This prevents abandoned checkouts from permanently blocking vehicles
-    const PENDING_GRACE_PERIOD_MS = 15 * 60 * 1000 // 15 minutes
-
-    const conflictingReservations = potentialConflicts.filter((reservation) => {
-      // Confirmed reservations always block
-      if (reservation.status === "confirmed") {
-        return true
-      }
-
-      // Pending reservations with payment always block
-      if (reservation.paymentId) {
-        return true
-      }
-
-      // Pending reservations without payment only block if created recently
-      const age = now - reservation.createdAt
-      return age < PENDING_GRACE_PERIOD_MS
-    })
 
     if (conflictingReservations.length > 0) {
       throwError(ErrorCode.DATES_CONFLICT, "Selected dates conflict with existing reservations", {
@@ -352,54 +326,30 @@ export const create = mutation({
       updatedAt: now,
     })
 
-    // Re-check for conflicts after insert to prevent race conditions
-    // This handles the case where two users book the same dates simultaneously
-    // Fetch our own reservation to get its _creationTime (set by Convex during insert)
-    const ourReservation = await ctx.db.get(reservationId)
-    if (!ourReservation) {
-      throwError(ErrorCode.INTERNAL_ERROR, "Failed to create reservation")
-    }
-    const ourCreationTime = ourReservation._creationTime
-
-    const concurrentConflicts = await ctx.db
-      .query("reservations")
-      .withIndex("by_vehicle", (q) => q.eq("vehicleId", args.vehicleId))
-      .filter((q) =>
-        q.and(
-          // Exclude our own reservation
-          q.neq(q.field("_id"), reservationId),
-          // Only check active reservations
-          q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "confirmed")),
-          // Check for date overlap
-          q.and(
-            q.lte(q.field("startDate"), args.endDate),
-            q.gte(q.field("endDate"), args.startDate)
-          )
-        )
-      )
-      .collect()
-
-    // Check if any concurrent reservation was created after our initial check
-    // Use Convex _creationTime for reliable ordering (set atomically by database)
-    const actualConflicts = concurrentConflicts.filter((reservation) => {
-      if (reservation.status === "confirmed") {
-        return true
-      }
-      if (reservation.paymentId) {
-        return true
-      }
-      // For pending without payment, only conflict if created before our reservation
-      // using _creationTime (set by Convex) for reliable ordering
-      return reservation._creationTime < ourCreationTime
+    // Auto-create a conversation linked to this reservation
+    const conversationId = await ctx.db.insert("conversations", {
+      vehicleId: args.vehicleId,
+      renterId,
+      ownerId: vehicle.ownerId,
+      reservationId,
+      lastMessageAt: now,
+      unreadCountRenter: 0,
+      unreadCountOwner: args.renterMessage ? 1 : 0,
+      isActive: !!args.renterMessage,
+      createdAt: now,
+      updatedAt: now,
     })
 
-    if (actualConflicts.length > 0) {
-      // Roll back our reservation - another user won the race
-      await ctx.db.delete(reservationId)
-      throwError(
-        ErrorCode.DATES_CONFLICT,
-        "Selected dates conflict with a reservation that was just created. Please try different dates."
-      )
+    // If renter included a message, insert it as the first message in the conversation
+    if (args.renterMessage) {
+      await ctx.db.insert("messages", {
+        conversationId,
+        senderId: renterId,
+        content: sanitizeMessage(args.renterMessage),
+        messageType: "text",
+        isRead: false,
+        createdAt: now,
+      })
     }
 
     // Send email to owner about new reservation request
@@ -473,25 +423,64 @@ export const approve = mutation({
       })
     }
 
+    const now = Date.now()
+
     await ctx.db.patch(args.reservationId, {
-      status: "confirmed",
+      status: "approved",
+      approvedAt: now,
       ownerMessage: args.ownerMessage ? sanitizeMessage(args.ownerMessage) : undefined,
-      updatedAt: Date.now(),
+      updatedAt: now,
     })
 
-    // Trigger notification for renter
+    // Auto-decline overlapping pending requests for the same vehicle/dates
+    const overlappingPending = await ctx.db
+      .query("reservations")
+      .withIndex("by_vehicle", (q) => q.eq("vehicleId", reservation.vehicleId))
+      .filter((q) =>
+        q.and(
+          q.neq(q.field("_id"), args.reservationId),
+          q.eq(q.field("status"), "pending"),
+          q.and(
+            q.lte(q.field("startDate"), reservation.endDate),
+            q.gte(q.field("endDate"), reservation.startDate)
+          )
+        )
+      )
+      .collect()
+
+    for (const pendingRes of overlappingPending) {
+      await ctx.db.patch(pendingRes._id, {
+        status: "declined",
+        ownerMessage: "Another request for these dates was approved.",
+        updatedAt: now,
+      })
+
+      // Notify declined renters
+      await ctx.scheduler.runAfter(0, internal.notifications.createNotification, {
+        userId: pendingRes.renterId,
+        type: "reservation_declined",
+        title: "Reservation Declined",
+        message: "Another request for these dates was approved by the host.",
+        link: `/vehicles/${pendingRes.vehicleId}`,
+        metadata: {
+          reservationId: pendingRes._id,
+        },
+      })
+    }
+
+    // Trigger notification for renter with link to pay
     await ctx.scheduler.runAfter(0, internal.notifications.createNotification, {
       userId: reservation.renterId,
       type: "reservation_approved",
       title: "Reservation Approved",
-      message: "Your reservation has been approved by the host.",
-      link: "/trips",
+      message: "Your reservation has been approved! Complete payment to confirm your booking.",
+      link: `/checkout/pay?reservationId=${args.reservationId}`,
       metadata: {
         reservationId: args.reservationId,
       },
     })
 
-    // Send email to renter about confirmed reservation
+    // Send email to renter about approved reservation
     try {
       const [vehicle, renter] = await Promise.all([
         ctx.db.get(reservation.vehicleId),
@@ -507,14 +496,14 @@ export const approve = mutation({
 
         if (renterEmail) {
           const webUrl = getWebUrl()
-          const template = getReservationConfirmedRenterEmailTemplate({
+          const template = getReservationApprovedRenterEmailTemplate({
             renterName: renter.name || "Guest",
             vehicleName,
             startDate: reservation.startDate,
             endDate: reservation.endDate,
             totalAmount: reservation.totalAmount,
             ownerMessage: args.ownerMessage,
-            reservationUrl: `${webUrl}/trips`,
+            paymentUrl: `${webUrl}/checkout/pay?reservationId=${args.reservationId}`,
           })
           await sendTransactionalEmail(ctx, renterEmail, template)
         }
@@ -522,7 +511,7 @@ export const approve = mutation({
     } catch (error) {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { logError } = require("./logger")
-      logError(error, "Failed to send reservation confirmed email")
+      logError(error, "Failed to send reservation approved email")
       // Don't fail the mutation if email fails
     }
 
@@ -553,8 +542,8 @@ export const decline = mutation({
       throwError(ErrorCode.FORBIDDEN, "Not authorized to decline this reservation")
     }
 
-    if (reservation.status !== "pending") {
-      throwError(ErrorCode.INVALID_STATUS, "Reservation is not pending", {
+    if (reservation.status !== "pending" && reservation.status !== "approved") {
+      throwError(ErrorCode.INVALID_STATUS, "Reservation is not pending or approved", {
         currentStatus: reservation.status,
       })
     }
@@ -634,7 +623,11 @@ export const cancel = mutation({
       throwError(ErrorCode.FORBIDDEN, "Not authorized to cancel this reservation")
     }
 
-    if (reservation.status !== "pending" && reservation.status !== "confirmed") {
+    if (
+      reservation.status !== "pending" &&
+      reservation.status !== "approved" &&
+      reservation.status !== "confirmed"
+    ) {
       throwError(ErrorCode.INVALID_STATUS, "Reservation cannot be cancelled", {
         currentStatus: reservation.status,
       })
@@ -894,6 +887,41 @@ export const getPendingForOwner = query({
   },
 })
 
+// Get approved reservations awaiting payment for a renter
+export const getApprovedForRenter = query({
+  args: { renterId: v.string() },
+  handler: async (ctx, args) => {
+    const reservations = await ctx.db
+      .query("reservations")
+      .withIndex("by_renter_status", (q) =>
+        q.eq("renterId", args.renterId).eq("status", "approved")
+      )
+      .order("desc")
+      .collect()
+
+    // Get vehicle and owner details
+    const reservationsWithDetails = await Promise.all(
+      reservations.map(async (reservation) => {
+        const [vehicle, owner] = await Promise.all([
+          ctx.db.get(reservation.vehicleId),
+          ctx.db
+            .query("users")
+            .withIndex("by_external_id", (q) => q.eq("externalId", reservation.ownerId))
+            .first(),
+        ])
+
+        return {
+          ...reservation,
+          vehicle,
+          owner,
+        }
+      })
+    )
+
+    return reservationsWithDetails
+  },
+})
+
 // Get confirmed reservations for an owner
 export const getConfirmedForOwner = query({
   args: { ownerId: v.string() },
@@ -1026,43 +1054,55 @@ export const getCompletedReservationForVehicle = query({
 // ============================================================================
 
 /**
- * Clean up stale pending reservations without payment.
+ * Clean up approved reservations that weren't paid within 48 hours.
  * This should be called periodically (e.g., by a cron job) to:
- * - Cancel pending reservations without payment that are older than 15 minutes
- * - This frees up vehicle availability for other users
+ * - Cancel approved reservations without payment that are older than 48 hours
+ * - This frees up the vehicle for other renters
  *
  * Called via: ctx.scheduler or cron.ts
  */
-export const cleanupStalePendingReservations = mutation({
+export const cleanupExpiredApprovedReservations = mutation({
   args: {},
   handler: async (ctx) => {
-    const STALE_THRESHOLD_MS = 15 * 60 * 1000 // 15 minutes
+    const APPROVED_TIMEOUT_MS = 48 * 60 * 60 * 1000 // 48 hours
     const now = Date.now()
-    const cutoffTime = now - STALE_THRESHOLD_MS
 
-    // Find all pending reservations without payment that are older than 15 minutes
-    const staleReservations = await ctx.db
+    // Find all approved reservations without payment that are older than 48 hours
+    const expiredReservations = await ctx.db
       .query("reservations")
-      .withIndex("by_status", (q) => q.eq("status", "pending"))
+      .withIndex("by_status", (q) => q.eq("status", "approved"))
       .filter((q) =>
         q.and(
           // No payment associated
           q.eq(q.field("paymentId"), undefined),
-          // Created more than 15 minutes ago
-          q.lt(q.field("createdAt"), cutoffTime)
+          // Approved more than 48 hours ago
+          q.lt(q.field("approvedAt"), now - APPROVED_TIMEOUT_MS)
         )
       )
       .collect()
 
-    // Cancel each stale reservation
+    // Cancel each expired reservation
     const cancelledIds: Id<"reservations">[] = []
-    for (const reservation of staleReservations) {
+    for (const reservation of expiredReservations) {
       await ctx.db.patch(reservation._id, {
         status: "cancelled",
-        cancellationReason: "Automatically cancelled - checkout not completed within 15 minutes",
+        cancellationReason: "Automatically cancelled - payment not completed within 48 hours",
         updatedAt: now,
       })
       cancelledIds.push(reservation._id)
+
+      // Notify the renter
+      await ctx.scheduler.runAfter(0, internal.notifications.createNotification, {
+        userId: reservation.renterId,
+        type: "reservation_cancelled",
+        title: "Reservation Expired",
+        message:
+          "Your approved reservation was cancelled because payment was not completed within 48 hours.",
+        link: `/vehicles/${reservation.vehicleId}`,
+        metadata: {
+          reservationId: reservation._id,
+        },
+      })
     }
 
     return {

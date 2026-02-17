@@ -11,6 +11,7 @@ import {
 } from "@workspace/ui/components/dropdown-menu"
 import { cn } from "@workspace/ui/lib/utils"
 import {
+  AlertTriangle,
   Calendar,
   Car,
   DollarSign,
@@ -39,6 +40,7 @@ const navigation = [
   { name: "Vehicle Approvals", href: "/vehicles/pending", icon: Car },
   { name: "Track Management", href: "/tracks", icon: MapPin },
   { name: "Disputes", href: "/disputes", icon: Shield },
+  { name: "Damage Claims", href: "/damage-invoices", icon: AlertTriangle },
   { name: "Direct Messages", href: "/messages", icon: MessageSquare },
   { name: "Emails", href: "/mass-emails", icon: Mail },
   { name: "Platform Settings", href: "/settings", icon: Settings },

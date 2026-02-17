@@ -321,7 +321,6 @@ export default function HomePage() {
               />
             ) : (
               <video
-                autoPlay
                 className="h-full w-full object-cover"
                 controls
                 loop

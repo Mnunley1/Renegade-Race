@@ -79,10 +79,8 @@ export default function HostVehicleAvailabilityPage() {
   const [blockDialogOpen, setBlockDialogOpen] = useState(false)
   const [selectedDateForBlock, setSelectedDateForBlock] = useState<Date | null>(null)
   const [blockReason, setBlockReason] = useState("")
-  const [priceOverride, setPriceOverride] = useState<string>("")
   const [rangeBlockDialogOpen, setRangeBlockDialogOpen] = useState(false)
   const [rangeBlockReason, setRangeBlockReason] = useState("")
-  const [rangePriceOverride, setRangePriceOverride] = useState<string>("")
 
   // Fetch vehicle from Convex
   const vehicle = useQuery(
@@ -250,10 +248,9 @@ export default function HostVehicleAvailabilityPage() {
         toast.error("An error occurred")
       }
     } else {
-      // If blocking, open dialog to allow reason and price override
+      // If blocking, open dialog to allow reason
       setSelectedDateForBlock(date)
       setBlockReason("")
-      setPriceOverride("")
       setBlockDialogOpen(true)
     }
   }
@@ -284,14 +281,12 @@ export default function HostVehicleAvailabilityPage() {
           vehicleId: vehicle._id,
           date: dateString,
           reason: blockReason || undefined,
-          price: priceOverride ? Math.round(Number.parseFloat(priceOverride) * 100) : undefined,
         })
         toast.success("Date blocked")
       }
       setBlockDialogOpen(false)
       setSelectedDateForBlock(null)
       setBlockReason("")
-      setPriceOverride("")
     } catch (_error) {
       toast.error("An error occurred")
     }
@@ -361,12 +356,11 @@ export default function HostVehicleAvailabilityPage() {
     } else {
       // Open dialog to block with details
       setRangeBlockReason("")
-      setRangePriceOverride("")
       setRangeBlockDialogOpen(true)
     }
   }
 
-  // Handle blocking date range with reason and price override
+  // Handle blocking date range with reason
   const handleBlockRangeWithDetails = async () => {
     if (!(vehicle?._id && selectedRange?.from)) return
 
@@ -401,16 +395,12 @@ export default function HostVehicleAvailabilityPage() {
           startDate,
           endDate,
           reason: rangeBlockReason || undefined,
-          price: rangePriceOverride
-            ? Math.round(Number.parseFloat(rangePriceOverride) * 100)
-            : undefined,
         })
         toast.success("Date range blocked")
       }
       setRangeBlockDialogOpen(false)
       setSelectedRange(undefined)
       setRangeBlockReason("")
-      setRangePriceOverride("")
     } catch (_error) {
       toast.error("An error occurred")
     }
@@ -720,25 +710,6 @@ export default function HostVehicleAvailabilityPage() {
           {selectedDateForBlock && !isDateBlocked(selectedDateForBlock) && (
             <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <Label htmlFor="priceOverride">Price Override (Optional)</Label>
-                <div className="relative">
-                  <span className="absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground">
-                    $
-                  </span>
-                  <Input
-                    id="priceOverride"
-                    inputMode="decimal"
-                    onChange={(e) => setPriceOverride(e.target.value)}
-                    placeholder={`Default: $${(vehicle.dailyRate / 100).toLocaleString()}/day`}
-                    type="number"
-                    value={priceOverride}
-                  />
-                </div>
-                <p className="text-muted-foreground text-xs">
-                  Set a custom daily rate for this date. Leave empty to use your default rate.
-                </p>
-              </div>
-              <div className="space-y-2">
                 <Label htmlFor="blockReason">Reason (Optional)</Label>
                 <Textarea
                   id="blockReason"
@@ -784,26 +755,6 @@ export default function HostVehicleAvailabilityPage() {
           </DialogHeader>
           {selectedRange && !isRangeFullyBlocked(selectedRange) && (
             <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="rangePriceOverride">Price Override (Optional)</Label>
-                <div className="relative">
-                  <span className="absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground">
-                    $
-                  </span>
-                  <Input
-                    id="rangePriceOverride"
-                    inputMode="decimal"
-                    onChange={(e) => setRangePriceOverride(e.target.value)}
-                    placeholder={`Default: $${(vehicle.dailyRate / 100).toLocaleString()}/day`}
-                    type="number"
-                    value={rangePriceOverride}
-                  />
-                </div>
-                <p className="text-muted-foreground text-xs">
-                  Set a custom daily rate for all dates in this range. Leave empty to use your
-                  default rate.
-                </p>
-              </div>
               <div className="space-y-2">
                 <Label htmlFor="rangeBlockReason">Reason (Optional)</Label>
                 <Textarea

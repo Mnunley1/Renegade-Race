@@ -4,6 +4,7 @@ import type { Id } from "./_generated/dataModel"
 import { mutation, query } from "./_generated/server"
 import { getReviewResponseEmailTemplate, sendTransactionalEmail } from "./emails"
 import { getWebUrl } from "./helpers"
+import { calculateUserReviewStats, calculateVehicleReviewStats } from "./reviewStats"
 import { sanitizeReview, sanitizeShortText } from "./sanitize"
 
 // Get review by completion ID for current user
@@ -213,86 +214,7 @@ export const getUserStats = query({
       .filter((q) => q.eq(q.field("isPublic"), true))
       .collect()
 
-    if (reviews.length === 0) {
-      return {
-        averageRating: 0,
-        totalReviews: 0,
-        ratingBreakdown: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
-        categoryAverages: {
-          communication: 0,
-          vehicleCondition: 0,
-          professionalism: 0,
-          overallExperience: 0,
-        },
-      }
-    }
-
-    const totalRating = reviews.reduce((sum, review) => sum + review.rating, 0)
-    const averageRating = totalRating / reviews.length
-
-    const ratingBreakdown = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
-    reviews.forEach((review) => {
-      ratingBreakdown[review.rating as keyof typeof ratingBreakdown]++
-    })
-
-    // Calculate category averages
-    const categoryTotals = {
-      communication: 0,
-      vehicleCondition: 0,
-      professionalism: 0,
-      overallExperience: 0,
-    }
-    const categoryCounts = {
-      communication: 0,
-      vehicleCondition: 0,
-      professionalism: 0,
-      overallExperience: 0,
-    }
-
-    reviews.forEach((review) => {
-      if (review.communication) {
-        categoryTotals.communication += review.communication
-        categoryCounts.communication++
-      }
-      if (review.vehicleCondition) {
-        categoryTotals.vehicleCondition += review.vehicleCondition
-        categoryCounts.vehicleCondition++
-      }
-      if (review.professionalism) {
-        categoryTotals.professionalism += review.professionalism
-        categoryCounts.professionalism++
-      }
-      if (review.overallExperience) {
-        categoryTotals.overallExperience += review.overallExperience
-        categoryCounts.overallExperience++
-      }
-    })
-
-    const categoryAverages = {
-      communication:
-        categoryCounts.communication > 0
-          ? categoryTotals.communication / categoryCounts.communication
-          : 0,
-      vehicleCondition:
-        categoryCounts.vehicleCondition > 0
-          ? categoryTotals.vehicleCondition / categoryCounts.vehicleCondition
-          : 0,
-      professionalism:
-        categoryCounts.professionalism > 0
-          ? categoryTotals.professionalism / categoryCounts.professionalism
-          : 0,
-      overallExperience:
-        categoryCounts.overallExperience > 0
-          ? categoryTotals.overallExperience / categoryCounts.overallExperience
-          : 0,
-    }
-
-    return {
-      averageRating: Math.round(averageRating * 10) / 10,
-      totalReviews: reviews.length,
-      ratingBreakdown,
-      categoryAverages,
-    }
+    return calculateUserReviewStats(reviews)
   },
 })
 
@@ -308,27 +230,7 @@ export const getVehicleStats = query({
       .filter((q) => q.eq(q.field("isPublic"), true))
       .collect()
 
-    if (reviews.length === 0) {
-      return {
-        averageRating: 0,
-        totalReviews: 0,
-        ratingBreakdown: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
-      }
-    }
-
-    const totalRating = reviews.reduce((sum, review) => sum + review.rating, 0)
-    const averageRating = totalRating / reviews.length
-
-    const ratingBreakdown = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
-    reviews.forEach((review) => {
-      ratingBreakdown[review.rating as keyof typeof ratingBreakdown]++
-    })
-
-    return {
-      averageRating: Math.round(averageRating * 10) / 10,
-      totalReviews: reviews.length,
-      ratingBreakdown,
-    }
+    return calculateVehicleReviewStats(reviews)
   },
 })
 
@@ -368,20 +270,10 @@ export const getVehicleStatsBatch = query({
 
     args.vehicleIds.forEach((vehicleId) => {
       const reviews = reviewsByVehicle.get(vehicleId) || []
-
-      if (reviews.length === 0) {
-        statsMap[vehicleId] = {
-          averageRating: 0,
-          totalReviews: 0,
-        }
-      } else {
-        const totalRating = reviews.reduce((sum, review) => sum + review.rating, 0)
-        const averageRating = totalRating / reviews.length
-
-        statsMap[vehicleId] = {
-          averageRating: Math.round(averageRating * 10) / 10,
-          totalReviews: reviews.length,
-        }
+      const stats = calculateVehicleReviewStats(reviews)
+      statsMap[vehicleId] = {
+        averageRating: stats.averageRating,
+        totalReviews: stats.totalReviews,
       }
     })
 

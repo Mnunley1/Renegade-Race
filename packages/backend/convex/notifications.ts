@@ -21,7 +21,8 @@ export const createNotification = internalMutation({
       v.literal("application_status_change"),
       v.literal("endorsement_received"),
       v.literal("team_event"),
-      v.literal("profile_view")
+      v.literal("profile_view"),
+      v.literal("damage_invoice")
     ),
     title: v.string(),
     message: v.string(),
@@ -51,7 +52,11 @@ export const createNotification = internalMutation({
         shouldNotify = prefs.reservationUpdates
       } else if (args.type === "new_message") {
         shouldNotify = prefs.messages
-      } else if (args.type === "payment_success" || args.type === "payment_failed") {
+      } else if (
+        args.type === "payment_success" ||
+        args.type === "payment_failed" ||
+        args.type === "damage_invoice"
+      ) {
         shouldNotify = prefs.paymentUpdates
       } else if (args.type === "review_received") {
         shouldNotify = prefs.reviewsAndRatings

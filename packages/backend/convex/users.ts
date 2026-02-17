@@ -1,4 +1,3 @@
-// @ts-expect-error - @clerk/backend module resolution issue
 import type { UserJSON } from "@clerk/backend"
 import { type Validator, v } from "convex/values"
 import { api, internal } from "./_generated/api"

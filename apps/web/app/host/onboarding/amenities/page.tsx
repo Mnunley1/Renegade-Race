@@ -10,6 +10,13 @@ import {
 } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@workspace/ui/components/select"
 import { Separator } from "@workspace/ui/components/separator"
 import { useMutation, useQuery } from "convex/react"
 import { ArrowRight, CheckCircle2, Loader2, Plus, X } from "lucide-react"
@@ -29,13 +36,20 @@ export default function AmenitiesPage() {
 
   const [amenities, setAmenities] = useState<string[]>(draft?.vehicleData?.amenities || [])
   const [addOns, setAddOns] = useState<
-    Array<{ name: string; price: number; description: string; isRequired: boolean }>
+    Array<{
+      name: string
+      price: number
+      description: string
+      isRequired: boolean
+      priceType: "daily" | "one-time"
+    }>
   >(
     (draft?.vehicleData?.addOns as Array<{
       name: string
       price: number
       description: string
       isRequired: boolean
+      priceType: "daily" | "one-time"
     }>) || []
   )
 
@@ -44,6 +58,7 @@ export default function AmenitiesPage() {
     price: "",
     description: "",
     isRequired: false,
+    priceType: "daily" as "daily" | "one-time",
   })
 
   const toggleAmenity = (amenity: string) => {
@@ -61,9 +76,10 @@ export default function AmenitiesPage() {
           price: Number(newAddOn.price),
           description: newAddOn.description,
           isRequired: newAddOn.isRequired,
+          priceType: newAddOn.priceType,
         },
       ])
-      setNewAddOn({ name: "", price: "", description: "", isRequired: false })
+      setNewAddOn({ name: "", price: "", description: "", isRequired: false, priceType: "daily" })
     }
   }
 
@@ -159,7 +175,10 @@ export default function AmenitiesPage() {
                       {addOn.description && (
                         <p className="text-muted-foreground text-sm">{addOn.description}</p>
                       )}
-                      <p className="font-semibold text-primary">${addOn.price}/day</p>
+                      <p className="font-semibold text-primary">
+                        ${addOn.price}
+                        {addOn.priceType === "one-time" ? " one-time" : "/day"}
+                      </p>
                     </div>
                     <Button
                       onClick={() => removeAddOn(index)}
@@ -175,7 +194,7 @@ export default function AmenitiesPage() {
             )}
 
             <div className="space-y-3 rounded-lg border p-4">
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 md:grid-cols-3">
                 <div className="space-y-2">
                   <Label htmlFor="addOnName">Add-on Name</Label>
                   <Input
@@ -186,7 +205,7 @@ export default function AmenitiesPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="addOnPrice">Price ($/day)</Label>
+                  <Label htmlFor="addOnPrice">Price ($)</Label>
                   <Input
                     id="addOnPrice"
                     onChange={(e) => setNewAddOn({ ...newAddOn, price: e.target.value })}
@@ -194,6 +213,23 @@ export default function AmenitiesPage() {
                     type="number"
                     value={newAddOn.price}
                   />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="addOnPriceType">Price Type</Label>
+                  <Select
+                    onValueChange={(value: "daily" | "one-time") =>
+                      setNewAddOn({ ...newAddOn, priceType: value })
+                    }
+                    value={newAddOn.priceType}
+                  >
+                    <SelectTrigger id="addOnPriceType">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="daily">Per Day</SelectItem>
+                      <SelectItem value="one-time">One-Time</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
               <div className="space-y-2">

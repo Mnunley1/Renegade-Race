@@ -7,6 +7,11 @@ import { action, internalAction, mutation, query } from "./_generated/server"
 import { checkAdmin } from "./admin"
 import { calculateDaysBetween, parseLocalDate } from "./dateUtils"
 import {
+  calculateAddOnsTotal,
+  calculatePlatformFeeAmount,
+  calculateRefundAmount,
+} from "./pricing"
+import {
   getPaymentFailedEmailTemplate,
   getPaymentSucceededEmailTemplate,
   sendTransactionalEmail,
@@ -125,11 +130,7 @@ export const calculatePlatformFee = mutation({
 
     if (!settings) {
       // Default platform settings if none exist
-      const platformFee = Math.round(args.amount * 0.05) // 5% default fee
-      return {
-        platformFee,
-        ownerAmount: args.amount - platformFee,
-      }
+      return calculatePlatformFeeAmount(args.amount, 5, 0)
     }
 
     const feePercentage = settings.platformFeePercentage
@@ -138,17 +139,13 @@ export const calculatePlatformFee = mutation({
     if (feePercentage < 0 || feePercentage > 100) {
       throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE, "Platform fee percentage must be between 0 and 100")
     }
-    const calculatedFee = Math.round((args.amount * feePercentage) / 100)
 
-    const platformFee = Math.max(
+    return calculatePlatformFeeAmount(
+      args.amount,
+      feePercentage,
       settings.minimumPlatformFee,
-      Math.min(calculatedFee, settings.maximumPlatformFee || calculatedFee)
+      settings.maximumPlatformFee
     )
-
-    return {
-      platformFee,
-      ownerAmount: args.amount - platformFee,
-    }
   },
 })
 
@@ -560,8 +557,8 @@ export const createCheckoutSession = action({
       throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE, "Not authorized to create payment for this reservation")
     }
 
-    if (reservation.status !== "pending") {
-      throwError(ErrorCode.INVALID_STATUS, "Reservation must be pending to create payment")
+    if (reservation.status !== "approved") {
+      throwError(ErrorCode.INVALID_STATUS, "Reservation must be approved to create payment")
     }
 
     // Monetary validation
@@ -590,7 +587,7 @@ export const createCheckoutSession = action({
     const baseAmount = totalDays * vehicle.dailyRate
 
     // Validate add-ons against vehicle's current add-ons
-    let addOnsTotal = 0
+    const validatedAddOns: Array<{ price: number; priceType?: "daily" | "one-time" }> = []
     if (reservation.addOns && reservation.addOns.length > 0) {
       for (const reservationAddOn of reservation.addOns) {
         const vehicleAddOn = vehicle.addOns?.find((va: any) => va.name === reservationAddOn.name)
@@ -598,25 +595,21 @@ export const createCheckoutSession = action({
           throwError(ErrorCode.INVALID_INPUT, `Add-on "${reservationAddOn.name}" is no longer available`)
         }
         if (vehicleAddOn.price !== reservationAddOn.price) {
-          throwError(ErrorCode.PRICE_CHANGED, 
+          throwError(ErrorCode.PRICE_CHANGED,
             `Add-on "${reservationAddOn.name}" price has changed from ${reservationAddOn.price} to ${vehicleAddOn.price} cents`
           )
         }
-        // Daily add-ons are charged per day, one-time add-ons are charged once
         const priceType = reservationAddOn.priceType || vehicleAddOn.priceType || "one-time"
-        if (priceType === "daily") {
-          addOnsTotal += reservationAddOn.price * totalDays
-        } else {
-          addOnsTotal += reservationAddOn.price
-        }
+        validatedAddOns.push({ price: reservationAddOn.price, priceType })
       }
     }
 
+    const addOnsTotal = calculateAddOnsTotal(validatedAddOns, totalDays)
     const expectedTotal = baseAmount + addOnsTotal
 
     // Validate that the payment amount matches the recalculated total
     if (args.amount !== expectedTotal) {
-      throwError(ErrorCode.PRICE_CHANGED, 
+      throwError(ErrorCode.PRICE_CHANGED,
         `Payment amount mismatch: expected ${expectedTotal} cents (based on current pricing), got ${args.amount} cents. ` +
           "Vehicle daily rate may have changed."
       )
@@ -636,7 +629,7 @@ export const createCheckoutSession = action({
     const connectAccount = await stripe.accounts.retrieve(owner.stripeAccountId)
 
     if (!connectAccount.details_submitted) {
-      throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE, 
+      throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,
         "Owner account onboarding is not complete. Please complete Stripe onboarding."
       )
     }
@@ -651,7 +644,7 @@ export const createCheckoutSession = action({
       capabilities?.transfers === "active" || capabilities?.legacy_payments === "active"
 
     if (!transfersEnabled) {
-      throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE, 
+      throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,
         "Owner account does not have transfers enabled. Please complete Stripe onboarding to enable transfers capability."
       )
     }
@@ -783,8 +776,8 @@ export const createPaymentIntent = action({
       throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE, "Not authorized to create payment for this reservation")
     }
 
-    if (reservation.status !== "pending") {
-      throwError(ErrorCode.INVALID_STATUS, "Reservation must be pending to create payment")
+    if (reservation.status !== "approved") {
+      throwError(ErrorCode.INVALID_STATUS, "Reservation must be approved to create payment")
     }
 
     // Monetary validation
@@ -813,7 +806,7 @@ export const createPaymentIntent = action({
     const baseAmount = totalDays * vehicle.dailyRate
 
     // Validate add-ons against vehicle's current add-ons
-    let addOnsTotal = 0
+    const validatedAddOns: Array<{ price: number; priceType?: "daily" | "one-time" }> = []
     if (reservation.addOns && reservation.addOns.length > 0) {
       for (const reservationAddOn of reservation.addOns) {
         const vehicleAddOn = vehicle.addOns?.find((va: any) => va.name === reservationAddOn.name)
@@ -821,25 +814,21 @@ export const createPaymentIntent = action({
           throwError(ErrorCode.INVALID_INPUT, `Add-on "${reservationAddOn.name}" is no longer available`)
         }
         if (vehicleAddOn.price !== reservationAddOn.price) {
-          throwError(ErrorCode.PRICE_CHANGED, 
+          throwError(ErrorCode.PRICE_CHANGED,
             `Add-on "${reservationAddOn.name}" price has changed from ${reservationAddOn.price} to ${vehicleAddOn.price} cents`
           )
         }
-        // Daily add-ons are charged per day, one-time add-ons are charged once
         const priceType = reservationAddOn.priceType || vehicleAddOn.priceType || "one-time"
-        if (priceType === "daily") {
-          addOnsTotal += reservationAddOn.price * totalDays
-        } else {
-          addOnsTotal += reservationAddOn.price
-        }
+        validatedAddOns.push({ price: reservationAddOn.price, priceType })
       }
     }
 
+    const addOnsTotal = calculateAddOnsTotal(validatedAddOns, totalDays)
     const expectedTotal = baseAmount + addOnsTotal
 
     // Validate that the payment amount matches the recalculated total
     if (args.amount !== expectedTotal) {
-      throwError(ErrorCode.PRICE_CHANGED, 
+      throwError(ErrorCode.PRICE_CHANGED,
         `Payment amount mismatch: expected ${expectedTotal} cents (based on current pricing), got ${args.amount} cents. ` +
           "Vehicle daily rate may have changed."
       )
@@ -1342,7 +1331,7 @@ export const processRefundOnCancellation = internalAction({
     const stripe = getStripe()
 
     // Calculate the refund amount based on percentage
-    const refundAmount = Math.round(payment.amount * (percentage / 100))
+    const refundAmount = calculateRefundAmount(payment.amount, percentage)
 
     // Validate refund amount
     if (refundAmount <= 0 || refundAmount > payment.amount) {
@@ -1527,7 +1516,13 @@ export const updateReservationStatus = mutation({
   },
   handler: async (ctx, args) => {
     await ctx.db.patch(args.reservationId, {
-      status: args.status as "pending" | "cancelled" | "confirmed" | "completed" | "declined",
+      status: args.status as
+        | "pending"
+        | "approved"
+        | "cancelled"
+        | "confirmed"
+        | "completed"
+        | "declined",
       paymentStatus: args.paymentStatus as "pending" | "paid" | "failed" | "refunded",
       updatedAt: Date.now(),
     })

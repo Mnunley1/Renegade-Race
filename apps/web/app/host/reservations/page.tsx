@@ -7,10 +7,12 @@ import { Card, CardContent } from "@workspace/ui/components/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
 import { useMutation, useQuery } from "convex/react"
 import {
+  AlertTriangle,
   Calendar,
   Car,
   CheckCircle2,
   Clock,
+  CreditCard,
   DollarSign,
   Loader2,
   MessageSquare,
@@ -98,6 +100,8 @@ export default function HostReservationsPage() {
 
   // Get counts for each status
   const pendingCount = pendingReservations?.length || 0
+  const approvedReservations = allReservations.filter((res: any) => res.status === "approved")
+  const approvedCount = approvedReservations.length
   const confirmedCount = confirmedReservations?.length || 0
   const completedReservations = allReservations.filter((res: any) => res.status === "completed")
   const completedCount = completedReservations.length
@@ -122,6 +126,13 @@ export default function HostReservationsPage() {
           <Badge className="gap-1.5 bg-yellow-500/10 text-yellow-700 dark:text-yellow-400">
             <Clock className="size-3" />
             Pending
+          </Badge>
+        )
+      case "approved":
+        return (
+          <Badge className="gap-1.5 bg-purple-500/10 text-purple-700 dark:text-purple-400">
+            <CreditCard className="size-3" />
+            Approved - Awaiting Payment
           </Badge>
         )
       case "completed":
@@ -237,6 +248,11 @@ export default function HostReservationsPage() {
             <TabsTrigger onClick={() => setSelectedStatus("pending")} value="pending">
               Pending ({pendingCount})
             </TabsTrigger>
+            {approvedCount > 0 && (
+              <TabsTrigger onClick={() => setSelectedStatus("approved")} value="approved">
+                Approved ({approvedCount})
+              </TabsTrigger>
+            )}
             <TabsTrigger onClick={() => setSelectedStatus("confirmed")} value="confirmed">
               Confirmed ({confirmedCount})
             </TabsTrigger>
@@ -377,6 +393,15 @@ export default function HostReservationsPage() {
                                 </Button>
                               </>
                             )}
+                            {(reservation.status === "pending" ||
+                              reservation.status === "approved") && (
+                              <Link href={`/messages?conversation=${reservation._id}`}>
+                                <Button size="sm" variant="outline">
+                                  <MessageSquare className="mr-2 size-4" />
+                                  Message
+                                </Button>
+                              </Link>
+                            )}
                             {reservation.status === "confirmed" &&
                               completionStatusMap.has(reservation._id) && (
                                 <Link href={`/host/returns/${reservation._id}`}>
@@ -390,6 +415,14 @@ export default function HostReservationsPage() {
                                 <Button size="sm" variant="outline">
                                   <MessageSquare className="mr-2 size-4" />
                                   Message
+                                </Button>
+                              </Link>
+                            )}
+                            {reservation.status === "completed" && (
+                              <Link href={`/host/damage-claim/${reservation._id}`}>
+                                <Button size="sm" variant="outline">
+                                  <AlertTriangle className="mr-2 size-4" />
+                                  Report Damage
                                 </Button>
                               </Link>
                             )}
@@ -478,6 +511,76 @@ export default function HostReservationsPage() {
                             >
                               Decline
                             </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                )
+              })}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="approved">
+          {approvedReservations.length === 0 ? (
+            <Card>
+              <CardContent className="p-12 text-center">
+                <CreditCard className="mx-auto mb-4 size-12 text-muted-foreground" />
+                <p className="mb-2 font-semibold text-lg">No approved reservations</p>
+                <p className="text-muted-foreground">
+                  Approved reservations awaiting renter payment will appear here
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-4">
+              {approvedReservations.map((reservation: any) => {
+                const vehicleImage =
+                  reservation.vehicle?.images?.[0]?.cardUrl ||
+                  "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=400"
+
+                return (
+                  <Card key={reservation._id}>
+                    <div className="flex flex-col md:flex-row">
+                      <div className="relative h-48 w-full shrink-0 overflow-hidden md:h-auto md:w-64">
+                        <img
+                          alt={`${reservation.vehicle?.year} ${reservation.vehicle?.make} ${reservation.vehicle?.model}`}
+                          className="size-full object-cover"
+                          src={vehicleImage}
+                        />
+                      </div>
+                      <div className="flex flex-1 flex-col p-6">
+                        <div className="mb-4 flex items-start justify-between">
+                          <div className="flex-1">
+                            <h2 className="mb-2 font-bold text-xl">
+                              {reservation.vehicle?.year} {reservation.vehicle?.make}{" "}
+                              {reservation.vehicle?.model}
+                            </h2>
+                            <div className="mb-3 flex items-center gap-3">
+                              <span className="font-medium">
+                                {reservation.renter?.name || "Unknown Renter"}
+                              </span>
+                              <span className="text-muted-foreground">•</span>
+                              <span className="text-muted-foreground text-sm">
+                                {formatDate(reservation.startDate)} -{" "}
+                                {formatDate(reservation.endDate)}
+                              </span>
+                            </div>
+                          </div>
+                          {getStatusBadge(reservation.status)}
+                        </div>
+                        <div className="mt-auto flex items-center justify-between">
+                          <p className="font-bold text-primary">
+                            ${(reservation.totalAmount || 0).toLocaleString()}
+                          </p>
+                          <div className="flex gap-2">
+                            <Link href={`/messages?conversation=${reservation._id}`}>
+                              <Button size="sm" variant="outline">
+                                <MessageSquare className="mr-2 size-4" />
+                                Message Renter
+                              </Button>
+                            </Link>
                           </div>
                         </div>
                       </div>
@@ -621,9 +724,14 @@ export default function HostReservationsPage() {
                                 </Button>
                               </Link>
                             )}
-                            <Button size="sm" variant="outline">
-                              View Details
-                            </Button>
+                            {reservation.status === "completed" && (
+                              <Link href={`/host/damage-claim/${reservation._id}`}>
+                                <Button size="sm" variant="outline">
+                                  <AlertTriangle className="mr-2 size-4" />
+                                  Report Damage
+                                </Button>
+                              </Link>
+                            )}
                           </div>
                         </div>
                       </div>

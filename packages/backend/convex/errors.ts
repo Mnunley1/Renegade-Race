@@ -69,6 +69,13 @@ export const ErrorCode = {
   INVALID_REFUND_AMOUNT: "INVALID_REFUND_AMOUNT",
 
   // ============================================================================
+  // Damage Invoice Errors
+  // ============================================================================
+  DAMAGE_INVOICE_NOT_FOUND: "DAMAGE_INVOICE_NOT_FOUND",
+  DAMAGE_INVOICE_ALREADY_EXISTS: "DAMAGE_INVOICE_ALREADY_EXISTS",
+  DAMAGE_INVOICE_INVALID_STATUS: "DAMAGE_INVOICE_INVALID_STATUS",
+
+  // ============================================================================
   // Rate Limiting
   // ============================================================================
   RATE_LIMITED: "RATE_LIMITED",

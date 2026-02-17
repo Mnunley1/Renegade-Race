@@ -11,8 +11,10 @@ import {
   Calendar,
   CheckCircle2,
   Clock,
+  CreditCard,
   FlagTriangleRight,
   Search,
+  Send,
   XCircle,
 } from "lucide-react"
 import Link from "next/link"
@@ -37,7 +39,7 @@ type Trip = {
   totalDays: number
   dailyRate: number
   totalAmount: number
-  status: "pending" | "confirmed" | "cancelled" | "completed" | "declined"
+  status: "pending" | "approved" | "confirmed" | "cancelled" | "completed" | "declined"
   addOns?: Array<{ name: string; price: number; description?: string }>
 }
 
@@ -175,6 +177,7 @@ function TripList({
 export default function TripsPage() {
   const { user } = useUser()
   const [searchQuery, setSearchQuery] = useState("")
+  const [requestsSort, setRequestsSort] = useState<"asc" | "desc">("desc")
   const [upcomingSort, setUpcomingSort] = useState<"asc" | "desc">("asc")
   const [pastSort, setPastSort] = useState<"asc" | "desc">("desc")
   const [cancelledSort, setCancelledSort] = useState<"asc" | "desc">("desc")
@@ -184,14 +187,16 @@ export default function TripsPage() {
     user?.id ? { userId: user.id, role: "renter" as const } : "skip"
   )
 
-  const { upcoming, past, cancelled } = useMemo(() => {
+  const { pendingRequests, awaitingPayment, upcoming, past, cancelled } = useMemo(() => {
     if (!reservationsData) {
-      return { upcoming: [], past: [], cancelled: [] }
+      return { pendingRequests: [], awaitingPayment: [], upcoming: [], past: [], cancelled: [] }
     }
     const today = new Date().toISOString().split("T")[0]
     const all = reservationsData.map(mapReservation).filter(Boolean) as Trip[]
 
     return {
+      pendingRequests: all.filter((t) => t.status === "pending"),
+      awaitingPayment: all.filter((t) => t.status === "approved"),
       upcoming: all.filter((t) => t.status === "confirmed" && t.endDate >= (today ?? "")),
       past: all.filter(
         (t) => t.status === "completed" || (t.endDate < (today ?? "") && t.status === "confirmed")
@@ -201,7 +206,12 @@ export default function TripsPage() {
   }, [reservationsData])
 
   const isLoading = reservationsData === undefined
-  const totalTrips = upcoming.length + past.length + cancelled.length
+  const totalTrips =
+    pendingRequests.length +
+    awaitingPayment.length +
+    upcoming.length +
+    past.length +
+    cancelled.length
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -213,7 +223,7 @@ export default function TripsPage() {
             ? "Loading your trips..."
             : totalTrips === 0
               ? "Manage your reservations and review past experiences"
-              : `${upcoming.length} upcoming, ${past.length} past, ${cancelled.length} cancelled`}
+              : `${pendingRequests.length + awaitingPayment.length > 0 ? `${pendingRequests.length + awaitingPayment.length} pending, ` : ""}${upcoming.length} upcoming, ${past.length} past`}
         </p>
       </div>
 
@@ -237,9 +247,21 @@ export default function TripsPage() {
 
       {/* Content */}
       {!isLoading && (
-        <Tabs className="space-y-6" defaultValue="upcoming">
+        <Tabs
+          className="space-y-6"
+          defaultValue={
+            pendingRequests.length + awaitingPayment.length > 0 ? "requests" : "upcoming"
+          }
+        >
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <TabsList>
+              {(pendingRequests.length > 0 || awaitingPayment.length > 0) && (
+                <TabsTrigger value="requests">
+                  Requests
+                  {pendingRequests.length + awaitingPayment.length > 0 &&
+                    ` (${pendingRequests.length + awaitingPayment.length})`}
+                </TabsTrigger>
+              )}
               <TabsTrigger value="upcoming">
                 Upcoming{upcoming.length > 0 && ` (${upcoming.length})`}
               </TabsTrigger>
@@ -260,6 +282,50 @@ export default function TripsPage() {
               />
             </div>
           </div>
+
+          {/* Requests (pending + approved) */}
+          <TabsContent value="requests">
+            {awaitingPayment.length > 0 && (
+              <div className="mb-6 rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-950/50">
+                <div className="flex items-center gap-2">
+                  <CreditCard className="size-5 text-green-600 dark:text-green-400" />
+                  <p className="font-medium text-green-900 dark:text-green-100">
+                    {awaitingPayment.length} approved{" "}
+                    {awaitingPayment.length === 1 ? "request" : "requests"} awaiting payment
+                  </p>
+                </div>
+                <p className="mt-1 text-green-800 text-sm dark:text-green-200">
+                  Complete payment within 48 hours to confirm your booking.
+                </p>
+              </div>
+            )}
+            {[...awaitingPayment, ...pendingRequests].length > 0 && (
+              <div className="mb-4 flex justify-end">
+                <Button
+                  className="text-muted-foreground text-xs"
+                  onClick={() => setRequestsSort((s) => (s === "asc" ? "desc" : "asc"))}
+                  size="sm"
+                  variant="ghost"
+                >
+                  <ArrowDownUp className="mr-1.5 size-3.5" />
+                  {requestsSort === "desc" ? "Most recent first" : "Oldest first"}
+                </Button>
+              </div>
+            )}
+            {[...awaitingPayment, ...pendingRequests].length === 0 && !searchQuery.trim() ? (
+              <EmptyState
+                description="When you request a rental, it will appear here until the host responds."
+                icon={Send}
+                title="No pending requests"
+              />
+            ) : (
+              <TripList
+                searchQuery={searchQuery}
+                sortDirection={requestsSort}
+                trips={[...awaitingPayment, ...pendingRequests]}
+              />
+            )}
+          </TabsContent>
 
           {/* Upcoming */}
           <TabsContent value="upcoming">

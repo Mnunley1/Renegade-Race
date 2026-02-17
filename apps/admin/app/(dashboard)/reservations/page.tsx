@@ -33,7 +33,7 @@ import { handleErrorWithContext } from "@/lib/error-handler"
 
 export default function ReservationsPage() {
   const [statusFilter, setStatusFilter] = useState<
-    "pending" | "confirmed" | "cancelled" | "completed" | "declined" | undefined
+    "pending" | "approved" | "confirmed" | "cancelled" | "completed" | "declined" | undefined
   >(undefined)
   const [searchQuery, setSearchQuery] = useState("")
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
@@ -115,6 +115,12 @@ export default function ReservationsPage() {
     switch (status) {
       case "pending":
         return <Badge variant="default">Pending</Badge>
+      case "approved":
+        return (
+          <Badge className="bg-purple-600" variant="default">
+            Approved
+          </Badge>
+        )
       case "confirmed":
         return (
           <Badge className="bg-green-600" variant="default">
@@ -189,7 +195,13 @@ export default function ReservationsPage() {
                   setStatusFilter(
                     value === "all"
                       ? undefined
-                      : (value as "pending" | "confirmed" | "cancelled" | "completed" | "declined")
+                      : (value as
+                          | "pending"
+                          | "approved"
+                          | "confirmed"
+                          | "cancelled"
+                          | "completed"
+                          | "declined")
                   )
                 }
                 value={statusFilter || "all"}
@@ -200,6 +212,7 @@ export default function ReservationsPage() {
                 <SelectContent>
                   <SelectItem value="all">All Status</SelectItem>
                   <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="approved">Approved</SelectItem>
                   <SelectItem value="confirmed">Confirmed</SelectItem>
                   <SelectItem value="completed">Completed</SelectItem>
                   <SelectItem value="cancelled">Cancelled</SelectItem>

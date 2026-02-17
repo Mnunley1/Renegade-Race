@@ -208,6 +208,63 @@ export const getAllDisputes = query({
   },
 })
 
+// Get all damage invoices for admin view
+export const getAllDamageInvoices = query({
+  args: {
+    status: v.optional(
+      v.union(
+        v.literal("pending_review"),
+        v.literal("payment_pending"),
+        v.literal("paid"),
+        v.literal("rejected"),
+        v.literal("cancelled")
+      )
+    ),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    await checkAdmin(ctx)
+
+    const { status, limit = 50 } = args
+
+    const invoices = status
+      ? await ctx.db
+          .query("damageInvoices")
+          .withIndex("by_status", (q) => q.eq("status", status))
+          .order("desc")
+          .take(limit)
+      : await ctx.db.query("damageInvoices").order("desc").take(limit)
+
+    // Get related data for each invoice
+    const invoicesWithDetails = await Promise.all(
+      invoices.map(async (invoice) => {
+        const [reservation, vehicle, renter, owner] = await Promise.all([
+          ctx.db.get(invoice.reservationId),
+          ctx.db.get(invoice.vehicleId),
+          ctx.db
+            .query("users")
+            .withIndex("by_external_id", (q) => q.eq("externalId", invoice.renterId))
+            .first(),
+          ctx.db
+            .query("users")
+            .withIndex("by_external_id", (q) => q.eq("externalId", invoice.ownerId))
+            .first(),
+        ])
+
+        return {
+          ...invoice,
+          reservation,
+          vehicle,
+          renter,
+          owner,
+        }
+      })
+    )
+
+    return invoicesWithDetails
+  },
+})
+
 // Resolve dispute as admin
 export const resolveDisputeAsAdmin = mutation({
   args: {
@@ -420,6 +477,7 @@ export const getPlatformStats = query({
     const allReservations = await ctx.db.query("reservations").collect()
     const totalReservations = allReservations.length
     const pendingReservations = allReservations.filter((r) => r.status === "pending").length
+    const approvedReservations = allReservations.filter((r) => r.status === "approved").length
     const confirmedReservations = allReservations.filter((r) => r.status === "confirmed").length
     const completedReservations = allReservations.filter((r) => r.status === "completed").length
     const cancelledReservations = allReservations.filter((r) => r.status === "cancelled").length
@@ -469,6 +527,7 @@ export const getPlatformStats = query({
       reservations: {
         total: totalReservations,
         pending: pendingReservations,
+        approved: approvedReservations,
         confirmed: confirmedReservations,
         completed: completedReservations,
         cancelled: cancelledReservations,
@@ -502,6 +561,7 @@ export const getAllReservations = query({
     status: v.optional(
       v.union(
         v.literal("pending"),
+        v.literal("approved"),
         v.literal("confirmed"),
         v.literal("cancelled"),
         v.literal("completed"),
@@ -2155,6 +2215,7 @@ export const getBookingFunnel = query({
     const allReservations = await ctx.db.query("reservations").collect()
 
     const pending = allReservations.filter((r) => r.status === "pending").length
+    const approved = allReservations.filter((r) => r.status === "approved").length
     const confirmed = allReservations.filter((r) => r.status === "confirmed").length
     const completed = allReservations.filter((r) => r.status === "completed").length
     const cancelled = allReservations.filter((r) => r.status === "cancelled").length
@@ -2165,6 +2226,7 @@ export const getBookingFunnel = query({
 
     return {
       pending,
+      approved,
       confirmed,
       completed,
       cancelled,
