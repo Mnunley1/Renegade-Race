@@ -40,10 +40,7 @@ export function calculatePlatformFeeAmount(
   maximumFee?: number
 ): { platformFee: number; ownerAmount: number } {
   const calculatedFee = Math.round((amount * feePercentage) / 100)
-  const platformFee = Math.max(
-    minimumFee,
-    Math.min(calculatedFee, maximumFee ?? calculatedFee)
-  )
+  const platformFee = Math.max(minimumFee, Math.min(calculatedFee, maximumFee ?? calculatedFee))
   return {
     platformFee,
     ownerAmount: amount - platformFee,
@@ -51,19 +48,11 @@ export function calculatePlatformFeeAmount(
 }
 
 /** Check if two date ranges overlap (string comparison, YYYY-MM-DD) */
-export function datesOverlap(
-  startA: string,
-  endA: string,
-  startB: string,
-  endB: string
-): boolean {
+export function datesOverlap(startA: string, endA: string, startB: string, endB: string): boolean {
   return startA <= endB && endA >= startB
 }
 
 /** Calculate refund amount from payment amount and refund percentage */
-export function calculateRefundAmount(
-  paymentAmount: number,
-  percentage: number
-): number {
+export function calculateRefundAmount(paymentAmount: number, percentage: number): number {
   return Math.round(paymentAmount * (percentage / 100))
 }

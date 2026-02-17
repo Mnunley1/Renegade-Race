@@ -38,22 +38,14 @@ describe("calculateUserReviewStats", () => {
   })
 
   it("calculates correct average for multiple reviews (rounded to 1dp)", () => {
-    const result = calculateUserReviewStats([
-      { rating: 5 },
-      { rating: 4 },
-      { rating: 3 },
-    ])
+    const result = calculateUserReviewStats([{ rating: 5 }, { rating: 4 }, { rating: 3 }])
     // average = 12/3 = 4.0
     expect(result.averageRating).toBe(4)
     expect(result.totalReviews).toBe(3)
   })
 
   it("rounds average to 1 decimal place", () => {
-    const result = calculateUserReviewStats([
-      { rating: 5 },
-      { rating: 5 },
-      { rating: 4 },
-    ])
+    const result = calculateUserReviewStats([{ rating: 5 }, { rating: 5 }, { rating: 4 }])
     // average = 14/3 = 4.666... -> 4.7
     expect(result.averageRating).toBe(4.7)
   })
@@ -142,11 +134,7 @@ describe("calculateVehicleReviewStats", () => {
   })
 
   it("calculates correct average rounded to 1dp", () => {
-    const result = calculateVehicleReviewStats([
-      { rating: 4 },
-      { rating: 5 },
-      { rating: 4 },
-    ])
+    const result = calculateVehicleReviewStats([{ rating: 4 }, { rating: 5 }, { rating: 4 }])
     // average = 13/3 = 4.333... -> 4.3
     expect(result.averageRating).toBe(4.3)
     expect(result.totalReviews).toBe(3)
@@ -165,11 +153,7 @@ describe("calculateVehicleReviewStats", () => {
   })
 
   it("handles all same ratings", () => {
-    const result = calculateVehicleReviewStats([
-      { rating: 3 },
-      { rating: 3 },
-      { rating: 3 },
-    ])
+    const result = calculateVehicleReviewStats([{ rating: 3 }, { rating: 3 }, { rating: 3 }])
     expect(result.averageRating).toBe(3)
     expect(result.ratingBreakdown).toEqual({ 1: 0, 2: 0, 3: 3, 4: 0, 5: 0 })
   })

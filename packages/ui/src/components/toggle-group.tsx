@@ -58,7 +58,9 @@ const ToggleGroupContext = React.createContext<{
   size?: "default" | "sm" | "lg" | null
 }>({
   value: "",
-  onValueChange: () => {},
+  onValueChange: () => {
+    // default no-op
+  },
 })
 
 function ToggleGroup({ value, onValueChange, children, className, size }: ToggleGroupProps) {

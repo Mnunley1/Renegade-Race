@@ -63,6 +63,7 @@ export function DataTableToolbar({
             <button
               className="absolute top-1/2 right-3 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               onClick={() => onSearchChange("")}
+              type="button"
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -108,7 +109,11 @@ export function DataTableToolbar({
       {hasActiveFilters && (
         <Button
           className="h-9"
-          onClick={() => filters?.forEach((f) => f.onChange(undefined))}
+          onClick={() => {
+            filters?.forEach((f) => {
+              f.onChange(undefined)
+            })
+          }}
           size="sm"
           variant="ghost"
         >

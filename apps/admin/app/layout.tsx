@@ -14,6 +14,8 @@ const fontBody = Lato({
   style: "normal",
 })
 
+export const dynamic = "force-dynamic"
+
 export const metadata: Metadata = {
   title: "Renegade Rentals - Admin Portal",
   description: "Admin portal for managing Renegade Race Rentals platform",

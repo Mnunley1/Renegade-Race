@@ -473,6 +473,7 @@ function VehicleDetailsPageContent() {
       </Head>
       <div className="container mx-auto max-w-7xl px-4 py-6">
         <script
+          // biome-ignore lint/security/noDangerouslySetInnerHtml: structured data for SEO
           dangerouslySetInnerHTML={{
             __html: JSON.stringify(jsonLd),
           }}

@@ -30,6 +30,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     // Log error to console for debugging (in development)
     if (process.env.NODE_ENV === "development") {
+      // Development-only logging handled by React DevTools
     }
 
     // Send to Sentry in production

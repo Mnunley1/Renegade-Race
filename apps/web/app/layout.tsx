@@ -6,6 +6,8 @@ import "@workspace/ui/globals.css"
 import { LayoutWrapper } from "@/components/layout-wrapper"
 import { Providers } from "@/components/providers"
 
+export const dynamic = "force-dynamic"
+
 export const metadata: Metadata = {
   title: {
     default: "Renegade Race Rentals - Track Car Rentals",

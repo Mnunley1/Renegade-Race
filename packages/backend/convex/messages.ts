@@ -66,18 +66,15 @@ export const getByConversation = query({
         let repliedToMessage: (typeof message & { sender: typeof sender }) | null = null
         if (message.replyTo) {
           const replyToMsg = await ctx.db.get(message.replyTo)
-          if (replyToMsg) {
-            // Only include replied-to message if it's visible (after reopening timestamp)
-            if (!reopenedAt || replyToMsg.createdAt >= reopenedAt) {
-              const replyToSender = await ctx.db
-                .query("users")
-                .withIndex("by_external_id", (q) => q.eq("externalId", replyToMsg.senderId))
-                .first()
+          if (replyToMsg && (!reopenedAt || replyToMsg.createdAt >= reopenedAt)) {
+            const replyToSender = await ctx.db
+              .query("users")
+              .withIndex("by_external_id", (q) => q.eq("externalId", replyToMsg.senderId))
+              .first()
 
-              repliedToMessage = {
-                ...replyToMsg,
-                sender: replyToSender,
-              }
+            repliedToMessage = {
+              ...replyToMsg,
+              sender: replyToSender,
             }
           }
         }

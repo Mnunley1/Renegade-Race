@@ -13,6 +13,7 @@ export default function ErrorBoundary({
 }) {
   useEffect(() => {
     if (process.env.NODE_ENV === "development") {
+      // Development-only error logging
     }
   }, [error])
 

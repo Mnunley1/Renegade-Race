@@ -25,7 +25,7 @@ import { handleErrorWithContext } from "@/lib/error-handler"
 import { getImageKitUrl } from "@/lib/imagekit"
 
 export default function DisputeCreationPage() {
-  const { user } = useUser()
+  const { user: _user } = useUser()
   const params = useParams()
   const router = useRouter()
   const reservationId = params.reservationId as string
@@ -35,8 +35,14 @@ export default function DisputeCreationPage() {
   const [requestedResolution, setRequestedResolution] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const { photos, setPhotos, isUploading, fileInputRef, handlePhotoUpload, handleRemovePhoto } =
-    usePhotoUpload()
+  const {
+    photos,
+    setPhotos: _setPhotos,
+    isUploading,
+    fileInputRef,
+    handlePhotoUpload,
+    handleRemovePhoto,
+  } = usePhotoUpload()
 
   // Fetch reservation and completion data
   const reservation = useQuery(

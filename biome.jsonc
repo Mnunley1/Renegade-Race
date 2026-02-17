@@ -10,7 +10,8 @@
       "**/*.jsx",
       "**/*.json",
       "**/*.jsonc",
-      "**/*.css"
+      "**/*.css",
+      "!**/_generated"
     ]
   },
   "formatter": {
@@ -26,7 +27,9 @@
       "recommended": false,
       "performance": {
         // Convex and other libs use namespace imports extensively
-        "noNamespaceImport": "off"
+        "noNamespaceImport": "off",
+        // Barrel files are standard pattern for packages/ui and backend exports
+        "noBarrelFile": "off"
       },
       "style": {
         // Too noisy for UI code with prices, indices, dimensions, etc.
@@ -48,7 +51,11 @@
         // Enums are sometimes appropriate for domain models
         "noEnum": "off",
         // Nested ternaries are common in JSX conditional rendering
-        "noNestedTernary": "warn"
+        "noNestedTernary": "warn",
+        // Prices in cents (10000 = $100) are clearer without separators
+        "useNumericSeparators": "off",
+        // TypeScript exhaustiveness checks handle this better
+        "useDefaultSwitchClause": "off"
       },
       "complexity": {
         // Complex UI components and backend handlers naturally exceed 15
@@ -57,7 +64,9 @@
           "options": { "maxAllowedComplexity": 25 }
         },
         // forEach is acceptable - not always worth converting to for...of
-        "noForEach": "warn"
+        "noForEach": "warn",
+        // Idiomatic for fire-and-forget promises
+        "noVoid": "off"
       },
       "suspicious": {
         // Warn rather than error - some contexts (Convex, third-party) legitimately need any
@@ -67,7 +76,32 @@
         // Rarely relevant in a web app
         "noBitwiseOperators": "off",
         // Warn during development, alerts may be intentional in some UI flows
-        "noAlert": "warn"
+        "noAlert": "warn",
+        // Catches real issues but too noisy in Convex handlers
+        "noEvolvingTypes": "warn",
+        // Fix gradually, don't block CI
+        "noImplicitAnyLet": "warn"
+      },
+      "correctness": {
+        // Next.js <Image> handles sizing; native <img> used for CDN images
+        "useImageSize": "off"
+      },
+      "a11y": {
+        // Img alt text containing "image"/"photo" is acceptable for photo galleries
+        "noRedundantAlt": "warn",
+        // Interactive divs with onClick are common in custom UI components
+        "noStaticElementInteractions": "warn",
+        "noNoninteractiveElementInteractions": "warn",
+        // Click handlers on divs with keyboard alternatives handled by parent
+        "useKeyWithClickEvents": "warn",
+        // Decorative SVGs in UI components don't always need titles
+        "noSvgWithoutTitle": "warn",
+        // Semantic elements not always applicable for custom component wrappers
+        "useSemanticElements": "warn",
+        // Labels associated via context/composition in shadcn components
+        "noLabelWithoutControl": "warn",
+        // Video/audio captions - warn to address progressively
+        "useMediaCaption": "warn"
       },
       "nursery": {
         // Nursery rule, still unstable - warn rather than error
@@ -105,6 +139,17 @@
           "style": {
             // Convex generated files use camelCase
             "useFilenamingConvention": "off"
+          }
+        }
+      }
+    },
+    {
+      // Test files - vitest globals (describe, it, expect) trigger noUndeclaredVariables
+      "includes": ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts"],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "noUndeclaredVariables": "off"
           }
         }
       }

@@ -19,7 +19,7 @@
   },
   "lint-staged": {
     "!(packages/backend/convex/**)*.{ts,tsx,js,jsx}": [
-      "biome format --write --no-errors-on-unmatched"
+      "biome check --write --no-errors-on-unmatched"
     ],
     "*.{json,jsonc}": [
       "biome format --write --no-errors-on-unmatched"

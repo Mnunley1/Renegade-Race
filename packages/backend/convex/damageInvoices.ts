@@ -35,11 +35,7 @@ export const getById = query({
       return role === "admin"
     })()
 
-    if (
-      invoice.renterId !== identity.subject &&
-      invoice.ownerId !== identity.subject &&
-      !isAdmin
-    ) {
+    if (invoice.renterId !== identity.subject && invoice.ownerId !== identity.subject && !isAdmin) {
       throwError(ErrorCode.FORBIDDEN, "Not authorized to view this damage invoice")
     }
 
@@ -173,7 +169,10 @@ export const create = mutation({
 
     // Validate amount: $1 - $25,000
     if (args.amount < 100 || args.amount > 2_500_000) {
-      throwError(ErrorCode.INVALID_AMOUNT, "Damage claim amount must be between $1.00 and $25,000.00")
+      throwError(
+        ErrorCode.INVALID_AMOUNT,
+        "Damage claim amount must be between $1.00 and $25,000.00"
+      )
     }
 
     // Must have at least 1 photo
@@ -186,10 +185,7 @@ export const create = mutation({
       .query("damageInvoices")
       .withIndex("by_reservation", (q) => q.eq("reservationId", args.reservationId))
       .filter((q) =>
-        q.or(
-          q.eq(q.field("status"), "pending_review"),
-          q.eq(q.field("status"), "payment_pending")
-        )
+        q.or(q.eq(q.field("status"), "pending_review"), q.eq(q.field("status"), "payment_pending"))
       )
       .first()
 
@@ -228,9 +224,7 @@ export const create = mutation({
 
     // Get vehicle name for notifications
     const vehicle = await ctx.db.get(reservation.vehicleId)
-    const vehicleName = vehicle
-      ? `${vehicle.year} ${vehicle.make} ${vehicle.model}`
-      : "Vehicle"
+    const vehicleName = vehicle ? `${vehicle.year} ${vehicle.make} ${vehicle.model}` : "Vehicle"
 
     // Notify renter
     await ctx.scheduler.runAfter(0, internal.notifications.createNotification, {
@@ -300,9 +294,7 @@ export const adminReject = mutation({
 
     // Get vehicle name
     const vehicle = await ctx.db.get(invoice.vehicleId)
-    const vehicleName = vehicle
-      ? `${vehicle.year} ${vehicle.make} ${vehicle.model}`
-      : "Vehicle"
+    const vehicleName = vehicle ? `${vehicle.year} ${vehicle.make} ${vehicle.model}` : "Vehicle"
 
     // Notify renter
     await ctx.scheduler.runAfter(0, internal.notifications.createNotification, {
@@ -360,9 +352,7 @@ export const handlePaymentSuccess = internalMutation({
 
     // Get vehicle name
     const vehicle = await ctx.db.get(invoice.vehicleId)
-    const vehicleName = vehicle
-      ? `${vehicle.year} ${vehicle.make} ${vehicle.model}`
-      : "Vehicle"
+    const vehicleName = vehicle ? `${vehicle.year} ${vehicle.make} ${vehicle.model}` : "Vehicle"
 
     // Notify owner (payment received)
     await ctx.scheduler.runAfter(0, internal.notifications.createNotification, {

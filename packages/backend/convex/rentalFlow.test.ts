@@ -1,21 +1,13 @@
 import { calculateDaysBetween } from "./dateUtils"
 import {
   calculateReservationTotal,
-  calculateAddOnsTotal,
   calculatePlatformFeeAmount,
   datesOverlap,
   calculateRefundAmount,
 } from "./pricing"
 import { calculateRefundTier } from "./stripe"
-import {
-  calculateUserReviewStats,
-  calculateVehicleReviewStats,
-} from "./reviewStats"
-import {
-  sanitizeMessage,
-  sanitizeReview,
-  sanitizeShortText,
-} from "./sanitize"
+import { calculateUserReviewStats, calculateVehicleReviewStats } from "./reviewStats"
+import { sanitizeMessage, sanitizeReview, sanitizeShortText } from "./sanitize"
 
 // ============================================================================
 // 1. Happy Path: Book → Pay → Complete → Review
@@ -71,7 +63,7 @@ describe("Happy Path: Book → Pay → Complete → Review", () => {
 // ============================================================================
 
 describe("Cancellation Refund Flow", () => {
-  const startDate = "2024-07-15"
+  const _startDate = "2024-07-15"
   const dailyRate = 20000
   const totalDays = 3
   const total = calculateReservationTotal(dailyRate, totalDays) // 60000
@@ -204,12 +196,7 @@ describe("Auto-Decline Overlapping Pending Requests", () => {
     const requestB = { start: "2024-03-12", end: "2024-03-18" }
 
     // Owner approves A → check if B overlaps with the now-confirmed A
-    const shouldDeclineB = datesOverlap(
-      requestA.start,
-      requestA.end,
-      requestB.start,
-      requestB.end
-    )
+    const shouldDeclineB = datesOverlap(requestA.start, requestA.end, requestB.start, requestB.end)
     expect(shouldDeclineB).toBe(true)
   })
 
@@ -217,12 +204,7 @@ describe("Auto-Decline Overlapping Pending Requests", () => {
     const requestA = { start: "2024-03-10", end: "2024-03-14" }
     const requestC = { start: "2024-03-15", end: "2024-03-20" }
 
-    const shouldDeclineC = datesOverlap(
-      requestA.start,
-      requestA.end,
-      requestC.start,
-      requestC.end
-    )
+    const shouldDeclineC = datesOverlap(requestA.start, requestA.end, requestC.start, requestC.end)
     expect(shouldDeclineC).toBe(false)
   })
 
@@ -333,7 +315,7 @@ describe("Multi-Rental Review Aggregation", () => {
 
 describe("Content Sanitization Through the Flow", () => {
   it("sanitizes renter message with HTML", () => {
-    const raw = '<img src=x onerror=alert(1)> Hey, is the car available?'
+    const raw = "<img src=x onerror=alert(1)> Hey, is the car available?"
     const sanitized = sanitizeMessage(raw)
     expect(sanitized).not.toContain("<img")
     expect(sanitized).not.toContain("<")
@@ -342,7 +324,7 @@ describe("Content Sanitization Through the Flow", () => {
   })
 
   it("sanitizes review text with script tags", () => {
-    const raw = 'Great car! <script>document.cookie</script> Would rent again.'
+    const raw = "Great car! <script>document.cookie</script> Would rent again."
     const sanitized = sanitizeReview(raw)
     expect(sanitized).not.toContain("<script>")
     expect(sanitized).toContain("Great car!")
@@ -350,7 +332,7 @@ describe("Content Sanitization Through the Flow", () => {
   })
 
   it("sanitizes cancellation reason via sanitizeShortText", () => {
-    const raw = 'Schedule conflict <b>sorry</b>'
+    const raw = "Schedule conflict <b>sorry</b>"
     const sanitized = sanitizeShortText(raw)
     expect(sanitized).not.toContain("<b>")
     expect(sanitized).toContain("Schedule conflict")

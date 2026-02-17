@@ -7,7 +7,7 @@ import { AlertTriangle, Home, RefreshCw } from "lucide-react"
 import Link from "next/link"
 import { useEffect } from "react"
 
-export default function Error({
+export default function ErrorPage({
   error,
   reset,
 }: {
@@ -17,6 +17,7 @@ export default function Error({
   useEffect(() => {
     // Log error to console for debugging (in development)
     if (process.env.NODE_ENV === "development") {
+      // Development-only logging handled by Sentry below
     }
 
     // Send to Sentry in production

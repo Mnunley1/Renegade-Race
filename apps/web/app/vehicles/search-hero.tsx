@@ -22,11 +22,11 @@ type SearchHeroProps = {
 }
 
 export function SearchHero({
-  filters,
+  filters: _filters,
   actions,
-  tracks,
-  searchSuggestions,
-  activeFiltersCount,
+  tracks: _tracks,
+  searchSuggestions: _searchSuggestions,
+  activeFiltersCount: _activeFiltersCount,
   dateRange,
   datePickerOpen,
   setDatePickerOpen,
@@ -69,10 +69,7 @@ export function SearchHero({
 
                 {/* Search icon */}
                 <div className="pr-2">
-                  <div
-                    aria-label="Search"
-                    className="flex size-9 items-center justify-center rounded-full bg-primary text-primary-foreground sm:size-10"
-                  >
+                  <div className="flex size-9 items-center justify-center rounded-full bg-primary text-primary-foreground sm:size-10">
                     <Search className="size-4" />
                   </div>
                 </div>

@@ -111,11 +111,7 @@ export interface ErrorDetails {
  * throwError(ErrorCode.NOT_FOUND, "Vehicle not found", { vehicleId })
  * ```
  */
-export function throwError(
-  code: ErrorCodeType,
-  message?: string,
-  details?: ErrorDetails
-): never {
+export function throwError(code: ErrorCodeType, message?: string, details?: ErrorDetails): never {
   const errorMessage = message ? `${code}: ${message}` : code
 
   // If details are provided, we could log them (but Convex doesn't persist logs easily)

@@ -60,7 +60,9 @@ export default function TeamsPage() {
 
   const uniqueLocations = useMemo(() => {
     const locations = new Set<string>()
-    allTeams.forEach((team: any) => locations.add(team.location))
+    for (const team of allTeams) {
+      locations.add((team as any).location)
+    }
     return Array.from(locations).sort()
   }, [allTeams])
 

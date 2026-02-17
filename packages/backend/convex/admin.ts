@@ -56,8 +56,8 @@ export const getAllUsers = query({
 
     // Apply cursor-based pagination
     if (cursor) {
-      allUsers = allUsers.filter((u) => u._id < (cursor as Id<"users">)
-      )
+      const cursorId = cursor as Id<"users">
+      allUsers = allUsers.filter((u) => u._id < cursorId)
     }
 
     let filteredUsers = allUsers
@@ -107,7 +107,7 @@ export const banUser = mutation({
       entityId: args.userId,
       action: "ban_user",
       userId: identity.subject,
-      previousState: { isBanned: user.isBanned || false },
+      previousState: { isBanned: user.isBanned },
       newState: { isBanned: true },
       metadata: {
         reason: args.reason || "No reason provided",
@@ -144,7 +144,7 @@ export const unbanUser = mutation({
       entityId: args.userId,
       action: "unban_user",
       userId: identity.subject,
-      previousState: { isBanned: user.isBanned || false },
+      previousState: { isBanned: user.isBanned },
       newState: { isBanned: false },
       metadata: {
         reason: args.reason || "No reason provided",
@@ -587,8 +587,8 @@ export const getAllReservations = query({
 
     // Apply cursor-based pagination
     if (cursor) {
-      reservations = reservations.filter((r) => r._id < (cursor as Id<"reservations">)
-      )
+      const cursorId = cursor as Id<"reservations">
+      reservations = reservations.filter((r) => r._id < cursorId)
     }
 
     // Filter by date range if provided
@@ -748,8 +748,8 @@ export const getAllReviews = query({
 
     // Apply cursor-based pagination
     if (cursor) {
-      reviews = reviews.filter((r) => r._id < (cursor as Id<"rentalReviews">)
-      )
+      const cursorId = cursor as Id<"rentalReviews">
+      reviews = reviews.filter((r) => r._id < cursorId)
     }
 
     const hasMore = reviews.length > limit
@@ -922,7 +922,7 @@ export const getAllVehicles = query({
   handler: async (ctx, args) => {
     await checkAdmin(ctx)
 
-    const { limit = 50, search, status, cursor } = args
+    const { limit = 50, search, status: _status, cursor } = args
 
     // Note: Vehicles don't have a status field, they use isApproved
     // Filter by status logic should be done after fetching if needed
@@ -933,8 +933,8 @@ export const getAllVehicles = query({
 
     // Apply cursor-based pagination
     if (cursor) {
-      vehicles = vehicles.filter((v) => v._id < (cursor as Id<"vehicles">)
-      )
+      const cursorId = cursor as Id<"vehicles">
+      vehicles = vehicles.filter((v) => v._id < cursorId)
     }
 
     const hasMore = vehicles.length > limit
@@ -1166,8 +1166,8 @@ export const getAllPayments = query({
 
     // Apply cursor-based pagination
     if (cursor) {
-      payments = payments.filter((p) => p._id < (cursor as Id<"payments">)
-      )
+      const cursorId = cursor as Id<"payments">
+      payments = payments.filter((p) => p._id < cursorId)
     }
 
     // Filter by date range if provided

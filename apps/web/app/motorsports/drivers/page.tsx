@@ -66,7 +66,9 @@ export default function DriversPage() {
 
   const uniqueLocations = useMemo(() => {
     const locations = new Set<string>()
-    allDrivers.forEach((driver: any) => locations.add(driver.location))
+    for (const driver of allDrivers) {
+      locations.add((driver as any).location)
+    }
     return Array.from(locations).sort()
   }, [allDrivers])
 

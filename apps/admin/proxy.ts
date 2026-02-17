@@ -6,7 +6,7 @@ const isPublicRoute = createRouteMatcher(["/sign-in(.*)"])
 
 export default clerkMiddleware(
   async (auth, req) => {
-    const { userId, sessionClaims, orgId } = await auth()
+    const { userId, sessionClaims, orgId: _orgId } = await auth()
 
     // Allow public access to sign-in page
     if (isPublicRoute(req)) {

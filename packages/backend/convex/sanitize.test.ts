@@ -36,9 +36,7 @@ describe("escapeHtml", () => {
   })
 
   it("escapes all special chars in one string", () => {
-    expect(escapeHtml('&<>"\'`=/')).toBe(
-      "&amp;&lt;&gt;&quot;&#x27;&#x60;&#x3D;&#x2F;"
-    )
+    expect(escapeHtml("&<>\"'`=/")).toBe("&amp;&lt;&gt;&quot;&#x27;&#x60;&#x3D;&#x2F;")
   })
 
   it("passes through clean strings unchanged", () => {
