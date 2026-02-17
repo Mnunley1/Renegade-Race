@@ -13,6 +13,7 @@ import type * as auditLog from "../auditLog.js";
 import type * as availability from "../availability.js";
 import type * as conversations from "../conversations.js";
 import type * as crons from "../crons.js";
+import type * as damageInvoices from "../damageInvoices.js";
 import type * as dateUtils from "../dateUtils.js";
 import type * as disputes from "../disputes.js";
 import type * as driverMedia from "../driverMedia.js";
@@ -74,6 +75,7 @@ declare const fullApi: ApiFromModules<{
   availability: typeof availability;
   conversations: typeof conversations;
   crons: typeof crons;
+  damageInvoices: typeof damageInvoices;
   dateUtils: typeof dateUtils;
   disputes: typeof disputes;
   driverMedia: typeof driverMedia;

@@ -52,6 +52,16 @@ registerRoutes(http, components.stripe, {
           paymentId: payment._id,
           stripeChargeId: paymentIntent.latest_charge as string,
         })
+      } else if (paymentIntent.metadata?.type === "damage_invoice") {
+        // Handle damage invoice payment
+        const damageInvoiceId = paymentIntent.metadata.damageInvoiceId
+        if (damageInvoiceId) {
+          await ctx.runMutation(internal.damageInvoices.handlePaymentSuccess, {
+            damageInvoiceId: damageInvoiceId as any,
+            stripeChargeId: (paymentIntent.latest_charge as string) || "",
+            stripePaymentIntentId: paymentIntent.id,
+          })
+        }
       }
 
       // Record successful processing

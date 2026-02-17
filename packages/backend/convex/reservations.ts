@@ -3,6 +3,7 @@ import { internal } from "./_generated/api"
 import type { Id } from "./_generated/dataModel"
 import { mutation, query } from "./_generated/server"
 import { calculateDaysBetween } from "./dateUtils"
+import { calculateAddOnsTotal, calculateReservationTotal } from "./pricing"
 import {
   getReservationApprovedRenterEmailTemplate,
   getReservationCancelledEmailTemplate,
@@ -231,13 +232,8 @@ export const create = mutation({
       })
     }
 
-    // Calculate base amount from daily rate
-    const baseAmount = totalDays * vehicle.dailyRate
-
-    // Add add-ons to total amount
-    let addOnsTotal = 0
+    // Validate add-on prices before calculating totals
     if (args.addOns && args.addOns.length > 0) {
-      // Validate all add-on prices are non-negative
       for (const addOn of args.addOns) {
         if (addOn.price < 0) {
           throwError(ErrorCode.INVALID_AMOUNT, `Add-on price for ${addOn.name} cannot be negative`)
@@ -251,10 +247,9 @@ export const create = mutation({
           )
         }
       }
-      addOnsTotal = args.addOns.reduce((sum, addOn) => sum + addOn.price, 0)
     }
 
-    const totalAmount = baseAmount + addOnsTotal
+    const totalAmount = calculateReservationTotal(vehicle.dailyRate, totalDays, args.addOns)
 
     // Validate total amount
     const MAX_TOTAL_AMOUNT_CENTS = 1_000_000 // $10,000 max

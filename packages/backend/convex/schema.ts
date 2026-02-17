@@ -742,6 +742,46 @@ export default defineSchema({
     .index("by_status", ["status"])
     .index("by_created_by", ["createdBy"]),
 
+  // Damage invoices - post-rental damage claims
+  damageInvoices: defineTable({
+    reservationId: v.id("reservations"),
+    completionId: v.id("rentalCompletions"),
+    vehicleId: v.id("vehicles"),
+    renterId: v.string(),
+    ownerId: v.string(),
+    amount: v.number(), // cents
+    description: v.string(),
+    photos: v.array(v.string()), // R2 keys
+    status: v.union(
+      v.literal("pending_review"),
+      v.literal("payment_pending"),
+      v.literal("paid"),
+      v.literal("rejected"),
+      v.literal("cancelled")
+    ),
+    // Admin
+    adminReviewedBy: v.optional(v.string()),
+    adminReviewedAt: v.optional(v.number()),
+    adminNotes: v.optional(v.string()),
+    // Stripe (populated on approval)
+    stripeCheckoutSessionId: v.optional(v.string()),
+    stripeCheckoutUrl: v.optional(v.string()),
+    stripePaymentIntentId: v.optional(v.string()),
+    stripeChargeId: v.optional(v.string()),
+    // Linked dispute (optional)
+    disputeId: v.optional(v.id("disputes")),
+    paidAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_reservation", ["reservationId"])
+    .index("by_completion", ["completionId"])
+    .index("by_renter", ["renterId"])
+    .index("by_owner", ["ownerId"])
+    .index("by_status", ["status"])
+    .index("by_stripe_checkout_session", ["stripeCheckoutSessionId"])
+    .index("by_stripe_payment_intent", ["stripePaymentIntentId"]),
+
   // Audit logs for tracking state changes
   auditLogs: defineTable({
     entityType: v.union(
@@ -749,7 +789,8 @@ export default defineSchema({
       v.literal("payment"),
       v.literal("user"),
       v.literal("vehicle"),
-      v.literal("dispute")
+      v.literal("dispute"),
+      v.literal("damage_invoice")
     ),
     entityId: v.string(), // ID of the entity being changed
     action: v.string(), // e.g., "status_change", "create", "update", "delete"
@@ -794,7 +835,8 @@ export default defineSchema({
       v.literal("application_status_change"),
       v.literal("endorsement_received"),
       v.literal("team_event"),
-      v.literal("profile_view")
+      v.literal("profile_view"),
+      v.literal("damage_invoice")
     ),
     title: v.string(),
     message: v.string(),

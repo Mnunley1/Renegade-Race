@@ -16,8 +16,17 @@ import {
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent } from "@workspace/ui/components/card"
 import { cn } from "@workspace/ui/lib/utils"
-import { useMutation } from "convex/react"
-import { Calendar, Car, ChevronRight, Clock, CreditCard, MapPin, XCircle } from "lucide-react"
+import { useMutation, useQuery } from "convex/react"
+import {
+  AlertTriangle,
+  Calendar,
+  Car,
+  ChevronRight,
+  Clock,
+  CreditCard,
+  MapPin,
+  XCircle,
+} from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import type { ComponentProps } from "react"
@@ -123,6 +132,18 @@ export function TripCard({
   const [isCancelling, setIsCancelling] = useState(false)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const cancelReservation = useMutation(api.reservations.cancel)
+
+  // Query damage invoices for completed reservations
+  const damageInvoices = useQuery(
+    api.damageInvoices.getByReservation,
+    status === "completed" ? { reservationId: reservationId as Id<"reservations"> } : "skip"
+  )
+
+  // Find the most relevant damage invoice to display
+  const activeDamageInvoice = damageInvoices?.find(
+    (inv) =>
+      inv.status === "pending_review" || inv.status === "payment_pending" || inv.status === "paid"
+  )
 
   const canCancel = status === "pending" || status === "approved" || status === "confirmed"
   const refundTier = canCancel ? calculateRefundTier(startDate) : null
@@ -381,26 +402,77 @@ export function TripCard({
               </Button>
             )}
             {status === "completed" && (
-              <div className="flex gap-2">
-                <Button
-                  asChild
-                  className="flex-1"
-                  onClick={(e) => e.stopPropagation()}
-                  size="sm"
-                  variant="outline"
-                >
-                  <Link href={`/trips/review/${reservationId}`}>Write Review</Link>
-                </Button>
-                <Button
-                  asChild
-                  className="flex-1"
-                  onClick={(e) => e.stopPropagation()}
-                  size="sm"
-                  variant="outline"
-                >
-                  <Link href={`/trips/dispute/${reservationId}`}>File Dispute</Link>
-                </Button>
-              </div>
+              <>
+                {/* Damage Invoice Status */}
+                {activeDamageInvoice && (
+                  <div className="rounded-lg border p-3">
+                    {activeDamageInvoice.status === "pending_review" && (
+                      <div className="flex items-center gap-2 text-yellow-700 dark:text-yellow-400">
+                        <AlertTriangle className="size-4" />
+                        <span className="font-medium text-sm">Damage Claim Filed</span>
+                        <span className="ml-auto text-muted-foreground text-sm">
+                          ${(activeDamageInvoice.amount / 100).toFixed(2)}
+                        </span>
+                      </div>
+                    )}
+                    {activeDamageInvoice.status === "payment_pending" && (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 text-orange-700 dark:text-orange-400">
+                          <AlertTriangle className="size-4" />
+                          <span className="font-medium text-sm">Damage Payment Required</span>
+                          <span className="ml-auto font-bold">
+                            ${(activeDamageInvoice.amount / 100).toFixed(2)}
+                          </span>
+                        </div>
+                        {activeDamageInvoice.stripeCheckoutUrl && (
+                          <Button
+                            asChild
+                            className="w-full"
+                            onClick={(e) => e.stopPropagation()}
+                            size="sm"
+                            variant="destructive"
+                          >
+                            <a href={activeDamageInvoice.stripeCheckoutUrl}>
+                              <CreditCard className="mr-2 size-4" />
+                              Pay Now
+                            </a>
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                    {activeDamageInvoice.status === "paid" && (
+                      <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
+                        <AlertTriangle className="size-4" />
+                        <span className="font-medium text-sm">Damage Charge Paid</span>
+                        <span className="ml-auto text-muted-foreground text-sm">
+                          ${(activeDamageInvoice.amount / 100).toFixed(2)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <Button
+                    asChild
+                    className="flex-1"
+                    onClick={(e) => e.stopPropagation()}
+                    size="sm"
+                    variant="outline"
+                  >
+                    <Link href={`/trips/review/${reservationId}`}>Write Review</Link>
+                  </Button>
+                  <Button
+                    asChild
+                    className="flex-1"
+                    onClick={(e) => e.stopPropagation()}
+                    size="sm"
+                    variant="outline"
+                  >
+                    <Link href={`/trips/dispute/${reservationId}`}>File Dispute</Link>
+                  </Button>
+                </div>
+              </>
             )}
           </div>
         </div>

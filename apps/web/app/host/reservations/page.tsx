@@ -7,6 +7,7 @@ import { Card, CardContent } from "@workspace/ui/components/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
 import { useMutation, useQuery } from "convex/react"
 import {
+  AlertTriangle,
   Calendar,
   Car,
   CheckCircle2,
@@ -417,6 +418,14 @@ export default function HostReservationsPage() {
                                 </Button>
                               </Link>
                             )}
+                            {reservation.status === "completed" && (
+                              <Link href={`/host/damage-claim/${reservation._id}`}>
+                                <Button size="sm" variant="outline">
+                                  <AlertTriangle className="mr-2 size-4" />
+                                  Report Damage
+                                </Button>
+                              </Link>
+                            )}
                             <Link href={`/host/vehicles/${reservation.vehicleId}`}>
                               <Button size="sm" variant="outline">
                                 View Vehicle
@@ -715,9 +724,14 @@ export default function HostReservationsPage() {
                                 </Button>
                               </Link>
                             )}
-                            <Button size="sm" variant="outline">
-                              View Details
-                            </Button>
+                            {reservation.status === "completed" && (
+                              <Link href={`/host/damage-claim/${reservation._id}`}>
+                                <Button size="sm" variant="outline">
+                                  <AlertTriangle className="mr-2 size-4" />
+                                  Report Damage
+                                </Button>
+                              </Link>
+                            )}
                           </div>
                         </div>
                       </div>

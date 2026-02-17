@@ -208,6 +208,63 @@ export const getAllDisputes = query({
   },
 })
 
+// Get all damage invoices for admin view
+export const getAllDamageInvoices = query({
+  args: {
+    status: v.optional(
+      v.union(
+        v.literal("pending_review"),
+        v.literal("payment_pending"),
+        v.literal("paid"),
+        v.literal("rejected"),
+        v.literal("cancelled")
+      )
+    ),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    await checkAdmin(ctx)
+
+    const { status, limit = 50 } = args
+
+    const invoices = status
+      ? await ctx.db
+          .query("damageInvoices")
+          .withIndex("by_status", (q) => q.eq("status", status))
+          .order("desc")
+          .take(limit)
+      : await ctx.db.query("damageInvoices").order("desc").take(limit)
+
+    // Get related data for each invoice
+    const invoicesWithDetails = await Promise.all(
+      invoices.map(async (invoice) => {
+        const [reservation, vehicle, renter, owner] = await Promise.all([
+          ctx.db.get(invoice.reservationId),
+          ctx.db.get(invoice.vehicleId),
+          ctx.db
+            .query("users")
+            .withIndex("by_external_id", (q) => q.eq("externalId", invoice.renterId))
+            .first(),
+          ctx.db
+            .query("users")
+            .withIndex("by_external_id", (q) => q.eq("externalId", invoice.ownerId))
+            .first(),
+        ])
+
+        return {
+          ...invoice,
+          reservation,
+          vehicle,
+          renter,
+          owner,
+        }
+      })
+    )
+
+    return invoicesWithDetails
+  },
+})
+
 // Resolve dispute as admin
 export const resolveDisputeAsAdmin = mutation({
   args: {

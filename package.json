@@ -12,6 +12,8 @@
     "format": "biome format --write .",
     "lint:check": "biome lint .",
     "lint:fix": "biome lint --write .",
+    "test": "turbo test",
+    "test:backend": "turbo test --filter=@renegade/backend",
     "typecheck": "turbo typecheck",
     "prepare": "husky"
   },
