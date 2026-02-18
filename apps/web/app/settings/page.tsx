@@ -812,7 +812,6 @@ export default function SettingsPage() {
                         [
                           { strategy: "oauth_google", label: "Google" },
                           { strategy: "oauth_github", label: "GitHub" },
-                          { strategy: "oauth_apple", label: "Apple" },
                         ] as const
                       )
                         .filter(
