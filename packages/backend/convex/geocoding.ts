@@ -76,7 +76,7 @@ export async function geocodeAddress(address: Address): Promise<GeocodeResult | 
  * @param zipCode - US zip code string
  * @returns GeocodeResult with latitude and longitude, or null if geocoding fails
  */
-export async function geocodeZipCode(zipCode: string): Promise<GeocodeResult | null> {
+export function geocodeZipCode(zipCode: string): Promise<GeocodeResult | null> {
   return geocodeAddress({ zipCode })
 }
 
