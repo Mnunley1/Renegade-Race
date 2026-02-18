@@ -166,9 +166,9 @@ export default defineSchema({
     // Pickup location address
     address: v.optional(
       v.object({
-        street: v.string(),
-        city: v.string(),
-        state: v.string(),
+        street: v.optional(v.string()),
+        city: v.optional(v.string()),
+        state: v.optional(v.string()),
         zipCode: v.string(),
         latitude: v.optional(v.number()),
         longitude: v.optional(v.number()),

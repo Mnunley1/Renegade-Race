@@ -83,9 +83,6 @@ export default function CreateVehiclePage() {
     horsepower: "",
     transmission: "",
     drivetrain: "",
-    street: "",
-    city: "",
-    state: "",
     zipCode: "",
   })
 
@@ -158,9 +155,6 @@ export default function CreateVehiclePage() {
       vehicleFormData.horsepower &&
       vehicleFormData.transmission &&
       vehicleFormData.drivetrain &&
-      vehicleFormData.street &&
-      vehicleFormData.city &&
-      vehicleFormData.state &&
       vehicleFormData.zipCode
     )
 
@@ -302,9 +296,6 @@ export default function CreateVehiclePage() {
           priceType: addOn.priceType,
         })),
         address: {
-          street: vehicleFormData.street.trim(),
-          city: vehicleFormData.city.trim(),
-          state: vehicleFormData.state.trim(),
           zipCode: vehicleFormData.zipCode.trim(),
         },
         advanceNotice,
@@ -570,57 +561,17 @@ export default function CreateVehiclePage() {
 
             <div className="border-t pt-6">
               <h3 className="mb-4 font-semibold">Pickup Location</h3>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="street">Street Address *</Label>
-                  <Input
-                    id="street"
-                    name="street"
-                    onChange={handleVehicleChange}
-                    placeholder="123 Main Street"
-                    required
-                    value={vehicleFormData.street}
-                  />
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="city">City *</Label>
-                    <Input
-                      id="city"
-                      name="city"
-                      onChange={handleVehicleChange}
-                      placeholder="Los Angeles"
-                      required
-                      value={vehicleFormData.city}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="state">State *</Label>
-                    <Input
-                      id="state"
-                      maxLength={2}
-                      name="state"
-                      onChange={handleVehicleChange}
-                      placeholder="CA"
-                      required
-                      value={vehicleFormData.state}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="zipCode">ZIP Code *</Label>
-                  <Input
-                    id="zipCode"
-                    maxLength={10}
-                    name="zipCode"
-                    onChange={handleVehicleChange}
-                    placeholder="90001"
-                    required
-                    value={vehicleFormData.zipCode}
-                  />
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="zipCode">ZIP Code *</Label>
+                <Input
+                  id="zipCode"
+                  maxLength={10}
+                  name="zipCode"
+                  onChange={handleVehicleChange}
+                  placeholder="90001"
+                  required
+                  value={vehicleFormData.zipCode}
+                />
               </div>
             </div>
 
