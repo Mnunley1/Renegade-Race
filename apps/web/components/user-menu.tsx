@@ -2,7 +2,6 @@
 
 import { useAuth, useUser } from "@clerk/nextjs"
 import { Avatar, AvatarFallback, AvatarImage } from "@workspace/ui/components/avatar"
-import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import {
   DropdownMenu,
@@ -11,32 +10,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu"
-import { useQuery } from "convex/react"
-import {
-  Calendar,
-  Car,
-  HeadphonesIcon,
-  Heart,
-  HelpCircle,
-  LogOut,
-  Menu,
-  MessageSquare,
-  Settings,
-  User,
-} from "lucide-react"
+import { LogOut, Menu, Settings, User } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { api } from "@/lib/convex"
 
 export function UserMenu() {
   const { user, isSignedIn } = useUser()
   const { signOut } = useAuth()
   const pathname = usePathname()
-  const onboardingStatus = useQuery(api.users.getHostOnboardingStatus, isSignedIn ? {} : "skip")
-  const unreadCount = useQuery(
-    api.messages.getUnreadCount,
-    isSignedIn && user?.id ? { userId: user.id } : "skip"
-  )
 
   const handleSignOut = async () => {
     await signOut()
@@ -72,69 +53,6 @@ export function UserMenu() {
       <DropdownMenuContent align="end" className="w-64">
         {isSignedIn ? (
           <>
-            {/* Quick Actions Section */}
-            <DropdownMenuItem asChild>
-              <Link className="flex items-center text-sm" href="/favorites">
-                <Heart className="mr-3 size-4" />
-                Favorites
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link className="flex items-center text-sm" href="/trips">
-                <Calendar className="mr-3 size-4" />
-                Trips
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link className="flex items-center text-sm" href="/messages">
-                <MessageSquare className="mr-3 size-4" />
-                <span>Inbox</span>
-                {unreadCount !== undefined && unreadCount > 0 && (
-                  <Badge className="ml-auto" variant="destructive">
-                    {unreadCount > 99 ? "99+" : unreadCount}
-                  </Badge>
-                )}
-              </Link>
-            </DropdownMenuItem>
-
-            <DropdownMenuSeparator />
-
-            {/* Host Section */}
-            {isSignedIn &&
-              (!onboardingStatus || onboardingStatus.status === "not_started" ? (
-                <DropdownMenuItem asChild>
-                  <Link className="flex items-center text-sm" href="/host/onboarding">
-                    <Car className="mr-3 size-4" />
-                    Become a Host
-                  </Link>
-                </DropdownMenuItem>
-              ) : onboardingStatus.status === "in_progress" ? (
-                <DropdownMenuItem asChild>
-                  <Link
-                    className="flex items-center justify-between text-sm"
-                    href="/host/onboarding"
-                  >
-                    <span className="flex items-center">
-                      <Car className="mr-3 size-4 shrink-0" />
-                      <span>Continue Setup</span>
-                    </span>
-                    <span className="ml-2 shrink-0 rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-700 text-xs dark:bg-amber-900/30 dark:text-amber-400">
-                      In Progress
-                    </span>
-                  </Link>
-                </DropdownMenuItem>
-              ) : (
-                <DropdownMenuItem asChild>
-                  <Link className="flex items-center text-sm" href="/host/dashboard">
-                    <Car className="mr-3 size-4" />
-                    Host Dashboard
-                  </Link>
-                </DropdownMenuItem>
-              ))}
-
-            <DropdownMenuSeparator />
-
-            {/* User Account Section */}
             <DropdownMenuItem asChild>
               <Link className="flex items-center text-sm" href="/profile">
                 <User className="mr-3 size-4" />
@@ -150,23 +68,6 @@ export function UserMenu() {
 
             <DropdownMenuSeparator />
 
-            {/* Help & Info Section */}
-            <DropdownMenuItem asChild>
-              <Link className="flex items-center text-sm" href="/help">
-                <HelpCircle className="mr-3 size-4" />
-                Help
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link className="flex items-center text-sm" href="/contact">
-                <HeadphonesIcon className="mr-3 size-4" />
-                Contact Renegade
-              </Link>
-            </DropdownMenuItem>
-
-            <DropdownMenuSeparator />
-
-            {/* Sign Out */}
             <DropdownMenuItem
               className="text-destructive text-sm focus:text-destructive"
               onClick={handleSignOut}
