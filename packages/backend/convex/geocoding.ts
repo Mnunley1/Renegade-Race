@@ -3,9 +3,9 @@
  */
 
 export type Address = {
-  street: string
-  city: string
-  state: string
+  street?: string
+  city?: string
+  state?: string
   zipCode: string
 }
 
@@ -29,7 +29,8 @@ export async function geocodeAddress(address: Address): Promise<GeocodeResult | 
   }
 
   // Construct the full address string
-  const fullAddress = `${address.street}, ${address.city}, ${address.state} ${address.zipCode}`
+  const parts = [address.street, address.city, address.state, address.zipCode].filter(Boolean)
+  const fullAddress = parts.join(", ")
 
   // Encode the address for URL
   const encodedAddress = encodeURIComponent(fullAddress)
@@ -68,6 +69,15 @@ export async function geocodeAddress(address: Address): Promise<GeocodeResult | 
   } catch {
     return null
   }
+}
+
+/**
+ * Geocode a zip code to get latitude and longitude coordinates
+ * @param zipCode - US zip code string
+ * @returns GeocodeResult with latitude and longitude, or null if geocoding fails
+ */
+export async function geocodeZipCode(zipCode: string): Promise<GeocodeResult | null> {
+  return geocodeAddress({ zipCode })
 }
 
 /**

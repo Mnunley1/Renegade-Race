@@ -111,10 +111,7 @@ export default function EditVehiclePage() {
       isRequired?: boolean
       priceType?: "daily" | "one-time"
     }>,
-    // Pickup location fields
-    street: "",
-    city: "",
-    state: "",
+    // Pickup location
     zipCode: "",
   })
 
@@ -135,9 +132,6 @@ export default function EditVehiclePage() {
         mileage: vehicle.mileage || 0,
         addOns: vehicle.addOns || [],
         // Pickup location
-        street: vehicle.address?.street || "",
-        city: vehicle.address?.city || "",
-        state: vehicle.address?.state || "",
         zipCode: vehicle.address?.zipCode || "",
       })
 
@@ -441,15 +435,7 @@ export default function EditVehiclePage() {
 
     try {
       // Build address object if any address fields are filled
-      const hasAddress = formData.street || formData.city || formData.state || formData.zipCode
-      const address = hasAddress
-        ? {
-            street: formData.street.trim(),
-            city: formData.city.trim(),
-            state: formData.state.trim(),
-            zipCode: formData.zipCode.trim(),
-          }
-        : undefined
+      const address = formData.zipCode ? { zipCode: formData.zipCode.trim() } : undefined
 
       await updateVehicle({
         id: vehicleId as Id<"vehicles">,
@@ -828,50 +814,16 @@ export default function EditVehiclePage() {
                 </p>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="street">Street Address</Label>
-                <Input
-                  id="street"
-                  name="street"
-                  onChange={handleChange}
-                  placeholder="123 Main Street"
-                  value={formData.street}
-                />
-              </div>
-
-              <div className="grid gap-6 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="city">City</Label>
-                  <Input
-                    id="city"
-                    name="city"
-                    onChange={handleChange}
-                    placeholder="Los Angeles"
-                    value={formData.city}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="state">State</Label>
-                  <Input
-                    id="state"
-                    maxLength={2}
-                    name="state"
-                    onChange={handleChange}
-                    placeholder="CA"
-                    value={formData.state}
-                  />
-                </div>
-              </div>
-
               <div className="md:w-1/2">
                 <div className="space-y-2">
-                  <Label htmlFor="zipCode">ZIP Code</Label>
+                  <Label htmlFor="zipCode">ZIP Code *</Label>
                   <Input
                     id="zipCode"
                     maxLength={10}
                     name="zipCode"
                     onChange={handleChange}
                     placeholder="90001"
+                    required
                     value={formData.zipCode}
                   />
                 </div>

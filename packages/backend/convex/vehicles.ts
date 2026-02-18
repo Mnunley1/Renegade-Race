@@ -547,9 +547,9 @@ export const createVehicleWithImages = mutation({
     ),
     address: v.optional(
       v.object({
-        street: v.string(),
-        city: v.string(),
-        state: v.string(),
+        street: v.optional(v.string()),
+        city: v.optional(v.string()),
+        state: v.optional(v.string()),
         zipCode: v.string(),
         latitude: v.optional(v.number()),
         longitude: v.optional(v.number()),
@@ -752,9 +752,9 @@ export const update = mutation({
     ),
     address: v.optional(
       v.object({
-        street: v.string(),
-        city: v.string(),
-        state: v.string(),
+        street: v.optional(v.string()),
+        city: v.optional(v.string()),
+        state: v.optional(v.string()),
         zipCode: v.string(),
         latitude: v.optional(v.number()),
         longitude: v.optional(v.number()),
@@ -780,9 +780,6 @@ export const update = mutation({
     const addressChanged =
       args.address &&
       (!vehicle.address ||
-        vehicle.address.street !== args.address.street ||
-        vehicle.address.city !== args.address.city ||
-        vehicle.address.state !== args.address.state ||
         vehicle.address.zipCode !== args.address.zipCode)
 
     const { id, ...updateData } = args
@@ -835,16 +832,16 @@ export const geocodeVehicleAddress = action({
   args: {
     vehicleId: v.id("vehicles"),
     address: v.object({
-      street: v.string(),
-      city: v.string(),
-      state: v.string(),
+      street: v.optional(v.string()),
+      city: v.optional(v.string()),
+      state: v.optional(v.string()),
       zipCode: v.string(),
     }),
   },
   handler: async (ctx, args) => {
-    const { geocodeAddress } = await import("./geocoding")
+    const { geocodeZipCode } = await import("./geocoding")
 
-    const result = await geocodeAddress(args.address)
+    const result = await geocodeZipCode(args.address.zipCode)
 
     if (result) {
       // Update the vehicle with coordinates
