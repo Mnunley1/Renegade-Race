@@ -626,7 +626,7 @@ export const getHostOnboardingStatus = query({
       personalInfo: !!(user.phone && user.location),
       vehicleAdded: vehicles.length > 0,
       payoutSetup: hasStripeAccount, // Tracked but not required for completion
-      safetyStandards: user.hostOnboardingSteps?.safetyStandards,
+      safetyStandards: user.hostOnboardingSteps?.safetyStandards ?? false,
     }
 
     // Determine overall status
