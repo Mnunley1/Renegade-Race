@@ -1113,6 +1113,54 @@ export async function sendTransactionalEmail(
   }
 }
 
+// Send a "welcome back" invite to a returning user
+export const sendReturningUserInvite = mutation({
+  args: {
+    email: v.string(),
+    name: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const siteUrl = process.env.WEB_URL || "https://renegaderace.com"
+    const subject = "The New Renegade Is Live - Come Check It Out"
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head><meta charset="utf-8"></head>
+      <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="text-align: center; margin-bottom: 30px;">
+          <h1 style="color: #1a1a1a;">Welcome Back to Renegade!</h1>
+        </div>
+        <p>Hi ${args.name},</p>
+        <p>We've rebuilt Renegade Race Rentals from the ground up and it's ready for you.</p>
+        <p>Your account is all set. Just sign in with the same email you used before and you're good to go.</p>
+        <p style="text-align: center; margin: 30px 0;">
+          <a href="${siteUrl}/sign-in" style="background-color: #1a1a1a; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">Sign In to Renegade</a>
+        </p>
+        <p>If you run into anything or have questions, just reply to this email.</p>
+        <p style="margin-top: 30px;">See you on the track,<br>The Renegade Race Rentals Team</p>
+      </body>
+      </html>
+    `
+    const text = [
+      "Welcome Back to Renegade!",
+      "",
+      `Hi ${args.name},`,
+      "",
+      "We've rebuilt Renegade Race Rentals from the ground up and it's ready for you.",
+      "",
+      "Your account is all set. Just sign in with the same email you used before.",
+      "",
+      `Sign in: ${siteUrl}/sign-in`,
+      "",
+      "See you on the track,",
+      "The Renegade Race Rentals Team",
+    ].join("\n")
+
+    const emailId = await sendTransactionalEmail(ctx, args.email, { subject, html, text })
+    return { success: !!emailId, emailId }
+  },
+})
+
 // Send mass email to users
 export const sendMassEmail = mutation({
   args: {
