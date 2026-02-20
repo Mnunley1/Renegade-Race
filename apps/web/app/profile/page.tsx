@@ -399,37 +399,20 @@ export default function ProfilePage() {
                       {userInitials.toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
-                  {!isEditing && (
-                    <button
-                      aria-label="Edit profile picture"
-                      className="absolute -right-1 -bottom-1 flex size-9 items-center justify-center rounded-full border-2 border-background bg-primary text-primary-foreground shadow-md transition-transform hover:scale-105"
-                      onClick={handleEditProfilePicture}
-                      type="button"
-                    >
-                      <Camera className="size-4" />
-                    </button>
-                  )}
-                </div>
-                {isEditing && (
-                  <Button
+                  <button
+                    aria-label="Edit profile picture"
+                    className="absolute -right-1 -bottom-1 flex size-9 items-center justify-center rounded-full border-2 border-background bg-primary text-primary-foreground shadow-md transition-transform hover:scale-105"
                     disabled={isUploadingImage}
                     onClick={handleEditProfilePicture}
-                    size="sm"
-                    variant="default"
+                    type="button"
                   >
                     {isUploadingImage ? (
-                      <>
-                        <Loader2 className="mr-2 size-4 animate-spin" />
-                        Uploading...
-                      </>
+                      <Loader2 className="size-4 animate-spin" />
                     ) : (
-                      <>
-                        <Camera className="mr-2 size-4" />
-                        Change Photo
-                      </>
+                      <Camera className="size-4" />
                     )}
-                  </Button>
-                )}
+                  </button>
+                </div>
                 <input
                   accept="image/*"
                   className="hidden"

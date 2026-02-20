@@ -160,8 +160,7 @@ export const generateProfileImageUploadUrl = mutation({
 
     // Generate organized key: images/profiles/{userId}/{uuid}
     const key = `images/profiles/${user._id}/${crypto.randomUUID()}`
-    const uploadResult = r2.generateUploadUrl(key)
-    // r2.generateUploadUrl returns an object with 'url' property
+    const uploadResult = await r2.generateUploadUrl(key)
     return { ...uploadResult, key }
   },
 })
