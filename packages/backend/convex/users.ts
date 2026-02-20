@@ -646,16 +646,7 @@ export const getHostOnboardingStatus = query({
 
     return {
       status,
-      steps: user.hostOnboardingSteps || steps,
-      stepCompletion: user.hostOnboardingSteps || {
-        step1_location: false,
-        step2_vehicleInfo: false,
-        step3_specifications: false,
-        step4_amenities: false,
-        step5_photos: false,
-        step6_availability: false,
-        step7_submit: false,
-      },
+      steps,
     }
   },
 })
