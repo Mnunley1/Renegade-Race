@@ -1,5 +1,5 @@
 import { v } from "convex/values"
-import { mutation, query } from "./_generated/server"
+import { internalMutation, mutation, query } from "./_generated/server"
 import { checkAdmin } from "./admin"
 
 // Get all active tracks
@@ -48,6 +48,14 @@ export const create = mutation({
   },
   handler: async (ctx, args) => {
     await checkAdmin(ctx)
+
+    const existing = await ctx.db.query("tracks").collect()
+    const duplicate = existing.find(
+      (t) => t.name.toLowerCase() === args.name.toLowerCase()
+    )
+    if (duplicate) {
+      throw new Error(`A track named "${args.name}" already exists`)
+    }
 
     const trackId = await ctx.db.insert("tracks", {
       name: args.name,
@@ -118,5 +126,47 @@ export const deleteTrack = mutation({
     await ctx.db.delete(args.id)
 
     return args.id
+  },
+})
+
+// Internal mutation to deduplicate tracks.
+// For each track name, keeps the copy referenced by vehicles (or the oldest if none are referenced)
+// and deletes all other duplicates.
+export const deduplicateTracks = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const allTracks = await ctx.db.query("tracks").collect()
+    const allVehicles = await ctx.db.query("vehicles").collect()
+
+    // Build set of track IDs referenced by vehicles
+    const referencedTrackIds = new Set(
+      allVehicles.filter((v) => v.trackId).map((v) => v.trackId as string)
+    )
+
+    // Group tracks by name
+    const tracksByName = new Map<string, typeof allTracks>()
+    for (const track of allTracks) {
+      const group = tracksByName.get(track.name) || []
+      group.push(track)
+      tracksByName.set(track.name, group)
+    }
+
+    const deleted: string[] = []
+    for (const [name, tracks] of tracksByName) {
+      if (tracks.length <= 1) continue
+
+      // Pick the one referenced by vehicles, or the oldest
+      const keeper =
+        tracks.find((t) => referencedTrackIds.has(t._id)) || tracks[0]!
+
+      for (const track of tracks) {
+        if (track._id !== keeper._id) {
+          await ctx.db.delete(track._id)
+          deleted.push(`${name} (${track._id})`)
+        }
+      }
+    }
+
+    return { deleted, remaining: allTracks.length - deleted.length }
   },
 })
