@@ -7,37 +7,60 @@ import { Area, AreaChart, ResponsiveContainer } from "recharts"
 interface StatCardProps {
   label: string
   value: string | number
+  description?: string
   trend?: { value: number; isPositive: boolean }
+  trendLabel?: string
   sparklineData?: { value: number }[]
   icon?: React.ReactNode
+  iconBgClassName?: string
+  iconClassName?: string
 }
 
-export function StatCard({ label, value, trend, sparklineData, icon }: StatCardProps) {
+export function StatCard({
+  label,
+  value,
+  description,
+  trend,
+  trendLabel,
+  sparklineData,
+  icon,
+  iconBgClassName = "bg-muted",
+  iconClassName,
+}: StatCardProps) {
   return (
-    <Card>
-      <CardContent className="p-6">
-        <div className="flex items-center justify-between">
+    <Card className="group transition-all duration-200 hover:shadow-md">
+      <CardContent className="p-5">
+        <div className="flex items-start justify-between">
           <p className="font-medium text-muted-foreground text-sm">{label}</p>
-          {icon}
+          {icon && (
+            <div
+              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${iconBgClassName}`}
+            >
+              <span className={iconClassName}>{icon}</span>
+            </div>
+          )}
         </div>
-        <div className="mt-2 flex items-end justify-between">
-          <div>
-            <p className="font-bold text-2xl">{value}</p>
+        <div className="mt-3 flex items-end justify-between">
+          <div className="min-w-0">
+            <p className="font-bold text-2xl tracking-tight">{value}</p>
+            {description && <p className="mt-1 text-muted-foreground text-xs">{description}</p>}
             {trend && (
               <div
-                className={`mt-1 flex items-center gap-1 text-xs ${trend.isPositive ? "text-emerald-600" : "text-red-600"}`}
+                className={`mt-1.5 flex items-center gap-1 font-medium text-xs ${trend.isPositive ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}
               >
                 {trend.isPositive ? (
-                  <TrendingUp className="h-3 w-3" />
+                  <TrendingUp className="h-3.5 w-3.5" />
                 ) : (
-                  <TrendingDown className="h-3 w-3" />
+                  <TrendingDown className="h-3.5 w-3.5" />
                 )}
-                <span>{Math.abs(trend.value)}% from last period</span>
+                <span>
+                  {trendLabel ? trendLabel : `${Math.abs(trend.value)}% from last period`}
+                </span>
               </div>
             )}
           </div>
           {sparklineData && sparklineData.length > 0 && (
-            <div className="h-10 w-20">
+            <div className="h-10 w-20 shrink-0">
               <ResponsiveContainer height="100%" width="100%">
                 <AreaChart data={sparklineData}>
                   <Area

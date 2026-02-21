@@ -1,6 +1,5 @@
 "use client"
 
-import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import {
   Card,
@@ -9,30 +8,49 @@ import {
   CardHeader,
   CardTitle,
 } from "@workspace/ui/components/card"
-import { Checkbox } from "@workspace/ui/components/checkbox"
-import { Input } from "@workspace/ui/components/input"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@workspace/ui/components/select"
 import { useMutation, useQuery } from "convex/react"
-import { CheckCircle, Eye, EyeOff, Loader2, Search, Star, Trash2 } from "lucide-react"
+import { CheckCircle, Eye, EyeOff, Loader2, Star, Trash2 } from "lucide-react"
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
+import { type Column, DataTable } from "@/components/data-table/data-table"
+import { DataTableBulkActions } from "@/components/data-table/data-table-bulk-actions"
+import { exportToCSV } from "@/components/data-table/data-table-export"
+import { DataTableToolbar, type FilterConfig } from "@/components/data-table/data-table-toolbar"
+import { PageHeader } from "@/components/page-header"
 import { Pagination } from "@/components/pagination"
+import { StatusBadge } from "@/components/status-badge"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
+
+function getReviewStatus(review: any) {
+  if (!review.isPublic) return "hidden"
+  if (!review.isModerated) return "unmoderated"
+  return "published"
+}
+
+function RatingStars({ rating }: { rating: number }) {
+  return (
+    <div className="flex items-center gap-0.5">
+      {[1, 2, 3, 4, 5].map((star) => (
+        <Star
+          className={`size-3.5 ${
+            star <= rating ? "fill-yellow-400 text-yellow-400" : "text-gray-300"
+          }`}
+          key={star}
+        />
+      ))}
+      <span className="ml-1 text-sm">{rating}</span>
+    </div>
+  )
+}
 
 export default function ReviewsPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [isPublicFilter, setIsPublicFilter] = useState<boolean | undefined>(undefined)
   const [isModeratedFilter, setIsModeratedFilter] = useState<boolean | undefined>(undefined)
   const [currentPage, setCurrentPage] = useState(1)
-  const [selectedIds, setSelectedIds] = useState<Set<Id<"rentalReviews">>>(new Set())
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [cursor, setCursor] = useState<string | undefined>(undefined)
 
   const result = useQuery(api.admin.getAllReviews, {
@@ -56,7 +74,6 @@ export default function ReviewsPage() {
   const [processingId, setProcessingId] = useState<Id<"rentalReviews"> | null>(null)
   const [isBulkProcessing, setIsBulkProcessing] = useState(false)
 
-  // Reset to page 1 when filters change
   useMemo(() => {
     if (isPublicFilter !== undefined || isModeratedFilter !== undefined || searchQuery) {
       setCurrentPage(1)
@@ -65,9 +82,8 @@ export default function ReviewsPage() {
   }, [isPublicFilter, isModeratedFilter, searchQuery])
 
   const handleDelete = async (reviewId: Id<"rentalReviews">) => {
-    if (!confirm("Are you sure you want to delete this review? This action cannot be undone.")) {
+    if (!confirm("Are you sure you want to delete this review? This action cannot be undone."))
       return
-    }
 
     setProcessingId(reviewId)
     try {
@@ -114,13 +130,12 @@ export default function ReviewsPage() {
       !confirm(
         `Are you sure you want to delete ${selectedIds.size} review(s)? This action cannot be undone.`
       )
-    ) {
+    )
       return
-    }
 
     setIsBulkProcessing(true)
     try {
-      await bulkDeleteReviews({ reviewIds: Array.from(selectedIds) })
+      await bulkDeleteReviews({ reviewIds: Array.from(selectedIds) as Id<"rentalReviews">[] })
       toast.success(`${selectedIds.size} review(s) deleted successfully`)
       setSelectedIds(new Set())
     } catch (error) {
@@ -136,7 +151,7 @@ export default function ReviewsPage() {
     setIsBulkProcessing(true)
     try {
       await bulkToggleVisibility({
-        reviewIds: Array.from(selectedIds),
+        reviewIds: Array.from(selectedIds) as Id<"rentalReviews">[],
         isPublic,
       })
       toast.success(
@@ -155,7 +170,7 @@ export default function ReviewsPage() {
 
     setIsBulkProcessing(true)
     try {
-      await bulkMarkModerated({ reviewIds: Array.from(selectedIds) })
+      await bulkMarkModerated({ reviewIds: Array.from(selectedIds) as Id<"rentalReviews">[] })
       toast.success(`${selectedIds.size} review(s) marked as moderated`)
       setSelectedIds(new Set())
     } catch (error) {
@@ -165,368 +180,249 @@ export default function ReviewsPage() {
     }
   }
 
-  const handleSelectAll = () => {
-    if (selectedIds.size === reviews.length) {
-      setSelectedIds(new Set())
-    } else {
-      setSelectedIds(new Set(reviews.map((r: any) => r._id)))
-    }
-  }
-
-  const handleSelectOne = (id: Id<"rentalReviews">) => {
-    const newSelected = new Set(selectedIds)
-    if (newSelected.has(id)) {
-      newSelected.delete(id)
-    } else {
-      newSelected.add(id)
-    }
-    setSelectedIds(newSelected)
-  }
-
   const handlePageChange = (page: number) => {
     setCurrentPage(page)
     setCursor(undefined)
   }
 
-  const renderStars = (rating: number) => (
-    <div className="flex items-center gap-1">
-      {[1, 2, 3, 4, 5].map((star) => (
-        <Star
-          className={`size-4 ${
-            star <= rating ? "fill-yellow-400 text-yellow-400" : "text-gray-300"
-          }`}
-          key={star}
-        />
-      ))}
-      <span className="ml-1 font-medium text-sm">{rating}</span>
-    </div>
-  )
+  const columns: Column<any>[] = [
+    {
+      key: "status",
+      header: "Status",
+      cell: (row) => <StatusBadge status={getReviewStatus(row)} />,
+    },
+    {
+      key: "rating",
+      header: "Rating",
+      cell: (row) => <RatingStars rating={row.rating} />,
+      sortable: true,
+      sortValue: (row) => row.rating,
+    },
+    {
+      key: "title",
+      header: "Title",
+      cell: (row) => (
+        <span className="inline-block max-w-[200px] truncate font-medium" title={row.title}>
+          {row.title}
+        </span>
+      ),
+    },
+    {
+      key: "reviewer",
+      header: "Reviewer",
+      cell: (row) => row.reviewer?.name || "Unknown",
+    },
+    {
+      key: "vehicle",
+      header: "Vehicle",
+      cell: (row) => (
+        <span>
+          {row.vehicle?.year} {row.vehicle?.make} {row.vehicle?.model}
+        </span>
+      ),
+    },
+    {
+      key: "date",
+      header: "Date",
+      cell: (row) => new Date(row.createdAt).toLocaleDateString(),
+      sortable: true,
+      sortValue: (row) => new Date(row.createdAt).getTime(),
+    },
+    {
+      key: "actions",
+      header: "",
+      cell: (row) => {
+        const isProcessing = processingId === row._id
+        const VisibilityIcon = row.isPublic ? EyeOff : Eye
+        return (
+          <div className="flex gap-1">
+            {!row.isModerated && (
+              <Button
+                disabled={isProcessing}
+                onClick={() => handleMarkModerated(row._id)}
+                size="sm"
+                title="Mark Moderated"
+                variant="outline"
+              >
+                {isProcessing ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <CheckCircle className="size-4" />
+                )}
+              </Button>
+            )}
+            <Button
+              disabled={isProcessing}
+              onClick={() => handleToggleVisibility(row._id, row.isPublic)}
+              size="sm"
+              title={row.isPublic ? "Hide" : "Show"}
+              variant="outline"
+            >
+              {isProcessing ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <VisibilityIcon className="size-4" />
+              )}
+            </Button>
+            <Button
+              disabled={isProcessing}
+              onClick={() => handleDelete(row._id)}
+              size="sm"
+              title="Delete"
+              variant="destructive"
+            >
+              {isProcessing ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Trash2 className="size-4" />
+              )}
+            </Button>
+          </div>
+        )
+      },
+    },
+  ]
+
+  let visibilityFilterValue: string | undefined
+  if (isPublicFilter === undefined) visibilityFilterValue = undefined
+  else visibilityFilterValue = isPublicFilter ? "public" : "hidden"
+
+  let moderationFilterValue: string | undefined
+  if (isModeratedFilter === undefined) moderationFilterValue = undefined
+  else moderationFilterValue = isModeratedFilter ? "moderated" : "unmoderated"
+
+  const filters: FilterConfig[] = [
+    {
+      key: "visibility",
+      label: "Visibility",
+      options: [
+        { label: "Public", value: "public" },
+        { label: "Hidden", value: "hidden" },
+      ],
+      value: visibilityFilterValue,
+      onChange: (value) => setIsPublicFilter(value === undefined ? undefined : value === "public"),
+    },
+    {
+      key: "moderation",
+      label: "Moderation",
+      options: [
+        { label: "Moderated", value: "moderated" },
+        { label: "Unmoderated", value: "unmoderated" },
+      ],
+      value: moderationFilterValue,
+      onChange: (value) =>
+        setIsModeratedFilter(value === undefined ? undefined : value === "moderated"),
+    },
+  ]
 
   const totalPages = Math.ceil((reviews.length || 0) / 50) || 1
 
-  if (result === undefined) {
-    return (
-      <div className="flex items-center justify-center p-12">
-        <div className="text-muted-foreground">Loading reviews...</div>
-      </div>
-    )
-  }
-
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-bold text-3xl">Reviews Management</h1>
-        <p className="mt-2 text-muted-foreground">Moderate and manage platform reviews</p>
-      </div>
+      <PageHeader description="Moderate and manage platform reviews" title="Reviews Management" />
 
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>All Reviews</CardTitle>
-              <CardDescription>
-                {reviews.length} review(s) found
-                {hasMore && " (showing first page)"}
-              </CardDescription>
-            </div>
-            <div className="flex gap-2">
-              <div className="relative">
-                <Search className="absolute top-1/2 left-2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  className="w-64 pl-8"
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search reviews..."
-                  value={searchQuery}
-                />
-              </div>
-              <Select
-                onValueChange={(value) => {
-                  setIsPublicFilter(value === "all" ? undefined : value === "public")
-                }}
-                value={isPublicFilter === undefined ? "all" : isPublicFilter ? "public" : "hidden"}
-              >
-                <SelectTrigger className="w-40">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Visibility</SelectItem>
-                  <SelectItem value="public">Public</SelectItem>
-                  <SelectItem value="hidden">Hidden</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select
-                onValueChange={(value) => {
-                  setIsModeratedFilter(value === "all" ? undefined : value === "moderated")
-                }}
-                value={
-                  isModeratedFilter === undefined
-                    ? "all"
-                    : isModeratedFilter
-                      ? "moderated"
-                      : "unmoderated"
-                }
-              >
-                <SelectTrigger className="w-40">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="moderated">Moderated</SelectItem>
-                  <SelectItem value="unmoderated">Unmoderated</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+          <CardTitle>All Reviews</CardTitle>
+          <CardDescription>
+            {reviews.length} review(s) found
+            {hasMore && " (showing first page)"}
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          {selectedIds.size > 0 && (
-            <div className="mb-4 flex items-center justify-between rounded-lg border bg-muted p-3">
-              <span className="font-medium text-sm">{selectedIds.size} review(s) selected</span>
-              <div className="flex gap-2">
-                <Button
-                  disabled={isBulkProcessing}
-                  onClick={handleBulkMarkModerated}
-                  size="sm"
-                  variant="outline"
-                >
-                  {isBulkProcessing ? (
-                    <Loader2 className="mr-2 size-4 animate-spin" />
-                  ) : (
-                    <CheckCircle className="mr-2 size-4" />
-                  )}
-                  Mark Moderated
-                </Button>
-                <Button
-                  disabled={isBulkProcessing}
-                  onClick={() => handleBulkToggleVisibility(true)}
-                  size="sm"
-                  variant="outline"
-                >
-                  <Eye className="mr-2 size-4" />
-                  Show Selected
-                </Button>
-                <Button
-                  disabled={isBulkProcessing}
-                  onClick={() => handleBulkToggleVisibility(false)}
-                  size="sm"
-                  variant="outline"
-                >
-                  <EyeOff className="mr-2 size-4" />
-                  Hide Selected
-                </Button>
-                <Button
-                  disabled={isBulkProcessing}
-                  onClick={handleBulkDelete}
-                  size="sm"
-                  variant="destructive"
-                >
-                  {isBulkProcessing ? (
-                    <Loader2 className="mr-2 size-4 animate-spin" />
-                  ) : (
-                    <Trash2 className="mr-2 size-4" />
-                  )}
-                  Delete Selected
-                </Button>
-                <Button onClick={() => setSelectedIds(new Set())} size="sm" variant="outline">
-                  Clear Selection
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {reviews && reviews.length > 0 ? (
-            <>
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 border-b pb-2">
-                  <Checkbox
-                    checked={selectedIds.size === reviews.length && reviews.length > 0}
-                    onCheckedChange={handleSelectAll}
-                  />
-                  <span className="text-muted-foreground text-sm">Select all</span>
-                </div>
-                {reviews.map((review: any) => {
-                  const isProcessing = processingId === review._id
-                  const isSelected = selectedIds.has(review._id)
-
-                  return (
-                    <Card className="overflow-hidden" key={review._id}>
-                      <CardContent className="p-6">
-                        <div className="flex gap-4">
-                          <div className="flex items-start pt-1">
-                            <Checkbox
-                              checked={isSelected}
-                              onCheckedChange={() => handleSelectOne(review._id)}
-                            />
-                          </div>
-                          <div className="flex flex-1 items-start justify-between">
-                            <div className="flex-1 space-y-4">
-                              <div className="flex items-start gap-4">
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-2">
-                                    {getStatusBadge(review)}
-                                    <h3 className="font-bold text-lg">{review.title}</h3>
-                                  </div>
-                                  <p className="mt-1 line-clamp-2 text-muted-foreground">
-                                    {review.review}
-                                  </p>
-                                  <div className="mt-2">{renderStars(review.rating)}</div>
-                                </div>
-                              </div>
-
-                              <div className="grid gap-4 md:grid-cols-2">
-                                <div>
-                                  <p className="text-muted-foreground text-sm">
-                                    <strong>Reviewer:</strong> {review.reviewer?.name || "Unknown"}
-                                  </p>
-                                  <p className="text-muted-foreground text-sm">
-                                    <strong>Reviewed:</strong> {review.reviewed?.name || "Unknown"}
-                                  </p>
-                                  <p className="text-muted-foreground text-sm">
-                                    <strong>Type:</strong>{" "}
-                                    {review.reviewType === "renter_to_owner"
-                                      ? "Renter → Owner"
-                                      : "Owner → Renter"}
-                                  </p>
-                                </div>
-                                <div>
-                                  <p className="text-muted-foreground text-sm">
-                                    <strong>Vehicle:</strong> {review.vehicle?.year}{" "}
-                                    {review.vehicle?.make} {review.vehicle?.model}
-                                  </p>
-                                  <p className="text-muted-foreground text-sm">
-                                    <strong>Created:</strong>{" "}
-                                    {new Date(review.createdAt).toLocaleDateString()}
-                                  </p>
-                                  {review.response && (
-                                    <p className="text-muted-foreground text-sm">
-                                      <strong>Has Response:</strong> Yes
-                                    </p>
-                                  )}
-                                </div>
-                              </div>
-
-                              {review.photos && review.photos.length > 0 && (
-                                <div>
-                                  <p className="mb-2 text-muted-foreground text-sm">
-                                    <strong>Photos:</strong> {review.photos.length}
-                                  </p>
-                                  <div className="flex gap-2">
-                                    {review.photos.slice(0, 3).map((photo: string, idx: number) => (
-                                      <img
-                                        alt={`Review photo ${idx + 1}`}
-                                        className="h-20 w-20 rounded-lg object-cover"
-                                        key={idx}
-                                        src={photo}
-                                      />
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                            <div className="ml-4 flex flex-col gap-2">
-                              {!review.isModerated && (
-                                <Button
-                                  disabled={isProcessing}
-                                  onClick={() => handleMarkModerated(review._id)}
-                                  size="sm"
-                                  variant="outline"
-                                >
-                                  {isProcessing ? (
-                                    <Loader2 className="size-4 animate-spin" />
-                                  ) : (
-                                    <>
-                                      <CheckCircle className="mr-2 size-4" />
-                                      Mark Moderated
-                                    </>
-                                  )}
-                                </Button>
-                              )}
-                              <Button
-                                disabled={isProcessing}
-                                onClick={() => handleToggleVisibility(review._id, review.isPublic)}
-                                size="sm"
-                                variant={review.isPublic ? "outline" : "default"}
-                              >
-                                {isProcessing ? (
-                                  <Loader2 className="size-4 animate-spin" />
-                                ) : review.isPublic ? (
-                                  <>
-                                    <EyeOff className="mr-2 size-4" />
-                                    Hide
-                                  </>
-                                ) : (
-                                  <>
-                                    <Eye className="mr-2 size-4" />
-                                    Show
-                                  </>
-                                )}
-                              </Button>
-                              <Button
-                                disabled={isProcessing}
-                                onClick={() => handleDelete(review._id)}
-                                size="sm"
-                                variant="destructive"
-                              >
-                                {isProcessing ? (
-                                  <Loader2 className="size-4 animate-spin" />
-                                ) : (
-                                  <>
-                                    <Trash2 className="mr-2 size-4" />
-                                    Delete
-                                  </>
-                                )}
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
+          <DataTable
+            bulkActions={
+              <DataTableBulkActions
+                actions={[
+                  {
+                    label: isBulkProcessing ? "Processing..." : "Mark Moderated",
+                    icon: isBulkProcessing ? Loader2 : CheckCircle,
+                    onClick: handleBulkMarkModerated,
+                  },
+                  {
+                    label: "Show",
+                    icon: Eye,
+                    onClick: () => handleBulkToggleVisibility(true),
+                  },
+                  {
+                    label: "Hide",
+                    icon: EyeOff,
+                    onClick: () => handleBulkToggleVisibility(false),
+                  },
+                  {
+                    label: "Delete",
+                    icon: Trash2,
+                    variant: "destructive",
+                    onClick: handleBulkDelete,
+                  },
+                ]}
+              />
+            }
+            columns={columns}
+            data={reviews}
+            emptyMessage="No reviews found"
+            getRowId={(row) => row._id}
+            isLoading={result === undefined}
+            onSelectionChange={setSelectedIds}
+            pagination={
+              hasMore ? (
+                <Pagination
+                  currentPage={currentPage}
+                  hasMore={hasMore}
+                  onLoadMore={() => {
+                    if (result?.nextCursor) {
+                      setCursor(result.nextCursor)
+                      setCurrentPage(currentPage + 1)
+                    }
+                  }}
+                  onPageChange={handlePageChange}
+                  totalPages={totalPages}
+                />
+              ) : undefined
+            }
+            selectedIds={selectedIds}
+            toolbar={
+              <DataTableToolbar
+                filters={filters}
+                onExport={() =>
+                  exportToCSV(
+                    reviews,
+                    [
+                      {
+                        key: "status",
+                        header: "Status",
+                        value: (r) => getReviewStatus(r),
+                      },
+                      { key: "rating", header: "Rating", value: (r) => r.rating },
+                      { key: "title", header: "Title", value: (r) => r.title ?? "" },
+                      {
+                        key: "reviewer",
+                        header: "Reviewer",
+                        value: (r) => r.reviewer?.name ?? "Unknown",
+                      },
+                      {
+                        key: "vehicle",
+                        header: "Vehicle",
+                        value: (r) =>
+                          `${r.vehicle?.year ?? ""} ${r.vehicle?.make ?? ""} ${r.vehicle?.model ?? ""}`.trim(),
+                      },
+                      {
+                        key: "date",
+                        header: "Date",
+                        value: (r) => new Date(r.createdAt).toLocaleDateString(),
+                      },
+                    ],
+                    "reviews"
                   )
-                })}
-              </div>
-              {hasMore && (
-                <div className="mt-4">
-                  <Pagination
-                    currentPage={currentPage}
-                    hasMore={hasMore}
-                    onLoadMore={() => {
-                      if (result?.nextCursor) {
-                        setCursor(result.nextCursor)
-                        setCurrentPage(currentPage + 1)
-                      }
-                    }}
-                    onPageChange={handlePageChange}
-                    totalPages={totalPages}
-                  />
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="py-12 text-center text-muted-foreground">
-              <Star className="mx-auto mb-4 size-12 opacity-50" />
-              <p>No reviews found</p>
-            </div>
-          )}
+                }
+                onSearchChange={setSearchQuery}
+                search={searchQuery}
+                searchPlaceholder="Search reviews..."
+              />
+            }
+          />
         </CardContent>
       </Card>
     </div>
   )
-
-  function getStatusBadge(review: any) {
-    if (!review.isPublic) {
-      return <Badge variant="secondary">Hidden</Badge>
-    }
-    if (!review.isModerated) {
-      return (
-        <Badge className="bg-yellow-600" variant="default">
-          Unmoderated
-        </Badge>
-      )
-    }
-    return (
-      <Badge className="bg-green-600" variant="default">
-        Public
-      </Badge>
-    )
-  }
 }

@@ -9,6 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu"
+import { Sheet, SheetContent, SheetTitle } from "@workspace/ui/components/sheet"
 import { cn } from "@workspace/ui/lib/utils"
 import {
   AlertTriangle,
@@ -19,6 +20,7 @@ import {
   LogOut,
   Mail,
   MapPin,
+  Menu,
   MessageSquare,
   Settings,
   Shield,
@@ -29,6 +31,7 @@ import {
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { useEffect, useState } from "react"
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -37,7 +40,6 @@ const navigation = [
   { name: "Vehicles", href: "/vehicles", icon: Car },
   { name: "Reviews", href: "/reviews", icon: Star },
   { name: "User Management", href: "/users", icon: Users },
-  { name: "Vehicle Approvals", href: "/vehicles/pending", icon: Car },
   { name: "Track Management", href: "/tracks", icon: MapPin },
   { name: "Disputes", href: "/disputes", icon: Shield },
   { name: "Damage Claims", href: "/damage-invoices", icon: AlertTriangle },
@@ -46,7 +48,7 @@ const navigation = [
   { name: "Platform Settings", href: "/settings", icon: Settings },
 ]
 
-export function AdminSidebar() {
+function SidebarContent() {
   const pathname = usePathname()
   const { signOut } = useClerk()
   const { user } = useUser()
@@ -56,7 +58,7 @@ export function AdminSidebar() {
   }
 
   return (
-    <div className="flex h-full w-64 flex-col border-r bg-card">
+    <div className="flex h-full flex-col">
       <div className="flex h-16 items-center border-b px-6">
         <div className="flex items-center gap-2">
           <Image
@@ -70,7 +72,7 @@ export function AdminSidebar() {
         </div>
       </div>
 
-      <nav className="flex-1 space-y-1 p-4">
+      <nav className="flex-1 space-y-1 overflow-y-auto p-4">
         {navigation.map((item) => {
           const isActive = pathname === item.href || pathname?.startsWith(`${item.href}/`)
           return (
@@ -121,5 +123,47 @@ export function AdminSidebar() {
         </DropdownMenu>
       </div>
     </div>
+  )
+}
+
+export function AdminSidebar() {
+  const pathname = usePathname()
+  const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    setOpen(false)
+  }, [pathname])
+
+  return (
+    <>
+      {/* Mobile header bar */}
+      <div className="fixed inset-x-0 top-0 z-40 flex h-14 items-center gap-3 border-b bg-card px-4 md:hidden">
+        <Button onClick={() => setOpen(true)} size="icon" variant="ghost">
+          <Menu className="size-5" />
+          <span className="sr-only">Open menu</span>
+        </Button>
+        <Image
+          alt="Renegade Logo"
+          className="rounded-full"
+          height={28}
+          src="/logo.png"
+          width={28}
+        />
+        <span className="font-bold text-sm">Admin Portal</span>
+      </div>
+
+      {/* Mobile sheet drawer */}
+      <Sheet onOpenChange={setOpen} open={open}>
+        <SheetContent className="w-64 p-0" side="left">
+          <SheetTitle className="sr-only">Navigation</SheetTitle>
+          <SidebarContent />
+        </SheetContent>
+      </Sheet>
+
+      {/* Desktop sidebar */}
+      <div className="hidden h-full w-64 flex-col border-r bg-card md:flex">
+        <SidebarContent />
+      </div>
+    </>
   )
 }

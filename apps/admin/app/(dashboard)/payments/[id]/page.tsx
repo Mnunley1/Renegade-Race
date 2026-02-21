@@ -1,6 +1,5 @@
 "use client"
 
-import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import {
@@ -10,93 +9,557 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@workspace/ui/components/dialog"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
+import { Separator } from "@workspace/ui/components/separator"
 import { Textarea } from "@workspace/ui/components/textarea"
 import { useAction, useQuery } from "convex/react"
+import { format, formatDistanceToNow } from "date-fns"
 import {
-  ArrowLeft,
+  AlertTriangle,
+  ArrowRightLeft,
   Calendar,
   Car,
-  CheckCircle,
   Clock,
+  CreditCard,
   DollarSign,
+  ExternalLink,
+  MapPin,
+  Percent,
+  ReceiptText,
   RefreshCw,
+  Star,
   User,
-  XCircle,
 } from "lucide-react"
-import Link from "next/link"
-import { useParams } from "next/navigation"
+import { useParams, useRouter } from "next/navigation"
 import { useState } from "react"
 import { toast } from "sonner"
+import { DetailPageLayout } from "@/components/detail-page-layout"
+import { LoadingState } from "@/components/loading-state"
+import { StatusBadge } from "@/components/status-badge"
+import { UserAvatar } from "@/components/user-avatar"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
+import { handleErrorWithContext } from "@/lib/error-handler"
 
-export default function PaymentDetailPage() {
-  const params = useParams()
-  const paymentId = params.id as Id<"payments">
-  const payment = useQuery(api.stripe.getPaymentById, { paymentId })
+const formatCurrency = (amount: number) =>
+  new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+  }).format(amount / 100)
+
+type PaymentData = NonNullable<ReturnType<typeof useQuery<typeof api.stripe.getPaymentById>>>
+
+type VehicleWithImages = NonNullable<PaymentData["vehicle"]> & {
+  images?: Array<{ isPrimary: boolean; cardUrl?: string; imageUrl?: string }>
+  track?: { name: string; location?: string }
+}
+
+function SummaryCards({ payment }: { payment: PaymentData }) {
+  const refundedAmount = payment.refundAmount || 0
+  const maxRefundable = payment.amount - refundedAmount
+
+  return (
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <Card>
+        <CardContent className="p-5">
+          <div className="flex items-start justify-between">
+            <p className="font-medium text-muted-foreground text-sm">Total Amount</p>
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-900/50">
+              <DollarSign className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
+            </div>
+          </div>
+          <p className="mt-3 font-bold text-2xl tracking-tight">{formatCurrency(payment.amount)}</p>
+          <p className="mt-1 text-muted-foreground text-xs">
+            {payment.currency?.toUpperCase() || "USD"}
+          </p>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent className="p-5">
+          <div className="flex items-start justify-between">
+            <p className="font-medium text-muted-foreground text-sm">Platform Fee</p>
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/50">
+              <Percent className="h-4 w-4 text-blue-700 dark:text-blue-400" />
+            </div>
+          </div>
+          <p className="mt-3 font-bold text-2xl tracking-tight">
+            {formatCurrency(payment.platformFee)}
+          </p>
+          <p className="mt-1 text-muted-foreground text-xs">
+            {payment.amount > 0
+              ? `${((payment.platformFee / payment.amount) * 100).toFixed(1)}% of total`
+              : "N/A"}
+          </p>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent className="p-5">
+          <div className="flex items-start justify-between">
+            <p className="font-medium text-muted-foreground text-sm">Owner Payout</p>
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-purple-100 dark:bg-purple-900/50">
+              <ArrowRightLeft className="h-4 w-4 text-purple-700 dark:text-purple-400" />
+            </div>
+          </div>
+          <p className="mt-3 font-bold text-2xl tracking-tight">
+            {formatCurrency(payment.ownerAmount)}
+          </p>
+          <p className="mt-1 text-muted-foreground text-xs">After platform fee</p>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent className="p-5">
+          <div className="flex items-start justify-between">
+            <p className="font-medium text-muted-foreground text-sm">Status</p>
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted">
+              <Clock className="h-4 w-4 text-muted-foreground" />
+            </div>
+          </div>
+          <div className="mt-3">
+            <StatusBadge className="text-sm" status={payment.status} />
+          </div>
+          <p className="mt-2 text-muted-foreground text-xs">
+            {refundedAmount > 0
+              ? `${formatCurrency(maxRefundable)} refundable`
+              : `Created ${formatDistanceToNow(payment.createdAt, { addSuffix: true })}`}
+          </p>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+function PaymentBreakdownCard({ payment }: { payment: PaymentData }) {
+  const refundedAmount = payment.refundAmount || 0
+  const netAmount = payment.amount - refundedAmount
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <CreditCard className="h-4 w-4" />
+          Payment Breakdown
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-3">
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Gross Amount</span>
+            <span className="font-medium">{formatCurrency(payment.amount)}</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Platform Fee</span>
+            <span className="font-medium text-blue-600 dark:text-blue-400">
+              -{formatCurrency(payment.platformFee)}
+            </span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Owner Payout</span>
+            <span className="font-medium">{formatCurrency(payment.ownerAmount)}</span>
+          </div>
+          {refundedAmount > 0 && (
+            <>
+              <Separator />
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Refunded</span>
+                <span className="font-medium text-orange-600 dark:text-orange-400">
+                  -{formatCurrency(refundedAmount)}
+                </span>
+              </div>
+              {payment.refundPercentage !== undefined && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Refund %</span>
+                  <span className="font-medium">{payment.refundPercentage}%</span>
+                </div>
+              )}
+            </>
+          )}
+          <Separator />
+          <div className="flex justify-between">
+            <span className="font-semibold">Net Amount</span>
+            <span className="font-bold text-lg">{formatCurrency(netAmount)}</span>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function TransactionDetailsCard({ payment }: { payment: PaymentData }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <ReceiptText className="h-4 w-4" />
+          Transaction Details
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="rounded-lg border p-4">
+            <p className="font-medium text-muted-foreground text-xs uppercase tracking-wider">
+              Created
+            </p>
+            <p className="mt-2 font-semibold">
+              {format(new Date(payment.createdAt), "EEEE, MMMM d, yyyy")}
+            </p>
+            <p className="mt-1 text-muted-foreground text-sm">
+              {format(new Date(payment.createdAt), "h:mm a")}
+            </p>
+          </div>
+          <div className="rounded-lg border p-4">
+            <p className="font-medium text-muted-foreground text-xs uppercase tracking-wider">
+              Last Updated
+            </p>
+            <p className="mt-2 font-semibold">
+              {format(new Date(payment.updatedAt), "EEEE, MMMM d, yyyy")}
+            </p>
+            <p className="mt-1 text-muted-foreground text-sm">
+              {format(new Date(payment.updatedAt), "h:mm a")}
+            </p>
+          </div>
+        </div>
+        <Separator />
+        <div className="space-y-3">
+          {payment.stripePaymentIntentId && (
+            <div className="flex items-start justify-between gap-4 text-sm">
+              <span className="shrink-0 text-muted-foreground">Payment Intent</span>
+              <span className="break-all text-right font-mono text-xs">
+                {payment.stripePaymentIntentId}
+              </span>
+            </div>
+          )}
+          {payment.stripeChargeId && (
+            <div className="flex items-start justify-between gap-4 text-sm">
+              <span className="shrink-0 text-muted-foreground">Charge ID</span>
+              <span className="break-all text-right font-mono text-xs">
+                {payment.stripeChargeId}
+              </span>
+            </div>
+          )}
+          {payment.stripeCheckoutSessionId && (
+            <div className="flex items-start justify-between gap-4 text-sm">
+              <span className="shrink-0 text-muted-foreground">Checkout Session</span>
+              <span className="break-all text-right font-mono text-xs">
+                {payment.stripeCheckoutSessionId}
+              </span>
+            </div>
+          )}
+          {payment.stripeTransferId && (
+            <div className="flex items-start justify-between gap-4 text-sm">
+              <span className="shrink-0 text-muted-foreground">Transfer ID</span>
+              <span className="break-all text-right font-mono text-xs">
+                {payment.stripeTransferId}
+              </span>
+            </div>
+          )}
+          {payment.stripeAccountId && (
+            <div className="flex items-start justify-between gap-4 text-sm">
+              <span className="shrink-0 text-muted-foreground">Connect Account</span>
+              <span className="break-all text-right font-mono text-xs">
+                {payment.stripeAccountId}
+              </span>
+            </div>
+          )}
+          {payment.stripeCustomerId && (
+            <div className="flex items-start justify-between gap-4 text-sm">
+              <span className="shrink-0 text-muted-foreground">Customer ID</span>
+              <span className="break-all text-right font-mono text-xs">
+                {payment.stripeCustomerId}
+              </span>
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function RefundInfoCard({ payment }: { payment: PaymentData }) {
+  if (!(payment.refundAmount || payment.refundReason)) return null
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <RefreshCw className="h-4 w-4" />
+          Refund Information
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {payment.refundAmount && (
+          <div className="rounded-lg border border-orange-200 bg-orange-50 p-4 dark:border-orange-800 dark:bg-orange-950/30">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+              <p className="font-medium text-orange-700 text-sm dark:text-orange-400">
+                {payment.status === "refunded" ? "Fully Refunded" : "Partially Refunded"}
+              </p>
+            </div>
+            <p className="mt-2 font-bold text-lg text-orange-700 dark:text-orange-300">
+              {formatCurrency(payment.refundAmount)}
+            </p>
+            {payment.refundPercentage !== undefined && (
+              <p className="mt-1 text-orange-600 text-xs dark:text-orange-400">
+                {payment.refundPercentage}% of original amount
+              </p>
+            )}
+          </div>
+        )}
+        {payment.refundPolicy && (
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Refund Policy</span>
+            <StatusBadge status={payment.refundPolicy} />
+          </div>
+        )}
+        {payment.refundReason && (
+          <div className="rounded-lg bg-muted/50 p-4">
+            <p className="mb-1 font-medium text-muted-foreground text-xs uppercase tracking-wider">
+              Refund Reason
+            </p>
+            <p className="whitespace-pre-wrap text-sm leading-relaxed">{payment.refundReason}</p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function FailureInfoCard({ payment }: { payment: PaymentData }) {
+  if (!payment.failureReason) return null
+
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-950/30">
+          <p className="mb-1 font-medium text-red-700 text-xs uppercase tracking-wider dark:text-red-400">
+            Failure Reason
+          </p>
+          <p className="whitespace-pre-wrap text-red-700 text-sm leading-relaxed dark:text-red-300">
+            {payment.failureReason}
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function ReservationCard({ payment }: { payment: PaymentData }) {
+  const router = useRouter()
+  if (!payment.reservation) return null
+  const reservation = payment.reservation
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Calendar className="h-4 w-4" />
+          Reservation
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex items-center justify-between">
+          <StatusBadge status={reservation.status} />
+          <span className="font-mono text-muted-foreground text-xs">
+            ...{reservation._id.slice(-8)}
+          </span>
+        </div>
+        <Separator />
+        <div className="space-y-2 text-sm">
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Dates</span>
+            <span className="font-medium">
+              {format(new Date(reservation.startDate), "MMM d")} -{" "}
+              {format(new Date(reservation.endDate), "MMM d, yyyy")}
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Duration</span>
+            <span className="font-medium">
+              {reservation.totalDays} {reservation.totalDays === 1 ? "day" : "days"}
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Total</span>
+            <span className="font-medium">{formatCurrency(reservation.totalAmount)}</span>
+          </div>
+        </div>
+        <Button
+          className="w-full"
+          onClick={() => router.push(`/reservations/${reservation._id}`)}
+          size="sm"
+          variant="outline"
+        >
+          <ExternalLink className="mr-2 h-3.5 w-3.5" />
+          View Reservation
+        </Button>
+      </CardContent>
+    </Card>
+  )
+}
+
+function VehicleCard({ payment }: { payment: PaymentData }) {
+  const router = useRouter()
+  if (!payment.vehicle) return null
+  const vehicleWithImages = payment.vehicle as VehicleWithImages
+  const primaryImage =
+    vehicleWithImages.images?.find((img) => img.isPrimary) || vehicleWithImages.images?.[0]
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Car className="h-4 w-4" />
+          Vehicle
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {primaryImage && (
+          <img
+            alt={`${payment.vehicle.make} ${payment.vehicle.model}`}
+            className="h-40 w-full rounded-lg object-cover"
+            src={primaryImage.cardUrl || primaryImage.imageUrl}
+          />
+        )}
+        <div>
+          <p className="font-semibold">
+            {payment.vehicle.year} {payment.vehicle.make} {payment.vehicle.model}
+          </p>
+          {vehicleWithImages.track && (
+            <div className="mt-1 flex items-center gap-1 text-muted-foreground text-sm">
+              <MapPin className="h-3.5 w-3.5" />
+              <span>{vehicleWithImages.track.name}</span>
+            </div>
+          )}
+        </div>
+        <Button
+          className="w-full"
+          onClick={() => router.push(`/vehicles/${payment.vehicle?._id}`)}
+          size="sm"
+          variant="outline"
+        >
+          <ExternalLink className="mr-2 h-3.5 w-3.5" />
+          View Vehicle
+        </Button>
+      </CardContent>
+    </Card>
+  )
+}
+
+function UserCard({
+  user,
+  label,
+  badgeLabel,
+}: {
+  user: PaymentData["renter"] | PaymentData["owner"]
+  label: string
+  badgeLabel: string
+}) {
+  const router = useRouter()
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <User className="h-4 w-4" />
+          {label}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex items-center gap-2">
+          <UserAvatar email={user?.email} name={user?.name} />
+          <span className="ml-auto rounded border px-1.5 py-0 font-medium text-[10px] text-muted-foreground">
+            {badgeLabel}
+          </span>
+        </div>
+        {user?.phone && <p className="text-muted-foreground text-sm">{user.phone}</p>}
+        {user?.rating && (
+          <div className="flex items-center gap-1.5 text-sm">
+            <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+            <span className="font-medium">{user.rating}</span>
+            <span className="text-muted-foreground">rating</span>
+          </div>
+        )}
+        {user?._id && (
+          <Button
+            className="w-full"
+            onClick={() => router.push(`/users/${user.externalId}`)}
+            size="sm"
+            variant="outline"
+          >
+            <ExternalLink className="mr-2 h-3.5 w-3.5" />
+            View Profile
+          </Button>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function MetadataCard({ payment }: { payment: PaymentData }) {
+  if (!payment.metadata || Object.keys(payment.metadata).length === 0) return null
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Booking Metadata</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-2 text-sm">
+          {payment.metadata.vehicleId && (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Vehicle ID</span>
+              <span className="font-mono text-xs">{payment.metadata.vehicleId}</span>
+            </div>
+          )}
+          {payment.metadata.startDate && (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Start Date</span>
+              <span className="font-medium">{payment.metadata.startDate}</span>
+            </div>
+          )}
+          {payment.metadata.endDate && (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">End Date</span>
+              <span className="font-medium">{payment.metadata.endDate}</span>
+            </div>
+          )}
+          {payment.metadata.totalDays && (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Total Days</span>
+              <span className="font-medium">{payment.metadata.totalDays}</span>
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function RefundDialog({
+  payment,
+  open,
+  onOpenChange,
+}: {
+  payment: PaymentData
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
   const initiateRefund = useAction(api.admin.initiateRefund)
-
-  const [refundDialogOpen, setRefundDialogOpen] = useState(false)
   const [refundAmount, setRefundAmount] = useState("")
   const [refundReason, setRefundReason] = useState("")
   const [isProcessing, setIsProcessing] = useState(false)
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "pending":
-        return (
-          <Badge className="bg-yellow-600" variant="default">
-            <Clock className="mr-1 size-3" />
-            Pending
-          </Badge>
-        )
-      case "succeeded":
-        return (
-          <Badge className="bg-green-600" variant="default">
-            <CheckCircle className="mr-1 size-3" />
-            Succeeded
-          </Badge>
-        )
-      case "failed":
-        return (
-          <Badge variant="destructive">
-            <XCircle className="mr-1 size-3" />
-            Failed
-          </Badge>
-        )
-      case "refunded":
-        return (
-          <Badge variant="secondary">
-            <RefreshCw className="mr-1 size-3" />
-            Refunded
-          </Badge>
-        )
-      default:
-        return <Badge>{status}</Badge>
-    }
-  }
-
-  const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      minimumFractionDigits: 2,
-    }).format(amount / 100)
+  const maxRefundable = payment.amount - (payment.refundAmount || 0)
 
   const handleRefund = async () => {
-    if (!payment) return
-
     const amountInCents = Math.round(Number.parseFloat(refundAmount) * 100)
     if (Number.isNaN(amountInCents) || amountInCents <= 0) {
       toast.error("Please enter a valid refund amount")
       return
     }
 
-    const maxRefundable = payment.amount - (payment.refundAmount || 0)
     if (amountInCents > maxRefundable) {
       toast.error(`Refund amount cannot exceed ${formatCurrency(maxRefundable)}`)
       return
@@ -110,359 +573,164 @@ export default function PaymentDetailPage() {
     setIsProcessing(true)
     try {
       await initiateRefund({
-        paymentId,
+        paymentId: payment._id,
         amount: amountInCents,
         reason: refundReason,
       })
       toast.success("Refund processed successfully")
-      setRefundDialogOpen(false)
+      onOpenChange(false)
       setRefundAmount("")
       setRefundReason("")
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to process refund")
+      handleErrorWithContext(error, {
+        action: "process refund",
+        entity: "payment",
+      })
     } finally {
       setIsProcessing(false)
     }
   }
 
-  const canRefund =
-    payment && payment.status === "succeeded" && payment.amount - (payment.refundAmount || 0) > 0
+  const handleFullRefund = () => {
+    setRefundAmount((maxRefundable / 100).toFixed(2))
+  }
+
+  return (
+    <Dialog onOpenChange={onOpenChange} open={open}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Process Refund</DialogTitle>
+          <DialogDescription>
+            Issue a full or partial refund for this payment. Maximum refundable:{" "}
+            {formatCurrency(maxRefundable)}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="refund-amount">Refund Amount (USD)</Label>
+              <Button
+                className="h-auto px-2 py-0.5 text-xs"
+                disabled={isProcessing}
+                onClick={handleFullRefund}
+                type="button"
+                variant="outline"
+              >
+                Full Refund
+              </Button>
+            </div>
+            <Input
+              disabled={isProcessing}
+              id="refund-amount"
+              max={(maxRefundable / 100).toFixed(2)}
+              min="0.01"
+              onChange={(e) => setRefundAmount(e.target.value)}
+              placeholder="0.00"
+              step="0.01"
+              type="number"
+              value={refundAmount}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="refund-reason">Reason for Refund</Label>
+            <Textarea
+              disabled={isProcessing}
+              id="refund-reason"
+              onChange={(e) => setRefundReason(e.target.value)}
+              placeholder="Describe the reason for this refund..."
+              rows={3}
+              value={refundReason}
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button disabled={isProcessing} onClick={() => onOpenChange(false)} variant="outline">
+            Cancel
+          </Button>
+          <Button disabled={isProcessing} onClick={handleRefund} variant="destructive">
+            {isProcessing ? "Processing..." : "Process Refund"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+export default function PaymentDetailPage() {
+  const params = useParams()
+  const paymentId = params.id as Id<"payments">
+  const payment = useQuery(api.stripe.getPaymentById, { paymentId })
+
+  const [refundDialogOpen, setRefundDialogOpen] = useState(false)
 
   if (payment === undefined) {
-    return (
-      <div className="flex items-center justify-center p-12">
-        <div className="text-muted-foreground">Loading payment...</div>
-      </div>
-    )
+    return <LoadingState message="Loading payment details..." />
   }
 
   if (payment === null) {
     return (
-      <div className="space-y-6">
-        <Link href="/payments">
-          <Button variant="ghost">
-            <ArrowLeft className="mr-2 size-4" />
-            Back to Payments
-          </Button>
-        </Link>
-        <Card>
-          <CardContent className="p-12 text-center text-muted-foreground">
-            Payment not found
-          </CardContent>
-        </Card>
-      </div>
+      <DetailPageLayout title="Payment Not Found">
+        <p className="text-muted-foreground">This payment could not be found.</p>
+      </DetailPageLayout>
     )
   }
 
-  const vehicleWithImages = payment.vehicle as
-    | (typeof payment.vehicle & {
-        images?: Array<{ isPrimary: boolean; cardUrl?: string; imageUrl?: string }>
-        track?: { name: string }
-      })
-    | null
-  const primaryImage =
-    vehicleWithImages?.images?.find((img) => img.isPrimary) || vehicleWithImages?.images?.[0]
+  const canRefund =
+    payment.status === "succeeded" && payment.amount - (payment.refundAmount || 0) > 0
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <Link href="/payments">
-            <Button className="mb-4" variant="ghost">
-              <ArrowLeft className="mr-2 size-4" />
-              Back to Payments
-            </Button>
-          </Link>
-          <h1 className="font-bold text-3xl">Payment Details</h1>
-          <p className="mt-2 text-muted-foreground">Payment ID: {payment._id}</p>
+    <DetailPageLayout
+      actions={
+        canRefund ? (
+          <Button onClick={() => setRefundDialogOpen(true)} variant="destructive">
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Process Refund
+          </Button>
+        ) : undefined
+      }
+      badges={
+        <div className="flex items-center gap-2">
+          <StatusBadge status={payment.status} />
+          {payment.refundPolicy && <StatusBadge status={payment.refundPolicy} />}
         </div>
-        <div className="flex items-center gap-3">
-          {getStatusBadge(payment.status)}
-          {canRefund && (
-            <Dialog onOpenChange={setRefundDialogOpen} open={refundDialogOpen}>
-              <DialogTrigger asChild>
-                <Button variant="destructive">
-                  <RefreshCw className="mr-2 size-4" />
-                  Process Refund
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Process Refund</DialogTitle>
-                  <DialogDescription>
-                    Issue a full or partial refund for this payment. Maximum refundable:{" "}
-                    {formatCurrency(payment.amount - (payment.refundAmount || 0))}
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="refund-amount">Refund Amount (USD)</Label>
-                    <Input
-                      disabled={isProcessing}
-                      id="refund-amount"
-                      max={(payment.amount - (payment.refundAmount || 0)) / 100}
-                      min="0.01"
-                      onChange={(e) => setRefundAmount(e.target.value)}
-                      placeholder="0.00"
-                      step="0.01"
-                      type="number"
-                      value={refundAmount}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="refund-reason">Reason for Refund</Label>
-                    <Textarea
-                      disabled={isProcessing}
-                      id="refund-reason"
-                      onChange={(e) => setRefundReason(e.target.value)}
-                      placeholder="Enter reason for refund..."
-                      rows={3}
-                      value={refundReason}
-                    />
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button
-                    disabled={isProcessing}
-                    onClick={() => setRefundDialogOpen(false)}
-                    variant="outline"
-                  >
-                    Cancel
-                  </Button>
-                  <Button disabled={isProcessing} onClick={handleRefund} variant="destructive">
-                    {isProcessing ? "Processing..." : "Process Refund"}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          )}
+      }
+      title={`Payment ${payment._id.slice(-8).toUpperCase()}`}
+    >
+      <SummaryCards payment={payment} />
+
+      <div className="mt-6 grid gap-6 lg:grid-cols-3">
+        <div className="space-y-6 lg:col-span-2">
+          <PaymentBreakdownCard payment={payment} />
+          <TransactionDetailsCard payment={payment} />
+          <RefundInfoCard payment={payment} />
+          <FailureInfoCard payment={payment} />
         </div>
-      </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* Payment Information */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <DollarSign className="size-5" />
-              <CardTitle>Payment Information</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <p className="text-muted-foreground text-sm">Amount</p>
-              <p className="font-semibold text-2xl">{formatCurrency(payment.amount || 0)}</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground text-sm">Status</p>
-              <div className="mt-1">{getStatusBadge(payment.status)}</div>
-            </div>
-            {payment.stripePaymentIntentId && (
-              <div>
-                <p className="text-muted-foreground text-sm">Stripe Payment Intent ID</p>
-                <p className="break-all font-mono text-sm">{payment.stripePaymentIntentId}</p>
-              </div>
-            )}
-            {payment.stripeCheckoutSessionId && (
-              <div>
-                <p className="text-muted-foreground text-sm">Stripe Checkout Session ID</p>
-                <p className="break-all font-mono text-sm">{payment.stripeCheckoutSessionId}</p>
-              </div>
-            )}
-            <div>
-              <p className="text-muted-foreground text-sm">Created</p>
-              <p className="font-medium">{new Date(payment.createdAt).toLocaleString()}</p>
-            </div>
-            {payment.updatedAt && (
-              <div>
-                <p className="text-muted-foreground text-sm">Last Updated</p>
-                <p className="font-medium">{new Date(payment.updatedAt).toLocaleString()}</p>
-              </div>
-            )}
-            {(payment as typeof payment & { refundedAt?: number }).refundedAt && (
-              <div>
-                <p className="text-muted-foreground text-sm">Refunded At</p>
-                <p className="font-medium">
-                  {new Date(
-                    (payment as typeof payment & { refundedAt?: number }).refundedAt!
-                  ).toLocaleString()}
-                </p>
-              </div>
-            )}
-            {payment.refundAmount && (
-              <div>
-                <p className="text-muted-foreground text-sm">Refund Amount</p>
-                <p className="font-semibold text-lg text-orange-600">
-                  {formatCurrency(payment.refundAmount)}
-                </p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <div className="space-y-6">
+          <ReservationCard payment={payment} />
+          <VehicleCard payment={payment} />
+          <UserCard badgeLabel="driver" label="Renter" user={payment.renter} />
+          <UserCard badgeLabel="host" label="Owner" user={payment.owner} />
+          <MetadataCard payment={payment} />
 
-        {/* Reservation Information */}
-        {payment.reservation && (
           <Card>
             <CardHeader>
-              <div className="flex items-center gap-2">
-                <Calendar className="size-5" />
-                <CardTitle>Reservation Information</CardTitle>
-              </div>
+              <CardTitle className="text-base">Payment ID</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <p className="text-muted-foreground text-sm">Reservation ID</p>
-                <Link href={`/reservations/${payment.reservation._id}`}>
-                  <Button className="h-auto p-0 font-mono text-sm" variant="link">
-                    {payment.reservation._id}
-                  </Button>
-                </Link>
-              </div>
-              <div>
-                <p className="text-muted-foreground text-sm">Status</p>
-                <Badge variant="outline">{payment.reservation.status}</Badge>
-              </div>
-              <div>
-                <p className="text-muted-foreground text-sm">Dates</p>
-                <p className="font-medium">
-                  {new Date(payment.reservation.startDate).toLocaleDateString()} -{" "}
-                  {new Date(payment.reservation.endDate).toLocaleDateString()}
-                </p>
-              </div>
-              <div>
-                <p className="text-muted-foreground text-sm">Total Days</p>
-                <p className="font-medium">{payment.reservation.totalDays} days</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground text-sm">Total Amount</p>
-                <p className="font-semibold text-lg">
-                  {formatCurrency(payment.reservation.totalAmount)}
-                </p>
-              </div>
+            <CardContent>
+              <p className="break-all font-mono text-muted-foreground text-xs">{payment._id}</p>
             </CardContent>
           </Card>
-        )}
-
-        {/* Renter Information */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <User className="size-5" />
-              <CardTitle>Renter Information</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <p className="font-medium">{payment.renter?.name || "Unknown"}</p>
-              <p className="text-muted-foreground text-sm">{payment.renter?.email || "N/A"}</p>
-              {payment.renter?.phone && (
-                <p className="text-muted-foreground text-sm">Phone: {payment.renter.phone}</p>
-              )}
-            </div>
-            {payment.renter?.rating && (
-              <div>
-                <p className="text-muted-foreground text-sm">Rating</p>
-                <p className="font-medium">{payment.renter.rating}/5</p>
-              </div>
-            )}
-            {payment.renter?._id && (
-              <Link href={`/users/${payment.renter._id}`}>
-                <Button size="sm" variant="outline">
-                  View User Profile
-                </Button>
-              </Link>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Owner Information */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <User className="size-5" />
-              <CardTitle>Owner Information</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <p className="font-medium">{payment.owner?.name || "Unknown"}</p>
-              <p className="text-muted-foreground text-sm">{payment.owner?.email || "N/A"}</p>
-              {payment.owner?.phone && (
-                <p className="text-muted-foreground text-sm">Phone: {payment.owner.phone}</p>
-              )}
-            </div>
-            {payment.owner?.rating && (
-              <div>
-                <p className="text-muted-foreground text-sm">Rating</p>
-                <p className="font-medium">{payment.owner.rating}/5</p>
-              </div>
-            )}
-            {payment.owner?._id && (
-              <Link href={`/users/${payment.owner._id}`}>
-                <Button size="sm" variant="outline">
-                  View User Profile
-                </Button>
-              </Link>
-            )}
-          </CardContent>
-        </Card>
+        </div>
       </div>
 
-      {/* Vehicle Information */}
-      {payment.vehicle && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Car className="size-5" />
-              <CardTitle>Vehicle Information</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="flex gap-6">
-              {primaryImage && (
-                <div className="flex-shrink-0">
-                  <img
-                    alt={`${payment.vehicle.make} ${payment.vehicle.model}`}
-                    className="h-32 w-48 rounded-lg object-cover"
-                    src={primaryImage.cardUrl || primaryImage.imageUrl}
-                  />
-                </div>
-              )}
-              <div className="flex-1">
-                <h3 className="font-semibold text-lg">
-                  {payment.vehicle.year} {payment.vehicle.make} {payment.vehicle.model}
-                </h3>
-                {vehicleWithImages?.track && (
-                  <p className="text-muted-foreground text-sm">
-                    Track: {vehicleWithImages.track.name}
-                  </p>
-                )}
-                <div className="mt-2">
-                  <Link href={`/vehicles/${payment.vehicle._id}`}>
-                    <Button size="sm" variant="outline">
-                      View Vehicle Details
-                    </Button>
-                  </Link>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      {canRefund && (
+        <RefundDialog
+          onOpenChange={setRefundDialogOpen}
+          open={refundDialogOpen}
+          payment={payment}
+        />
       )}
-
-      {/* Metadata */}
-      {payment.metadata && Object.keys(payment.metadata).length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Additional Information</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <pre className="overflow-auto rounded-lg bg-muted p-4 text-xs">
-              {JSON.stringify(payment.metadata, null, 2)}
-            </pre>
-          </CardContent>
-        </Card>
-      )}
-    </div>
+    </DetailPageLayout>
   )
 }

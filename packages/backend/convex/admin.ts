@@ -922,14 +922,22 @@ export const getAllVehicles = query({
   handler: async (ctx, args) => {
     await checkAdmin(ctx)
 
-    const { limit = 50, search, status: _status, cursor } = args
+    const { limit = 50, search, status, cursor } = args
 
-    // Note: Vehicles don't have a status field, they use isApproved
-    // Filter by status logic should be done after fetching if needed
+    // Note: Vehicles don't have a status field, they use isApproved boolean
     let vehicles = await ctx.db
       .query("vehicles")
       .order("desc")
       .take(limit + 1)
+
+    // Filter by status (maps to isApproved field)
+    if (status === "pending") {
+      vehicles = vehicles.filter((v) => v.isApproved === undefined)
+    } else if (status === "approved") {
+      vehicles = vehicles.filter((v) => v.isApproved === true)
+    } else if (status === "rejected") {
+      vehicles = vehicles.filter((v) => v.isApproved === false)
+    }
 
     // Apply cursor-based pagination
     if (cursor) {
@@ -995,7 +1003,7 @@ export const getAllVehicles = query({
 export const suspendVehicle = mutation({
   args: {
     vehicleId: v.id("vehicles"),
-    isActive: v.boolean(),
+    isSuspended: v.boolean(),
   },
   handler: async (ctx, args) => {
     await checkAdmin(ctx)
@@ -1006,7 +1014,7 @@ export const suspendVehicle = mutation({
     }
 
     await ctx.db.patch(args.vehicleId, {
-      isActive: args.isActive,
+      isSuspended: args.isSuspended,
       updatedAt: Date.now(),
     })
 
@@ -1018,7 +1026,7 @@ export const suspendVehicle = mutation({
 export const bulkSuspendVehicles = mutation({
   args: {
     vehicleIds: v.array(v.id("vehicles")),
-    isActive: v.boolean(),
+    isSuspended: v.boolean(),
   },
   handler: async (ctx, args) => {
     await checkAdmin(ctx)
@@ -1026,7 +1034,7 @@ export const bulkSuspendVehicles = mutation({
     await Promise.all(
       args.vehicleIds.map((vehicleId) =>
         ctx.db.patch(vehicleId, {
-          isActive: args.isActive,
+          isSuspended: args.isSuspended,
           updatedAt: Date.now(),
         })
       )

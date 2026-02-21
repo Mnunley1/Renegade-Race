@@ -189,6 +189,7 @@ export default defineSchema({
       v.union(v.literal("flexible"), v.literal("moderate"), v.literal("strict"))
     ),
     isActive: v.boolean(),
+    isSuspended: v.optional(v.boolean()),
     isApproved: v.optional(v.boolean()),
     viewCount: v.optional(v.number()), // Total views
     shareCount: v.optional(v.number()), // Total shares

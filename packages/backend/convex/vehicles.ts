@@ -27,7 +27,8 @@ export const getAllWithOptimizedImages = query({
           q.and(
             q.eq(q.field("isActive"), true),
             q.eq(q.field("isApproved"), true),
-            q.eq(q.field("deletedAt"), undefined)
+            q.eq(q.field("deletedAt"), undefined),
+            q.neq(q.field("isSuspended"), true)
           )
         )
         .order("desc")
@@ -36,7 +37,9 @@ export const getAllWithOptimizedImages = query({
       vehicles = await ctx.db
         .query("vehicles")
         .withIndex("by_active_approved", (q) => q.eq("isActive", true).eq("isApproved", true))
-        .filter((q) => q.eq(q.field("deletedAt"), undefined))
+        .filter((q) =>
+          q.and(q.eq(q.field("deletedAt"), undefined), q.neq(q.field("isSuspended"), true))
+        )
         .order("desc")
         .take(limit)
     }
@@ -124,7 +127,9 @@ export const searchWithAvailability = query({
     let vehiclesQuery = ctx.db
       .query("vehicles")
       .withIndex("by_active_approved", (q) => q.eq("isActive", true).eq("isApproved", true))
-      .filter((q) => q.eq(q.field("deletedAt"), undefined))
+      .filter((q) =>
+        q.and(q.eq(q.field("deletedAt"), undefined), q.neq(q.field("isSuspended"), true))
+      )
 
     if (trackId) {
       vehiclesQuery = ctx.db
@@ -134,7 +139,8 @@ export const searchWithAvailability = query({
           q.and(
             q.eq(q.field("isActive"), true),
             q.eq(q.field("isApproved"), true),
-            q.eq(q.field("deletedAt"), undefined)
+            q.eq(q.field("deletedAt"), undefined),
+            q.neq(q.field("isSuspended"), true)
           )
         )
     }
@@ -343,7 +349,8 @@ export const getAll = query({
           q.and(
             q.eq(q.field("isActive"), true),
             q.eq(q.field("isApproved"), true),
-            q.eq(q.field("deletedAt"), undefined)
+            q.eq(q.field("deletedAt"), undefined),
+            q.neq(q.field("isSuspended"), true)
           )
         )
         .order("desc")
@@ -352,7 +359,9 @@ export const getAll = query({
       vehicles = await ctx.db
         .query("vehicles")
         .withIndex("by_active_approved", (q) => q.eq("isActive", true).eq("isApproved", true))
-        .filter((q) => q.eq(q.field("deletedAt"), undefined))
+        .filter((q) =>
+          q.and(q.eq(q.field("deletedAt"), undefined), q.neq(q.field("isSuspended"), true))
+        )
         .order("desc")
         .take(limit)
     }
@@ -424,9 +433,23 @@ export const getById = query({
         .collect(),
     ])
 
+    const optimizedImages = images.map((image) => {
+      if (!image.r2Key) {
+        return image
+      }
+      return {
+        ...image,
+        thumbnailUrl: imagePresets.thumbnail(image.r2Key),
+        cardUrl: imagePresets.card(image.r2Key),
+        detailUrl: imagePresets.detail(image.r2Key),
+        heroUrl: imagePresets.hero(image.r2Key),
+        originalUrl: imagePresets.original(image.r2Key),
+      }
+    })
+
     return {
       ...vehicle,
-      images,
+      images: optimizedImages,
       owner,
       track,
       availability,
@@ -778,9 +801,7 @@ export const update = mutation({
 
     // Check if address changed and needs geocoding
     const addressChanged =
-      args.address &&
-      (!vehicle.address ||
-        vehicle.address.zipCode !== args.address.zipCode)
+      args.address && (!vehicle.address || vehicle.address.zipCode !== args.address.zipCode)
 
     const { id, ...updateData } = args
     void id // Exclude id from updateData

@@ -1,12 +1,22 @@
 "use client"
 
-import { Badge } from "@workspace/ui/components/badge"
-import { Card, CardContent } from "@workspace/ui/components/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
+import { Button } from "@workspace/ui/components/button"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@workspace/ui/components/card"
 import { useQuery } from "convex/react"
-import { AlertTriangle, DollarSign, Loader2 } from "lucide-react"
+import { Eye } from "lucide-react"
 import Link from "next/link"
 import { useState } from "react"
+import { type Column, DataTable } from "@/components/data-table/data-table"
+import { exportToCSV } from "@/components/data-table/data-table-export"
+import { DataTableToolbar, type FilterConfig } from "@/components/data-table/data-table-toolbar"
+import { PageHeader } from "@/components/page-header"
+import { StatusBadge } from "@/components/status-badge"
 import { api } from "@/lib/convex"
 
 type StatusFilter =
@@ -17,31 +27,6 @@ type StatusFilter =
   | "rejected"
   | "cancelled"
 
-function getStatusBadge(status: string) {
-  switch (status) {
-    case "pending_review":
-      return (
-        <Badge className="bg-yellow-500/10 text-yellow-700 dark:text-yellow-400">
-          Pending Review
-        </Badge>
-      )
-    case "payment_pending":
-      return (
-        <Badge className="bg-orange-500/10 text-orange-700 dark:text-orange-400">
-          Payment Pending
-        </Badge>
-      )
-    case "paid":
-      return <Badge className="bg-green-500/10 text-green-700 dark:text-green-400">Paid</Badge>
-    case "rejected":
-      return <Badge className="bg-red-500/10 text-red-700 dark:text-red-400">Rejected</Badge>
-    case "cancelled":
-      return <Badge variant="secondary">Cancelled</Badge>
-    default:
-      return <Badge>{status}</Badge>
-  }
-}
-
 export default function DamageInvoicesPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(undefined)
 
@@ -49,111 +34,141 @@ export default function DamageInvoicesPage() {
     status: statusFilter,
   })
 
-  if (invoices === undefined) {
-    return (
-      <div className="flex items-center justify-center p-12">
-        <Loader2 className="size-8 animate-spin text-muted-foreground" />
-      </div>
-    )
-  }
+  const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 2,
+    }).format(amount / 100)
 
-  const pendingCount = invoices.filter((i) => i.status === "pending_review").length
-  const paymentPendingCount = invoices.filter((i) => i.status === "payment_pending").length
+  const columns: Column<any>[] = [
+    {
+      key: "status",
+      header: "Status",
+      cell: (row) => <StatusBadge status={row.status} />,
+    },
+    {
+      key: "vehicle",
+      header: "Vehicle",
+      cell: (row) => (
+        <span className="font-medium">
+          {row.vehicle?.year} {row.vehicle?.make} {row.vehicle?.model}
+        </span>
+      ),
+    },
+    {
+      key: "host",
+      header: "Host",
+      cell: (row) => row.owner?.name || "Unknown",
+    },
+    {
+      key: "renter",
+      header: "Renter",
+      cell: (row) => row.renter?.name || "Unknown",
+    },
+    {
+      key: "amount",
+      header: "Amount",
+      cell: (row) => <span className="font-semibold">{formatCurrency(row.amount)}</span>,
+      sortable: true,
+      sortValue: (row) => row.amount,
+    },
+    {
+      key: "date",
+      header: "Date",
+      cell: (row) => new Date(row.createdAt).toLocaleDateString(),
+      sortable: true,
+      sortValue: (row) => new Date(row.createdAt).getTime(),
+    },
+    {
+      key: "actions",
+      header: "",
+      cell: (row) => (
+        <Link href={`/damage-invoices/${row._id}`}>
+          <Button size="sm" variant="outline">
+            <Eye className="mr-2 size-4" />
+            View Details
+          </Button>
+        </Link>
+      ),
+    },
+  ]
+
+  const filters: FilterConfig[] = [
+    {
+      key: "status",
+      label: "Status",
+      options: [
+        { label: "Pending Review", value: "pending_review" },
+        { label: "Payment Pending", value: "payment_pending" },
+        { label: "Paid", value: "paid" },
+        { label: "Rejected", value: "rejected" },
+        { label: "Cancelled", value: "cancelled" },
+      ],
+      value: statusFilter,
+      onChange: (value) => setStatusFilter(value as StatusFilter),
+    },
+  ]
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-bold text-3xl">Damage Claims</h1>
-        <p className="mt-2 text-muted-foreground">Review and manage post-rental damage claims</p>
-      </div>
+      <PageHeader description="Review and manage post-rental damage claims" title="Damage Claims" />
 
-      <Tabs defaultValue="all">
-        <TabsList>
-          <TabsTrigger onClick={() => setStatusFilter(undefined)} value="all">
-            All ({invoices.length})
-          </TabsTrigger>
-          <TabsTrigger onClick={() => setStatusFilter("pending_review")} value="pending_review">
-            Pending Review {pendingCount > 0 && `(${pendingCount})`}
-          </TabsTrigger>
-          <TabsTrigger onClick={() => setStatusFilter("payment_pending")} value="payment_pending">
-            Payment Pending {paymentPendingCount > 0 && `(${paymentPendingCount})`}
-          </TabsTrigger>
-          <TabsTrigger onClick={() => setStatusFilter("paid")} value="paid">
-            Paid
-          </TabsTrigger>
-          <TabsTrigger onClick={() => setStatusFilter("rejected")} value="rejected">
-            Rejected
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent className="mt-6" value="all">
-          <InvoiceList invoices={invoices} />
-        </TabsContent>
-        <TabsContent className="mt-6" value="pending_review">
-          <InvoiceList invoices={invoices} />
-        </TabsContent>
-        <TabsContent className="mt-6" value="payment_pending">
-          <InvoiceList invoices={invoices} />
-        </TabsContent>
-        <TabsContent className="mt-6" value="paid">
-          <InvoiceList invoices={invoices} />
-        </TabsContent>
-        <TabsContent className="mt-6" value="rejected">
-          <InvoiceList invoices={invoices} />
-        </TabsContent>
-      </Tabs>
-    </div>
-  )
-}
-
-type DamageInvoice = NonNullable<
-  ReturnType<typeof useQuery<typeof api.admin.getAllDamageInvoices>>
->[number]
-
-function InvoiceList({ invoices }: { invoices: DamageInvoice[] }) {
-  if (invoices.length === 0) {
-    return (
       <Card>
-        <CardContent className="p-12 text-center">
-          <AlertTriangle className="mx-auto mb-4 size-12 text-muted-foreground" />
-          <p className="mb-2 font-semibold text-lg">No damage claims found</p>
-          <p className="text-muted-foreground">
-            Damage claims will appear here when submitted by hosts
-          </p>
+        <CardHeader>
+          <CardTitle>All Damage Claims</CardTitle>
+          <CardDescription>{invoices?.length || 0} claim(s) found</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <DataTable
+            columns={columns}
+            data={invoices ?? []}
+            emptyMessage="No damage claims found"
+            getRowId={(row) => row._id}
+            isLoading={invoices === undefined}
+            toolbar={
+              <DataTableToolbar
+                filters={filters}
+                onExport={() =>
+                  exportToCSV(
+                    invoices ?? [],
+                    [
+                      { key: "status", header: "Status", value: (r) => r.status },
+                      {
+                        key: "vehicle",
+                        header: "Vehicle",
+                        value: (r) =>
+                          `${r.vehicle?.year ?? ""} ${r.vehicle?.make ?? ""} ${r.vehicle?.model ?? ""}`.trim(),
+                      },
+                      {
+                        key: "host",
+                        header: "Host",
+                        value: (r) => r.owner?.name ?? "Unknown",
+                      },
+                      {
+                        key: "renter",
+                        header: "Renter",
+                        value: (r) => r.renter?.name ?? "Unknown",
+                      },
+                      {
+                        key: "amount",
+                        header: "Amount",
+                        value: (r) => (r.amount / 100).toFixed(2),
+                      },
+                      {
+                        key: "date",
+                        header: "Date",
+                        value: (r) => new Date(r.createdAt).toLocaleDateString(),
+                      },
+                    ],
+                    "damage-claims"
+                  )
+                }
+              />
+            }
+          />
         </CardContent>
       </Card>
-    )
-  }
-
-  return (
-    <div className="space-y-4">
-      {invoices.map((invoice) => (
-        <Link href={`/damage-invoices/${invoice._id}`} key={invoice._id}>
-          <Card className="cursor-pointer transition-colors hover:bg-accent/50">
-            <CardContent className="p-6">
-              <div className="flex items-start justify-between">
-                <div className="flex-1 space-y-2">
-                  <div className="flex items-center gap-3">
-                    <h3 className="font-semibold text-lg">
-                      {invoice.vehicle?.year} {invoice.vehicle?.make} {invoice.vehicle?.model}
-                    </h3>
-                    {getStatusBadge(invoice.status)}
-                  </div>
-                  <div className="flex items-center gap-4 text-muted-foreground text-sm">
-                    <span>Host: {invoice.owner?.name || "Unknown"}</span>
-                    <span>Renter: {invoice.renter?.name || "Unknown"}</span>
-                    <span>{new Date(invoice.createdAt).toLocaleDateString()}</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 text-right">
-                  <DollarSign className="size-5 text-muted-foreground" />
-                  <span className="font-bold text-xl">${(invoice.amount / 100).toFixed(2)}</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </Link>
-      ))}
     </div>
   )
 }

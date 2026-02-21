@@ -1,6 +1,5 @@
 "use client"
 
-import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import {
   Card,
@@ -9,13 +8,17 @@ import {
   CardHeader,
   CardTitle,
 } from "@workspace/ui/components/card"
-import { Input } from "@workspace/ui/components/input"
 import { useMutation, useQuery } from "convex/react"
-import { Ban, Loader2, Search, UserCheck, Users } from "lucide-react"
+import { Ban, Loader2, UserCheck } from "lucide-react"
 import Link from "next/link"
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
+import { type Column, DataTable } from "@/components/data-table/data-table"
+import { exportToCSV } from "@/components/data-table/data-table-export"
+import { DataTableToolbar } from "@/components/data-table/data-table-toolbar"
+import { PageHeader } from "@/components/page-header"
 import { Pagination } from "@/components/pagination"
+import { StatusBadge } from "@/components/status-badge"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
@@ -38,7 +41,6 @@ export default function UsersPage() {
   const unbanUser = useMutation(api.admin.unbanUser)
   const [processingId, setProcessingId] = useState<Id<"users"> | null>(null)
 
-  // Reset to page 1 when filters change
   useMemo(() => {
     if (searchQuery) {
       setCurrentPage(1)
@@ -52,9 +54,7 @@ export default function UsersPage() {
   }
 
   const handleBan = async (userId: Id<"users">) => {
-    if (!confirm("Are you sure you want to ban this user?")) {
-      return
-    }
+    if (!confirm("Are you sure you want to ban this user?")) return
 
     setProcessingId(userId)
     try {
@@ -79,153 +79,160 @@ export default function UsersPage() {
     }
   }
 
-  const totalPages = Math.ceil((users.length || 0) / 50) || 1
+  const columns: Column<any>[] = [
+    {
+      key: "name",
+      header: "Name",
+      cell: (row) => <span className="font-medium">{row.name}</span>,
+      sortable: true,
+      sortValue: (row) => row.name ?? "",
+    },
+    {
+      key: "email",
+      header: "Email",
+      cell: (row) => <span className="text-muted-foreground">{row.email || row.externalId}</span>,
+      sortable: true,
+      sortValue: (row) => row.email ?? "",
+    },
+    {
+      key: "role",
+      header: "Role",
+      cell: (row) => (row.role ? <StatusBadge status={row.role} /> : "—"),
+    },
+    {
+      key: "status",
+      header: "Status",
+      cell: (row) => (row.isBanned ? <StatusBadge status="banned" /> : null),
+    },
+    {
+      key: "rating",
+      header: "Rating",
+      cell: (row) => (row.rating ? `${row.rating}/5` : "—"),
+      sortable: true,
+      sortValue: (row) => row.rating ?? 0,
+    },
+    {
+      key: "totalRentals",
+      header: "Rentals",
+      cell: (row) => row.totalRentals ?? 0,
+      sortable: true,
+      sortValue: (row) => row.totalRentals ?? 0,
+    },
+    {
+      key: "actions",
+      header: "",
+      cell: (row) => {
+        const isProcessing = processingId === row._id
+        const isBanned = row.isBanned === true
+        return (
+          <div className="flex gap-2">
+            <Link href={`/users/${row._id}`}>
+              <Button size="sm" variant="outline">
+                View Details
+              </Button>
+            </Link>
+            {isBanned ? (
+              <Button
+                disabled={isProcessing}
+                onClick={() => handleUnban(row._id)}
+                size="sm"
+                variant="outline"
+              >
+                {isProcessing ? (
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                ) : (
+                  <UserCheck className="mr-2 size-4" />
+                )}
+                {isProcessing ? "Processing..." : "Unban"}
+              </Button>
+            ) : (
+              <Button
+                disabled={isProcessing}
+                onClick={() => handleBan(row._id)}
+                size="sm"
+                variant="destructive"
+              >
+                {isProcessing ? (
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                ) : (
+                  <Ban className="mr-2 size-4" />
+                )}
+                {isProcessing ? "Processing..." : "Ban"}
+              </Button>
+            )}
+          </div>
+        )
+      },
+    },
+  ]
 
-  if (result === undefined) {
-    return (
-      <div className="flex items-center justify-center p-12">
-        <div className="text-muted-foreground">Loading users...</div>
-      </div>
-    )
-  }
+  const totalPages = Math.ceil((users.length || 0) / 50) || 1
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-bold text-3xl">User Management</h1>
-        <p className="mt-2 text-muted-foreground">Manage users and ban/unban accounts</p>
-      </div>
+      <PageHeader description="Manage users and ban/unban accounts" title="User Management" />
 
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>All Users</CardTitle>
-              <CardDescription>
-                {users.length} user(s) found
-                {hasMore && " (showing first page)"}
-              </CardDescription>
-            </div>
-            <div className="relative">
-              <Search className="absolute top-1/2 left-2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                className="w-64 pl-8"
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search users..."
-                value={searchQuery}
-              />
-            </div>
-          </div>
+          <CardTitle>All Users</CardTitle>
+          <CardDescription>
+            {users.length} user(s) found
+            {hasMore && " (showing first page)"}
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          {users && users.length > 0 ? (
-            <>
-              <div className="space-y-4">
-                {users.map((user: any) => {
-                  const isProcessing = processingId === user._id
-                  const isBanned = user.isBanned === true
-
-                  return (
-                    <Card key={user._id}>
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-4">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                              <Users className="size-5 text-primary" />
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <h3 className="font-medium">{user.name}</h3>
-                                {isBanned && <Badge variant="destructive">Banned</Badge>}
-                                {user.role && <Badge variant="outline">{user.role}</Badge>}
-                              </div>
-                              <p className="text-muted-foreground text-sm">
-                                {user.email || user.externalId}
-                              </p>
-                              <div className="mt-1 flex gap-4 text-muted-foreground text-xs">
-                                {user.phone && <span>Phone: {user.phone}</span>}
-                                {user.rating && <span>Rating: {user.rating}/5</span>}
-                                {user.totalRentals !== undefined && (
-                                  <span>Rentals: {user.totalRentals}</span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex gap-2">
-                            <Link href={`/users/${user._id}`}>
-                              <Button size="sm" variant="outline">
-                                View Details
-                              </Button>
-                            </Link>
-                            {isBanned ? (
-                              <Button
-                                disabled={isProcessing}
-                                onClick={() => handleUnban(user._id)}
-                                size="sm"
-                                variant="outline"
-                              >
-                                {isProcessing ? (
-                                  <>
-                                    <Loader2 className="mr-2 size-4 animate-spin" />
-                                    Processing...
-                                  </>
-                                ) : (
-                                  <>
-                                    <UserCheck className="mr-2 size-4" />
-                                    Unban
-                                  </>
-                                )}
-                              </Button>
-                            ) : (
-                              <Button
-                                disabled={isProcessing}
-                                onClick={() => handleBan(user._id)}
-                                size="sm"
-                                variant="destructive"
-                              >
-                                {isProcessing ? (
-                                  <>
-                                    <Loader2 className="mr-2 size-4 animate-spin" />
-                                    Processing...
-                                  </>
-                                ) : (
-                                  <>
-                                    <Ban className="mr-2 size-4" />
-                                    Ban
-                                  </>
-                                )}
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
+          <DataTable
+            columns={columns}
+            data={users}
+            emptyMessage="No users found"
+            getRowId={(row) => row._id}
+            isLoading={result === undefined}
+            pagination={
+              hasMore ? (
+                <Pagination
+                  currentPage={currentPage}
+                  hasMore={hasMore}
+                  onLoadMore={() => {
+                    if (result?.nextCursor) {
+                      setCursor(result.nextCursor)
+                      setCurrentPage(currentPage + 1)
+                    }
+                  }}
+                  onPageChange={handlePageChange}
+                  totalPages={totalPages}
+                />
+              ) : undefined
+            }
+            toolbar={
+              <DataTableToolbar
+                onExport={() =>
+                  exportToCSV(
+                    users as any[],
+                    [
+                      { key: "name", header: "Name", value: (r) => r.name ?? "Unknown" },
+                      { key: "email", header: "Email", value: (r) => r.email ?? "" },
+                      { key: "role", header: "Role", value: (r) => r.role ?? "" },
+                      {
+                        key: "status",
+                        header: "Status",
+                        value: (r) => (r.isBanned ? "Banned" : "Active"),
+                      },
+                      { key: "rating", header: "Rating", value: (r) => r.rating ?? "" },
+                      {
+                        key: "totalRentals",
+                        header: "Total Rentals",
+                        value: (r) => r.totalRentals ?? 0,
+                      },
+                    ],
+                    "users"
                   )
-                })}
-              </div>
-              {hasMore && (
-                <div className="mt-4">
-                  <Pagination
-                    currentPage={currentPage}
-                    hasMore={hasMore}
-                    onLoadMore={() => {
-                      if (result?.nextCursor) {
-                        setCursor(result.nextCursor)
-                        setCurrentPage(currentPage + 1)
-                      }
-                    }}
-                    onPageChange={handlePageChange}
-                    totalPages={totalPages}
-                  />
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="py-12 text-center text-muted-foreground">
-              <Users className="mx-auto mb-4 size-12 opacity-50" />
-              <p>No users found</p>
-            </div>
-          )}
+                }
+                onSearchChange={setSearchQuery}
+                search={searchQuery}
+                searchPlaceholder="Search users..."
+              />
+            }
+          />
         </CardContent>
       </Card>
     </div>

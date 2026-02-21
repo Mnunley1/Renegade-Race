@@ -94,7 +94,7 @@ export const addToFavorites = mutation({
 
     // Verify vehicle exists and is active
     const vehicle = await ctx.db.get(args.vehicleId)
-    if (!vehicle?.isActive) {
+    if (!vehicle?.isActive || vehicle?.isSuspended) {
       throw new Error("Vehicle not found or not available")
     }
 

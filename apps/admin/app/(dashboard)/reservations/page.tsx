@@ -1,6 +1,5 @@
 "use client"
 
-import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import {
   Card,
@@ -9,36 +8,39 @@ import {
   CardHeader,
   CardTitle,
 } from "@workspace/ui/components/card"
-import { Checkbox } from "@workspace/ui/components/checkbox"
-import { Input } from "@workspace/ui/components/input"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@workspace/ui/components/select"
 import { useMutation, useQuery } from "convex/react"
 import { format } from "date-fns"
-import { Calendar, Eye, Loader2, Search, XCircle } from "lucide-react"
+import { Eye, Loader2, XCircle } from "lucide-react"
 import Link from "next/link"
 import { useMemo, useState } from "react"
 import type { DateRange } from "react-day-picker"
 import { toast } from "sonner"
+import { type Column, DataTable } from "@/components/data-table/data-table"
+import { DataTableBulkActions } from "@/components/data-table/data-table-bulk-actions"
+import { exportToCSV } from "@/components/data-table/data-table-export"
+import { DataTableToolbar, type FilterConfig } from "@/components/data-table/data-table-toolbar"
 import { DateRangeFilter } from "@/components/date-range-filter"
+import { PageHeader } from "@/components/page-header"
 import { Pagination } from "@/components/pagination"
+import { StatusBadge } from "@/components/status-badge"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 
+type ReservationStatus =
+  | "pending"
+  | "approved"
+  | "confirmed"
+  | "cancelled"
+  | "completed"
+  | "declined"
+
 export default function ReservationsPage() {
-  const [statusFilter, setStatusFilter] = useState<
-    "pending" | "approved" | "confirmed" | "cancelled" | "completed" | "declined" | undefined
-  >(undefined)
+  const [statusFilter, setStatusFilter] = useState<ReservationStatus | undefined>(undefined)
   const [searchQuery, setSearchQuery] = useState("")
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
   const [currentPage, setCurrentPage] = useState(1)
-  const [selectedIds, setSelectedIds] = useState<Set<Id<"reservations">>>(new Set())
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [cursor, setCursor] = useState<string | undefined>(undefined)
 
   const startDate = dateRange?.from ? format(dateRange.from, "yyyy-MM-dd") : undefined
@@ -59,7 +61,6 @@ export default function ReservationsPage() {
   const cancelReservation = useMutation(api.admin.cancelReservationAsAdmin)
   const [processingId, setProcessingId] = useState<Id<"reservations"> | null>(null)
 
-  // Reset to page 1 when filters change
   useMemo(() => {
     if (statusFilter !== undefined || searchQuery || dateRange) {
       setCurrentPage(1)
@@ -68,11 +69,8 @@ export default function ReservationsPage() {
   }, [statusFilter, searchQuery, dateRange])
 
   const handleCancel = async (reservationId: Id<"reservations">) => {
-    if (
-      !confirm("Are you sure you want to cancel this reservation? This action cannot be undone.")
-    ) {
+    if (!confirm("Are you sure you want to cancel this reservation? This action cannot be undone."))
       return
-    }
 
     setProcessingId(reservationId)
     try {
@@ -86,56 +84,24 @@ export default function ReservationsPage() {
     }
   }
 
-  const handleSelectAll = () => {
-    if (selectedIds.size === reservations.length) {
+  const handleBulkCancel = async () => {
+    if (!confirm(`Are you sure you want to cancel ${selectedIds.size} reservation(s)?`)) return
+    try {
+      await Promise.all(
+        Array.from(selectedIds).map((id) =>
+          cancelReservation({ reservationId: id as Id<"reservations"> })
+        )
+      )
+      toast.success(`${selectedIds.size} reservation(s) cancelled`)
       setSelectedIds(new Set())
-    } else {
-      setSelectedIds(new Set(reservations.map((r: any) => r._id)))
+    } catch (error) {
+      handleErrorWithContext(error, { action: "cancel reservations" })
     }
-  }
-
-  const handleSelectOne = (id: Id<"reservations">) => {
-    const newSelected = new Set(selectedIds)
-    if (newSelected.has(id)) {
-      newSelected.delete(id)
-    } else {
-      newSelected.add(id)
-    }
-    setSelectedIds(newSelected)
   }
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page)
-    // For cursor-based pagination, we'd need to track cursors per page
-    // For simplicity, we'll use offset-based approach
     setCursor(undefined)
-  }
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "pending":
-        return <Badge variant="default">Pending</Badge>
-      case "approved":
-        return (
-          <Badge className="bg-purple-600" variant="default">
-            Approved
-          </Badge>
-        )
-      case "confirmed":
-        return (
-          <Badge className="bg-green-600" variant="default">
-            Confirmed
-          </Badge>
-        )
-      case "completed":
-        return <Badge variant="secondary">Completed</Badge>
-      case "cancelled":
-        return <Badge variant="destructive">Cancelled</Badge>
-      case "declined":
-        return <Badge variant="destructive">Declined</Badge>
-      default:
-        return <Badge>{status}</Badge>
-    }
   }
 
   const formatCurrency = (amount: number) =>
@@ -152,301 +118,204 @@ export default function ReservationsPage() {
       day: "numeric",
     })
 
-  const totalPages = Math.ceil((reservations.length || 0) / 50) || 1
+  const columns: Column<any>[] = [
+    {
+      key: "status",
+      header: "Status",
+      cell: (row) => <StatusBadge status={row.status} />,
+    },
+    {
+      key: "vehicle",
+      header: "Vehicle",
+      cell: (row) => (
+        <span className="font-medium">
+          {row.vehicle?.year} {row.vehicle?.make} {row.vehicle?.model}
+        </span>
+      ),
+      sortable: true,
+      sortValue: (row) =>
+        `${row.vehicle?.year ?? ""} ${row.vehicle?.make ?? ""} ${row.vehicle?.model ?? ""}`,
+    },
+    {
+      key: "renter",
+      header: "Renter",
+      cell: (row) => row.renter?.name || "Unknown",
+      sortable: true,
+      sortValue: (row) => row.renter?.name ?? "",
+    },
+    {
+      key: "owner",
+      header: "Owner",
+      cell: (row) => row.owner?.name || "Unknown",
+      sortable: true,
+      sortValue: (row) => row.owner?.name ?? "",
+    },
+    {
+      key: "dates",
+      header: "Dates",
+      cell: (row) => (
+        <span className="whitespace-nowrap text-sm">
+          {formatDate(row.startDate)} – {formatDate(row.endDate)}
+        </span>
+      ),
+      sortable: true,
+      sortValue: (row) => new Date(row.startDate).getTime(),
+    },
+    {
+      key: "amount",
+      header: "Amount",
+      cell: (row) => <span className="font-semibold">{formatCurrency(row.totalAmount)}</span>,
+      sortable: true,
+      sortValue: (row) => row.totalAmount || 0,
+    },
+    {
+      key: "actions",
+      header: "",
+      cell: (row) => {
+        const isProcessing = processingId === row._id
+        const canCancel = row.status !== "cancelled" && row.status !== "completed"
+        return (
+          <div className="flex gap-2">
+            {canCancel && (
+              <Button
+                disabled={isProcessing}
+                onClick={() => handleCancel(row._id)}
+                size="sm"
+                variant="destructive"
+              >
+                {isProcessing ? (
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                ) : (
+                  <XCircle className="mr-2 size-4" />
+                )}
+                {isProcessing ? "Cancelling..." : "Cancel"}
+              </Button>
+            )}
+            <Link href={`/reservations/${row._id}`}>
+              <Button size="sm" variant="outline">
+                <Eye className="mr-2 size-4" />
+                View
+              </Button>
+            </Link>
+          </div>
+        )
+      },
+    },
+  ]
 
-  if (result === undefined) {
-    return (
-      <div className="flex items-center justify-center p-12">
-        <div className="text-muted-foreground">Loading reservations...</div>
-      </div>
-    )
-  }
+  const filters: FilterConfig[] = [
+    {
+      key: "status",
+      label: "Status",
+      options: [
+        { label: "Pending", value: "pending" },
+        { label: "Approved", value: "approved" },
+        { label: "Confirmed", value: "confirmed" },
+        { label: "Completed", value: "completed" },
+        { label: "Cancelled", value: "cancelled" },
+        { label: "Declined", value: "declined" },
+      ],
+      value: statusFilter,
+      onChange: (value) => setStatusFilter(value as ReservationStatus | undefined),
+    },
+  ]
+
+  const totalPages = Math.ceil((reservations.length || 0) / 50) || 1
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-bold text-3xl">Reservations Management</h1>
-        <p className="mt-2 text-muted-foreground">View and manage all platform reservations</p>
-      </div>
+      <PageHeader
+        description="View and manage all platform reservations"
+        title="Reservations Management"
+      />
 
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>All Reservations</CardTitle>
-              <CardDescription>
-                {reservations.length} reservation(s) found
-                {hasMore && " (showing first page)"}
-              </CardDescription>
-            </div>
-            <div className="flex gap-2">
-              <DateRangeFilter dateRange={dateRange} onDateRangeChange={setDateRange} />
-              <div className="relative">
-                <Search className="absolute top-1/2 left-2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  className="w-64 pl-8"
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search reservations..."
-                  value={searchQuery}
-                />
-              </div>
-              <Select
-                onValueChange={(value) =>
-                  setStatusFilter(
-                    value === "all"
-                      ? undefined
-                      : (value as
-                          | "pending"
-                          | "approved"
-                          | "confirmed"
-                          | "cancelled"
-                          | "completed"
-                          | "declined")
-                  )
-                }
-                value={statusFilter || "all"}
-              >
-                <SelectTrigger className="w-40">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="approved">Approved</SelectItem>
-                  <SelectItem value="confirmed">Confirmed</SelectItem>
-                  <SelectItem value="completed">Completed</SelectItem>
-                  <SelectItem value="cancelled">Cancelled</SelectItem>
-                  <SelectItem value="declined">Declined</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+          <CardTitle>All Reservations</CardTitle>
+          <CardDescription>
+            {reservations.length} reservation(s) found
+            {hasMore && " (showing first page)"}
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          {selectedIds.size > 0 && (
-            <div className="mb-4 flex items-center justify-between rounded-lg border bg-muted p-3">
-              <span className="font-medium text-sm">{selectedIds.size} item(s) selected</span>
-              <div className="flex gap-2">
-                <Button
-                  onClick={async () => {
-                    if (
-                      !confirm(
-                        `Are you sure you want to cancel ${selectedIds.size} reservation(s)?`
-                      )
-                    ) {
-                      return
-                    }
-                    try {
-                      await Promise.all(
-                        Array.from(selectedIds).map((id) =>
-                          cancelReservation({ reservationId: id })
-                        )
-                      )
-                      toast.success(`${selectedIds.size} reservation(s) cancelled`)
-                      setSelectedIds(new Set())
-                    } catch (error) {
-                      handleErrorWithContext(error, { action: "cancel reservations" })
+          <DataTable
+            bulkActions={
+              <DataTableBulkActions
+                actions={[
+                  {
+                    label: "Cancel Selected",
+                    icon: XCircle,
+                    variant: "destructive",
+                    onClick: handleBulkCancel,
+                  },
+                ]}
+              />
+            }
+            columns={columns}
+            data={reservations}
+            emptyMessage="No reservations found"
+            getRowId={(row) => row._id}
+            isLoading={result === undefined}
+            onSelectionChange={setSelectedIds}
+            pagination={
+              hasMore ? (
+                <Pagination
+                  currentPage={currentPage}
+                  hasMore={hasMore}
+                  onLoadMore={() => {
+                    if (result?.nextCursor) {
+                      setCursor(result.nextCursor)
+                      setCurrentPage(currentPage + 1)
                     }
                   }}
-                  size="sm"
-                  variant="destructive"
-                >
-                  Cancel Selected
-                </Button>
-                <Button onClick={() => setSelectedIds(new Set())} size="sm" variant="outline">
-                  Clear Selection
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {reservations && reservations.length > 0 ? (
-            <>
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 border-b pb-2">
-                  <Checkbox
-                    checked={selectedIds.size === reservations.length && reservations.length > 0}
-                    onCheckedChange={handleSelectAll}
-                  />
-                  <span className="text-muted-foreground text-sm">Select all</span>
-                </div>
-                {reservations.map((reservation: any) => {
-                  const isProcessing = processingId === reservation._id
-                  const isSelected = selectedIds.has(reservation._id)
-                  const primaryImage =
-                    reservation.vehicle?.images?.find((img: any) => img.isPrimary) ||
-                    reservation.vehicle?.images?.[0]
-                  const canCancel =
-                    reservation.status !== "cancelled" && reservation.status !== "completed"
-
-                  return (
-                    <Card className="overflow-hidden" key={reservation._id}>
-                      <CardContent className="p-6">
-                        <div className="flex gap-4">
-                          <div className="flex items-start pt-1">
-                            <Checkbox
-                              checked={isSelected}
-                              onCheckedChange={() => handleSelectOne(reservation._id)}
-                            />
-                          </div>
-                          <div className="flex flex-1 gap-6">
-                            {primaryImage && (
-                              <div className="flex-shrink-0">
-                                <img
-                                  alt={`${reservation.vehicle?.make} ${reservation.vehicle?.model}`}
-                                  className="h-32 w-48 rounded-lg object-cover"
-                                  src={primaryImage.cardUrl || primaryImage.imageUrl}
-                                />
-                              </div>
-                            )}
-                            <div className="flex-1 space-y-4">
-                              <div className="flex items-start justify-between">
-                                <div>
-                                  <div className="flex items-center gap-2">
-                                    {getStatusBadge(reservation.status)}
-                                    <h3 className="font-bold text-lg">
-                                      {reservation.vehicle?.year} {reservation.vehicle?.make}{" "}
-                                      {reservation.vehicle?.model}
-                                    </h3>
-                                  </div>
-                                  <p className="mt-1 text-muted-foreground">
-                                    Reservation ID: {reservation._id}
-                                  </p>
-                                </div>
-                                <div className="flex gap-2">
-                                  {canCancel && (
-                                    <Button
-                                      disabled={isProcessing}
-                                      onClick={() => handleCancel(reservation._id)}
-                                      size="sm"
-                                      variant="destructive"
-                                    >
-                                      {isProcessing ? (
-                                        <>
-                                          <Loader2 className="mr-2 size-4 animate-spin" />
-                                          Cancelling...
-                                        </>
-                                      ) : (
-                                        <>
-                                          <XCircle className="mr-2 size-4" />
-                                          Cancel
-                                        </>
-                                      )}
-                                    </Button>
-                                  )}
-                                  <Link href={`/reservations/${reservation._id}`}>
-                                    <Button size="sm" variant="outline">
-                                      <Eye className="mr-2 size-4" />
-                                      View Details
-                                    </Button>
-                                  </Link>
-                                </div>
-                              </div>
-
-                              <div className="grid gap-4 md:grid-cols-2">
-                                <div className="space-y-2">
-                                  <div>
-                                    <p className="text-muted-foreground text-sm">
-                                      <strong>Renter:</strong>{" "}
-                                      {reservation.renter?.name || "Unknown"}
-                                    </p>
-                                    <p className="text-muted-foreground text-sm">
-                                      {reservation.renter?.email || "N/A"}
-                                    </p>
-                                  </div>
-                                  <div>
-                                    <p className="text-muted-foreground text-sm">
-                                      <strong>Owner:</strong> {reservation.owner?.name || "Unknown"}
-                                    </p>
-                                    <p className="text-muted-foreground text-sm">
-                                      {reservation.owner?.email || "N/A"}
-                                    </p>
-                                  </div>
-                                </div>
-                                <div className="space-y-2">
-                                  <div className="flex items-center gap-2">
-                                    <Calendar className="size-4 text-muted-foreground" />
-                                    <div>
-                                      <p className="text-muted-foreground text-sm">
-                                        <strong>Dates:</strong> {formatDate(reservation.startDate)}{" "}
-                                        - {formatDate(reservation.endDate)}
-                                      </p>
-                                      <p className="text-muted-foreground text-sm">
-                                        {reservation.totalDays} day(s)
-                                      </p>
-                                    </div>
-                                  </div>
-                                  <div>
-                                    <p className="text-muted-foreground text-sm">
-                                      <strong>Total Amount:</strong>{" "}
-                                      <span className="font-semibold text-foreground">
-                                        {formatCurrency(reservation.totalAmount)}
-                                      </span>
-                                    </p>
-                                    <p className="text-muted-foreground text-sm">
-                                      Daily Rate: {formatCurrency(reservation.dailyRate)}
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
-
-                              {reservation.addOns && reservation.addOns.length > 0 && (
-                                <div>
-                                  <p className="text-muted-foreground text-sm">
-                                    <strong>Add-ons:</strong>{" "}
-                                    {reservation.addOns
-                                      .map(
-                                        (addon: any) =>
-                                          `${addon.name} (${formatCurrency(addon.price)})`
-                                      )
-                                      .join(", ")}
-                                  </p>
-                                </div>
-                              )}
-
-                              <div className="flex gap-4 text-muted-foreground text-xs">
-                                <span>
-                                  <strong>Created:</strong>{" "}
-                                  {new Date(reservation.createdAt).toLocaleString()}
-                                </span>
-                                {reservation.updatedAt && (
-                                  <span>
-                                    <strong>Updated:</strong>{" "}
-                                    {new Date(reservation.updatedAt).toLocaleString()}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
+                  onPageChange={handlePageChange}
+                  totalPages={totalPages}
+                />
+              ) : undefined
+            }
+            selectedIds={selectedIds}
+            toolbar={
+              <DataTableToolbar
+                actions={<DateRangeFilter dateRange={dateRange} onDateRangeChange={setDateRange} />}
+                filters={filters}
+                onExport={() =>
+                  exportToCSV(
+                    reservations,
+                    [
+                      { key: "status", header: "Status", value: (r) => r.status },
+                      {
+                        key: "vehicle",
+                        header: "Vehicle",
+                        value: (r) =>
+                          `${r.vehicle?.year ?? ""} ${r.vehicle?.make ?? ""} ${r.vehicle?.model ?? ""}`.trim(),
+                      },
+                      {
+                        key: "renter",
+                        header: "Renter",
+                        value: (r) => r.renter?.name ?? "Unknown",
+                      },
+                      {
+                        key: "owner",
+                        header: "Owner",
+                        value: (r) => r.owner?.name ?? "Unknown",
+                      },
+                      { key: "startDate", header: "Start Date", value: (r) => r.startDate },
+                      { key: "endDate", header: "End Date", value: (r) => r.endDate },
+                      {
+                        key: "amount",
+                        header: "Amount",
+                        value: (r) => ((r.totalAmount || 0) / 100).toFixed(2),
+                      },
+                    ],
+                    "reservations"
                   )
-                })}
-              </div>
-              {hasMore && (
-                <div className="mt-4">
-                  <Pagination
-                    currentPage={currentPage}
-                    hasMore={hasMore}
-                    onLoadMore={() => {
-                      if (result?.nextCursor) {
-                        setCursor(result.nextCursor)
-                        setCurrentPage(currentPage + 1)
-                      }
-                    }}
-                    onPageChange={handlePageChange}
-                    totalPages={totalPages}
-                  />
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="py-12 text-center text-muted-foreground">
-              <Calendar className="mx-auto mb-4 size-12 opacity-50" />
-              <p>No reservations found</p>
-            </div>
-          )}
+                }
+                onSearchChange={setSearchQuery}
+                search={searchQuery}
+                searchPlaceholder="Search reservations..."
+              />
+            }
+          />
         </CardContent>
       </Card>
     </div>
