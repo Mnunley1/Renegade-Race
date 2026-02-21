@@ -32,7 +32,7 @@ export function PageHeader({ title, description, breadcrumbs, actions }: PageHea
           ))}
         </nav>
       )}
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-col items-start gap-2 md:flex-row md:items-center md:justify-between md:gap-4">
         <div>
           <h1 className="font-bold text-2xl tracking-tight">{title}</h1>
           {description && <p className="mt-1 text-muted-foreground">{description}</p>}

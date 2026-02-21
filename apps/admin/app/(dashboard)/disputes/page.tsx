@@ -1,6 +1,6 @@
 "use client"
 
-import { Badge } from "@workspace/ui/components/badge"
+import { Button } from "@workspace/ui/components/button"
 import {
   Card,
   CardContent,
@@ -8,18 +8,15 @@ import {
   CardHeader,
   CardTitle,
 } from "@workspace/ui/components/card"
-import { Input } from "@workspace/ui/components/input"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@workspace/ui/components/select"
 import { useQuery } from "convex/react"
-import { ArrowRight, Search } from "lucide-react"
+import { Eye } from "lucide-react"
 import Link from "next/link"
 import { useState } from "react"
+import { type Column, DataTable } from "@/components/data-table/data-table"
+import { exportToCSV } from "@/components/data-table/data-table-export"
+import { DataTableToolbar, type FilterConfig } from "@/components/data-table/data-table-toolbar"
+import { PageHeader } from "@/components/page-header"
+import { StatusBadge } from "@/components/status-badge"
 import { api } from "@/lib/convex"
 
 export default function DisputesPage() {
@@ -27,6 +24,7 @@ export default function DisputesPage() {
     undefined
   )
   const [searchQuery, setSearchQuery] = useState("")
+
   const disputes = useQuery(api.admin.getAllDisputes, {
     status: statusFilter,
     limit: 100,
@@ -43,116 +41,130 @@ export default function DisputesPage() {
     )
   })
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "open":
-        return <Badge variant="destructive">Open</Badge>
-      case "resolved":
-        return <Badge variant="default">Resolved</Badge>
-      case "closed":
-        return <Badge variant="secondary">Closed</Badge>
-      default:
-        return <Badge>{status}</Badge>
-    }
-  }
+  const columns: Column<any>[] = [
+    {
+      key: "status",
+      header: "Status",
+      cell: (row) => <StatusBadge status={row.status} />,
+    },
+    {
+      key: "vehicle",
+      header: "Vehicle",
+      cell: (row) => (
+        <span className="font-medium">
+          {row.vehicle?.make} {row.vehicle?.model}
+        </span>
+      ),
+    },
+    {
+      key: "reason",
+      header: "Reason",
+      cell: (row) => (
+        <span className="inline-block max-w-[200px] truncate" title={row.reason}>
+          {row.reason}
+        </span>
+      ),
+    },
+    {
+      key: "renter",
+      header: "Renter",
+      cell: (row) => row.renter?.name || "Unknown",
+    },
+    {
+      key: "owner",
+      header: "Owner",
+      cell: (row) => row.owner?.name || "Unknown",
+    },
+    {
+      key: "date",
+      header: "Date",
+      cell: (row) => new Date(row.createdAt).toLocaleDateString(),
+      sortable: true,
+      sortValue: (row) => new Date(row.createdAt).getTime(),
+    },
+    {
+      key: "actions",
+      header: "",
+      cell: (row) => (
+        <Link href={`/disputes/${row._id}`}>
+          <Button size="sm" variant="outline">
+            <Eye className="mr-2 size-4" />
+            View Details
+          </Button>
+        </Link>
+      ),
+    },
+  ]
 
-  if (disputes === undefined) {
-    return (
-      <div className="flex items-center justify-center p-12">
-        <div className="text-muted-foreground">Loading disputes...</div>
-      </div>
-    )
-  }
+  const filters: FilterConfig[] = [
+    {
+      key: "status",
+      label: "Status",
+      options: [
+        { label: "Open", value: "open" },
+        { label: "Resolved", value: "resolved" },
+        { label: "Closed", value: "closed" },
+      ],
+      value: statusFilter,
+      onChange: (value) => setStatusFilter(value as "open" | "resolved" | "closed" | undefined),
+    },
+  ]
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-bold text-3xl">Disputes Management</h1>
-        <p className="mt-2 text-muted-foreground">Manage and resolve rental disputes</p>
-      </div>
+      <PageHeader description="Manage and resolve rental disputes" title="Disputes Management" />
 
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>All Disputes</CardTitle>
-              <CardDescription>{filteredDisputes?.length || 0} dispute(s) found</CardDescription>
-            </div>
-            <div className="flex gap-2">
-              <div className="relative">
-                <Search className="absolute top-1/2 left-2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  className="w-64 pl-8"
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search disputes..."
-                  value={searchQuery}
-                />
-              </div>
-              <Select
-                onValueChange={(value) =>
-                  setStatusFilter(
-                    value === "all" ? undefined : (value as "open" | "resolved" | "closed")
-                  )
-                }
-                value={statusFilter || "all"}
-              >
-                <SelectTrigger className="w-40">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="open">Open</SelectItem>
-                  <SelectItem value="resolved">Resolved</SelectItem>
-                  <SelectItem value="closed">Closed</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+          <CardTitle>All Disputes</CardTitle>
+          <CardDescription>{filteredDisputes?.length || 0} dispute(s) found</CardDescription>
         </CardHeader>
         <CardContent>
-          {filteredDisputes && filteredDisputes.length > 0 ? (
-            <div className="space-y-4">
-              {filteredDisputes.map((dispute: any) => (
-                <Link className="block" href={`/disputes/${dispute._id}`} key={dispute._id}>
-                  <Card className="transition-colors hover:bg-accent">
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1 space-y-2">
-                          <div className="flex items-center gap-2">
-                            {getStatusBadge(dispute.status)}
-                            <span className="font-medium">
-                              {dispute.vehicle?.make} {dispute.vehicle?.model}
-                            </span>
-                          </div>
-                          <p className="text-muted-foreground text-sm">
-                            <strong>Reason:</strong> {dispute.reason}
-                          </p>
-                          <p className="line-clamp-2 text-muted-foreground text-sm">
-                            {dispute.description}
-                          </p>
-                          <div className="flex gap-4 text-muted-foreground text-xs">
-                            <span>
-                              <strong>Renter:</strong> {dispute.renter?.name || "Unknown"}
-                            </span>
-                            <span>
-                              <strong>Owner:</strong> {dispute.owner?.name || "Unknown"}
-                            </span>
-                            <span>
-                              <strong>Created:</strong>{" "}
-                              {new Date(dispute.createdAt).toLocaleDateString()}
-                            </span>
-                          </div>
-                        </div>
-                        <ArrowRight className="text-muted-foreground" />
-                      </div>
-                    </CardContent>
-                  </Card>
-                </Link>
-              ))}
-            </div>
-          ) : (
-            <div className="py-12 text-center text-muted-foreground">No disputes found</div>
-          )}
+          <DataTable
+            columns={columns}
+            data={filteredDisputes ?? []}
+            emptyMessage="No disputes found"
+            getRowId={(row) => row._id}
+            isLoading={disputes === undefined}
+            toolbar={
+              <DataTableToolbar
+                filters={filters}
+                onExport={() =>
+                  exportToCSV(
+                    filteredDisputes ?? [],
+                    [
+                      { key: "status", header: "Status", value: (r) => r.status },
+                      {
+                        key: "vehicle",
+                        header: "Vehicle",
+                        value: (r) => `${r.vehicle?.make ?? ""} ${r.vehicle?.model ?? ""}`.trim(),
+                      },
+                      { key: "reason", header: "Reason", value: (r) => r.reason ?? "" },
+                      {
+                        key: "renter",
+                        header: "Renter",
+                        value: (r) => r.renter?.name ?? "Unknown",
+                      },
+                      {
+                        key: "owner",
+                        header: "Owner",
+                        value: (r) => r.owner?.name ?? "Unknown",
+                      },
+                      {
+                        key: "date",
+                        header: "Date",
+                        value: (r) => new Date(r.createdAt).toLocaleDateString(),
+                      },
+                    ],
+                    "disputes"
+                  )
+                }
+                onSearchChange={setSearchQuery}
+                search={searchQuery}
+                searchPlaceholder="Search disputes..."
+              />
+            }
+          />
         </CardContent>
       </Card>
     </div>

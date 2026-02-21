@@ -1,6 +1,6 @@
 "use client"
 
-import { Badge } from "@workspace/ui/components/badge"
+import { Button } from "@workspace/ui/components/button"
 import {
   Card,
   CardContent,
@@ -8,30 +8,19 @@ import {
   CardHeader,
   CardTitle,
 } from "@workspace/ui/components/card"
-import { Input } from "@workspace/ui/components/input"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@workspace/ui/components/select"
 import { useQuery } from "convex/react"
 import { format } from "date-fns"
-import {
-  ArrowRight,
-  CheckCircle,
-  Clock,
-  DollarSign,
-  RefreshCw,
-  Search,
-  XCircle,
-} from "lucide-react"
+import { Clock, DollarSign, Eye, RefreshCw } from "lucide-react"
 import Link from "next/link"
 import { useMemo, useState } from "react"
 import type { DateRange } from "react-day-picker"
+import { type Column, DataTable } from "@/components/data-table/data-table"
+import { exportToCSV } from "@/components/data-table/data-table-export"
+import { DataTableToolbar, type FilterConfig } from "@/components/data-table/data-table-toolbar"
 import { DateRangeFilter } from "@/components/date-range-filter"
+import { PageHeader } from "@/components/page-header"
 import { Pagination } from "@/components/pagination"
+import { StatusBadge } from "@/components/status-badge"
 import { api } from "@/lib/convex"
 
 export default function PaymentsPage() {
@@ -58,7 +47,6 @@ export default function PaymentsPage() {
   const payments = result?.payments || []
   const hasMore = result?.hasMore
 
-  // Reset to page 1 when filters change
   useMemo(() => {
     if (statusFilter !== undefined || searchQuery || dateRange) {
       setCurrentPage(1)
@@ -71,41 +59,6 @@ export default function PaymentsPage() {
     setCursor(undefined)
   }
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "pending":
-        return (
-          <Badge className="bg-yellow-600" variant="default">
-            <Clock className="mr-1 size-3" />
-            Pending
-          </Badge>
-        )
-      case "succeeded":
-        return (
-          <Badge className="bg-green-600" variant="default">
-            <CheckCircle className="mr-1 size-3" />
-            Succeeded
-          </Badge>
-        )
-      case "failed":
-        return (
-          <Badge variant="destructive">
-            <XCircle className="mr-1 size-3" />
-            Failed
-          </Badge>
-        )
-      case "refunded":
-        return (
-          <Badge variant="secondary">
-            <RefreshCw className="mr-1 size-3" />
-            Refunded
-          </Badge>
-        )
-      default:
-        return <Badge>{status}</Badge>
-    }
-  }
-
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat("en-US", {
       style: "currency",
@@ -113,7 +66,6 @@ export default function PaymentsPage() {
       minimumFractionDigits: 2,
     }).format(amount / 100)
 
-  // Calculate totals
   const totalRevenue = payments
     .filter((p: any) => p.status === "succeeded")
     .reduce((sum: number, p: any) => sum + (p.amount || 0), 0)
@@ -126,22 +78,92 @@ export default function PaymentsPage() {
     .filter((p: any) => p.status === "pending")
     .reduce((sum: number, p: any) => sum + (p.amount || 0), 0)
 
-  const totalPages = Math.ceil((payments.length || 0) / 50) || 1
+  const columns: Column<any>[] = [
+    {
+      key: "status",
+      header: "Status",
+      cell: (row) => <StatusBadge status={row.status} />,
+    },
+    {
+      key: "amount",
+      header: "Amount",
+      cell: (row) => <span className="font-semibold">{formatCurrency(row.amount || 0)}</span>,
+      sortable: true,
+      sortValue: (row) => row.amount || 0,
+    },
+    {
+      key: "renter",
+      header: "Renter",
+      cell: (row) => row.renter?.name || "Unknown",
+    },
+    {
+      key: "owner",
+      header: "Owner",
+      cell: (row) => row.owner?.name || "Unknown",
+    },
+    {
+      key: "vehicle",
+      header: "Vehicle",
+      cell: (row) => (
+        <span>
+          {row.vehicle?.year} {row.vehicle?.make} {row.vehicle?.model}
+        </span>
+      ),
+    },
+    {
+      key: "paymentId",
+      header: "Payment ID",
+      cell: (row) => (
+        <span className="font-mono text-xs" title={row.stripePaymentIntentId}>
+          {row.stripePaymentIntentId ? `${row.stripePaymentIntentId.slice(0, 16)}...` : "N/A"}
+        </span>
+      ),
+    },
+    {
+      key: "date",
+      header: "Date",
+      cell: (row) => new Date(row.createdAt).toLocaleDateString(),
+      sortable: true,
+      sortValue: (row) => new Date(row.createdAt).getTime(),
+    },
+    {
+      key: "actions",
+      header: "",
+      cell: (row) => (
+        <Link href={`/payments/${row._id}`}>
+          <Button size="sm" variant="outline">
+            <Eye className="mr-2 size-4" />
+            View
+          </Button>
+        </Link>
+      ),
+    },
+  ]
 
-  if (result === undefined) {
-    return (
-      <div className="flex items-center justify-center p-12">
-        <div className="text-muted-foreground">Loading payments...</div>
-      </div>
-    )
-  }
+  const filters: FilterConfig[] = [
+    {
+      key: "status",
+      label: "Status",
+      options: [
+        { label: "Pending", value: "pending" },
+        { label: "Succeeded", value: "succeeded" },
+        { label: "Failed", value: "failed" },
+        { label: "Refunded", value: "refunded" },
+      ],
+      value: statusFilter,
+      onChange: (value) =>
+        setStatusFilter(value as "pending" | "succeeded" | "failed" | "refunded" | undefined),
+    },
+  ]
+
+  const totalPages = Math.ceil((payments.length || 0) / 50) || 1
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-bold text-3xl">Payments & Transactions</h1>
-        <p className="mt-2 text-muted-foreground">View and monitor all platform payments</p>
-      </div>
+      <PageHeader
+        description="View and monitor all platform payments"
+        title="Payments & Transactions"
+      />
 
       {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-3">
@@ -187,145 +209,85 @@ export default function PaymentsPage() {
 
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>All Payments</CardTitle>
-              <CardDescription>
-                {payments.length} payment(s) found
-                {hasMore && " (showing first page)"}
-              </CardDescription>
-            </div>
-            <div className="flex gap-2">
-              <DateRangeFilter dateRange={dateRange} onDateRangeChange={setDateRange} />
-              <div className="relative">
-                <Search className="absolute top-1/2 left-2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  className="w-64 pl-8"
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search payments..."
-                  value={searchQuery}
-                />
-              </div>
-              <Select
-                onValueChange={(value) =>
-                  setStatusFilter(
-                    value === "all"
-                      ? undefined
-                      : (value as "pending" | "succeeded" | "failed" | "refunded")
-                  )
-                }
-                value={statusFilter || "all"}
-              >
-                <SelectTrigger className="w-40">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="succeeded">Succeeded</SelectItem>
-                  <SelectItem value="failed">Failed</SelectItem>
-                  <SelectItem value="refunded">Refunded</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+          <CardTitle>All Payments</CardTitle>
+          <CardDescription>
+            {payments.length} payment(s) found
+            {hasMore && " (showing first page)"}
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          {payments && payments.length > 0 ? (
-            <>
-              <div className="space-y-4">
-                {payments.map((payment: any) => {
-                  const primaryImage =
-                    payment.vehicle?.images?.find((img: any) => img.isPrimary) ||
-                    payment.vehicle?.images?.[0]
-
-                  return (
-                    <Link className="block" href={`/payments/${payment._id}`} key={payment._id}>
-                      <Card className="transition-colors hover:bg-accent">
-                        <CardContent className="p-4">
-                          <div className="flex items-start justify-between">
-                            <div className="flex flex-1 gap-4">
-                              {primaryImage && (
-                                <div className="flex-shrink-0">
-                                  <img
-                                    alt={`${payment.vehicle?.make} ${payment.vehicle?.model}`}
-                                    className="h-20 w-32 rounded-lg object-cover"
-                                    src={primaryImage.cardUrl || primaryImage.imageUrl}
-                                  />
-                                </div>
-                              )}
-                              <div className="flex-1 space-y-2">
-                                <div className="flex items-center gap-2">
-                                  {getStatusBadge(payment.status)}
-                                  <span className="font-medium">
-                                    {formatCurrency(payment.amount || 0)}
-                                  </span>
-                                </div>
-                                <div className="grid gap-2 text-sm md:grid-cols-2">
-                                  <div>
-                                    <p className="text-muted-foreground">
-                                      <strong>Renter:</strong> {payment.renter?.name || "Unknown"}
-                                    </p>
-                                    <p className="text-muted-foreground">
-                                      <strong>Owner:</strong> {payment.owner?.name || "Unknown"}
-                                    </p>
-                                  </div>
-                                  <div>
-                                    <p className="text-muted-foreground">
-                                      <strong>Vehicle:</strong> {payment.vehicle?.year}{" "}
-                                      {payment.vehicle?.make} {payment.vehicle?.model}
-                                    </p>
-                                    <p className="text-muted-foreground">
-                                      <strong>Payment ID:</strong>{" "}
-                                      {payment.stripePaymentIntentId || "N/A"}
-                                    </p>
-                                  </div>
-                                </div>
-                                <div className="flex gap-4 text-muted-foreground text-xs">
-                                  <span>
-                                    <strong>Created:</strong>{" "}
-                                    {new Date(payment.createdAt).toLocaleString()}
-                                  </span>
-                                  {payment.updatedAt && (
-                                    <span>
-                                      <strong>Updated:</strong>{" "}
-                                      {new Date(payment.updatedAt).toLocaleString()}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                            <ArrowRight className="text-muted-foreground" />
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </Link>
+          <DataTable
+            columns={columns}
+            data={payments}
+            emptyMessage="No payments found"
+            getRowId={(row) => row._id}
+            isLoading={result === undefined}
+            pagination={
+              hasMore ? (
+                <Pagination
+                  currentPage={currentPage}
+                  hasMore={hasMore}
+                  onLoadMore={() => {
+                    if (result?.nextCursor) {
+                      setCursor(result.nextCursor)
+                      setCurrentPage(currentPage + 1)
+                    }
+                  }}
+                  onPageChange={handlePageChange}
+                  totalPages={totalPages}
+                />
+              ) : undefined
+            }
+            toolbar={
+              <DataTableToolbar
+                actions={<DateRangeFilter dateRange={dateRange} onDateRangeChange={setDateRange} />}
+                filters={filters}
+                onExport={() =>
+                  exportToCSV(
+                    payments,
+                    [
+                      { key: "status", header: "Status", value: (r) => r.status },
+                      {
+                        key: "amount",
+                        header: "Amount",
+                        value: (r) => ((r.amount || 0) / 100).toFixed(2),
+                      },
+                      {
+                        key: "renter",
+                        header: "Renter",
+                        value: (r) => r.renter?.name ?? "Unknown",
+                      },
+                      {
+                        key: "owner",
+                        header: "Owner",
+                        value: (r) => r.owner?.name ?? "Unknown",
+                      },
+                      {
+                        key: "vehicle",
+                        header: "Vehicle",
+                        value: (r) =>
+                          `${r.vehicle?.year ?? ""} ${r.vehicle?.make ?? ""} ${r.vehicle?.model ?? ""}`.trim(),
+                      },
+                      {
+                        key: "paymentId",
+                        header: "Payment ID",
+                        value: (r) => r.stripePaymentIntentId ?? "N/A",
+                      },
+                      {
+                        key: "date",
+                        header: "Date",
+                        value: (r) => new Date(r.createdAt).toLocaleDateString(),
+                      },
+                    ],
+                    "payments"
                   )
-                })}
-              </div>
-              {hasMore && (
-                <div className="mt-4">
-                  <Pagination
-                    currentPage={currentPage}
-                    hasMore={hasMore}
-                    onLoadMore={() => {
-                      if (result?.nextCursor) {
-                        setCursor(result.nextCursor)
-                        setCurrentPage(currentPage + 1)
-                      }
-                    }}
-                    onPageChange={handlePageChange}
-                    totalPages={totalPages}
-                  />
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="py-12 text-center text-muted-foreground">
-              <DollarSign className="mx-auto mb-4 size-12 opacity-50" />
-              <p>No payments found</p>
-            </div>
-          )}
+                }
+                onSearchChange={setSearchQuery}
+                search={searchQuery}
+                searchPlaceholder="Search payments..."
+              />
+            }
+          />
         </CardContent>
       </Card>
     </div>

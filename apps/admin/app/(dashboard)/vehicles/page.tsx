@@ -1,6 +1,5 @@
 "use client"
 
-import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import {
   Card,
@@ -9,34 +8,48 @@ import {
   CardHeader,
   CardTitle,
 } from "@workspace/ui/components/card"
-import { Checkbox } from "@workspace/ui/components/checkbox"
-import { Input } from "@workspace/ui/components/input"
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@workspace/ui/components/select"
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@workspace/ui/components/dropdown-menu"
 import { useMutation, useQuery } from "convex/react"
-import { Ban, Car, CheckCircle, Eye, Loader2, Search } from "lucide-react"
+import { Ban, CheckCircle, Eye, Loader2, MoreHorizontal, XCircle } from "lucide-react"
 import Link from "next/link"
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
+import { type Column, DataTable } from "@/components/data-table/data-table"
+import { exportToCSV } from "@/components/data-table/data-table-export"
+import { DataTableToolbar, type FilterConfig } from "@/components/data-table/data-table-toolbar"
+import { PageHeader } from "@/components/page-header"
 import { Pagination } from "@/components/pagination"
+import { StatusBadge } from "@/components/status-badge"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 
+function getVehicleStatus(vehicle: any): string {
+  if (vehicle.isSuspended === true) return "suspended"
+  if (vehicle.isApproved === true) return "approved"
+  if (vehicle.isApproved === false) return "denied"
+  return "pending"
+}
+
 export default function VehiclesPage() {
-  const [statusFilter, setStatusFilter] = useState<"pending" | "approved" | undefined>(undefined)
+  const [statusFilter, setStatusFilter] = useState<"pending" | "approved" | "denied" | undefined>(
+    undefined
+  )
   const [searchQuery, setSearchQuery] = useState("")
   const [currentPage, setCurrentPage] = useState(1)
-  const [selectedIds, setSelectedIds] = useState<Set<Id<"vehicles">>>(new Set())
   const [cursor, setCursor] = useState<string | undefined>(undefined)
 
+  // Map frontend "denied" to backend "rejected" status
+  const backendStatus = statusFilter === "denied" ? ("rejected" as const) : statusFilter
+
   const result = useQuery(api.admin.getAllVehicles, {
-    status: statusFilter,
+    status: backendStatus,
     limit: 50,
     search: searchQuery || undefined,
     cursor,
@@ -45,12 +58,11 @@ export default function VehiclesPage() {
   const vehicles = result?.vehicles || []
   const hasMore = result?.hasMore
 
+  const approveVehicle = useMutation(api.vehicles.approveVehicle)
+  const rejectVehicle = useMutation(api.vehicles.rejectVehicle)
   const suspendVehicle = useMutation(api.admin.suspendVehicle)
-  const bulkSuspendVehicles = useMutation(api.admin.bulkSuspendVehicles)
   const [processingId, setProcessingId] = useState<Id<"vehicles"> | null>(null)
-  const [isBulkProcessing, setIsBulkProcessing] = useState(false)
 
-  // Reset to page 1 when filters change
   useMemo(() => {
     if (statusFilter !== undefined || searchQuery) {
       setCurrentPage(1)
@@ -58,12 +70,35 @@ export default function VehiclesPage() {
     }
   }, [statusFilter, searchQuery])
 
-  const handleSuspend = async (vehicleId: Id<"vehicles">, currentStatus: boolean) => {
+  const handleApprove = async (vehicleId: Id<"vehicles">) => {
     setProcessingId(vehicleId)
     try {
-      await suspendVehicle({ vehicleId, isActive: !currentStatus })
-      toast.success(`Vehicle ${currentStatus ? "suspended" : "activated"} successfully`)
-      setSelectedIds(new Set())
+      await approveVehicle({ vehicleId })
+      toast.success("Vehicle approved successfully")
+    } catch (error) {
+      handleErrorWithContext(error, { action: "approve vehicle", entity: "vehicle" })
+    } finally {
+      setProcessingId(null)
+    }
+  }
+
+  const handleDeny = async (vehicleId: Id<"vehicles">) => {
+    setProcessingId(vehicleId)
+    try {
+      await rejectVehicle({ vehicleId })
+      toast.success("Vehicle denied")
+    } catch (error) {
+      handleErrorWithContext(error, { action: "deny vehicle", entity: "vehicle" })
+    } finally {
+      setProcessingId(null)
+    }
+  }
+
+  const handleSuspend = async (vehicleId: Id<"vehicles">, suspend: boolean) => {
+    setProcessingId(vehicleId)
+    try {
+      await suspendVehicle({ vehicleId, isSuspended: suspend })
+      toast.success(`Vehicle ${suspend ? "suspended" : "unsuspended"} successfully`)
     } catch (error) {
       handleErrorWithContext(error, { action: "suspend vehicle", entity: "vehicle" })
     } finally {
@@ -71,65 +106,9 @@ export default function VehiclesPage() {
     }
   }
 
-  const handleBulkSuspend = async (isActive: boolean) => {
-    if (selectedIds.size === 0) return
-
-    setIsBulkProcessing(true)
-    try {
-      await bulkSuspendVehicles({
-        vehicleIds: Array.from(selectedIds),
-        isActive,
-      })
-      toast.success(
-        `${selectedIds.size} vehicle(s) ${isActive ? "activated" : "suspended"} successfully`
-      )
-      setSelectedIds(new Set())
-    } catch (error) {
-      handleErrorWithContext(error, { action: "bulk suspend vehicles", entity: "vehicles" })
-    } finally {
-      setIsBulkProcessing(false)
-    }
-  }
-
-  const handleSelectAll = () => {
-    if (selectedIds.size === vehicles.length) {
-      setSelectedIds(new Set())
-    } else {
-      setSelectedIds(new Set(vehicles.map((v: any) => v._id)))
-    }
-  }
-
-  const handleSelectOne = (id: Id<"vehicles">) => {
-    const newSelected = new Set(selectedIds)
-    if (newSelected.has(id)) {
-      newSelected.delete(id)
-    } else {
-      newSelected.add(id)
-    }
-    setSelectedIds(newSelected)
-  }
-
   const handlePageChange = (page: number) => {
     setCurrentPage(page)
     setCursor(undefined)
-  }
-
-  const getStatusBadge = (status: string, isActive?: boolean) => {
-    if (isActive === false) {
-      return <Badge variant="destructive">Suspended</Badge>
-    }
-    switch (status) {
-      case "pending":
-        return <Badge variant="default">Pending</Badge>
-      case "approved":
-        return (
-          <Badge className="bg-green-600" variant="default">
-            Approved
-          </Badge>
-        )
-      default:
-        return <Badge>{status}</Badge>
-    }
   }
 
   const formatCurrency = (amount: number) =>
@@ -140,290 +119,196 @@ export default function VehiclesPage() {
       maximumFractionDigits: 0,
     }).format(amount / 100)
 
-  const totalPages = Math.ceil((vehicles.length || 0) / 50) || 1
-  const approvedVehicles = vehicles.filter((v: any) => v.status === "approved")
+  const columns: Column<any>[] = [
+    {
+      key: "status",
+      header: "Status",
+      cell: (row) => <StatusBadge status={getVehicleStatus(row)} />,
+    },
+    {
+      key: "vehicle",
+      header: "Vehicle",
+      cell: (row) => (
+        <span className="font-medium">
+          {row.year} {row.make} {row.model}
+        </span>
+      ),
+      sortable: true,
+      sortValue: (row) => `${row.year ?? ""} ${row.make ?? ""} ${row.model ?? ""}`,
+    },
+    {
+      key: "track",
+      header: "Track",
+      cell: (row) => row.track?.name || "Unknown",
+      sortable: true,
+      sortValue: (row) => row.track?.name ?? "",
+    },
+    {
+      key: "owner",
+      header: "Owner",
+      cell: (row) => row.owner?.name || "Unknown",
+      sortable: true,
+      sortValue: (row) => row.owner?.name ?? "",
+    },
+    {
+      key: "dailyRate",
+      header: "Daily Rate",
+      cell: (row) => <span className="font-semibold">{formatCurrency(row.dailyRate)}</span>,
+      sortable: true,
+      sortValue: (row) => row.dailyRate || 0,
+    },
+    {
+      key: "actions",
+      header: "",
+      cell: (row) => {
+        const isProcessing = processingId === row._id
+        const status = getVehicleStatus(row)
+        return (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button disabled={isProcessing} size="sm" variant="outline">
+                {isProcessing ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <MoreHorizontal className="size-4" />
+                )}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem asChild>
+                <Link href={`/vehicles/${row._id}`}>
+                  <Eye className="mr-2 size-4" />
+                  View Details
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {status !== "approved" && (
+                <DropdownMenuItem onClick={() => handleApprove(row._id)}>
+                  <CheckCircle className="mr-2 size-4" />
+                  Approve
+                </DropdownMenuItem>
+              )}
+              {status !== "denied" && (
+                <DropdownMenuItem onClick={() => handleDeny(row._id)}>
+                  <XCircle className="mr-2 size-4" />
+                  Deny
+                </DropdownMenuItem>
+              )}
+              {status !== "suspended" && (
+                <DropdownMenuItem
+                  className="text-destructive"
+                  onClick={() => handleSuspend(row._id, true)}
+                >
+                  <Ban className="mr-2 size-4" />
+                  Suspend
+                </DropdownMenuItem>
+              )}
+              {status === "suspended" && (
+                <DropdownMenuItem onClick={() => handleSuspend(row._id, false)}>
+                  <CheckCircle className="mr-2 size-4" />
+                  Unsuspend
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )
+      },
+    },
+  ]
 
-  if (result === undefined) {
-    return (
-      <div className="flex items-center justify-center p-12">
-        <div className="text-muted-foreground">Loading vehicles...</div>
-      </div>
-    )
-  }
+  const filters: FilterConfig[] = [
+    {
+      key: "status",
+      label: "Status",
+      options: [
+        { label: "Pending", value: "pending" },
+        { label: "Approved", value: "approved" },
+        { label: "Denied", value: "denied" },
+      ],
+      value: statusFilter,
+      onChange: (value) => setStatusFilter(value as "pending" | "approved" | "denied" | undefined),
+    },
+  ]
+
+  const totalPages = Math.ceil((vehicles.length || 0) / 50) || 1
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-bold text-3xl">Vehicle Management</h1>
-        <p className="mt-2 text-muted-foreground">View and manage all platform vehicles</p>
-      </div>
+      <PageHeader description="View and manage all platform vehicles" title="Vehicle Management" />
 
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>All Vehicles</CardTitle>
-              <CardDescription>
-                {vehicles.length} vehicle(s) found
-                {hasMore && " (showing first page)"}
-              </CardDescription>
-            </div>
-            <div className="flex gap-2">
-              <div className="relative">
-                <Search className="absolute top-1/2 left-2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  className="w-64 pl-8"
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search vehicles..."
-                  value={searchQuery}
-                />
-              </div>
-              <Select
-                onValueChange={(value) =>
-                  setStatusFilter(value === "all" ? undefined : (value as "pending" | "approved"))
-                }
-                value={statusFilter || "all"}
-              >
-                <SelectTrigger className="w-40">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="approved">Approved</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+          <CardTitle>All Vehicles</CardTitle>
+          <CardDescription>
+            {vehicles.length} vehicle(s) found
+            {hasMore && " (showing first page)"}
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          {selectedIds.size > 0 && (
-            <div className="mb-4 flex items-center justify-between rounded-lg border bg-muted p-3">
-              <span className="font-medium text-sm">{selectedIds.size} vehicle(s) selected</span>
-              <div className="flex gap-2">
-                {approvedVehicles.some((v: any) => selectedIds.has(v._id)) && (
-                  <>
-                    <Button
-                      disabled={isBulkProcessing}
-                      onClick={() => {
-                        const selectedApproved = vehicles.filter(
-                          (v: any) => selectedIds.has(v._id) && v.status === "approved"
-                        )
-                        const allActive = selectedApproved.every((v: any) => v.isActive !== false)
-                        handleBulkSuspend(!allActive)
-                      }}
-                      size="sm"
-                      variant="default"
-                    >
-                      {isBulkProcessing ? (
-                        <>
-                          <Loader2 className="mr-2 size-4 animate-spin" />
-                          Processing...
-                        </>
-                      ) : (
-                        <>
-                          <Ban className="mr-2 size-4" />
-                          Suspend Selected
-                        </>
-                      )}
-                    </Button>
-                    <Button
-                      disabled={isBulkProcessing}
-                      onClick={() => {
-                        const selectedApproved = vehicles.filter(
-                          (v: any) => selectedIds.has(v._id) && v.status === "approved"
-                        )
-                        const allSuspended = selectedApproved.every(
-                          (v: any) => v.isActive === false
-                        )
-                        if (allSuspended) {
-                          handleBulkSuspend(true)
-                        }
-                      }}
-                      size="sm"
-                      variant="outline"
-                    >
-                      <CheckCircle className="mr-2 size-4" />
-                      Activate Selected
-                    </Button>
-                  </>
-                )}
-                <Button onClick={() => setSelectedIds(new Set())} size="sm" variant="outline">
-                  Clear Selection
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {vehicles && vehicles.length > 0 ? (
-            <>
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 border-b pb-2">
-                  <Checkbox
-                    checked={selectedIds.size === vehicles.length && vehicles.length > 0}
-                    onCheckedChange={handleSelectAll}
-                  />
-                  <span className="text-muted-foreground text-sm">Select all</span>
-                </div>
-                {vehicles.map((vehicle: any) => {
-                  const isProcessing = processingId === vehicle._id
-                  const isSelected = selectedIds.has(vehicle._id)
-                  const primaryImage =
-                    vehicle.images?.find((img: any) => img.isPrimary) || vehicle.images?.[0]
-
-                  return (
-                    <Card className="overflow-hidden" key={vehicle._id}>
-                      <CardContent className="p-6">
-                        <div className="flex gap-4">
-                          <div className="flex items-start pt-1">
-                            <Checkbox
-                              checked={isSelected}
-                              onCheckedChange={() => handleSelectOne(vehicle._id)}
-                            />
-                          </div>
-                          <div className="flex flex-1 gap-6">
-                            {primaryImage && (
-                              <div className="flex-shrink-0">
-                                <img
-                                  alt={`${vehicle.make} ${vehicle.model}`}
-                                  className="h-32 w-48 rounded-lg object-cover"
-                                  src={primaryImage.cardUrl || primaryImage.imageUrl}
-                                />
-                              </div>
-                            )}
-                            <div className="flex-1 space-y-4">
-                              <div className="flex items-start justify-between">
-                                <div>
-                                  <div className="flex items-center gap-2">
-                                    {getStatusBadge(vehicle.status, vehicle.isActive)}
-                                    <h3 className="font-bold text-lg">
-                                      {vehicle.year} {vehicle.make} {vehicle.model}
-                                    </h3>
-                                  </div>
-                                  <p className="mt-1 text-muted-foreground">
-                                    Track: {vehicle.track?.name || "Unknown"} | Owner:{" "}
-                                    {vehicle.owner?.name || "Unknown"}
-                                  </p>
-                                </div>
-                                <div className="flex gap-2">
-                                  {vehicle.status === "approved" && (
-                                    <Button
-                                      disabled={isProcessing}
-                                      onClick={() =>
-                                        handleSuspend(vehicle._id, vehicle.isActive !== false)
-                                      }
-                                      size="sm"
-                                      variant={
-                                        vehicle.isActive === false ? "default" : "destructive"
-                                      }
-                                    >
-                                      {isProcessing ? (
-                                        <>
-                                          <Loader2 className="mr-2 size-4 animate-spin" />
-                                          Processing...
-                                        </>
-                                      ) : vehicle.isActive === false ? (
-                                        <>
-                                          <CheckCircle className="mr-2 size-4" />
-                                          Activate
-                                        </>
-                                      ) : (
-                                        <>
-                                          <Ban className="mr-2 size-4" />
-                                          Suspend
-                                        </>
-                                      )}
-                                    </Button>
-                                  )}
-                                  <Link href={`/vehicles/${vehicle._id}`}>
-                                    <Button size="sm" variant="outline">
-                                      <Eye className="mr-2 size-4" />
-                                      View Details
-                                    </Button>
-                                  </Link>
-                                </div>
-                              </div>
-
-                              <div className="grid gap-4 md:grid-cols-2">
-                                <div>
-                                  <p className="text-muted-foreground text-sm">
-                                    <strong>Daily Rate:</strong> {formatCurrency(vehicle.dailyRate)}
-                                  </p>
-                                  <p className="text-muted-foreground text-sm">
-                                    <strong>Horsepower:</strong> {vehicle.horsepower || "N/A"}
-                                  </p>
-                                  <p className="text-muted-foreground text-sm">
-                                    <strong>Transmission:</strong> {vehicle.transmission || "N/A"}
-                                  </p>
-                                </div>
-                                <div>
-                                  <p className="text-muted-foreground text-sm">
-                                    <strong>Drivetrain:</strong> {vehicle.drivetrain || "N/A"}
-                                  </p>
-                                  <p className="text-muted-foreground text-sm">
-                                    <strong>Engine:</strong> {vehicle.engineType || "N/A"}
-                                  </p>
-                                  <p className="text-muted-foreground text-sm">
-                                    <strong>Mileage:</strong>{" "}
-                                    {vehicle.mileage?.toLocaleString() || "N/A"}
-                                  </p>
-                                </div>
-                              </div>
-
-                              {vehicle.description && (
-                                <div>
-                                  <p className="text-muted-foreground text-sm">
-                                    <strong>Description:</strong>
-                                  </p>
-                                  <p className="mt-1 line-clamp-2 text-muted-foreground text-sm">
-                                    {vehicle.description}
-                                  </p>
-                                </div>
-                              )}
-
-                              <div className="flex gap-4 text-muted-foreground text-xs">
-                                <span>
-                                  <strong>Created:</strong>{" "}
-                                  {new Date(vehicle.createdAt).toLocaleDateString()}
-                                </span>
-                                {vehicle.updatedAt && (
-                                  <span>
-                                    <strong>Updated:</strong>{" "}
-                                    {new Date(vehicle.updatedAt).toLocaleDateString()}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
+          <DataTable
+            columns={columns}
+            data={vehicles}
+            emptyMessage="No vehicles found"
+            getRowId={(row) => row._id}
+            isLoading={result === undefined}
+            pagination={
+              hasMore ? (
+                <Pagination
+                  currentPage={currentPage}
+                  hasMore={hasMore}
+                  onLoadMore={() => {
+                    if (result?.nextCursor) {
+                      setCursor(result.nextCursor)
+                      setCurrentPage(currentPage + 1)
+                    }
+                  }}
+                  onPageChange={handlePageChange}
+                  totalPages={totalPages}
+                />
+              ) : undefined
+            }
+            toolbar={
+              <DataTableToolbar
+                filters={filters}
+                onExport={() =>
+                  exportToCSV(
+                    vehicles as any[],
+                    [
+                      {
+                        key: "status",
+                        header: "Status",
+                        value: (r) => getVehicleStatus(r),
+                      },
+                      {
+                        key: "vehicle",
+                        header: "Vehicle",
+                        value: (r) => `${r.year ?? ""} ${r.make ?? ""} ${r.model ?? ""}`.trim(),
+                      },
+                      {
+                        key: "track",
+                        header: "Track",
+                        value: (r) => r.track?.name ?? "Unknown",
+                      },
+                      {
+                        key: "owner",
+                        header: "Owner",
+                        value: (r) => r.owner?.name ?? "Unknown",
+                      },
+                      {
+                        key: "dailyRate",
+                        header: "Daily Rate",
+                        value: (r) => ((r.dailyRate || 0) / 100).toFixed(0),
+                      },
+                    ],
+                    "vehicles"
                   )
-                })}
-              </div>
-              {hasMore && (
-                <div className="mt-4">
-                  <Pagination
-                    currentPage={currentPage}
-                    hasMore={hasMore}
-                    onLoadMore={() => {
-                      if (result?.nextCursor) {
-                        setCursor(result.nextCursor)
-                        setCurrentPage(currentPage + 1)
-                      }
-                    }}
-                    onPageChange={handlePageChange}
-                    totalPages={totalPages}
-                  />
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="py-12 text-center text-muted-foreground">
-              <Car className="mx-auto mb-4 size-12 opacity-50" />
-              <p>No vehicles found</p>
-            </div>
-          )}
+                }
+                onSearchChange={setSearchQuery}
+                search={searchQuery}
+                searchPlaceholder="Search vehicles..."
+              />
+            }
+          />
         </CardContent>
       </Card>
     </div>

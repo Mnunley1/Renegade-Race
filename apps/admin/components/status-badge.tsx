@@ -17,6 +17,7 @@ const statusConfig: Record<
   closed: { variant: "secondary" },
   approved: { variant: "default", className: "bg-emerald-600" },
   rejected: { variant: "destructive" },
+  denied: { variant: "destructive" },
   succeeded: { variant: "default", className: "bg-emerald-600" },
   failed: { variant: "destructive" },
   processing: { variant: "outline", className: "border-blue-500 text-blue-700 dark:text-blue-400" },
@@ -43,6 +44,16 @@ const statusConfig: Record<
   },
   sending: { variant: "outline", className: "border-blue-500 text-blue-700 dark:text-blue-400" },
   archived: { variant: "secondary" },
+  pending_review: {
+    variant: "outline",
+    className: "border-yellow-500 text-yellow-700 dark:text-yellow-400",
+  },
+  payment_pending: {
+    variant: "outline",
+    className: "border-orange-500 text-orange-700 dark:text-orange-400",
+  },
+  paid: { variant: "default", className: "bg-emerald-600" },
+  suspended: { variant: "destructive" },
 }
 
 interface StatusBadgeProps {
