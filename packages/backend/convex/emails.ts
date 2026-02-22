@@ -1,8 +1,8 @@
 import { Resend as ResendComponent } from "@convex-dev/resend"
 import { v } from "convex/values"
 import { Resend } from "resend"
-import { components, internal } from "./_generated/api"
-import { type MutationCtx, mutation, query } from "./_generated/server"
+import { api, components, internal } from "./_generated/api"
+import { action, type MutationCtx, internalMutation, mutation, query } from "./_generated/server"
 import { checkAdmin } from "./admin"
 import { rateLimiter } from "./rateLimiter"
 
@@ -1113,6 +1113,56 @@ export async function sendTransactionalEmail(
   }
 }
 
+// Email template: Returning user invite
+export function getReturningUserInviteTemplate(name: string): {
+  subject: string
+  html: string
+  text: string
+} {
+  const siteUrl = process.env.WEB_URL || "https://renegaderace.com"
+  // Handle bad names from migration (e.g. "null null", "null", empty)
+  const displayName =
+    !name || name.trim() === "" || name.toLowerCase() === "null null" || name.toLowerCase() === "null"
+      ? "there"
+      : name
+  const subject = "The New Renegade Is Live - Come Check It Out"
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="utf-8"></head>
+    <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+      <div style="text-align: center; margin-bottom: 30px;">
+        <h1 style="color: #1a1a1a;">Welcome Back to Renegade!</h1>
+      </div>
+      <p>Hi ${displayName},</p>
+      <p>We've rebuilt Renegade Race Rentals from the ground up and it's ready for you.</p>
+      <p>Your account is all set. Just sign in with the same email you used before and you're good to go.</p>
+      <p style="text-align: center; margin: 30px 0;">
+        <a href="${siteUrl}/sign-in" style="background-color: #1a1a1a; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">Sign In to Renegade</a>
+      </p>
+      <p>If you run into anything or have questions, just reply to this email.</p>
+      <p style="margin-top: 30px;">See you on the track,<br>The Renegade Race Rentals Team</p>
+    </body>
+    </html>
+  `
+  const text = [
+    "Welcome Back to Renegade!",
+    "",
+    `Hi ${displayName},`,
+    "",
+    "We've rebuilt Renegade Race Rentals from the ground up and it's ready for you.",
+    "",
+    "Your account is all set. Just sign in with the same email you used before.",
+    "",
+    `Sign in: ${siteUrl}/sign-in`,
+    "",
+    "See you on the track,",
+    "The Renegade Race Rentals Team",
+  ].join("\n")
+
+  return { subject, html, text }
+}
+
 // Send a "welcome back" invite to a returning user
 export const sendReturningUserInvite = mutation({
   args: {
@@ -1120,44 +1170,118 @@ export const sendReturningUserInvite = mutation({
     name: v.string(),
   },
   handler: async (ctx, args) => {
-    const siteUrl = process.env.WEB_URL || "https://renegaderace.com"
-    const subject = "The New Renegade Is Live - Come Check It Out"
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head><meta charset="utf-8"></head>
-      <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <div style="text-align: center; margin-bottom: 30px;">
-          <h1 style="color: #1a1a1a;">Welcome Back to Renegade!</h1>
-        </div>
-        <p>Hi ${args.name},</p>
-        <p>We've rebuilt Renegade Race Rentals from the ground up and it's ready for you.</p>
-        <p>Your account is all set. Just sign in with the same email you used before and you're good to go.</p>
-        <p style="text-align: center; margin: 30px 0;">
-          <a href="${siteUrl}/sign-in" style="background-color: #1a1a1a; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">Sign In to Renegade</a>
-        </p>
-        <p>If you run into anything or have questions, just reply to this email.</p>
-        <p style="margin-top: 30px;">See you on the track,<br>The Renegade Race Rentals Team</p>
-      </body>
-      </html>
-    `
-    const text = [
-      "Welcome Back to Renegade!",
-      "",
-      `Hi ${args.name},`,
-      "",
-      "We've rebuilt Renegade Race Rentals from the ground up and it's ready for you.",
-      "",
-      "Your account is all set. Just sign in with the same email you used before.",
-      "",
-      `Sign in: ${siteUrl}/sign-in`,
-      "",
-      "See you on the track,",
-      "The Renegade Race Rentals Team",
-    ].join("\n")
-
-    const emailId = await sendTransactionalEmail(ctx, args.email, { subject, html, text })
+    const template = getReturningUserInviteTemplate(args.name)
+    const emailId = await sendTransactionalEmail(ctx, args.email, template)
     return { success: !!emailId, emailId }
+  },
+})
+
+// Batch send returning user invite emails (internal - called from action)
+export const sendReturningUserInviteBatch = internalMutation({
+  args: {
+    users: v.array(v.object({ email: v.string(), name: v.string() })),
+  },
+  handler: async (ctx, args) => {
+    let successful = 0
+    let failed = 0
+    const errors: string[] = []
+
+    for (const user of args.users) {
+      const template = getReturningUserInviteTemplate(user.name)
+      const emailId = await sendTransactionalEmail(ctx, user.email, template)
+      if (emailId) {
+        successful++
+      } else {
+        failed++
+        errors.push(user.email)
+      }
+    }
+
+    return { successful, failed, errors }
+  },
+})
+
+// Mark returning hosts as onboarded (internal - called from action)
+export const markReturningHostsOnboarded = internalMutation({
+  args: {
+    userEmails: v.array(v.string()),
+  },
+  handler: async (ctx, args) => {
+    let updated = 0
+    const emailSet = new Set(args.userEmails.map((e) => e.toLowerCase()))
+
+    // Get all users and filter by email
+    const allUsers = await ctx.db.query("users").collect()
+    const matchedUsers = allUsers.filter((u) => u.email && emailSet.has(u.email.toLowerCase()))
+
+    for (const user of matchedUsers) {
+      // Check if they own vehicles
+      const vehicles = await ctx.db
+        .query("vehicles")
+        .withIndex("by_owner", (q) => q.eq("ownerId", user.externalId))
+        .first()
+
+      if (vehicles) {
+        await ctx.db.patch(user._id, {
+          hostOnboardingStatus: "completed",
+          hostOnboardingSteps: {
+            personalInfo: true,
+            vehicleAdded: true,
+            payoutSetup: false,
+            safetyStandards: true,
+          },
+        })
+        updated++
+      }
+    }
+
+    return { updated }
+  },
+})
+
+// Send returning user invites in batch (admin action)
+export const sendReturningUserInvites = action({
+  args: {
+    users: v.array(v.object({ email: v.string(), name: v.string() })),
+    fixHostOnboarding: v.boolean(),
+    hostEmails: v.optional(v.array(v.string())),
+  },
+  handler: async (ctx, args) => {
+    await checkAdmin(ctx)
+
+    let hostsFixed = 0
+
+    // Fix host onboarding if requested
+    if (args.fixHostOnboarding && args.hostEmails && args.hostEmails.length > 0) {
+      const result = await ctx.runMutation(internal.emails.markReturningHostsOnboarded, {
+        userEmails: args.hostEmails,
+      })
+      hostsFixed = result.updated
+    }
+
+    // Split users into batches of 50
+    const batchSize = 50
+    let totalSuccessful = 0
+    let totalFailed = 0
+    const allErrors: string[] = []
+
+    for (let i = 0; i < args.users.length; i += batchSize) {
+      const batch = args.users.slice(i, i + batchSize)
+      const result = await ctx.runMutation(internal.emails.sendReturningUserInviteBatch, {
+        users: batch,
+      })
+      totalSuccessful += result.successful
+      totalFailed += result.failed
+      allErrors.push(...result.errors)
+    }
+
+    return {
+      totalRecipients: args.users.length,
+      successful: totalSuccessful,
+      failed: totalFailed,
+      errors: allErrors,
+      hostsFixed,
+    }
   },
 })
 
