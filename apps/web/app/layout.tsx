@@ -31,14 +31,14 @@ export const metadata: Metadata = {
     address: false,
     telephone: false,
   },
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://renegaderentals.com"),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://renegaderace.com"),
   alternates: {
     canonical: "/",
   },
   openGraph: {
     type: "website",
     locale: "en_US",
-    url: process.env.NEXT_PUBLIC_SITE_URL || "https://renegaderentals.com",
+    url: process.env.NEXT_PUBLIC_SITE_URL || "https://renegaderace.com",
     siteName: "Renegade Race Rentals",
     title: "Renegade Race Rentals - Track Car Rentals",
     description:

@@ -12,4 +12,4 @@ Disallow: /checkout/
 Disallow: /trips/
 
 # Sitemap
-Sitemap: https://renegaderentals.com/sitemap.xml
+Sitemap: https://renegaderace.com/sitemap.xml
