@@ -355,7 +355,7 @@ export const createConnectAccount = action({
     // Production allowed domains
     const allowedProductionDomains = [
       "https://renegaderace.com",
-      // Add other production/staging domains here as needed
+      "https://www.renegaderace.com",
     ]
 
     // If not development, validate against allowed domains
