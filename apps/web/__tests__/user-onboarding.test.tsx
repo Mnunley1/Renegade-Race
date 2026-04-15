@@ -47,11 +47,11 @@ vi.mock("@clerk/nextjs", () => ({
       create: signUpCreate,
       authenticateWithRedirect,
       prepareEmailAddressVerification,
+      unverifiedFields: [] as string[],
+      status: null as string | null,
     },
     isLoaded: true,
     setActive: vi.fn(),
-    unverifiedFields: [] as string[],
-    status: null as string | null,
   }),
 }))
 
