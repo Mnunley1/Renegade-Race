@@ -14,6 +14,11 @@ export default defineSchema({
     profileImageR2Key: v.optional(v.string()), // R2 object key for profile image
     profileImage: v.optional(v.string()), // ImageKit or legacy URL for profile image
     isHost: v.optional(v.boolean()),
+    /** User offers paid driver coaching listings (parallel to hosting vehicles). */
+    isCoach: v.optional(v.boolean()),
+    coachOnboardingStatus: v.optional(
+      v.union(v.literal("not_started"), v.literal("in_progress"), v.literal("completed"))
+    ),
     isBanned: v.optional(v.boolean()),
     userType: v.optional(v.union(v.literal("driver"), v.literal("team"), v.literal("both"))),
     // Stripe Connect fields
@@ -1012,6 +1017,151 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_category", ["category"])
     .index("by_user_category", ["userId", "category"]),
+
+  /** Coach marketplace listing (mirrors vehicles: one coach may have many services). */
+  coachServices: defineTable({
+    coachId: v.string(),
+    trackId: v.optional(v.id("tracks")),
+    title: v.string(),
+    description: v.string(),
+    /** Amount in cents per billing unit (see pricingUnit). */
+    baseRate: v.number(),
+    pricingUnit: v.union(
+      v.literal("hour"),
+      v.literal("half_day"),
+      v.literal("full_day"),
+      v.literal("session")
+    ),
+    addOns: v.array(
+      v.object({
+        name: v.string(),
+        price: v.number(),
+        description: v.optional(v.string()),
+        isRequired: v.optional(v.boolean()),
+        priceType: v.optional(v.union(v.literal("daily"), v.literal("one-time"))),
+      })
+    ),
+    specialties: v.array(v.string()),
+    certifications: v.optional(v.array(v.string())),
+    maxParticipants: v.optional(v.number()),
+    languages: v.optional(v.array(v.string())),
+    address: v.optional(
+      v.object({
+        street: v.optional(v.string()),
+        city: v.optional(v.string()),
+        state: v.optional(v.string()),
+        zipCode: v.string(),
+        latitude: v.optional(v.number()),
+        longitude: v.optional(v.number()),
+      })
+    ),
+    cancellationPolicy: v.optional(
+      v.union(v.literal("flexible"), v.literal("moderate"), v.literal("strict"))
+    ),
+    isActive: v.boolean(),
+    isSuspended: v.optional(v.boolean()),
+    isApproved: v.optional(v.boolean()),
+    viewCount: v.optional(v.number()),
+    shareCount: v.optional(v.number()),
+    deletedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_coach", ["coachId"])
+    .index("by_track", ["trackId"])
+    .index("by_active", ["isActive"])
+    .index("by_coach_active", ["coachId", "isActive"])
+    .index("by_approved", ["isApproved"])
+    .index("by_active_approved", ["isActive", "isApproved"]),
+
+  coachServiceImages: defineTable({
+    coachServiceId: v.id("coachServices"),
+    r2Key: v.optional(v.string()),
+    imageUrl: v.optional(v.string()),
+    isPrimary: v.boolean(),
+    order: v.number(),
+    metadata: v.optional(
+      v.object({
+        fileName: v.string(),
+        originalSize: v.number(),
+        processedSizes: v.object({
+          thumbnail: v.number(),
+          card: v.number(),
+          detail: v.number(),
+          hero: v.number(),
+        }),
+      })
+    ),
+  })
+    .index("by_coach_service", ["coachServiceId"])
+    .index("by_coach_service_primary", ["coachServiceId", "isPrimary"]),
+
+  coachAvailability: defineTable({
+    coachServiceId: v.id("coachServices"),
+    date: v.string(),
+    isAvailable: v.boolean(),
+    reason: v.optional(v.string()),
+    price: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_coach_service_date", ["coachServiceId", "date"])
+    .index("by_coach_service_available", ["coachServiceId", "isAvailable"])
+    .index("by_coach_date_available", ["date", "isAvailable"]),
+
+  coachBookings: defineTable({
+    coachServiceId: v.id("coachServices"),
+    clientId: v.string(),
+    coachId: v.string(),
+    startDate: v.string(),
+    endDate: v.string(),
+    /** Required when service pricingUnit is hour; stored snapshot for billing. */
+    totalHours: v.optional(v.number()),
+    billingUnits: v.number(),
+    baseRate: v.number(),
+    pricingUnit: v.union(
+      v.literal("hour"),
+      v.literal("half_day"),
+      v.literal("full_day"),
+      v.literal("session")
+    ),
+    totalAmount: v.number(),
+    addOns: v.optional(
+      v.array(
+        v.object({
+          name: v.string(),
+          price: v.number(),
+          description: v.optional(v.string()),
+          priceType: v.optional(v.union(v.literal("daily"), v.literal("one-time"))),
+        })
+      )
+    ),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("approved"),
+      v.literal("confirmed"),
+      v.literal("cancelled"),
+      v.literal("completed"),
+      v.literal("declined")
+    ),
+    approvedAt: v.optional(v.number()),
+    clientMessage: v.optional(v.string()),
+    coachMessage: v.optional(v.string()),
+    cancellationReason: v.optional(v.string()),
+    /** Reserved for Stripe integration (coach-specific payment rows may come later). */
+    stripePaymentIntentId: v.optional(v.string()),
+    paymentStatus: v.optional(
+      v.union(v.literal("pending"), v.literal("paid"), v.literal("failed"), v.literal("refunded"))
+    ),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_coach_service", ["coachServiceId"])
+    .index("by_client", ["clientId"])
+    .index("by_coach", ["coachId"])
+    .index("by_status", ["status"])
+    .index("by_client_status", ["clientId", "status"])
+    .index("by_coach_status", ["coachId", "status"])
+    .index("by_coach_dates", ["startDate", "endDate"]),
 
   // Webhook idempotency tracking
   webhookEvents: defineTable({
