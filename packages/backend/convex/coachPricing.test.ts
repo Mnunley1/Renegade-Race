@@ -1,5 +1,8 @@
-import { calculateBillingUnits, calculateCoachBookingTotal } from "./coachPricing"
-import { calculateAddOnsTotal } from "./pricing"
+import { calculateAddOnsTotal } from "@renegade/convex/pricing"
+import {
+  calculateBillingUnits,
+  calculateCoachBookingTotal,
+} from "@renegade/convex/coachPricing"
 
 describe("calculateBillingUnits", () => {
   it("counts full_day units using the same day span as vehicle rentals (calculateDaysBetween)", () => {
