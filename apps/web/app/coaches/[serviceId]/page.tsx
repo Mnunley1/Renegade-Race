@@ -105,7 +105,8 @@ export default function CoachServiceDetailPage() {
     )
   }
 
-  const hero = service.images?.find((i: { isPrimary?: boolean }) => i.isPrimary) || service.images?.[0]
+  const hero =
+    service.images?.find((i: { isPrimary?: boolean }) => i.isPrimary) || service.images?.[0]
   const ogImage = hero?.detailUrl || hero?.cardUrl || ""
 
   return (
@@ -250,7 +251,9 @@ export default function CoachServiceDetailPage() {
                   className="w-full"
                   onClick={() => {
                     if (!isSignedIn) {
-                      router.push(`/sign-in?redirect_url=${encodeURIComponent(`/coaches/${serviceId}/book`)}`)
+                      router.push(
+                        `/sign-in?redirect_url=${encodeURIComponent(`/coaches/${serviceId}/book`)}`
+                      )
                       return
                     }
                     router.push(`/coaches/${serviceId}/book`)

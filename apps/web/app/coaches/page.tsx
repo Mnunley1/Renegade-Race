@@ -63,7 +63,10 @@ function CoachesContent() {
               </p>
             </div>
             <div className="w-full max-w-xs">
-              <label className="mb-1.5 block font-medium text-muted-foreground text-xs" htmlFor="track">
+              <label
+                className="mb-1.5 block font-medium text-muted-foreground text-xs"
+                htmlFor="track"
+              >
                 Track
               </label>
               <Select

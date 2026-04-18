@@ -92,8 +92,8 @@ export default function NewCoachingProgramPage() {
   }
 
   const handleSubmit = async () => {
-    if (!user || !ack) return
-    if (!title.trim() || !description.trim()) {
+    if (!(user && ack)) return
+    if (!(title.trim() && description.trim())) {
       toast.error("Title and description are required")
       return
     }
@@ -167,8 +167,7 @@ export default function NewCoachingProgramPage() {
           : undefined
 
       const id = await createWithImages({
-        trackId:
-          trackId && trackId !== "none" ? (trackId as Id<"tracks">) : undefined,
+        trackId: trackId && trackId !== "none" ? (trackId as Id<"tracks">) : undefined,
         title: title.trim(),
         description: description.trim(),
         baseRate: rateCents,
@@ -272,10 +271,7 @@ export default function NewCoachingProgramPage() {
               </div>
               <div className="space-y-2">
                 <Label>Billing unit</Label>
-                <Select
-                  onValueChange={(v) => setPricingUnit(v as PricingUnit)}
-                  value={pricingUnit}
-                >
+                <Select onValueChange={(v) => setPricingUnit(v as PricingUnit)} value={pricingUnit}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -323,7 +319,10 @@ export default function NewCoachingProgramPage() {
           <CardContent className="space-y-4">
             <div className="flex flex-wrap gap-3">
               {images.map((im, i) => (
-                <div className="relative size-28 overflow-hidden rounded-md border" key={im.preview}>
+                <div
+                  className="relative size-28 overflow-hidden rounded-md border"
+                  key={im.preview}
+                >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img alt="" className="size-full object-cover" src={im.preview} />
                   <button
@@ -378,7 +377,10 @@ export default function NewCoachingProgramPage() {
             <div className="space-y-2">
               <Label>Add-ons</Label>
               {addOns.map((a, i) => (
-                <div className="flex items-center justify-between rounded border p-2 text-sm" key={i}>
+                <div
+                  className="flex items-center justify-between rounded border p-2 text-sm"
+                  key={i}
+                >
                   <span>
                     {a.name} — ${a.price} ({a.priceType})
                   </span>
@@ -426,7 +428,7 @@ export default function NewCoachingProgramPage() {
                 </Select>
                 <Button
                   onClick={() => {
-                    if (!newAddOn.name || !newAddOn.price) return
+                    if (!(newAddOn.name && newAddOn.price)) return
                     setAddOns((prev) => [...prev, { ...newAddOn }])
                     setNewAddOn({
                       name: "",

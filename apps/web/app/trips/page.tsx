@@ -198,9 +198,7 @@ export default function TripsPage() {
 
   const coachAwaitingPayment = useMemo(() => {
     if (!coachBookings) return []
-    return coachBookings.filter(
-      (b) => b.status === "approved" && b.paymentStatus !== "paid"
-    )
+    return coachBookings.filter((b) => b.status === "approved" && b.paymentStatus !== "paid")
   }, [coachBookings])
 
   const payCoachBooking = async (bookingId: Id<"coachBookings">) => {
@@ -276,8 +274,7 @@ export default function TripsPage() {
                     key={b._id}
                   >
                     <span>
-                      {b.coachService?.title ?? "Coaching"} · $
-                      {(b.totalAmount / 100).toFixed(2)}
+                      {b.coachService?.title ?? "Coaching"} · ${(b.totalAmount / 100).toFixed(2)}
                     </span>
                     <Button
                       disabled={payingCoachId === b._id}

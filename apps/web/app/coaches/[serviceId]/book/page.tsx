@@ -50,7 +50,7 @@ export default function CoachBookPage() {
   const [submitting, setSubmitting] = useState(false)
 
   const addOnPayload = useMemo(() => {
-    if (!service?.addOns?.length) return undefined
+    if (!service?.addOns?.length) return
     const out: Array<{
       name: string
       price: number
@@ -89,7 +89,7 @@ export default function CoachBookPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!service || !user) return
+    if (!(service && user)) return
     setSubmitting(true)
     try {
       const { conversationId } = await createBooking({
@@ -98,9 +98,7 @@ export default function CoachBookPage() {
         endDate,
         totalHours: service.pricingUnit === "hour" ? Number.parseFloat(totalHours) : undefined,
         eventTrackId:
-          eventTrackId && eventTrackId !== "none"
-            ? (eventTrackId as Id<"tracks">)
-            : undefined,
+          eventTrackId && eventTrackId !== "none" ? (eventTrackId as Id<"tracks">) : undefined,
         clientMessage: clientMessage.trim() || undefined,
         addOns: addOnPayload,
       })
@@ -118,9 +116,7 @@ export default function CoachBookPage() {
       <div className="mx-auto max-w-lg px-4 py-20 text-center">
         <p className="text-muted-foreground">Sign in to book coaching.</p>
         <Button asChild className="mt-4">
-          <Link
-            href={`/sign-in?redirect_url=${encodeURIComponent(`/coaches/${serviceId}/book`)}`}
-          >
+          <Link href={`/sign-in?redirect_url=${encodeURIComponent(`/coaches/${serviceId}/book`)}`}>
             Sign in
           </Link>
         </Button>
@@ -219,10 +215,10 @@ export default function CoachBookPage() {
                     <SelectItem value="none">No travel surcharge</SelectItem>
                     {surchargeTrackOptions.map(
                       (row: { trackId: Id<"tracks">; amount: number; trackName: string }) => (
-                      <SelectItem key={row.trackId} value={row.trackId}>
-                        {row.trackName} — ${(row.amount / 100).toFixed(2)}
-                      </SelectItem>
-                    )
+                        <SelectItem key={row.trackId} value={row.trackId}>
+                          {row.trackName} — ${(row.amount / 100).toFixed(2)}
+                        </SelectItem>
+                      )
                     )}
                   </SelectContent>
                 </Select>

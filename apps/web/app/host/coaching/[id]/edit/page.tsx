@@ -63,7 +63,7 @@ export default function EditCoachingProgramPage() {
   }, [service])
 
   const handleSave = async () => {
-    if (!service || !user || service.coachId !== user.id) return
+    if (!(service && user) || service.coachId !== user.id) return
     setSaving(true)
     try {
       await update({
@@ -72,8 +72,7 @@ export default function EditCoachingProgramPage() {
         description: description.trim(),
         baseRate: Math.round(Number.parseFloat(baseRate) * 100),
         pricingUnit,
-        trackId:
-          trackId && trackId !== "none" ? (trackId as Id<"tracks">) : undefined,
+        trackId: trackId && trackId !== "none" ? (trackId as Id<"tracks">) : undefined,
       })
       toast.success("Saved")
     } catch (e) {
@@ -84,7 +83,7 @@ export default function EditCoachingProgramPage() {
   }
 
   const handleDelete = async () => {
-    if (!service || !confirm("Remove this program from the marketplace?")) return
+    if (!(service && confirm("Remove this program from the marketplace?"))) return
     try {
       await softDelete({ coachServiceId: service._id })
       toast.success("Program removed")
@@ -136,7 +135,12 @@ export default function EditCoachingProgramPage() {
           </div>
           <div className="space-y-2">
             <Label htmlFor="d">Description</Label>
-            <Textarea id="d" onChange={(e) => setDescription(e.target.value)} rows={5} value={description} />
+            <Textarea
+              id="d"
+              onChange={(e) => setDescription(e.target.value)}
+              rows={5}
+              value={description}
+            />
           </div>
           <div className="space-y-2">
             <Label>Track</Label>

@@ -5,24 +5,12 @@ import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent } from "@workspace/ui/components/card"
 import { useQuery } from "convex/react"
-import {
-  ArrowLeft,
-  CheckCircle2,
-  Clock,
-  GraduationCap,
-  Loader2,
-  Plus,
-  XCircle,
-} from "lucide-react"
+import { ArrowLeft, CheckCircle2, Clock, GraduationCap, Loader2, Plus, XCircle } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { api } from "@/lib/convex"
 
-function statusBadge(service: {
-  isActive: boolean
-  isApproved?: boolean
-  isSuspended?: boolean
-}) {
+function statusBadge(service: { isActive: boolean; isApproved?: boolean; isSuspended?: boolean }) {
   if (service.isSuspended) {
     return (
       <Badge className="gap-1.5 bg-amber-500/10 text-amber-800 dark:text-amber-200">
@@ -92,9 +80,7 @@ export default function HostCoachingListPage() {
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-bold text-3xl">Coaching programs</h1>
-          <p className="mt-2 text-muted-foreground">
-            Manage listings, pricing, and availability
-          </p>
+          <p className="mt-2 text-muted-foreground">Manage listings, pricing, and availability</p>
         </div>
         <Button asChild>
           <Link href="/host/coaching/new">
@@ -123,12 +109,7 @@ export default function HostCoachingListPage() {
                 <Card className="h-full transition-shadow hover:shadow-md">
                   <div className="relative aspect-[16/9] bg-muted">
                     {img?.cardUrl ? (
-                      <Image
-                        alt={s.title}
-                        className="object-cover"
-                        fill
-                        src={img.cardUrl}
-                      />
+                      <Image alt={s.title} className="object-cover" fill src={img.cardUrl} />
                     ) : (
                       <div className="flex h-full items-center justify-center">
                         <GraduationCap className="size-12 text-muted-foreground/40" />
@@ -136,9 +117,7 @@ export default function HostCoachingListPage() {
                     )}
                   </div>
                   <CardContent className="p-4">
-                    <div className="mb-2 flex flex-wrap items-center gap-2">
-                      {statusBadge(s)}
-                    </div>
+                    <div className="mb-2 flex flex-wrap items-center gap-2">{statusBadge(s)}</div>
                     <h2 className="font-semibold text-lg">{s.title}</h2>
                     <p className="mt-1 line-clamp-2 text-muted-foreground text-sm">
                       {s.description}
