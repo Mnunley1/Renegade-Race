@@ -9,7 +9,8 @@ export const create = internalMutation({
       v.literal("user"),
       v.literal("vehicle"),
       v.literal("dispute"),
-      v.literal("damage_invoice")
+      v.literal("damage_invoice"),
+      v.literal("coach_service")
     ),
     entityId: v.optional(v.string()),
     action: v.string(),

@@ -12,7 +12,17 @@ import {
 } from "@workspace/ui/components/sheet"
 import { cn } from "@workspace/ui/lib/utils"
 import { useQuery } from "convex/react"
-import { Calendar, Car, Heart, LogOut, Menu, MessageSquare, Settings, User } from "lucide-react"
+import {
+  Calendar,
+  Car,
+  GraduationCap,
+  Heart,
+  LogOut,
+  Menu,
+  MessageSquare,
+  Settings,
+  User,
+} from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -149,6 +159,19 @@ function MobileSidebar() {
                   href="/motorsports"
                 >
                   Motorsports
+                </Link>
+              </SheetClose>
+              <SheetClose asChild>
+                <Link
+                  className={cn(
+                    sidebarLinkClass,
+                    pathname === "/coaches" || pathname?.startsWith("/coaches")
+                      ? "bg-accent text-foreground"
+                      : "text-muted-foreground"
+                  )}
+                  href="/coaches"
+                >
+                  Coaches
                 </Link>
               </SheetClose>
             </div>
@@ -334,6 +357,18 @@ export function Navigation() {
                 href="/motorsports"
               >
                 Motorsports
+              </Link>
+              <Link
+                className={cn(
+                  "inline-flex items-center gap-1.5 font-medium text-sm transition-colors hover:text-foreground",
+                  pathname === "/coaches" || pathname?.startsWith("/coaches")
+                    ? "text-foreground"
+                    : "text-muted-foreground"
+                )}
+                href="/coaches"
+              >
+                <GraduationCap className="size-3.5 opacity-80" />
+                Coaches
               </Link>
               {isSignedIn && (
                 <>

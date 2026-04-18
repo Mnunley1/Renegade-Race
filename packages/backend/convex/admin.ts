@@ -1022,6 +1022,100 @@ export const suspendVehicle = mutation({
   },
 })
 
+/** Coach marketplace listings — admin queue (mirrors getAllVehicles). */
+export const getAllCoachServices = query({
+  args: {
+    limit: v.optional(v.number()),
+    search: v.optional(v.string()),
+    status: v.optional(v.union(v.literal("pending"), v.literal("approved"), v.literal("rejected"))),
+    cursor: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await checkAdmin(ctx)
+
+    const { limit = 50, search, status, cursor } = args
+
+    let rows = await ctx.db
+      .query("coachServices")
+      .order("desc")
+      .take(limit + 1)
+
+    if (status === "pending") {
+      rows = rows.filter((s) => s.isApproved === undefined)
+    } else if (status === "approved") {
+      rows = rows.filter((s) => s.isApproved === true)
+    } else if (status === "rejected") {
+      rows = rows.filter((s) => s.isApproved === false)
+    }
+
+    if (cursor) {
+      const cursorId = cursor as Id<"coachServices">
+      rows = rows.filter((s) => s._id < cursorId)
+    }
+
+    const hasMore = rows.length > limit
+    const page = hasMore ? rows.slice(0, limit) : rows
+
+    const withDetails = await Promise.all(
+      page.map(async (service) => {
+        const [coach, track] = await Promise.all([
+          ctx.db
+            .query("users")
+            .withIndex("by_external_id", (q) => q.eq("externalId", service.coachId))
+            .first(),
+          service.trackId ? ctx.db.get(service.trackId) : Promise.resolve(undefined),
+        ])
+        return { ...service, coach, track }
+      })
+    )
+
+    let filtered = withDetails
+    if (search) {
+      const q = search.toLowerCase()
+      filtered = withDetails.filter(
+        (s) =>
+          s.title?.toLowerCase().includes(q) ||
+          s.description?.toLowerCase().includes(q) ||
+          s.coach?.name?.toLowerCase().includes(q) ||
+          s.coach?.email?.toLowerCase().includes(q) ||
+          s.track?.name?.toLowerCase().includes(q) ||
+          s._id.includes(q)
+      )
+    }
+
+    const finalRows = filtered.slice(0, limit)
+    const finalHasMore = filtered.length > limit
+
+    return {
+      coachServices: finalRows,
+      hasMore: finalHasMore,
+      nextCursor: finalHasMore && finalRows.length > 0 ? finalRows.at(-1)?._id : null,
+    }
+  },
+})
+
+export const suspendCoachService = mutation({
+  args: {
+    coachServiceId: v.id("coachServices"),
+    isSuspended: v.boolean(),
+  },
+  handler: async (ctx, args) => {
+    await checkAdmin(ctx)
+
+    const service = await ctx.db.get(args.coachServiceId)
+    if (!service) {
+      throw new Error("Coach service not found")
+    }
+
+    await ctx.db.patch(args.coachServiceId, {
+      isSuspended: args.isSuspended,
+      updatedAt: Date.now(),
+    })
+
+    return args.coachServiceId
+  },
+})
+
 // Bulk suspend/activate vehicles
 export const bulkSuspendVehicles = mutation({
   args: {

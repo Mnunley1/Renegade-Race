@@ -22,6 +22,7 @@ import {
   Clock,
   DollarSign,
   Eye,
+  GraduationCap,
   Heart,
   Loader2,
   MessageSquare,
@@ -758,6 +759,13 @@ function HostDashboardContent() {
                   <Button className="w-full justify-start" size="lg" variant="default">
                     <Car className="mr-3 size-5" />
                     <span className="font-semibold">Manage Vehicles</span>
+                    <ArrowRight className="ml-auto size-4" />
+                  </Button>
+                </Link>
+                <Link className="block" href="/host/coaching/list">
+                  <Button className="w-full justify-start" size="lg" variant="default">
+                    <GraduationCap className="mr-3 size-5" />
+                    <span className="font-semibold">Coaching programs</span>
                     <ArrowRight className="ml-auto size-4" />
                   </Button>
                 </Link>

@@ -11,9 +11,11 @@
 import type * as admin from "../admin.js";
 import type * as auditLog from "../auditLog.js";
 import type * as availability from "../availability.js";
+import type * as coachAnalytics from "../coachAnalytics.js";
 import type * as coachAvailability from "../coachAvailability.js";
 import type * as coachBookingValidation from "../coachBookingValidation.js";
 import type * as coachBookings from "../coachBookings.js";
+import type * as coachInvoices from "../coachInvoices.js";
 import type * as coachPricing from "../coachPricing.js";
 import type * as coachServices from "../coachServices.js";
 import type * as conversations from "../conversations.js";
@@ -80,9 +82,11 @@ declare const fullApi: ApiFromModules<{
   admin: typeof admin;
   auditLog: typeof auditLog;
   availability: typeof availability;
+  coachAnalytics: typeof coachAnalytics;
   coachAvailability: typeof coachAvailability;
   coachBookingValidation: typeof coachBookingValidation;
   coachBookings: typeof coachBookings;
+  coachInvoices: typeof coachInvoices;
   coachPricing: typeof coachPricing;
   coachServices: typeof coachServices;
   conversations: typeof conversations;

@@ -1,7 +1,13 @@
 import { v } from "convex/values"
-import { mutation, query } from "./_generated/server"
+import { internal } from "./_generated/api"
+import { internalMutation, mutation, query } from "./_generated/server"
 import { assertValidCoachDateOrder, validateHourlyTotalHours } from "./coachBookingValidation"
-import { calculateBillingUnits, calculateCoachBookingTotal } from "./coachPricing"
+import {
+  calculateBillingUnits,
+  calculateCoachBookingTotal,
+  lookupTravelSurchargeCents,
+  type TravelSurchargeRow,
+} from "./coachPricing"
 import { ErrorCode, throwError } from "./errors"
 import { sanitizeMessage } from "./sanitize"
 
@@ -91,12 +97,90 @@ export const getById = query({
   },
 })
 
+/** Public pricing preview for the booking form (same math as create). */
+export const previewBookingQuote = query({
+  args: {
+    coachServiceId: v.id("coachServices"),
+    startDate: v.string(),
+    endDate: v.string(),
+    totalHours: v.optional(v.number()),
+    eventTrackId: v.optional(v.id("tracks")),
+    addOns: addOnArg,
+  },
+  handler: async (ctx, args) => {
+    const service = await ctx.db.get(args.coachServiceId)
+    if (
+      !service ||
+      service.deletedAt ||
+      !service.isActive ||
+      service.isSuspended ||
+      !service.isApproved
+    ) {
+      return null
+    }
+
+    if (validateHourlyTotalHours(service.pricingUnit, args.totalHours)) {
+      return null
+    }
+
+    if (args.startDate > args.endDate) {
+      return null
+    }
+
+    const billingUnits = calculateBillingUnits(
+      service.pricingUnit,
+      args.startDate,
+      args.endDate,
+      args.totalHours
+    )
+    if (billingUnits <= 0) {
+      return null
+    }
+
+    const selectedAddOns = args.addOns ?? []
+    const surchargeRows: TravelSurchargeRow[] = (service.travelSurcharges ?? []).map((r) => ({
+      trackId: r.trackId,
+      amount: r.amount,
+      label: r.label,
+    }))
+
+    if (args.eventTrackId) {
+      const allowed = surchargeRows.some((r) => r.trackId === args.eventTrackId)
+      if (!allowed) {
+        return null
+      }
+    }
+
+    const travelSurchargeCents = lookupTravelSurchargeCents(surchargeRows, args.eventTrackId)
+
+    const totalAmount = calculateCoachBookingTotal({
+      baseRate: service.baseRate,
+      pricingUnit: service.pricingUnit,
+      startDate: args.startDate,
+      endDate: args.endDate,
+      totalHours: args.totalHours,
+      addOns: selectedAddOns,
+      travelSurchargeCents,
+    })
+
+    return {
+      totalAmount,
+      billingUnits,
+      travelSurchargeCents,
+      baseRate: service.baseRate,
+      pricingUnit: service.pricingUnit,
+    }
+  },
+})
+
 export const create = mutation({
   args: {
     coachServiceId: v.id("coachServices"),
     startDate: v.string(),
     endDate: v.string(),
     totalHours: v.optional(v.number()),
+    /** When set, must match a travel surcharge row on the coach program. */
+    eventTrackId: v.optional(v.id("tracks")),
     clientMessage: v.optional(v.string()),
     addOns: addOnArg,
   },
@@ -177,6 +261,24 @@ export const create = mutation({
       }
     }
 
+    const surchargeRows: TravelSurchargeRow[] = (service.travelSurcharges ?? []).map((r) => ({
+      trackId: r.trackId,
+      amount: r.amount,
+      label: r.label,
+    }))
+
+    if (args.eventTrackId) {
+      const allowed = surchargeRows.some((r) => r.trackId === args.eventTrackId)
+      if (!allowed) {
+        throwError(
+          ErrorCode.INVALID_INPUT,
+          "Selected event track does not have a travel fee configured for this program"
+        )
+      }
+    }
+
+    const travelSurchargeCents = lookupTravelSurchargeCents(surchargeRows, args.eventTrackId)
+
     const totalAmount = calculateCoachBookingTotal({
       baseRate: service.baseRate,
       pricingUnit: service.pricingUnit,
@@ -184,6 +286,7 @@ export const create = mutation({
       endDate: args.endDate,
       totalHours: args.totalHours,
       addOns: selectedAddOns,
+      travelSurchargeCents,
     })
 
     const MAX_TOTAL_AMOUNT_CENTS = 1_000_000
@@ -239,6 +342,8 @@ export const create = mutation({
       baseRate: service.baseRate,
       pricingUnit: service.pricingUnit,
       totalAmount,
+      eventTrackId: args.eventTrackId,
+      travelSurchargeAmount: travelSurchargeCents > 0 ? travelSurchargeCents : undefined,
       addOns: selectedAddOns.length > 0 ? selectedAddOns : undefined,
       status: "pending",
       clientMessage: args.clientMessage ? sanitizeMessage(args.clientMessage) : undefined,
@@ -246,7 +351,32 @@ export const create = mutation({
       updatedAt: now,
     })
 
-    return bookingId
+    const conversationId = await ctx.db.insert("conversations", {
+      conversationType: "coach",
+      coachServiceId: args.coachServiceId,
+      coachBookingId: bookingId,
+      renterId: clientId,
+      ownerId: service.coachId,
+      lastMessageAt: now,
+      unreadCountRenter: 0,
+      unreadCountOwner: args.clientMessage ? 1 : 0,
+      isActive: !!args.clientMessage,
+      createdAt: now,
+      updatedAt: now,
+    })
+
+    if (args.clientMessage) {
+      await ctx.db.insert("messages", {
+        conversationId,
+        senderId: clientId,
+        content: sanitizeMessage(args.clientMessage),
+        messageType: "text",
+        isRead: false,
+        createdAt: now,
+      })
+    }
+
+    return { bookingId, conversationId }
   },
 })
 
@@ -285,5 +415,66 @@ export const updateStatus = mutation({
       ...(args.status === "approved" ? { approvedAt: now } : {}),
     })
     return args.bookingId
+  },
+})
+
+export const attachCoachBookingCheckout = internalMutation({
+  args: {
+    coachBookingId: v.id("coachBookings"),
+    stripeCheckoutSessionId: v.string(),
+    stripeCheckoutUrl: v.string(),
+    stripePaymentIntentId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.coachBookingId, {
+      stripeCheckoutSessionId: args.stripeCheckoutSessionId,
+      stripeCheckoutUrl: args.stripeCheckoutUrl,
+      stripePaymentIntentId: args.stripePaymentIntentId,
+      paymentStatus: "pending",
+      updatedAt: Date.now(),
+    })
+  },
+})
+
+export const markPaymentSucceeded = internalMutation({
+  args: {
+    coachBookingId: v.id("coachBookings"),
+    stripePaymentIntentId: v.string(),
+    stripeChargeId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const booking = await ctx.db.get(args.coachBookingId)
+    if (!booking) {
+      return
+    }
+    if (booking.paymentStatus === "paid") {
+      return
+    }
+
+    const now = Date.now()
+    await ctx.db.patch(args.coachBookingId, {
+      paymentStatus: "paid",
+      stripePaymentIntentId: args.stripePaymentIntentId,
+      status: "confirmed",
+      updatedAt: now,
+    })
+
+    await ctx.scheduler.runAfter(0, internal.notifications.createNotification, {
+      userId: booking.clientId,
+      type: "payment_success",
+      title: "Coaching payment received",
+      message: `Your payment of $${(booking.totalAmount / 100).toFixed(2)} for coaching was successful.`,
+      link: "/trips",
+      metadata: { coachBookingId: args.coachBookingId },
+    })
+
+    await ctx.scheduler.runAfter(0, internal.notifications.createNotification, {
+      userId: booking.coachId,
+      type: "payment_success",
+      title: "Coaching booking paid",
+      message: `A client completed payment for a coaching booking.`,
+      link: "/host/coaching/list",
+      metadata: { coachBookingId: args.coachBookingId },
+    })
   },
 })

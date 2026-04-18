@@ -61,6 +61,24 @@ registerRoutes(http, components.stripe, {
             stripePaymentIntentId: paymentIntent.id,
           })
         }
+      } else if (paymentIntent.metadata?.type === "coach_invoice") {
+        const coachInvoiceId = paymentIntent.metadata.coachInvoiceId
+        if (coachInvoiceId) {
+          await ctx.runMutation(internal.coachInvoices.handlePaymentSuccess, {
+            coachInvoiceId: coachInvoiceId as any,
+            stripeChargeId: (paymentIntent.latest_charge as string) || "",
+            stripePaymentIntentId: paymentIntent.id,
+          })
+        }
+      } else if (paymentIntent.metadata?.type === "coach_booking") {
+        const coachBookingId = paymentIntent.metadata.coachBookingId
+        if (coachBookingId) {
+          await ctx.runMutation(internal.coachBookings.markPaymentSucceeded, {
+            coachBookingId: coachBookingId as any,
+            stripeChargeId: (paymentIntent.latest_charge as string) || "",
+            stripePaymentIntentId: paymentIntent.id,
+          })
+        }
       }
 
       // Record successful processing

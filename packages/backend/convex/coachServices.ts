@@ -1,6 +1,8 @@
 import { v } from "convex/values"
+import { internal } from "./_generated/api"
 import type { Doc } from "./_generated/dataModel"
 import { mutation, query } from "./_generated/server"
+import { checkAdmin } from "./admin"
 import { ErrorCode, throwError } from "./errors"
 import { imagePresets } from "./r2"
 
@@ -166,6 +168,58 @@ export const getById = query({
   },
 })
 
+/** Public marketplace detail: active, approved, Stripe-enabled coach only. */
+export const getPublicById = query({
+  args: { coachServiceId: v.id("coachServices") },
+  handler: async (ctx, args) => {
+    const service = await ctx.db.get(args.coachServiceId)
+    if (
+      !service ||
+      service.deletedAt ||
+      !service.isActive ||
+      service.isSuspended ||
+      !service.isApproved
+    ) {
+      return null
+    }
+
+    const [images, coach, track] = await Promise.all([
+      ctx.db
+        .query("coachServiceImages")
+        .withIndex("by_coach_service", (q) => q.eq("coachServiceId", service._id))
+        .order("asc")
+        .collect(),
+      ctx.db
+        .query("users")
+        .withIndex("by_external_id", (q) => q.eq("externalId", service.coachId))
+        .first(),
+      service.trackId ? ctx.db.get(service.trackId) : Promise.resolve(null),
+    ])
+
+    if (!coach?.stripeAccountId || coach.stripeAccountStatus !== "enabled") {
+      return null
+    }
+
+    const optimizedImages = images
+      .filter((image) => image.r2Key)
+      .map((image) => ({
+        ...image,
+        thumbnailUrl: imagePresets.thumbnail(image.r2Key as string),
+        cardUrl: imagePresets.card(image.r2Key as string),
+        detailUrl: imagePresets.detail(image.r2Key as string),
+        heroUrl: imagePresets.hero(image.r2Key as string),
+        originalUrl: imagePresets.original(image.r2Key as string),
+      }))
+
+    return {
+      ...service,
+      images: optimizedImages,
+      coach,
+      track,
+    }
+  },
+})
+
 export const listByCoach = query({
   args: {
     coachId: v.string(),
@@ -235,6 +289,15 @@ export const createWithImages = mutation({
     cancellationPolicy: v.optional(
       v.union(v.literal("flexible"), v.literal("moderate"), v.literal("strict"))
     ),
+    travelSurcharges: v.optional(
+      v.array(
+        v.object({
+          trackId: v.id("tracks"),
+          amount: v.number(),
+          label: v.optional(v.string()),
+        })
+      )
+    ),
     images: imageArgs,
   },
   handler: async (ctx, args) => {
@@ -272,8 +335,8 @@ export const createWithImages = mutation({
       languages: args.languages,
       address: args.address,
       cancellationPolicy: args.cancellationPolicy ?? "moderate",
+      travelSurcharges: args.travelSurcharges,
       isActive: true,
-      isApproved: false,
       createdAt: now,
       updatedAt: now,
     })
@@ -335,6 +398,15 @@ export const update = mutation({
     cancellationPolicy: v.optional(
       v.union(v.literal("flexible"), v.literal("moderate"), v.literal("strict"))
     ),
+    travelSurcharges: v.optional(
+      v.array(
+        v.object({
+          trackId: v.id("tracks"),
+          amount: v.number(),
+          label: v.optional(v.string()),
+        })
+      )
+    ),
     isActive: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
@@ -365,6 +437,7 @@ export const update = mutation({
     if (rest.trackId !== undefined) patch.trackId = rest.trackId
     if (rest.address !== undefined) patch.address = rest.address
     if (rest.cancellationPolicy !== undefined) patch.cancellationPolicy = rest.cancellationPolicy
+    if (rest.travelSurcharges !== undefined) patch.travelSurcharges = rest.travelSurcharges
     if (rest.isActive !== undefined) patch.isActive = rest.isActive
 
     await ctx.db.patch(args.coachServiceId, patch as Partial<typeof existing>)
@@ -394,6 +467,74 @@ export const softDelete = mutation({
       isActive: false,
       updatedAt: now,
     })
+    return args.coachServiceId
+  },
+})
+
+export const approveCoachService = mutation({
+  args: { coachServiceId: v.id("coachServices") },
+  handler: async (ctx, args) => {
+    const identity = await checkAdmin(ctx)
+
+    const service = await ctx.db.get(args.coachServiceId)
+    if (!service) {
+      throw new Error("Coach service not found")
+    }
+
+    await ctx.db.patch(args.coachServiceId, {
+      isApproved: true,
+      updatedAt: Date.now(),
+    })
+
+    await ctx.runMutation(internal.auditLog.create, {
+      entityType: "coach_service",
+      entityId: args.coachServiceId,
+      action: "approve_coach_service",
+      userId: identity.subject,
+      previousState: { isApproved: service.isApproved ?? false },
+      newState: { isApproved: true },
+      metadata: {
+        coachId: service.coachId,
+        title: service.title,
+      },
+    })
+
+    return args.coachServiceId
+  },
+})
+
+export const rejectCoachService = mutation({
+  args: {
+    coachServiceId: v.id("coachServices"),
+    reason: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const identity = await checkAdmin(ctx)
+
+    const service = await ctx.db.get(args.coachServiceId)
+    if (!service) {
+      throw new Error("Coach service not found")
+    }
+
+    await ctx.db.patch(args.coachServiceId, {
+      isApproved: false,
+      updatedAt: Date.now(),
+    })
+
+    await ctx.runMutation(internal.auditLog.create, {
+      entityType: "coach_service",
+      entityId: args.coachServiceId,
+      action: "reject_coach_service",
+      userId: identity.subject,
+      previousState: { isApproved: service.isApproved ?? false },
+      newState: { isApproved: false },
+      metadata: {
+        reason: args.reason || "Did not meet approval criteria",
+        coachId: service.coachId,
+        title: service.title,
+      },
+    })
+
     return args.coachServiceId
   },
 })

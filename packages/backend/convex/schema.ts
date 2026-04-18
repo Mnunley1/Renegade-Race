@@ -308,11 +308,13 @@ export default defineSchema({
     renterId: v.string(),
     ownerId: v.string(),
     conversationType: v.optional(
-      v.union(v.literal("rental"), v.literal("team"), v.literal("driver"))
+      v.union(v.literal("rental"), v.literal("team"), v.literal("driver"), v.literal("coach"))
     ),
     teamId: v.optional(v.id("teams")),
     driverProfileId: v.optional(v.id("driverProfiles")),
     reservationId: v.optional(v.id("reservations")),
+    coachServiceId: v.optional(v.id("coachServices")),
+    coachBookingId: v.optional(v.id("coachBookings")),
     lastMessageAt: v.number(),
     lastMessageText: v.optional(v.string()),
     lastMessageSenderId: v.optional(v.string()),
@@ -333,7 +335,8 @@ export default defineSchema({
     .index("by_owner_active", ["ownerId", "isActive"])
     .index("by_participants", ["renterId", "ownerId"])
     .index("by_last_message", ["lastMessageAt"])
-    .index("by_reservation", ["reservationId"]),
+    .index("by_reservation", ["reservationId"])
+    .index("by_coach_booking", ["coachBookingId"]),
 
   messages: defineTable({
     conversationId: v.id("conversations"),
@@ -796,7 +799,8 @@ export default defineSchema({
       v.literal("user"),
       v.literal("vehicle"),
       v.literal("dispute"),
-      v.literal("damage_invoice")
+      v.literal("damage_invoice"),
+      v.literal("coach_service")
     ),
     entityId: v.string(), // ID of the entity being changed
     action: v.string(), // e.g., "status_change", "create", "update", "delete"
@@ -1058,6 +1062,16 @@ export default defineSchema({
     cancellationPolicy: v.optional(
       v.union(v.literal("flexible"), v.literal("moderate"), v.literal("strict"))
     ),
+    /** Extra one-time fee (cents) when coaching at this track (e.g. travel). */
+    travelSurcharges: v.optional(
+      v.array(
+        v.object({
+          trackId: v.id("tracks"),
+          amount: v.number(),
+          label: v.optional(v.string()),
+        })
+      )
+    ),
     isActive: v.boolean(),
     isSuspended: v.optional(v.boolean()),
     isApproved: v.optional(v.boolean()),
@@ -1125,6 +1139,10 @@ export default defineSchema({
       v.literal("session")
     ),
     totalAmount: v.number(),
+    /** Where the client wants the session (travel fee applies if configured for this track). */
+    eventTrackId: v.optional(v.id("tracks")),
+    /** Snapshot of applied travel surcharge in cents. */
+    travelSurchargeAmount: v.optional(v.number()),
     addOns: v.optional(
       v.array(
         v.object({
@@ -1148,6 +1166,8 @@ export default defineSchema({
     coachMessage: v.optional(v.string()),
     cancellationReason: v.optional(v.string()),
     /** Reserved for Stripe integration (coach-specific payment rows may come later). */
+    stripeCheckoutSessionId: v.optional(v.string()),
+    stripeCheckoutUrl: v.optional(v.string()),
     stripePaymentIntentId: v.optional(v.string()),
     paymentStatus: v.optional(
       v.union(v.literal("pending"), v.literal("paid"), v.literal("failed"), v.literal("refunded"))
@@ -1162,6 +1182,34 @@ export default defineSchema({
     .index("by_client_status", ["clientId", "status"])
     .index("by_coach_status", ["coachId", "status"])
     .index("by_coach_dates", ["startDate", "endDate"]),
+
+  /** Coach-issued custom invoices (e.g. special requests); paid via Stripe Checkout. */
+  coachInvoices: defineTable({
+    coachId: v.string(),
+    clientId: v.string(),
+    coachServiceId: v.optional(v.id("coachServices")),
+    coachBookingId: v.optional(v.id("coachBookings")),
+    amount: v.number(),
+    description: v.string(),
+    status: v.union(
+      v.literal("unpaid"),
+      v.literal("payment_pending"),
+      v.literal("paid"),
+      v.literal("cancelled")
+    ),
+    stripeCheckoutSessionId: v.optional(v.string()),
+    stripeCheckoutUrl: v.optional(v.string()),
+    stripePaymentIntentId: v.optional(v.string()),
+    stripeChargeId: v.optional(v.string()),
+    paidAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_coach", ["coachId"])
+    .index("by_client", ["clientId"])
+    .index("by_status", ["status"])
+    .index("by_stripe_checkout_session", ["stripeCheckoutSessionId"])
+    .index("by_stripe_payment_intent", ["stripePaymentIntentId"]),
 
   // Webhook idempotency tracking
   webhookEvents: defineTable({

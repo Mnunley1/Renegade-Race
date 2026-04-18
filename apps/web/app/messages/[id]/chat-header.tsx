@@ -20,9 +20,14 @@ interface ParticipantInfo {
   name?: string | null
 }
 
+interface CoachServiceInfo {
+  title?: string | null
+}
+
 interface ChatHeaderProps {
   participant: ParticipantInfo | null | undefined
   vehicle: VehicleInfo | null | undefined
+  coachService?: CoachServiceInfo | null | undefined
   isPending: boolean
   onArchive: () => void
   onDelete: () => void
@@ -31,14 +36,17 @@ interface ChatHeaderProps {
 export function ChatHeader({
   participant,
   vehicle,
+  coachService,
   isPending,
   onArchive,
   onDelete,
 }: ChatHeaderProps) {
   const name = participant?.name || "Unknown User"
-  const vehicleLabel = vehicle
-    ? `${vehicle.year} ${vehicle.make} ${vehicle.model}`
-    : "Vehicle conversation"
+  const vehicleLabel = coachService?.title
+    ? `Coaching: ${coachService.title}`
+    : vehicle
+      ? `${vehicle.year} ${vehicle.make} ${vehicle.model}`
+      : "Conversation"
 
   return (
     <div className="flex items-center justify-between">

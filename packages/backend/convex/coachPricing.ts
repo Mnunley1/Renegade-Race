@@ -45,6 +45,27 @@ export function calculateBillingUnits(
   return days * 2
 }
 
+/** One row per track the coach charges extra to travel to (amounts in cents). */
+export type TravelSurchargeRow = {
+  trackId: string
+  amount: number
+  label?: string
+}
+
+/**
+ * Returns the configured travel surcharge for an event track, or 0 if none / no selection.
+ */
+export function lookupTravelSurchargeCents(
+  surcharges: TravelSurchargeRow[] | undefined,
+  eventTrackId: string | undefined
+): number {
+  if (!eventTrackId || !surcharges?.length) {
+    return 0
+  }
+  const row = surcharges.find((s) => s.trackId === eventTrackId)
+  return row?.amount ?? 0
+}
+
 export type CoachBookingTotalArgs = {
   baseRate: number
   pricingUnit: CoachPricingUnit
@@ -52,10 +73,12 @@ export type CoachBookingTotalArgs = {
   endDate: string
   addOns?: Array<{ price: number; priceType?: "daily" | "one-time" }>
   totalHours?: number
+  /** One-time travel surcharge in cents (from lookupTravelSurchargeCents). */
+  travelSurchargeCents?: number
 }
 
 /**
- * Total amount in cents: (baseRate * billingUnits) + add-ons.
+ * Total amount in cents: (baseRate * billingUnits) + add-ons + travel surcharge.
  * Add-ons with priceType "daily" multiply by billing units; "one-time" is flat.
  */
 export function calculateCoachBookingTotal(args: CoachBookingTotalArgs): number {
@@ -68,5 +91,7 @@ export function calculateCoachBookingTotal(args: CoachBookingTotalArgs): number 
   if (units <= 0) {
     return 0
   }
-  return calculateReservationTotal(args.baseRate, units, args.addOns)
+  const basePlusAddOns = calculateReservationTotal(args.baseRate, units, args.addOns)
+  const travel = Math.max(0, args.travelSurchargeCents ?? 0)
+  return basePlusAddOns + travel
 }

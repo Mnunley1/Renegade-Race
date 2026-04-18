@@ -31,6 +31,16 @@ function MessagesPageContent() {
   const [isBulkMode, setIsBulkMode] = useState(false)
   const [isPerformingBulkAction, setIsPerformingBulkAction] = useState(false)
 
+  const coachBookingLink = useQuery(
+    api.conversations.getByCoachBookingId,
+    user?.id && searchParams.get("coachBookingId")
+      ? {
+          coachBookingId: searchParams.get("coachBookingId") as Id<"coachBookings">,
+          userId: user.id,
+        }
+      : "skip"
+  )
+
   // Handle query parameters - redirect to chat page if needed
   useEffect(() => {
     const conversationId = searchParams.get("conversationId")
@@ -41,11 +51,13 @@ function MessagesPageContent() {
     if (conversationId) {
       // If there's a conversationId, navigate to the chat page
       router.replace(`/messages/${conversationId}`)
+    } else if (coachBookingLink) {
+      router.replace(`/messages/${coachBookingLink}`)
     } else if (vehicleId && renterId && ownerId) {
       // If there are pending conversation parameters, navigate to chat page
       router.replace(`/messages?vehicleId=${vehicleId}&renterId=${renterId}&ownerId=${ownerId}`)
     }
-  }, [searchParams, router])
+  }, [searchParams, router, coachBookingLink])
 
   // Fetch user's conversations
   const renterConversations = useQuery(
@@ -87,6 +99,7 @@ function MessagesPageContent() {
       otherUser?.name?.toLowerCase().includes(searchLower) ||
       conversation.vehicle?.make?.toLowerCase().includes(searchLower) ||
       conversation.vehicle?.model?.toLowerCase().includes(searchLower) ||
+      conversation.coachService?.title?.toLowerCase().includes(searchLower) ||
       conversation.lastMessageText?.toLowerCase().includes(searchLower) ||
       conversation.team?.name?.toLowerCase().includes(searchLower)
     )
@@ -348,13 +361,15 @@ function MessagesPageContent() {
                           </div>
                         </div>
                         <p className="mb-1 truncate text-muted-foreground text-xs">
-                          {conversation.vehicle
-                            ? `${conversation.vehicle.year} ${conversation.vehicle.make} ${conversation.vehicle.model}`
-                            : conversation.team
-                              ? `Team: ${conversation.team.name}`
-                              : conversation.driverProfile
-                                ? "Driver conversation"
-                                : "Conversation"}
+                          {conversation.coachService
+                            ? `Coaching: ${conversation.coachService.title}`
+                            : conversation.vehicle
+                              ? `${conversation.vehicle.year} ${conversation.vehicle.make} ${conversation.vehicle.model}`
+                              : conversation.team
+                                ? `Team: ${conversation.team.name}`
+                                : conversation.driverProfile
+                                  ? "Driver conversation"
+                                  : "Conversation"}
                         </p>
                         <p
                           className={cn(

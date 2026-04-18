@@ -83,6 +83,13 @@ export const getByUser = query({
           }
         }
 
+        const coachService = conversation.coachServiceId
+          ? await ctx.db.get(conversation.coachServiceId)
+          : null
+        const coachBooking = conversation.coachBookingId
+          ? await ctx.db.get(conversation.coachBookingId)
+          : null
+
         return {
           ...conversation,
           vehicle,
@@ -91,6 +98,8 @@ export const getByUser = query({
           team,
           driverProfile,
           reservation,
+          coachService,
+          coachBooking,
         }
       })
     )
@@ -122,6 +131,34 @@ export const getByUser = query({
     }
 
     return filteredConversations
+  },
+})
+
+/** Resolve inbox deep link from a coach booking thread. */
+export const getByCoachBookingId = query({
+  args: {
+    coachBookingId: v.id("coachBookings"),
+    userId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity || identity.subject !== args.userId) {
+      return null
+    }
+
+    const conversation = await ctx.db
+      .query("conversations")
+      .withIndex("by_coach_booking", (q) => q.eq("coachBookingId", args.coachBookingId))
+      .first()
+
+    if (!conversation) {
+      return null
+    }
+    if (conversation.renterId !== args.userId && conversation.ownerId !== args.userId) {
+      return null
+    }
+
+    return conversation._id
   },
 })
 
@@ -199,6 +236,13 @@ export const getById = query({
       }
     }
 
+    const coachService = conversation.coachServiceId
+      ? await ctx.db.get(conversation.coachServiceId)
+      : null
+    const coachBooking = conversation.coachBookingId
+      ? await ctx.db.get(conversation.coachBookingId)
+      : null
+
     return {
       ...conversation,
       vehicle,
@@ -207,6 +251,8 @@ export const getById = query({
       team,
       driverProfile,
       reservation,
+      coachService,
+      coachBooking,
     }
   },
 })

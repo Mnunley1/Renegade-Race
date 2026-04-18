@@ -2,6 +2,7 @@ import { calculateAddOnsTotal } from "@renegade/convex/pricing"
 import {
   calculateBillingUnits,
   calculateCoachBookingTotal,
+  lookupTravelSurchargeCents,
 } from "@renegade/convex/coachPricing"
 
 describe("calculateBillingUnits", () => {
@@ -90,6 +91,39 @@ describe("calculateCoachBookingTotal", () => {
       endDate: "2025-07-01",
     })
     expect(total).toBe(0)
+  })
+
+  it("adds travel surcharge as a one-time amount on top of base + add-ons", () => {
+    const total = calculateCoachBookingTotal({
+      baseRate: 10000,
+      pricingUnit: "session",
+      startDate: "2025-07-01",
+      endDate: "2025-07-01",
+      travelSurchargeCents: 25000,
+    })
+    expect(total).toBe(10000 + 25000)
+  })
+})
+
+describe("lookupTravelSurchargeCents", () => {
+  const surcharges = [
+    { trackId: "t1", amount: 15000, label: "Laguna" },
+    { trackId: "t2", amount: 8000 },
+  ]
+
+  it("returns 0 when no event track or no surcharges", () => {
+    expect(lookupTravelSurchargeCents(undefined, undefined)).toBe(0)
+    expect(lookupTravelSurchargeCents(surcharges, undefined)).toBe(0)
+    expect(lookupTravelSurchargeCents([], "t1")).toBe(0)
+  })
+
+  it("returns amount for matching track id", () => {
+    expect(lookupTravelSurchargeCents(surcharges, "t1")).toBe(15000)
+    expect(lookupTravelSurchargeCents(surcharges, "t2")).toBe(8000)
+  })
+
+  it("returns 0 for unknown track", () => {
+    expect(lookupTravelSurchargeCents(surcharges, "unknown")).toBe(0)
   })
 })
 

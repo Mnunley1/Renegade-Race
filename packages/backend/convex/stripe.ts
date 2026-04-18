@@ -771,6 +771,138 @@ export const createCheckoutSession = action({
   },
 })
 
+/** Client pays for an approved coach booking (Stripe Checkout + Connect + platform fee). */
+export const createCoachBookingCheckoutSession = action({
+  args: {
+    coachBookingId: v.id("coachBookings"),
+  },
+  handler: async (
+    ctx,
+    args
+  ): Promise<{ url: string | null; coachBookingId: Id<"coachBookings"> }> => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) {
+      throwError(ErrorCode.AUTH_REQUIRED, "Not authenticated")
+    }
+
+    const booking = await ctx.runQuery(api.coachBookings.getById, { id: args.coachBookingId })
+    if (!booking || !booking.coachService) {
+      throwError(ErrorCode.NOT_FOUND, "Booking not found")
+    }
+
+    if (booking.clientId !== identity.subject) {
+      throwError(ErrorCode.FORBIDDEN, "Not authorized to pay for this booking")
+    }
+
+    if (booking.status !== "approved") {
+      throwError(ErrorCode.INVALID_STATUS, "Booking must be approved by the coach before payment")
+    }
+
+    if (booking.paymentStatus === "paid") {
+      throwError(ErrorCode.INVALID_STATUS, "This booking is already paid")
+    }
+
+    if (booking.stripeCheckoutUrl) {
+      return { url: booking.stripeCheckoutUrl, coachBookingId: args.coachBookingId }
+    }
+
+    const coach = await ctx.runQuery(api.users.getByExternalId, {
+      externalId: booking.coachId,
+    })
+
+    if (!coach?.stripeAccountId) {
+      throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE, "Coach must complete Stripe onboarding")
+    }
+
+    const stripe = getStripe()
+    const connectAccount = await stripe.accounts.retrieve(coach.stripeAccountId)
+    if (!connectAccount.charges_enabled) {
+      throwError(ErrorCode.STRIPE_ACCOUNT_DISABLED, "Coach account cannot accept charges yet")
+    }
+
+    const { platformFee, ownerAmount } = await ctx.runMutation(api.stripe.calculatePlatformFee, {
+      amount: booking.totalAmount,
+    })
+
+    const customer = await stripeClient.getOrCreateCustomer(ctx, {
+      userId: identity.subject,
+      email: identity.email || "",
+      name: identity.name || "",
+    })
+
+    const payer = await ctx.runQuery(api.users.getByExternalId, {
+      externalId: identity.subject,
+    })
+    if (payer && !payer.stripeCustomerId) {
+      await ctx.runMutation(api.users.setStripeCustomerId, {
+        userId: identity.subject,
+        stripeCustomerId: customer.customerId,
+      })
+    }
+
+    const webUrl = getWebUrl()
+    const title = booking.coachService.title ?? "Coaching session"
+
+    const checkoutSession = await stripe.checkout.sessions.create(
+      {
+        customer: customer.customerId,
+        mode: "payment",
+        line_items: [
+          {
+            price_data: {
+              currency: "usd",
+              product_data: {
+                name: `Coaching — ${title}`,
+                description: `${booking.startDate} → ${booking.endDate}`,
+              },
+              unit_amount: booking.totalAmount,
+            },
+            quantity: 1,
+          },
+        ],
+        payment_intent_data: {
+          application_fee_amount: platformFee,
+          transfer_data: {
+            destination: coach.stripeAccountId,
+          },
+          metadata: {
+            type: "coach_booking",
+            coachBookingId: args.coachBookingId,
+            clientId: booking.clientId,
+            coachId: booking.coachId,
+            platformFee: platformFee.toString(),
+            ownerAmount: ownerAmount.toString(),
+          },
+        },
+        success_url: `${webUrl}/coaches/bookings/success?coachBookingId=${args.coachBookingId}`,
+        cancel_url: `${webUrl}/trips`,
+        metadata: {
+          type: "coach_booking",
+          coachBookingId: args.coachBookingId,
+        },
+      },
+      {
+        idempotencyKey: `coach_cs_${args.coachBookingId}`,
+      }
+    )
+
+    const pi = checkoutSession.payment_intent
+    const stripePaymentIntentId = typeof pi === "string" ? pi : pi?.id
+
+    await ctx.runMutation(internal.coachBookings.attachCoachBookingCheckout, {
+      coachBookingId: args.coachBookingId,
+      stripeCheckoutSessionId: checkoutSession.id,
+      stripeCheckoutUrl: checkoutSession.url || "",
+      stripePaymentIntentId,
+    })
+
+    return {
+      url: checkoutSession.url,
+      coachBookingId: args.coachBookingId,
+    }
+  },
+})
+
 // Legacy: Create payment intent (for embedded payment form)
 // This still works but uses Connect
 export const createPaymentIntent = action({

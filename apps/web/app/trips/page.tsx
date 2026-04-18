@@ -5,7 +5,7 @@ import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
-import { useQuery } from "convex/react"
+import { useAction, useQuery } from "convex/react"
 import {
   ArrowDownUp,
   Calendar,
@@ -13,6 +13,7 @@ import {
   Clock,
   CreditCard,
   FlagTriangleRight,
+  GraduationCap,
   Search,
   Send,
   XCircle,
@@ -22,6 +23,7 @@ import { useMemo, useState } from "react"
 import { TripCard } from "@/components/trip-card"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
+import { handleErrorWithContext } from "@/lib/error-handler"
 
 type Trip = {
   reservationId: Id<"reservations">
@@ -181,11 +183,39 @@ export default function TripsPage() {
   const [upcomingSort, setUpcomingSort] = useState<"asc" | "desc">("asc")
   const [pastSort, setPastSort] = useState<"asc" | "desc">("desc")
   const [cancelledSort, setCancelledSort] = useState<"asc" | "desc">("desc")
+  const [payingCoachId, setPayingCoachId] = useState<Id<"coachBookings"> | null>(null)
 
   const reservationsData = useQuery(
     api.reservations.getByUser,
     user?.id ? { userId: user.id, role: "renter" as const } : "skip"
   )
+
+  const coachBookings = useQuery(
+    api.coachBookings.getByUser,
+    user?.id ? { userId: user.id, role: "client" as const } : "skip"
+  )
+  const createCoachCheckout = useAction(api.stripe.createCoachBookingCheckoutSession)
+
+  const coachAwaitingPayment = useMemo(() => {
+    if (!coachBookings) return []
+    return coachBookings.filter(
+      (b) => b.status === "approved" && b.paymentStatus !== "paid"
+    )
+  }, [coachBookings])
+
+  const payCoachBooking = async (bookingId: Id<"coachBookings">) => {
+    setPayingCoachId(bookingId)
+    try {
+      const { url } = await createCoachCheckout({ coachBookingId: bookingId })
+      if (url) {
+        window.location.href = url
+      }
+    } catch (e) {
+      handleErrorWithContext(e, { action: "pay for coaching" })
+    } finally {
+      setPayingCoachId(null)
+    }
+  }
 
   const { pendingRequests, awaitingPayment, upcoming, past, cancelled } = useMemo(() => {
     if (!reservationsData) {
@@ -226,6 +256,43 @@ export default function TripsPage() {
               : `${pendingRequests.length + awaitingPayment.length > 0 ? `${pendingRequests.length + awaitingPayment.length} pending, ` : ""}${upcoming.length} upcoming, ${past.length} past`}
         </p>
       </div>
+
+      {coachBookings !== undefined && coachAwaitingPayment.length > 0 && (
+        <Card className="mb-8 border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40">
+          <CardContent className="space-y-3 p-4">
+            <div className="flex items-center gap-2 font-medium">
+              <GraduationCap className="size-5" />
+              Coaching — payment due
+            </div>
+            <ul className="space-y-2">
+              {coachAwaitingPayment.map(
+                (b: {
+                  _id: Id<"coachBookings">
+                  totalAmount: number
+                  coachService?: { title?: string } | null
+                }) => (
+                  <li
+                    className="flex flex-wrap items-center justify-between gap-2 text-sm"
+                    key={b._id}
+                  >
+                    <span>
+                      {b.coachService?.title ?? "Coaching"} · $
+                      {(b.totalAmount / 100).toFixed(2)}
+                    </span>
+                    <Button
+                      disabled={payingCoachId === b._id}
+                      onClick={() => payCoachBooking(b._id)}
+                      size="sm"
+                    >
+                      {payingCoachId === b._id ? "Redirecting…" : "Pay now"}
+                    </Button>
+                  </li>
+                )
+              )}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Stats */}
       {!isLoading && totalTrips > 0 && (
