@@ -297,6 +297,21 @@ export default defineSchema({
     .index("by_vehicle", ["vehicleId"])
     .index("by_user_vehicle", ["userId", "vehicleId"]),
 
+  // Renter "Notify me when available" interest, used when a host has not finished
+  // Stripe Connect onboarding so a vehicle cannot be reserved yet. Records who
+  // wants the car so the owner can be nudged to finish onboarding, and so we
+  // can dedupe repeated nudges from the same renter for the same vehicle.
+  vehicleInterest: defineTable({
+    vehicleId: v.id("vehicles"),
+    renterId: v.string(), // Clerk externalId of the interested renter
+    ownerId: v.string(), // Clerk externalId of the vehicle owner at time of interest
+    notifiedAt: v.number(), // Last time we nudged the owner about this renter+vehicle
+    createdAt: v.number(),
+  })
+    .index("by_vehicle", ["vehicleId"])
+    .index("by_owner", ["ownerId"])
+    .index("by_renter_vehicle", ["renterId", "vehicleId"]),
+
   // New tables for messaging system
   conversations: defineTable({
     vehicleId: v.optional(v.id("vehicles")),
