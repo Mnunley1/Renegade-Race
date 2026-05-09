@@ -559,6 +559,7 @@ function VehiclesPageContent() {
         experienceLevel: vehicle.experienceLevel,
         tireType: vehicle.tireType,
         deliveryAvailable: vehicle.deliveryAvailable,
+        hostStripeReady: vehicle.hostStripeReady,
       }
     })
   }, [vehiclesData, vehicleStats])

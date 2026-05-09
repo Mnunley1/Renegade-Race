@@ -35,6 +35,7 @@ interface VehicleCardProps extends ComponentProps<"div"> {
   drivetrain?: string
   datesSelected?: boolean
   bookingCount?: number
+  hostStripeReady?: boolean
 }
 
 export function VehicleCard({
@@ -55,6 +56,7 @@ export function VehicleCard({
   drivetrain,
   datesSelected,
   bookingCount,
+  hostStripeReady,
   className,
   ...props
 }: VehicleCardProps) {
@@ -180,6 +182,11 @@ export function VehicleCard({
               {bookingCount !== undefined && bookingCount > 0 && (
                 <Badge className="border-0 bg-amber-600/90 text-white text-xs hover:bg-amber-600/90">
                   Booked {bookingCount}x
+                </Badge>
+              )}
+              {hostStripeReady === false && (
+                <Badge className="border-0 bg-blue-600/90 text-white text-xs hover:bg-blue-600/90">
+                  Coming Soon
                 </Badge>
               )}
             </div>

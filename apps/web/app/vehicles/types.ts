@@ -19,6 +19,7 @@ export type VehicleItem = {
   experienceLevel?: string
   tireType?: string
   deliveryAvailable?: boolean
+  hostStripeReady?: boolean
 }
 
 export type TrackItem = {
