@@ -2,8 +2,15 @@ import { v } from "convex/values"
 import { api, internal } from "./_generated/api"
 import { action, internalMutation, mutation, query } from "./_generated/server"
 import { checkAdmin } from "./admin"
+import { getHostInterestNotificationEmailTemplate, sendTransactionalEmail } from "./emails"
 import { calculateDistance } from "./geocoding"
 import { imagePresets, r2 } from "./r2"
+import { rateLimiter } from "./rateLimiter"
+
+// Window during which we won't re-ping a host for the same (renter, vehicle).
+// Renters can still record interest, but the owner won't receive duplicate
+// nudges within this window.
+const NOTIFY_HOST_INTEREST_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000
 
 // Get all active and approved vehicles with optimized images
 export const getAllWithOptimizedImages = query({
@@ -65,11 +72,6 @@ export const getAllWithOptimizedImages = query({
           ctx.db.get(vehicle.trackId),
         ])
 
-        // Filter out vehicles from hosts without complete Stripe setup
-        if (!owner?.stripeAccountId || owner.stripeAccountStatus !== "enabled") {
-          return null
-        }
-
         const optimizedImages = images
           .filter((image) => image.r2Key)
           .map((image) => ({
@@ -90,8 +92,7 @@ export const getAllWithOptimizedImages = query({
       })
     )
 
-    // Filter out null values (vehicles from hosts without Stripe setup)
-    return vehiclesWithDetails.filter((v) => v !== null)
+    return vehiclesWithDetails
   },
 })
 
@@ -241,14 +242,6 @@ export const searchWithAvailability = query({
           ctx.db.get(vehicle.trackId),
         ])
 
-        // Filter out vehicles from hosts without fully enabled, connected Stripe accounts
-        // Only show vehicles where the owner has:
-        // 1. A Stripe account ID (connected account)
-        // 2. An enabled Stripe account status
-        if (!owner?.stripeAccountId || owner.stripeAccountStatus !== "enabled") {
-          return null
-        }
-
         const optimizedImages = images
           .filter((image) => image.r2Key)
           .map((image) => ({
@@ -269,8 +262,7 @@ export const searchWithAvailability = query({
       })
     )
 
-    // Filter out null values (vehicles from hosts without Stripe setup)
-    let finalVehicles = vehiclesWithDetails.filter((v) => v !== null)
+    let finalVehicles = vehiclesWithDetails
 
     // Step 5: Apply distance-based filtering if coordinates provided
     if (
@@ -387,11 +379,6 @@ export const getAll = query({
           ctx.db.get(vehicle.trackId),
         ])
 
-        // Filter out vehicles from hosts without complete Stripe setup
-        if (!owner?.stripeAccountId || owner.stripeAccountStatus !== "enabled") {
-          return null
-        }
-
         return {
           ...vehicle,
           images,
@@ -401,8 +388,7 @@ export const getAll = query({
       })
     )
 
-    // Filter out null values (vehicles from hosts without Stripe setup)
-    return vehiclesWithDetails.filter((v) => v !== null)
+    return vehiclesWithDetails
   },
 })
 
@@ -454,6 +440,113 @@ export const getById = query({
       track,
       availability,
     }
+  },
+})
+
+// Record renter interest in a vehicle whose host hasn't completed Stripe
+// onboarding yet, and nudge the owner (in-app notification + email) to finish
+// payout setup so the listing becomes reservable. Idempotent per (renter,
+// vehicle) within NOTIFY_HOST_INTEREST_COOLDOWN_MS so renters can't spam hosts.
+export const notifyHostOfInterest = mutation({
+  args: { vehicleId: v.id("vehicles") },
+  returns: v.object({
+    status: v.union(v.literal("notified"), v.literal("already_notified"), v.literal("not_needed")),
+  }),
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) {
+      throw new Error("Not authenticated")
+    }
+    const renterId = identity.subject
+
+    await rateLimiter.limit(ctx, "notifyHostInterest", { key: renterId, throws: true })
+
+    const vehicle = await ctx.db.get(args.vehicleId)
+    if (!vehicle || vehicle.deletedAt) {
+      throw new Error("Vehicle not found")
+    }
+
+    if (vehicle.ownerId === renterId) {
+      throw new Error("You can't request notifications for your own vehicle")
+    }
+
+    const owner = await ctx.db
+      .query("users")
+      .withIndex("by_external_id", (q) => q.eq("externalId", vehicle.ownerId))
+      .first()
+
+    // If the owner already has a fully enabled Stripe account, the renter
+    // should be hitting "Reserve Now" instead — don't pester the host.
+    if (owner?.stripeAccountId && owner.stripeAccountStatus === "enabled") {
+      return { status: "not_needed" as const }
+    }
+
+    const now = Date.now()
+    const existing = await ctx.db
+      .query("vehicleInterest")
+      .withIndex("by_renter_vehicle", (q) =>
+        q.eq("renterId", renterId).eq("vehicleId", args.vehicleId)
+      )
+      .first()
+
+    if (existing && now - existing.notifiedAt < NOTIFY_HOST_INTEREST_COOLDOWN_MS) {
+      return { status: "already_notified" as const }
+    }
+
+    if (existing) {
+      await ctx.db.patch(existing._id, { notifiedAt: now, ownerId: vehicle.ownerId })
+    } else {
+      await ctx.db.insert("vehicleInterest", {
+        vehicleId: args.vehicleId,
+        renterId,
+        ownerId: vehicle.ownerId,
+        notifiedAt: now,
+        createdAt: now,
+      })
+    }
+
+    const renter = await ctx.db
+      .query("users")
+      .withIndex("by_external_id", (q) => q.eq("externalId", renterId))
+      .first()
+
+    const vehicleName = `${vehicle.year} ${vehicle.make} ${vehicle.model}`
+    const renterName = renter?.name || "A renter"
+    const ownerName = owner?.name || "there"
+
+    const allInterest = await ctx.db
+      .query("vehicleInterest")
+      .withIndex("by_vehicle", (q) => q.eq("vehicleId", args.vehicleId))
+      .collect()
+    const interestedCount = new Set(allInterest.map((row) => row.renterId)).size
+
+    await ctx.scheduler.runAfter(0, internal.notifications.createNotification, {
+      userId: vehicle.ownerId,
+      type: "system",
+      title: "A renter is waiting for your car",
+      message: `${renterName} wants to rent your ${vehicleName}. Finish your Stripe payout setup so we can accept their booking.`,
+      link: "/host/onboarding",
+      metadata: {
+        kind: "host_interest",
+        vehicleId: args.vehicleId,
+        renterId,
+        interestedCount,
+      },
+    })
+
+    if (owner?.email) {
+      const webUrl = process.env.WEB_URL || "https://renegaderace.com"
+      const template = getHostInterestNotificationEmailTemplate({
+        ownerName,
+        renterName,
+        vehicleName,
+        onboardingUrl: `${webUrl}/host/onboarding`,
+        interestedCount,
+      })
+      await sendTransactionalEmail(ctx, owner.email, template)
+    }
+
+    return { status: "notified" as const }
   },
 })
 

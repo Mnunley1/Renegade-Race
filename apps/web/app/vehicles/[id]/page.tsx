@@ -18,6 +18,7 @@ import { cn } from "@workspace/ui/lib/utils"
 import { useMutation, useQuery } from "convex/react"
 import {
   AlertTriangle,
+  BellRing,
   Car,
   Check,
   Clock,
@@ -63,6 +64,8 @@ type VehicleOwner = {
   memberSince?: string
   totalRentals?: number
   externalId?: string
+  stripeAccountId?: string
+  stripeAccountStatus?: "pending" | "enabled" | "restricted" | "disabled"
 }
 
 type VehicleTrack = {
@@ -204,6 +207,8 @@ function VehicleDetailsPageContent() {
   const id = params.id as string
   const [showLoginDialog, setShowLoginDialog] = useState(false)
   const [isCreatingConversation, setIsCreatingConversation] = useState(false)
+  const [isNotifyingHost, setIsNotifyingHost] = useState(false)
+  const [hasNotifiedHost, setHasNotifiedHost] = useState(false)
   const [reviewSort, setReviewSort] = useState<"newest" | "highest" | "lowest">("newest")
   const hasTrackedView = useRef(false)
 
@@ -244,6 +249,7 @@ function VehicleDetailsPageContent() {
   const createConversation = useMutation(api.conversations.create)
   const trackView = useMutation(api.vehicleAnalytics.trackView)
   const trackShare = useMutation(api.vehicleAnalytics.trackShare)
+  const notifyHostOfInterest = useMutation(api.vehicles.notifyHostOfInterest)
 
   // Sorted reviews
   const sortedReviews = useMemo(() => {
@@ -296,6 +302,46 @@ function VehicleDetailsPageContent() {
   const handleLogin = () => {
     setShowLoginDialog(false)
     router.push(`/sign-in?redirect_url=${encodeURIComponent(window.location.pathname)}`)
+  }
+
+  const handleNotifyMe = async () => {
+    if (!(isSignedIn && user?.id)) {
+      setShowLoginDialog(true)
+      return
+    }
+    if (!vehicle?._id) {
+      return
+    }
+    if (vehicle.ownerId === user.id) {
+      return
+    }
+
+    setIsNotifyingHost(true)
+    try {
+      const result = await notifyHostOfInterest({ vehicleId: vehicle._id })
+      setHasNotifiedHost(true)
+      if (result.status === "already_notified") {
+        toast.success("We've already let the host know. We'll email you when this car is bookable.")
+      } else if (result.status === "not_needed") {
+        toast.success("Good news — this car is now ready to book!")
+      } else {
+        toast.success("Thanks! We've nudged the host to finish setup.")
+      }
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : ""
+      if (errorMessage.includes("Not authenticated") || errorMessage.includes("authentication")) {
+        setShowLoginDialog(true)
+      } else {
+        handleErrorWithContext(error, {
+          action: "notify host",
+          customMessages: {
+            generic: "Couldn't send the notification. Please try again.",
+          },
+        })
+      }
+    } finally {
+      setIsNotifyingHost(false)
+    }
   }
 
   const handleMessageHost = async () => {
@@ -450,6 +496,20 @@ function VehicleDetailsPageContent() {
     flexible: "Flexible",
     moderate: "Moderate",
     strict: "Strict",
+  }
+
+  // A host's vehicle can only accept bookings once they have a connected
+  // Stripe account in the "enabled" state. Until then we let renters express
+  // interest via "Notify me when available" instead of hitting checkout.
+  const canBeReserved =
+    !!vehicle.owner?.stripeAccountId && vehicle.owner?.stripeAccountStatus === "enabled"
+
+  const goToCheckout = () => {
+    const checkoutUrl =
+      startDate && endDate
+        ? `/checkout?vehicleId=${vehicle._id}&startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`
+        : `/checkout?vehicleId=${vehicle._id}`
+    router.push(checkoutUrl)
   }
 
   // JSON-LD
@@ -1039,22 +1099,41 @@ function VehicleDetailsPageContent() {
                     </div>
                   </div>
 
-                  <Button
-                    className="mb-3 w-full text-base"
-                    onClick={() => {
-                      const checkoutUrl =
-                        startDate && endDate
-                          ? `/checkout?vehicleId=${vehicle._id}&startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`
-                          : `/checkout?vehicleId=${vehicle._id}`
-                      router.push(checkoutUrl)
-                    }}
-                    size="lg"
-                  >
-                    Reserve Now
-                  </Button>
-                  <p className="text-center text-muted-foreground text-xs">
-                    You won&apos;t be charged until checkout
-                  </p>
+                  {canBeReserved ? (
+                    <>
+                      <Button className="mb-3 w-full text-base" onClick={goToCheckout} size="lg">
+                        Reserve Now
+                      </Button>
+                      <p className="text-center text-muted-foreground text-xs">
+                        You won&apos;t be charged until checkout
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <div className="mb-3 rounded-lg border border-amber-300/60 bg-amber-50 p-3 text-amber-900 text-xs dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+                        This host hasn&apos;t finished setting up payouts yet, so we can&apos;t
+                        accept bookings for this car. Tap below and we&apos;ll let them know
+                        you&apos;re interested.
+                      </div>
+                      <Button
+                        className="mb-3 w-full text-base"
+                        disabled={isNotifyingHost || hasNotifiedHost}
+                        onClick={handleNotifyMe}
+                        size="lg"
+                        variant="outline"
+                      >
+                        <BellRing className="mr-2 size-4" />
+                        {hasNotifiedHost
+                          ? "Host notified — we'll email you"
+                          : isNotifyingHost
+                            ? "Notifying host..."
+                            : "Notify me when available"}
+                      </Button>
+                      <p className="text-center text-muted-foreground text-xs">
+                        You&apos;ll get an email when this car is ready to book.
+                      </p>
+                    </>
+                  )}
                 </CardContent>
               </Card>
 
@@ -1119,18 +1198,21 @@ function VehicleDetailsPageContent() {
               <span className="font-bold text-lg">${vehicle.dailyRate.toLocaleString()}</span>
               <span className="text-muted-foreground text-sm"> /day</span>
             </div>
-            <Button
-              onClick={() => {
-                const checkoutUrl =
-                  startDate && endDate
-                    ? `/checkout?vehicleId=${vehicle._id}&startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`
-                    : `/checkout?vehicleId=${vehicle._id}`
-                router.push(checkoutUrl)
-              }}
-              size="lg"
-            >
-              Reserve Now
-            </Button>
+            {canBeReserved ? (
+              <Button onClick={goToCheckout} size="lg">
+                Reserve Now
+              </Button>
+            ) : (
+              <Button
+                disabled={isNotifyingHost || hasNotifiedHost}
+                onClick={handleNotifyMe}
+                size="lg"
+                variant="outline"
+              >
+                <BellRing className="mr-2 size-4" />
+                {hasNotifiedHost ? "Host notified" : "Notify me"}
+              </Button>
+            )}
           </div>
         </div>
         {/* Spacer for mobile sticky footer */}

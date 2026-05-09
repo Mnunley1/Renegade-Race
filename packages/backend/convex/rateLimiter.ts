@@ -57,6 +57,16 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
     capacity: 2,
   },
 
+  // "Notify me when available" host pings: 10 per hour per renter (across all
+  // vehicles). Per-(renter, vehicle) deduplication is enforced separately via
+  // a 7-day cooldown stored on the vehicleInterest row.
+  notifyHostInterest: {
+    kind: "token bucket",
+    rate: 10,
+    period: HOUR,
+    capacity: 3,
+  },
+
   // ============================================
   // Content Creation Operations
   // ============================================

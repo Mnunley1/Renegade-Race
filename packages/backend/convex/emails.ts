@@ -1071,6 +1071,68 @@ Renegade Race Rentals
   return { subject, html, text }
 }
 
+// Email template: Renter expressed interest while host's Stripe Connect
+// onboarding is incomplete. Nudges the host to finish onboarding so the
+// vehicle becomes reservable.
+export function getHostInterestNotificationEmailTemplate(data: {
+  ownerName: string
+  renterName: string
+  vehicleName: string
+  onboardingUrl: string
+  interestedCount: number
+}): { subject: string; html: string; text: string } {
+  const subject = `${data.renterName} wants to rent your ${data.vehicleName}`
+  const interestedLine =
+    data.interestedCount > 1
+      ? `${data.interestedCount} renters are now waiting on this vehicle.`
+      : "A renter is waiting on this vehicle."
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+      <div style="text-align: center; margin-bottom: 30px;">
+        <h1 style="color: #1a1a1a;">A renter is waiting for your car</h1>
+      </div>
+      <p>Hi ${data.ownerName},</p>
+      <p><strong>${data.renterName}</strong> is interested in renting your <strong>${data.vehicleName}</strong>, but we can&apos;t accept their booking yet because your Stripe Connect onboarding isn&apos;t complete.</p>
+      <div style="background-color: #fff3cd; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ffc107;">
+        <p style="margin: 0;">${interestedLine} Finish your payout setup to start accepting reservations and getting paid.</p>
+      </div>
+      <p style="text-align: center; margin: 30px 0;">
+        <a href="${data.onboardingUrl}" style="background-color: #28a745; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">Finish Stripe Onboarding</a>
+      </p>
+      <p>Once you complete onboarding we&apos;ll automatically open your listing for booking and let interested renters know.</p>
+      <p style="margin-top: 30px;">
+        Best regards,<br>
+        Renegade Race Rentals
+      </p>
+    </body>
+    </html>
+  `
+  const text = `
+A renter is waiting for your car
+
+Hi ${data.ownerName},
+
+${data.renterName} is interested in renting your ${data.vehicleName}, but we can't accept their booking yet because your Stripe Connect onboarding isn't complete.
+
+${interestedLine} Finish your payout setup to start accepting reservations and getting paid.
+
+Finish Stripe onboarding: ${data.onboardingUrl}
+
+Once you complete onboarding we'll automatically open your listing for booking and let interested renters know.
+
+Best regards,
+Renegade Race Rentals
+  `.trim()
+
+  return { subject, html, text }
+}
+
 // Helper function to convert email to test address if in test mode
 function getTestEmail(originalEmail: string): string {
   if (isTestMode()) {
