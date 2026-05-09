@@ -1056,7 +1056,7 @@ function VehicleDetailsPageContent() {
                   </Button>
                   <p className="text-center text-muted-foreground text-xs">
                     {vehicle.hostStripeReady === false
-                      ? "Host is finishing payout setup — booking will open soon."
+                      ? "Vehicle coming soon"
                       : "You won't be charged until checkout"}
                   </p>
                 </CardContent>
@@ -1092,12 +1092,16 @@ function VehicleDetailsPageContent() {
                       <Separator className="my-4" />
                       <Button
                         className="w-full"
-                        disabled={isCreatingConversation}
+                        disabled={isCreatingConversation || vehicle.hostStripeReady === false}
                         onClick={handleMessageHost}
                         variant="outline"
                       >
                         <MessageSquare className="mr-2 size-4" />
-                        {isCreatingConversation ? "Loading..." : "Message Host"}
+                        {isCreatingConversation
+                          ? "Loading..."
+                          : vehicle.hostStripeReady === false
+                            ? "Messaging Unavailable"
+                            : "Message Host"}
                       </Button>
                     </>
                   )}
