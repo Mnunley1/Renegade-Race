@@ -65,10 +65,8 @@ export const getAllWithOptimizedImages = query({
           ctx.db.get(vehicle.trackId),
         ])
 
-        // Filter out vehicles from hosts without complete Stripe setup
-        if (!owner?.stripeAccountId || owner.stripeAccountStatus !== "enabled") {
-          return null
-        }
+        const hostStripeReady =
+          !!owner?.stripeAccountId && owner.stripeAccountStatus === "enabled"
 
         const optimizedImages = images
           .filter((image) => image.r2Key)
@@ -86,12 +84,12 @@ export const getAllWithOptimizedImages = query({
           images: optimizedImages,
           owner,
           track,
+          hostStripeReady,
         }
       })
     )
 
-    // Filter out null values (vehicles from hosts without Stripe setup)
-    return vehiclesWithDetails.filter((v) => v !== null)
+    return vehiclesWithDetails
   },
 })
 
@@ -241,13 +239,8 @@ export const searchWithAvailability = query({
           ctx.db.get(vehicle.trackId),
         ])
 
-        // Filter out vehicles from hosts without fully enabled, connected Stripe accounts
-        // Only show vehicles where the owner has:
-        // 1. A Stripe account ID (connected account)
-        // 2. An enabled Stripe account status
-        if (!owner?.stripeAccountId || owner.stripeAccountStatus !== "enabled") {
-          return null
-        }
+        const hostStripeReady =
+          !!owner?.stripeAccountId && owner.stripeAccountStatus === "enabled"
 
         const optimizedImages = images
           .filter((image) => image.r2Key)
@@ -265,12 +258,12 @@ export const searchWithAvailability = query({
           images: optimizedImages,
           owner,
           track,
+          hostStripeReady,
         }
       })
     )
 
-    // Filter out null values (vehicles from hosts without Stripe setup)
-    let finalVehicles = vehiclesWithDetails.filter((v) => v !== null)
+    let finalVehicles = vehiclesWithDetails
 
     // Step 5: Apply distance-based filtering if coordinates provided
     if (
@@ -387,22 +380,20 @@ export const getAll = query({
           ctx.db.get(vehicle.trackId),
         ])
 
-        // Filter out vehicles from hosts without complete Stripe setup
-        if (!owner?.stripeAccountId || owner.stripeAccountStatus !== "enabled") {
-          return null
-        }
+        const hostStripeReady =
+          !!owner?.stripeAccountId && owner.stripeAccountStatus === "enabled"
 
         return {
           ...vehicle,
           images,
           owner,
           track,
+          hostStripeReady,
         }
       })
     )
 
-    // Filter out null values (vehicles from hosts without Stripe setup)
-    return vehiclesWithDetails.filter((v) => v !== null)
+    return vehiclesWithDetails
   },
 })
 
@@ -447,12 +438,16 @@ export const getById = query({
       }
     })
 
+    const hostStripeReady =
+      !!owner?.stripeAccountId && owner.stripeAccountStatus === "enabled"
+
     return {
       ...vehicle,
       images: optimizedImages,
       owner,
       track,
       availability,
+      hostStripeReady,
     }
   },
 })

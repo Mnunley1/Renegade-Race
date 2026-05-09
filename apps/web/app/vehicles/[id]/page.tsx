@@ -106,6 +106,7 @@ type VehicleData = {
   images?: VehicleImage[]
   owner?: VehicleOwner
   track?: VehicleTrack
+  hostStripeReady?: boolean
 }
 
 type ReviewData = {
@@ -1041,6 +1042,7 @@ function VehicleDetailsPageContent() {
 
                   <Button
                     className="mb-3 w-full text-base"
+                    disabled={vehicle.hostStripeReady === false}
                     onClick={() => {
                       const checkoutUrl =
                         startDate && endDate
@@ -1050,10 +1052,12 @@ function VehicleDetailsPageContent() {
                     }}
                     size="lg"
                   >
-                    Reserve Now
+                    {vehicle.hostStripeReady === false ? "Booking Unavailable" : "Reserve Now"}
                   </Button>
                   <p className="text-center text-muted-foreground text-xs">
-                    You won&apos;t be charged until checkout
+                    {vehicle.hostStripeReady === false
+                      ? "Host is finishing payout setup — booking will open soon."
+                      : "You won't be charged until checkout"}
                   </p>
                 </CardContent>
               </Card>
@@ -1120,6 +1124,7 @@ function VehicleDetailsPageContent() {
               <span className="text-muted-foreground text-sm"> /day</span>
             </div>
             <Button
+              disabled={vehicle.hostStripeReady === false}
               onClick={() => {
                 const checkoutUrl =
                   startDate && endDate
@@ -1129,7 +1134,7 @@ function VehicleDetailsPageContent() {
               }}
               size="lg"
             >
-              Reserve Now
+              {vehicle.hostStripeReady === false ? "Booking Unavailable" : "Reserve Now"}
             </Button>
           </div>
         </div>
