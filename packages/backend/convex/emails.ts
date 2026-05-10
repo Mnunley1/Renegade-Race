@@ -1,7 +1,7 @@
 import { Resend as ResendComponent } from "@convex-dev/resend"
 import { v } from "convex/values"
 import { Resend } from "resend"
-import { api, components, internal } from "./_generated/api"
+import { components, internal } from "./_generated/api"
 import { action, type MutationCtx, internalMutation, mutation, query } from "./_generated/server"
 import { checkAdmin } from "./admin"
 import { rateLimiter } from "./rateLimiter"
