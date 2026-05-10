@@ -14,15 +14,17 @@ import {
 import { Textarea } from "@workspace/ui/components/textarea"
 import { useMutation, useQuery } from "convex/react"
 import { AlertTriangle, ArrowLeft, Loader2, Upload, X } from "lucide-react"
+import Image from "next/image"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import { useState } from "react"
 import { toast } from "sonner"
-import { usePhotoUpload } from "@/hooks/usePhotoUpload"
+import { useReservationPhotoUpload } from "@/hooks/useReservationPhotoUpload"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
-import { getImageKitUrl } from "@/lib/imagekit"
+import { IMAGE_ACCEPT_ATTR } from "@/lib/image-validation"
+import { r2Url } from "@/lib/r2-url"
 
 export default function DisputeCreationPage() {
   const { user: _user } = useUser()
@@ -42,7 +44,7 @@ export default function DisputeCreationPage() {
     fileInputRef,
     handlePhotoUpload,
     handleRemovePhoto,
-  } = usePhotoUpload()
+  } = useReservationPhotoUpload({ kind: "dispute", reservationId })
 
   // Fetch reservation and completion data
   const reservation = useQuery(
@@ -260,11 +262,14 @@ export default function DisputeCreationPage() {
               <Label>Supporting Evidence (Photos)</Label>
               <div className="mt-2 flex flex-wrap gap-2">
                 {photos.map((photoKey, index) => (
-                  <div className="group relative" key={index}>
-                    <img
+                  <div className="group relative h-24 w-24" key={index}>
+                    <Image
                       alt={`Dispute photo ${index + 1}`}
-                      className="h-24 w-24 rounded-lg object-cover"
-                      src={getImageKitUrl(photoKey, { width: 96, height: 96, quality: 80 })}
+                      className="rounded-lg object-cover"
+                      fill
+                      quality={80}
+                      sizes="96px"
+                      src={r2Url(photoKey)}
                     />
                     <button
                       className="absolute top-1 right-1 rounded-full bg-destructive p-1 opacity-0 transition-opacity group-hover:opacity-100"
@@ -277,7 +282,7 @@ export default function DisputeCreationPage() {
                 ))}
                 <label className="cursor-pointer">
                   <input
-                    accept="image/*"
+                    accept={IMAGE_ACCEPT_ATTR}
                     className="hidden"
                     disabled={isUploading}
                     multiple

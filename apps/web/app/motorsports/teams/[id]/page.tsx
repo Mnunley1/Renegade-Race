@@ -44,6 +44,7 @@ import { TeamRoster } from "@/components/team-roster"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
+import { r2Url } from "@/lib/r2-url"
 
 type TeamDetailPageProps = {
   params: Promise<{
@@ -297,8 +298,17 @@ export default function TeamDetailPage({ params }: TeamDetailPageProps) {
         <div className="space-y-6 lg:col-span-2">
           <Card>
             <div className="relative h-64 w-full overflow-hidden rounded-t-lg">
-              {team.logoUrl ? (
-                <Image alt={team.name} className="object-cover" fill src={team.logoUrl} />
+              {team.logoR2Key ? (
+                <Image
+                  alt={team.name}
+                  className="object-cover"
+                  fill
+                  sizes="(max-width: 1024px) 100vw, 66vw"
+                  src={r2Url(team.logoR2Key)}
+                />
+              ) : team.logoUrl ? (
+                // biome-ignore lint/performance/noImgElement: legacy user-supplied URL not in remotePatterns
+                <img alt={team.name} className="size-full object-cover" src={team.logoUrl} />
               ) : (
                 <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-primary">
                   <h3 className="font-bold text-4xl text-white">{team.name}</h3>
@@ -406,6 +416,7 @@ export default function TeamDetailPage({ params }: TeamDetailPageProps) {
                     id={team._id}
                     key={team._id}
                     location={team.location}
+                    logoR2Key={team.logoR2Key}
                     logoUrl={team.logoUrl}
                     name={team.name}
                     racingType={team.racingType}

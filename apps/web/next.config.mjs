@@ -42,6 +42,7 @@ const nextConfig = {
   outputFileTracingRoot: resolve(__dirname, "../.."),
   transpilePackages: ["@workspace/ui", "@renegade/backend"],
   images: {
+    qualities: [60, 70, 75, 80, 85, 90],
     remotePatterns: [
       {
         protocol: "https",
@@ -52,15 +53,7 @@ const nextConfig = {
         hostname: "api.dicebear.com",
       },
       {
-        protocol: "https",
-        hostname: "ik.imgkit.net",
-      },
-      {
-        protocol: "https",
-        hostname: "ik.imagekit.io",
-      },
-      {
-        // Cloudflare R2 public bucket URLs (pub-*.r2.dev)
+        // Cloudflare R2 public bucket URLs (pub-*.r2.dev) — used for dev
         protocol: "https",
         hostname: "*.r2.dev",
       },
@@ -68,6 +61,11 @@ const nextConfig = {
         // Cloudflare R2 custom domains
         protocol: "https",
         hostname: "*.cloudflarestorage.com",
+      },
+      {
+        // R2 custom domain — production image origin
+        protocol: "https",
+        hostname: "images.renegaderace.com",
       },
     ],
   },

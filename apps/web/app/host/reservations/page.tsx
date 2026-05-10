@@ -19,11 +19,13 @@ import {
   User,
   XCircle,
 } from "lucide-react"
+import Image from "next/image"
 import Link from "next/link"
 import { useMemo, useState } from "react"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
+import { r2Url } from "@/lib/r2-url"
 
 export default function HostReservationsPage() {
   const { user } = useUser()
@@ -284,19 +286,22 @@ export default function HostReservationsPage() {
           ) : (
             <div className="space-y-4">
               {filteredReservations.map((reservation: any) => {
-                const vehicleImage =
-                  reservation.vehicle?.images?.[0]?.cardUrl ||
-                  reservation.vehicle?.images?.[0]?.cardUrl ||
-                  "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=400"
+                const primaryImageKey = reservation.vehicle?.images?.[0]?.r2Key
+                const vehicleImage = primaryImageKey
+                  ? r2Url(primaryImageKey)
+                  : "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=400"
 
                 return (
                   <Card key={reservation._id}>
                     <div className="flex flex-col md:flex-row">
                       {/* Vehicle Image */}
                       <div className="relative h-48 w-full shrink-0 overflow-hidden md:h-auto md:w-64">
-                        <img
+                        <Image
                           alt={`${reservation.vehicle?.year} ${reservation.vehicle?.make} ${reservation.vehicle?.model}`}
-                          className="size-full object-cover"
+                          className="object-cover"
+                          fill
+                          quality={75}
+                          sizes="(max-width: 768px) 100vw, 256px"
                           src={vehicleImage}
                         />
                       </div>
@@ -454,18 +459,21 @@ export default function HostReservationsPage() {
           ) : (
             <div className="space-y-4">
               {pendingReservations.map((reservation: any) => {
-                const vehicleImage =
-                  reservation.vehicle?.images?.[0]?.cardUrl ||
-                  reservation.vehicle?.images?.[0]?.cardUrl ||
-                  "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=400"
+                const primaryImageKey = reservation.vehicle?.images?.[0]?.r2Key
+                const vehicleImage = primaryImageKey
+                  ? r2Url(primaryImageKey)
+                  : "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=400"
 
                 return (
                   <Card key={reservation._id}>
                     <div className="flex flex-col md:flex-row">
                       <div className="relative h-48 w-full shrink-0 overflow-hidden md:h-auto md:w-64">
-                        <img
+                        <Image
                           alt={`${reservation.vehicle?.year} ${reservation.vehicle?.make} ${reservation.vehicle?.model}`}
-                          className="size-full object-cover"
+                          className="object-cover"
+                          fill
+                          quality={75}
+                          sizes="(max-width: 768px) 100vw, 256px"
                           src={vehicleImage}
                         />
                       </div>
@@ -536,17 +544,21 @@ export default function HostReservationsPage() {
           ) : (
             <div className="space-y-4">
               {approvedReservations.map((reservation: any) => {
-                const vehicleImage =
-                  reservation.vehicle?.images?.[0]?.cardUrl ||
-                  "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=400"
+                const primaryImageKey = reservation.vehicle?.images?.[0]?.r2Key
+                const vehicleImage = primaryImageKey
+                  ? r2Url(primaryImageKey)
+                  : "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=400"
 
                 return (
                   <Card key={reservation._id}>
                     <div className="flex flex-col md:flex-row">
                       <div className="relative h-48 w-full shrink-0 overflow-hidden md:h-auto md:w-64">
-                        <img
+                        <Image
                           alt={`${reservation.vehicle?.year} ${reservation.vehicle?.make} ${reservation.vehicle?.model}`}
-                          className="size-full object-cover"
+                          className="object-cover"
+                          fill
+                          quality={75}
+                          sizes="(max-width: 768px) 100vw, 256px"
                           src={vehicleImage}
                         />
                       </div>
@@ -604,17 +616,21 @@ export default function HostReservationsPage() {
           ) : (
             <div className="space-y-4">
               {confirmedReservations.map((reservation: any) => {
-                const vehicleImage =
-                  reservation.vehicle.images?.[0]?.cardUrl ||
-                  "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=400"
+                const primaryImageKey = reservation.vehicle.images?.[0]?.r2Key
+                const vehicleImage = primaryImageKey
+                  ? r2Url(primaryImageKey)
+                  : "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=400"
 
                 return (
                   <Card key={reservation._id}>
                     <div className="flex flex-col md:flex-row">
                       <div className="relative h-48 w-full shrink-0 overflow-hidden md:h-auto md:w-64">
-                        <img
+                        <Image
                           alt={`${reservation.vehicle?.year} ${reservation.vehicle?.make} ${reservation.vehicle?.model}`}
-                          className="size-full object-cover"
+                          className="object-cover"
+                          fill
+                          quality={75}
+                          sizes="(max-width: 768px) 100vw, 256px"
                           src={vehicleImage}
                         />
                       </div>
@@ -678,17 +694,21 @@ export default function HostReservationsPage() {
           ) : (
             <div className="space-y-4">
               {completedReservations.map((reservation: any) => {
-                const vehicleImage =
-                  reservation.vehicle?.images?.[0]?.cardUrl ||
-                  "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=400"
+                const primaryImageKey = reservation.vehicle?.images?.[0]?.r2Key
+                const vehicleImage = primaryImageKey
+                  ? r2Url(primaryImageKey)
+                  : "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=400"
 
                 return (
                   <Card key={reservation._id}>
                     <div className="flex flex-col md:flex-row">
                       <div className="relative h-48 w-full shrink-0 overflow-hidden md:h-auto md:w-64">
-                        <img
+                        <Image
                           alt={`${reservation.vehicle?.year} ${reservation.vehicle?.make} ${reservation.vehicle?.model}`}
-                          className="size-full object-cover"
+                          className="object-cover"
+                          fill
+                          quality={75}
+                          sizes="(max-width: 768px) 100vw, 256px"
                           src={vehicleImage}
                         />
                       </div>
@@ -760,18 +780,21 @@ export default function HostReservationsPage() {
                   const reservation = completion.reservation
                   if (!reservation) return null
 
-                  const vehicleImage =
-                    completion.vehicle?.images?.[0]?.cardUrl ||
-                    completion.vehicle?.images?.[0]?.cardUrl ||
-                    "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=400"
+                  const primaryImageKey = completion.vehicle?.images?.[0]?.r2Key
+                  const vehicleImage = primaryImageKey
+                    ? r2Url(primaryImageKey)
+                    : "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=400"
 
                   return (
                     <Card className="border-orange-500/50" key={completion._id}>
                       <div className="flex flex-col md:flex-row">
                         <div className="relative h-48 w-full shrink-0 overflow-hidden md:h-auto md:w-64">
-                          <img
+                          <Image
                             alt={`${completion.vehicle?.year} ${completion.vehicle?.make} ${completion.vehicle?.model}`}
-                            className="size-full object-cover"
+                            className="object-cover"
+                            fill
+                            quality={75}
+                            sizes="(max-width: 768px) 100vw, 256px"
                             src={vehicleImage}
                           />
                         </div>

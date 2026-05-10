@@ -32,6 +32,7 @@ import { UserAvatar } from "@/components/user-avatar"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
+import { r2Url } from "@/lib/r2-url"
 
 const formatCurrency = (amount: number) =>
   new Intl.NumberFormat("en-US", {
@@ -72,7 +73,7 @@ type VehicleItem = {
   isActive?: boolean
   isApproved?: boolean | null
   isSuspended?: boolean
-  images?: Array<{ isPrimary: boolean; cardUrl?: string; imageUrl?: string }>
+  images?: Array<{ isPrimary: boolean; r2Key?: string; imageUrl?: string }>
 }
 
 type ReviewItem = {
@@ -514,7 +515,7 @@ function VehiclesCard({ vehicles }: { vehicles: VehicleItem[] | undefined }) {
                     <img
                       alt={`${vehicle.make} ${vehicle.model}`}
                       className="h-12 w-16 shrink-0 rounded-md object-cover"
-                      src={primaryImage.cardUrl || primaryImage.imageUrl}
+                      src={primaryImage.r2Key ? r2Url(primaryImage.r2Key) : primaryImage.imageUrl}
                     />
                   )}
                   <div className="min-w-0 flex-1">

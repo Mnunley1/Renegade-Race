@@ -1,6 +1,7 @@
 "use client"
 
 import { useUser } from "@clerk/nextjs"
+import { useUploadFile } from "@convex-dev/r2/react"
 import { Button } from "@workspace/ui/components/button"
 import {
   Card,
@@ -21,11 +22,14 @@ import {
 import { Separator } from "@workspace/ui/components/separator"
 import { Textarea } from "@workspace/ui/components/textarea"
 import { useMutation } from "convex/react"
-import { ArrowLeft, Check, Loader2, Plus, X } from "lucide-react"
+import { ArrowLeft, Check, Loader2, Plus, Upload, X } from "lucide-react"
+import Image from "next/image"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
+import { toast } from "sonner"
 import {
+  MAX_FILE_SIZE_BYTES,
   RACING_TYPES,
   REAL_WORLD_CATEGORIES,
   SIM_RACING_CATEGORIES,
@@ -33,6 +37,12 @@ import {
 } from "@/lib/constants"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
+import {
+  ALLOWED_IMAGE_FORMATS_LABEL,
+  IMAGE_ACCEPT_ATTR,
+  isAllowedImageFile,
+} from "@/lib/image-validation"
+import { r2Url } from "@/lib/r2-url"
 
 // Combine real-world and sim-racing categories for team specialties
 const COMMON_SPECIALTIES = [...REAL_WORLD_CATEGORIES, "Cup Series", ...SIM_RACING_CATEGORIES]
@@ -41,10 +51,12 @@ export default function CreateTeamProfilePage() {
   const router = useRouter()
   const pathname = usePathname()
   const { isSignedIn, isLoaded: userLoaded } = useUser()
+  const uploadFile = useUploadFile(api.r2)
+  const [logoR2Key, setLogoR2Key] = useState<string>("")
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false)
   const [formData, setFormData] = useState({
     name: "",
     description: "",
-    logoUrl: "",
     location: "",
     racingType: "",
     simRacingPlatforms: [] as string[],
@@ -86,7 +98,7 @@ export default function CreateTeamProfilePage() {
       await createTeam({
         name: formData.name,
         description: formData.description,
-        logoUrl: formData.logoUrl || undefined,
+        logoR2Key: logoR2Key || undefined,
         location: formData.location,
         racingType: formData.racingType
           ? (formData.racingType as "real-world" | "sim-racing" | "both")
@@ -174,6 +186,35 @@ export default function CreateTeamProfilePage() {
       ...formData,
       requirements: formData.requirements.filter((r) => r !== requirement),
     })
+  }
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ""
+    if (!file) return
+    if (!isAllowedImageFile(file)) {
+      toast.error(`Please choose ${ALLOWED_IMAGE_FORMATS_LABEL}`)
+      return
+    }
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      toast.error(`Image is too large. Maximum size is ${MAX_FILE_SIZE_BYTES / 1024 / 1024}MB.`)
+      return
+    }
+    setIsUploadingLogo(true)
+    try {
+      const key = await uploadFile(file)
+      setLogoR2Key(key)
+    } catch (error) {
+      handleErrorWithContext(error, {
+        action: "upload team logo",
+        customMessages: {
+          file_upload: "Failed to upload logo. Please try again.",
+          generic: "Failed to upload logo. Please try again.",
+        },
+      })
+    } finally {
+      setIsUploadingLogo(false)
+    }
   }
 
   const handleSimPlatformToggle = (platform: string) => {
@@ -271,15 +312,54 @@ export default function CreateTeamProfilePage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="logoUrl">Team Logo URL (Optional)</Label>
-                  <Input
-                    id="logoUrl"
-                    name="logoUrl"
-                    onChange={handleChange}
-                    placeholder="https://example.com/logo.png"
-                    type="url"
-                    value={formData.logoUrl}
-                  />
+                  <Label htmlFor="logo">Team Logo (Optional)</Label>
+                  {logoR2Key ? (
+                    <div className="flex items-center gap-3">
+                      <div className="relative size-20 overflow-hidden rounded-md border bg-muted">
+                        <Image
+                          alt="Team logo preview"
+                          className="object-cover"
+                          fill
+                          sizes="80px"
+                          src={r2Url(logoR2Key)}
+                        />
+                      </div>
+                      <Button
+                        onClick={() => setLogoR2Key("")}
+                        size="sm"
+                        type="button"
+                        variant="outline"
+                      >
+                        <X className="mr-1 size-4" />
+                        Remove
+                      </Button>
+                    </div>
+                  ) : (
+                    <label
+                      className="flex h-20 cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed text-muted-foreground text-sm transition-colors hover:bg-accent"
+                      htmlFor="logo"
+                    >
+                      {isUploadingLogo ? (
+                        <>
+                          <Loader2 className="size-4 animate-spin" />
+                          Uploading...
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="size-4" />
+                          Upload logo
+                        </>
+                      )}
+                      <input
+                        accept={IMAGE_ACCEPT_ATTR}
+                        className="hidden"
+                        disabled={isUploadingLogo}
+                        id="logo"
+                        onChange={handleLogoUpload}
+                        type="file"
+                      />
+                    </label>
+                  )}
                 </div>
               </div>
 

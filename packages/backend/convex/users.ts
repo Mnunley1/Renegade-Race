@@ -10,7 +10,7 @@ import {
   query,
 } from "./_generated/server"
 import { getWelcomeEmailTemplate, sendTransactionalEmail } from "./emails"
-import { imagePresets, r2 } from "./r2"
+import { r2 } from "./r2"
 
 export const current = query({
   args: {},
@@ -34,9 +34,8 @@ export const getById = query({
     return {
       _id: user._id,
       name: user.name,
-      profileImage: user.profileImageR2Key
-        ? imagePresets.avatar(user.profileImageR2Key)
-        : undefined,
+      profileImage: user.profileImage,
+      profileImageR2Key: user.profileImageR2Key,
       location: user.location,
       bio: user.bio,
       memberSince: user.memberSince,
@@ -347,12 +346,8 @@ export const updateProfileImage = mutation({
       throw new Error("Failed to create or retrieve user")
     }
 
-    // Prefer R2 key, fallback to legacy storage ID
     if (args.r2Key) {
-      // Generate ImageKit URL for profile image
-      const profileImageUrl = imagePresets.original(args.r2Key)
       await ctx.db.patch(user._id, {
-        profileImage: profileImageUrl,
         profileImageR2Key: args.r2Key,
       })
     } else if (args.storageId) {

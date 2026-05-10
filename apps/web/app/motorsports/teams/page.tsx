@@ -46,6 +46,7 @@ export default function TeamsPage() {
       id: team._id as string,
       name: team.name,
       logoUrl: team.logoUrl,
+      logoR2Key: team.logoR2Key,
       location: team.location,
       racingType: team.racingType,
       simRacingPlatforms: team.simRacingPlatforms,

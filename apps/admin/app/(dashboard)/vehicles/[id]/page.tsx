@@ -33,6 +33,7 @@ import { UserAvatar } from "@/components/user-avatar"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
+import { r2Url } from "@/lib/r2-url"
 
 const formatCurrency = (amount: number) =>
   new Intl.NumberFormat("en-US", {
@@ -184,9 +185,6 @@ function ImageGallery({ vehicle }: { vehicle: VehicleData }) {
   const images = vehicle.images as Array<{
     _id: string
     isPrimary: boolean
-    detailUrl?: string
-    cardUrl?: string
-    heroUrl?: string
     imageUrl?: string
     r2Key?: string
   }>
@@ -205,12 +203,7 @@ function ImageGallery({ vehicle }: { vehicle: VehicleData }) {
           <img
             alt={`${vehicle.make} ${vehicle.model}`}
             className="h-64 w-full object-cover"
-            src={
-              selectedImage?.heroUrl ||
-              selectedImage?.detailUrl ||
-              selectedImage?.cardUrl ||
-              selectedImage?.imageUrl
-            }
+            src={selectedImage?.r2Key ? r2Url(selectedImage.r2Key) : selectedImage?.imageUrl}
           />
           {selectedImage?.isPrimary && (
             <Badge className="absolute top-3 left-3 bg-black/60 text-white">Primary</Badge>
@@ -232,7 +225,7 @@ function ImageGallery({ vehicle }: { vehicle: VehicleData }) {
                 <img
                   alt={`${vehicle.make} ${vehicle.model} - ${idx + 1}`}
                   className="h-16 w-full object-cover"
-                  src={image.cardUrl || image.imageUrl}
+                  src={image.r2Key ? r2Url(image.r2Key) : image.imageUrl}
                 />
               </button>
             ))}

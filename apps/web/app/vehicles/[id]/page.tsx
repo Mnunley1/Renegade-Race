@@ -47,6 +47,7 @@ import { VehicleGallery } from "@/components/vehicle-gallery"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
+import { r2Url } from "@/lib/r2-url"
 
 // ─── Types ──────────────────────────────────────────────────────────────
 
@@ -60,6 +61,7 @@ type VehicleOwner = {
   _id: string
   name?: string
   profileImage?: string
+  profileImageR2Key?: string
   memberSince?: string
   totalRentals?: number
   externalId?: string
@@ -106,6 +108,7 @@ type VehicleData = {
   images?: VehicleImage[]
   owner?: VehicleOwner
   track?: VehicleTrack
+  hostStripeReady?: boolean
 }
 
 type ReviewData = {
@@ -417,7 +420,9 @@ function VehicleDetailsPageContent() {
 
   const host = {
     name: vehicle.owner?.name || "Unknown",
-    avatar: vehicle.owner?.profileImage || "",
+    avatar: vehicle.owner?.profileImageR2Key
+      ? r2Url(vehicle.owner.profileImageR2Key)
+      : vehicle.owner?.profileImage || "",
     memberSince: vehicle.owner?.memberSince || "",
     tripsCompleted: vehicle.owner?.totalRentals || 0,
   }
@@ -1041,6 +1046,7 @@ function VehicleDetailsPageContent() {
 
                   <Button
                     className="mb-3 w-full text-base"
+                    disabled={vehicle.hostStripeReady === false}
                     onClick={() => {
                       const checkoutUrl =
                         startDate && endDate
@@ -1050,10 +1056,12 @@ function VehicleDetailsPageContent() {
                     }}
                     size="lg"
                   >
-                    Reserve Now
+                    {vehicle.hostStripeReady === false ? "Booking Unavailable" : "Reserve Now"}
                   </Button>
                   <p className="text-center text-muted-foreground text-xs">
-                    You won&apos;t be charged until checkout
+                    {vehicle.hostStripeReady === false
+                      ? "Vehicle coming soon"
+                      : "You won't be charged until checkout"}
                   </p>
                 </CardContent>
               </Card>
@@ -1088,12 +1096,16 @@ function VehicleDetailsPageContent() {
                       <Separator className="my-4" />
                       <Button
                         className="w-full"
-                        disabled={isCreatingConversation}
+                        disabled={isCreatingConversation || vehicle.hostStripeReady === false}
                         onClick={handleMessageHost}
                         variant="outline"
                       >
                         <MessageSquare className="mr-2 size-4" />
-                        {isCreatingConversation ? "Loading..." : "Message Host"}
+                        {isCreatingConversation
+                          ? "Loading..."
+                          : vehicle.hostStripeReady === false
+                            ? "Messaging Unavailable"
+                            : "Message Host"}
                       </Button>
                     </>
                   )}
@@ -1120,6 +1132,7 @@ function VehicleDetailsPageContent() {
               <span className="text-muted-foreground text-sm"> /day</span>
             </div>
             <Button
+              disabled={vehicle.hostStripeReady === false}
               onClick={() => {
                 const checkoutUrl =
                   startDate && endDate
@@ -1129,7 +1142,7 @@ function VehicleDetailsPageContent() {
               }}
               size="lg"
             >
-              Reserve Now
+              {vehicle.hostStripeReady === false ? "Booking Unavailable" : "Reserve Now"}
             </Button>
           </div>
         </div>

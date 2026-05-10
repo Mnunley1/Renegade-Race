@@ -1,18 +1,19 @@
-import { useUploadFile } from "@convex-dev/r2/react"
 import { useRef, useState } from "react"
 import { toast } from "sonner"
 import { MAX_FILE_SIZE_BYTES, UPLOAD_DELAY_MS } from "@/lib/constants"
-import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
+import { ALLOWED_IMAGE_FORMATS_LABEL, isAllowedImageFile } from "@/lib/image-validation"
+
+export type UploadFn = (file: File) => Promise<string>
 
 type UsePhotoUploadOptions = {
+  uploadFile: UploadFn
   onUploadComplete?: (uploadedKeys: string[]) => void
   maxFiles?: number
 }
 
-export function usePhotoUpload(options: UsePhotoUploadOptions = {}) {
-  const { onUploadComplete, maxFiles } = options
-  const uploadFile = useUploadFile(api.r2)
+export function usePhotoUpload(options: UsePhotoUploadOptions) {
+  const { uploadFile, onUploadComplete, maxFiles } = options
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [photos, setPhotos] = useState<string[]>([])
@@ -26,7 +27,6 @@ export function usePhotoUpload(options: UsePhotoUploadOptions = {}) {
       const fileArray = Array.from(files)
       const uploadedKeys: string[] = []
 
-      // Check max files limit
       if (maxFiles && photos.length + fileArray.length > maxFiles) {
         toast.error(`Maximum ${maxFiles} photos allowed`)
         setIsUploading(false)
@@ -35,12 +35,11 @@ export function usePhotoUpload(options: UsePhotoUploadOptions = {}) {
 
       for (let index = 0; index < fileArray.length; index++) {
         const file = fileArray[index]!
-        if (!file.type.startsWith("image/")) {
-          toast.error(`${file.name} is not an image file`)
+        if (!isAllowedImageFile(file)) {
+          toast.error(`${file.name} must be ${ALLOWED_IMAGE_FORMATS_LABEL}`)
           continue
         }
 
-        // Check file size
         if (file.size > MAX_FILE_SIZE_BYTES) {
           toast.error(
             `${file.name} is too large. Maximum size is ${MAX_FILE_SIZE_BYTES / 1024 / 1024}MB.`
@@ -49,7 +48,6 @@ export function usePhotoUpload(options: UsePhotoUploadOptions = {}) {
         }
 
         try {
-          // Add a small delay between uploads to avoid rate limiting
           if (index > 0) {
             await new Promise((resolve) => setTimeout(resolve, UPLOAD_DELAY_MS))
           }
@@ -83,7 +81,6 @@ export function usePhotoUpload(options: UsePhotoUploadOptions = {}) {
       })
     } finally {
       setIsUploading(false)
-      // Reset file input
       if (fileInputRef.current) {
         fileInputRef.current.value = ""
       }

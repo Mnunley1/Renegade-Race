@@ -25,6 +25,7 @@ import { Suspense, useEffect, useState } from "react"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { formatDateToISO, parseLocalDate } from "@/lib/date-utils"
+import { r2Url } from "@/lib/r2-url"
 
 interface AddOn {
   name: string
@@ -293,10 +294,7 @@ function CheckoutPageContent() {
     | undefined
   const primaryImageData = vehicleImages?.find((img) => img.isPrimary) || vehicleImages?.[0]
   const primaryImage =
-    primaryImageData?.imageUrl ||
-    (primaryImageData?.r2Key
-      ? `https://ik.imagekit.io/renegaderace/${primaryImageData.r2Key}?tr=w-320,h-200,q-80,f-auto`
-      : "")
+    (primaryImageData?.r2Key ? r2Url(primaryImageData.r2Key) : primaryImageData?.imageUrl) || ""
   // Check if form is valid and dates don't contain blocked dates
   const isValid =
     pickupDate &&

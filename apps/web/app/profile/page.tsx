@@ -43,7 +43,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
-import { imagePresets } from "@/lib/imagekit"
+import {
+  ALLOWED_IMAGE_FORMATS_LABEL,
+  IMAGE_ACCEPT_ATTR,
+  isAllowedImageFile,
+} from "@/lib/image-validation"
+import { r2Url } from "@/lib/r2-url"
 
 const DEFAULT_MEMBER_YEAR = 2024
 const MAX_IMAGE_SIZE_MB = 5
@@ -273,8 +278,8 @@ export default function ProfilePage() {
       return
     }
 
-    if (!file.type.startsWith("image/")) {
-      toast.error("Please select an image file")
+    if (!isAllowedImageFile(file)) {
+      toast.error(`Please select ${ALLOWED_IMAGE_FORMATS_LABEL}`)
       return
     }
 
@@ -340,10 +345,9 @@ export default function ProfilePage() {
     }
   }
 
-  // Compute profile image URL with ImageKit sizing
   const profileImageUrl = useMemo(() => {
     if (convexUser?.profileImageR2Key) {
-      return imagePresets.avatar(convexUser.profileImageR2Key)
+      return r2Url(convexUser.profileImageR2Key)
     }
     if (convexUser?.profileImage) {
       return convexUser.profileImage
@@ -414,7 +418,7 @@ export default function ProfilePage() {
                   </button>
                 </div>
                 <input
-                  accept="image/*"
+                  accept={IMAGE_ACCEPT_ATTR}
                   className="hidden"
                   onChange={handleProfilePictureChange}
                   ref={fileInputRef}

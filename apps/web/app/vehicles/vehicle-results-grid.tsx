@@ -240,6 +240,7 @@ export function VehicleResultsGrid({
                   datesSelected={datesSelected}
                   drivetrain={vehicle.drivetrain}
                   horsepower={vehicle.horsepower}
+                  hostStripeReady={vehicle.hostStripeReady}
                   id={vehicle.id}
                   image={vehicle.image}
                   imageKey={vehicle.imageKey}

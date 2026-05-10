@@ -5,11 +5,13 @@ import { MapPin, Users } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import type { ComponentProps } from "react"
+import { r2Url } from "@/lib/r2-url"
 
 interface TeamCardProps extends ComponentProps<"div"> {
   id: string
   name: string
   logoUrl?: string
+  logoR2Key?: string
   location: string
   racingType?: "real-world" | "sim-racing" | "both"
   simRacingPlatforms?: string[]
@@ -37,6 +39,7 @@ export function TeamCard({
   id,
   name,
   logoUrl,
+  logoR2Key,
   location,
   racingType,
   simRacingPlatforms,
@@ -62,8 +65,17 @@ export function TeamCard({
           <div className="flex flex-1 flex-col space-y-3">
             <div className="flex items-start gap-4">
               <div className="relative h-24 w-24 flex-shrink-0 overflow-hidden rounded-lg border-2 border-primary/20 bg-muted">
-                {logoUrl ? (
-                  <Image alt={name} className="object-cover" fill src={logoUrl} />
+                {logoR2Key ? (
+                  <Image
+                    alt={name}
+                    className="object-cover"
+                    fill
+                    sizes="96px"
+                    src={r2Url(logoR2Key)}
+                  />
+                ) : logoUrl ? (
+                  // biome-ignore lint/performance/noImgElement: legacy user-supplied URL not in remotePatterns
+                  <img alt={name} className="size-full object-cover" src={logoUrl} />
                 ) : (
                   <div className="flex h-full items-center justify-center bg-primary">
                     <h3 className="font-bold text-lg text-white">{name.slice(0, 2)}</h3>

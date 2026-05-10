@@ -17,6 +17,7 @@ import { useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
+import { IMAGE_ACCEPT_ATTR, isAllowedImageFile } from "@/lib/image-validation"
 
 export default function PhotosPage() {
   const router = useRouter()
@@ -34,7 +35,7 @@ export default function PhotosPage() {
     }
 
     for (const file of Array.from(files)) {
-      if (file.type.startsWith("image/")) {
+      if (isAllowedImageFile(file)) {
         const reader = new FileReader()
         reader.onloadend = () => {
           setImages((prev) => [...prev, { file, preview: reader.result as string }])
@@ -167,7 +168,7 @@ export default function PhotosPage() {
                   <span className="text-muted-foreground text-xs">Add Photo</span>
                 </div>
                 <input
-                  accept="image/*"
+                  accept={IMAGE_ACCEPT_ATTR}
                   className="hidden"
                   multiple
                   onChange={handleImageUpload}

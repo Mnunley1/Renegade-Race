@@ -1,11 +1,12 @@
 "use client"
 
-import { Image } from "@imagekit/next"
 import { Button } from "@workspace/ui/components/button"
 import { Dialog, DialogContent } from "@workspace/ui/components/dialog"
 import { cn } from "@workspace/ui/lib/utils"
 import { Car, ChevronLeft, ChevronRight, Grid, X } from "lucide-react"
+import Image from "next/image"
 import { useCallback, useEffect, useState } from "react"
+import { r2Url } from "@/lib/r2-url"
 
 type VehicleGalleryProps = {
   images: string[]
@@ -105,9 +106,9 @@ export function VehicleGallery({ images, vehicleName }: VehicleGalleryProps) {
               className="size-full object-cover"
               fill
               priority
+              quality={85}
               sizes="100vw"
-              src={validImages[0] as string}
-              urlEndpoint="https://ik.imagekit.io/renegaderace"
+              src={r2Url(validImages[0] as string)}
             />
           </button>
         </div>
@@ -156,9 +157,9 @@ export function VehicleGallery({ images, vehicleName }: VehicleGalleryProps) {
               className="size-full object-cover"
               fill
               priority
+              quality={85}
               sizes="(max-width: 768px) 100vw, 60vw"
-              src={validImages[0] as string}
-              urlEndpoint="https://ik.imagekit.io/renegaderace"
+              src={r2Url(validImages[0] as string)}
             />
           </button>
 
@@ -183,9 +184,9 @@ export function VehicleGallery({ images, vehicleName }: VehicleGalleryProps) {
                   alt={`${vehicleName} - Image ${realIndex + 1}`}
                   className="size-full object-cover"
                   fill
+                  quality={75}
                   sizes="(max-width: 768px) 50vw, 25vw"
-                  src={image}
-                  urlEndpoint="https://ik.imagekit.io/renegaderace"
+                  src={r2Url(image)}
                 />
                 {isLast && (
                   <div
@@ -278,9 +279,9 @@ export function VehicleGallery({ images, vehicleName }: VehicleGalleryProps) {
                     className="size-full object-contain"
                     fill
                     priority
+                    quality={90}
                     sizes="100vw"
-                    src={validImages[selectedIndex]}
-                    urlEndpoint="https://ik.imagekit.io/renegaderace"
+                    src={r2Url(validImages[selectedIndex])}
                   />
                 </div>
               )}
@@ -347,9 +348,9 @@ export function VehicleGallery({ images, vehicleName }: VehicleGalleryProps) {
                         alt={`Thumbnail ${index + 1}`}
                         className="size-full object-cover"
                         fill
+                        quality={60}
                         sizes="80px"
-                        src={image}
-                        urlEndpoint="https://ik.imagekit.io/renegaderace"
+                        src={r2Url(image)}
                       />
                     </button>
                   ))}

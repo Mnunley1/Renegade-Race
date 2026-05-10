@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "@clerk/clerk-sdk-node": "^5.1.6",
-    "@convex-dev/crons": "^0.1.4",
+    "@convex-dev/crons": "^0.2.0",
     "@convex-dev/r2": "^0.8.1",
     "@convex-dev/rate-limiter": "^0.2.12",
     "@convex-dev/resend": "^0.2.1",

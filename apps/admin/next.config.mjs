@@ -51,11 +51,11 @@ const nextConfig = {
       },
       {
         protocol: "https",
-        hostname: "ik.imgkit.net",
+        hostname: "*.r2.dev",
       },
       {
         protocol: "https",
-        hostname: "ik.imagekit.io",
+        hostname: "images.renegaderace.com",
       },
       {
         protocol: "https",
