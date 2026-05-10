@@ -7,6 +7,7 @@ export const create = mutation({
     name: v.string(),
     description: v.string(),
     logoUrl: v.optional(v.string()),
+    logoR2Key: v.optional(v.string()),
     location: v.string(),
     racingType: v.optional(
       v.union(v.literal("real-world"), v.literal("sim-racing"), v.literal("both"))
@@ -55,6 +56,7 @@ export const update = mutation({
     name: v.optional(v.string()),
     description: v.optional(v.string()),
     logoUrl: v.optional(v.string()),
+    logoR2Key: v.optional(v.string()),
     location: v.optional(v.string()),
     racingType: v.optional(
       v.union(v.literal("real-world"), v.literal("sim-racing"), v.literal("both"))

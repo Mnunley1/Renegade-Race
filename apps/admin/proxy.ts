@@ -56,7 +56,7 @@ export default clerkMiddleware(
         "img-src": [
           "*.r2.dev",
           "*.r2.cloudflarestorage.com",
-          "ik.imagekit.io",
+          "images.renegaderace.com",
           "images.unsplash.com",
           "api.dicebear.com",
           "*.vercel.app",

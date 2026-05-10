@@ -15,6 +15,7 @@ import { Suspense, useEffect, useState } from "react"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { formatDateForDisplay } from "@/lib/date-utils"
+import { r2Url } from "@/lib/r2-url"
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "")
 
@@ -233,10 +234,7 @@ function PayPageContent() {
     | undefined
   const primaryImageData = vehicleImages?.find((img) => img.isPrimary) || vehicleImages?.[0]
   const primaryImage =
-    primaryImageData?.imageUrl ||
-    (primaryImageData?.r2Key
-      ? `https://ik.imagekit.io/renegaderace/${primaryImageData.r2Key}?tr=w-320,h-200,q-80,f-auto`
-      : "")
+    (primaryImageData?.r2Key ? r2Url(primaryImageData.r2Key) : primaryImageData?.imageUrl) || ""
 
   const formatTimeForDisplay = (time24: string) => {
     const [hours, minutes] = time24.split(":")

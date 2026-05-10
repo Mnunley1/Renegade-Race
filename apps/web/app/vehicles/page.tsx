@@ -541,7 +541,7 @@ function VehiclesPageContent() {
 
       return {
         id: vehicle._id,
-        image: primaryImage?.cardUrl ?? "",
+        image: "",
         imageKey: primaryImage?.r2Key ?? undefined,
         name: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
         year: vehicle.year,

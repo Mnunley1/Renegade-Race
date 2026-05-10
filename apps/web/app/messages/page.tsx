@@ -16,6 +16,7 @@ import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 import { formatTime } from "@/lib/format-time"
+import { r2Url } from "@/lib/r2-url"
 
 type FilterTab = "all" | "unread" | "archived"
 
@@ -327,7 +328,11 @@ function MessagesPageContent() {
                   const conversationContent = (
                     <div className="flex items-start space-x-3">
                       <UserAvatar
-                        imageUrl={otherUser?.profileImage}
+                        imageUrl={
+                          otherUser?.profileImageR2Key
+                            ? r2Url(otherUser.profileImageR2Key)
+                            : otherUser?.profileImage
+                        }
                         name={otherUser?.name || "Unknown"}
                         size="md"
                       />

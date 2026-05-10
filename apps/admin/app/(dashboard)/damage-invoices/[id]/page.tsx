@@ -21,6 +21,7 @@ import { toast } from "sonner"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
+import { r2Url } from "@/lib/r2-url"
 
 function getStatusBadge(status: string) {
   switch (status) {
@@ -223,7 +224,7 @@ export default function DamageInvoiceDetailPage() {
                     className="object-cover"
                     fill
                     sizes="(max-width: 768px) 50vw, 25vw"
-                    src={`https://ik.imagekit.io/renegaderace/${photo}?tr=w-400,h-300,q-80,f-auto`}
+                    src={r2Url(photo)}
                   />
                 </div>
               ))}

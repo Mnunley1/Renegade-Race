@@ -47,8 +47,8 @@ export default function HomePage() {
 
       return {
         id: vehicle._id,
-        image: primaryImage?.cardUrl ?? "",
-        imageKey: primaryImage?.r2Key ?? undefined, // Pass r2Key for ImageKit
+        image: "",
+        imageKey: primaryImage?.r2Key ?? undefined,
         name: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
         year: vehicle.year,
         make: vehicle.make,

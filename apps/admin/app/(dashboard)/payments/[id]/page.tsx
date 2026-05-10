@@ -42,6 +42,7 @@ import { UserAvatar } from "@/components/user-avatar"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
+import { r2Url } from "@/lib/r2-url"
 
 const formatCurrency = (amount: number) =>
   new Intl.NumberFormat("en-US", {
@@ -53,7 +54,7 @@ const formatCurrency = (amount: number) =>
 type PaymentData = NonNullable<ReturnType<typeof useQuery<typeof api.stripe.getPaymentById>>>
 
 type VehicleWithImages = NonNullable<PaymentData["vehicle"]> & {
-  images?: Array<{ isPrimary: boolean; cardUrl?: string; imageUrl?: string }>
+  images?: Array<{ isPrimary: boolean; r2Key?: string; imageUrl?: string }>
   track?: { name: string; location?: string }
 }
 
@@ -419,7 +420,7 @@ function VehicleCard({ payment }: { payment: PaymentData }) {
           <img
             alt={`${payment.vehicle.make} ${payment.vehicle.model}`}
             className="h-40 w-full rounded-lg object-cover"
-            src={primaryImage.cardUrl || primaryImage.imageUrl}
+            src={primaryImage.r2Key ? r2Url(primaryImage.r2Key) : primaryImage.imageUrl}
           />
         )}
         <div>

@@ -47,6 +47,7 @@ import { VehicleGallery } from "@/components/vehicle-gallery"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
+import { r2Url } from "@/lib/r2-url"
 
 // ─── Types ──────────────────────────────────────────────────────────────
 
@@ -60,6 +61,7 @@ type VehicleOwner = {
   _id: string
   name?: string
   profileImage?: string
+  profileImageR2Key?: string
   memberSince?: string
   totalRentals?: number
   externalId?: string
@@ -418,7 +420,9 @@ function VehicleDetailsPageContent() {
 
   const host = {
     name: vehicle.owner?.name || "Unknown",
-    avatar: vehicle.owner?.profileImage || "",
+    avatar: vehicle.owner?.profileImageR2Key
+      ? r2Url(vehicle.owner.profileImageR2Key)
+      : vehicle.owner?.profileImage || "",
     memberSince: vehicle.owner?.memberSince || "",
     tripsCompleted: vehicle.owner?.totalRentals || 0,
   }

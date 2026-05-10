@@ -1,7 +1,6 @@
 "use client"
 
 import { useUser } from "@clerk/nextjs"
-import { Image, ImageKitProvider } from "@imagekit/next"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent } from "@workspace/ui/components/card"
@@ -18,8 +17,10 @@ import {
   Plus,
   XCircle,
 } from "lucide-react"
+import Image from "next/image"
 import Link from "next/link"
 import { api } from "@/lib/convex"
+import { r2Url } from "@/lib/r2-url"
 
 export default function HostVehiclesListPage() {
   const { user } = useUser()
@@ -141,20 +142,14 @@ export default function HostVehiclesListPage() {
                   {/* Vehicle Image */}
                   <div className="relative flex h-48 w-full shrink-0 items-center justify-center overflow-hidden bg-muted md:h-auto md:w-64">
                     {hasValidImage ? (
-                      <ImageKitProvider
-                        urlEndpoint={
-                          process.env.NEXT_PUBLIC_IMAGEKIT_URL_ENDPOINT ||
-                          "https://ik.imagekit.io/renegaderace"
-                        }
-                      >
-                        <Image
-                          alt={`${vehicle.year} ${vehicle.make} ${vehicle.model}`}
-                          className="size-full object-cover"
-                          fill
-                          src={`/${primaryImageKey}`}
-                          transformation={[{ width: 400, height: 300, quality: 80 }]}
-                        />
-                      </ImageKitProvider>
+                      <Image
+                        alt={`${vehicle.year} ${vehicle.make} ${vehicle.model}`}
+                        className="size-full object-cover"
+                        fill
+                        quality={80}
+                        sizes="(max-width: 768px) 100vw, 256px"
+                        src={r2Url(primaryImageKey)}
+                      />
                     ) : (
                       <div className="flex flex-col items-center gap-2 text-center">
                         <Car className="size-12 text-muted-foreground/40" />

@@ -63,7 +63,8 @@ export default function FavoritesPage() {
         const stats = favoriteVehicleStats?.[vehicle._id]
         return {
           id: vehicle._id,
-          image: primaryImage?.imageUrl ?? primaryImage?.r2Key ?? "",
+          image: primaryImage?.imageUrl ?? "",
+          imageKey: primaryImage?.r2Key ?? undefined,
           name: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
           year: vehicle.year,
           make: vehicle.make,
@@ -81,6 +82,7 @@ export default function FavoritesPage() {
       .filter(Boolean) as Array<{
       id: string
       image: string
+      imageKey?: string
       name: string
       year: number
       make: string
@@ -284,6 +286,7 @@ export default function FavoritesPage() {
                 horsepower={vehicle.horsepower}
                 id={vehicle.id}
                 image={vehicle.image}
+                imageKey={vehicle.imageKey}
                 key={vehicle.id}
                 location={vehicle.location}
                 make={vehicle.make}

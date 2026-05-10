@@ -30,6 +30,7 @@ import { toast } from "sonner"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
+import { IMAGE_ACCEPT_ATTR, isAllowedImageFile } from "@/lib/image-validation"
 
 const ADVANCE_NOTICE_OPTIONS = [
   { value: "same-day", label: "Same day" },
@@ -172,7 +173,7 @@ export default function CreateVehiclePage() {
     if (!files) return
 
     for (const file of Array.from(files)) {
-      if (file.type.startsWith("image/")) {
+      if (isAllowedImageFile(file)) {
         const reader = new FileReader()
         reader.onloadend = () => {
           setImages((prev) => [...prev, { file, preview: reader.result as string }])
@@ -637,7 +638,7 @@ export default function CreateVehiclePage() {
                     <span className="text-muted-foreground text-xs">Add Photo</span>
                   </div>
                   <input
-                    accept="image/*"
+                    accept={IMAGE_ACCEPT_ATTR}
                     className="hidden"
                     multiple
                     onChange={handleImageUpload}

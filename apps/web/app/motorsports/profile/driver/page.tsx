@@ -37,7 +37,12 @@ import {
   SIM_RACING_PLATFORMS,
 } from "@/lib/constants"
 import { api } from "@/lib/convex"
-import { imagePresets } from "@/lib/imagekit"
+import {
+  ALLOWED_IMAGE_FORMATS_LABEL,
+  IMAGE_ACCEPT_ATTR,
+  isAllowedImageFile,
+} from "@/lib/image-validation"
+import { r2Url } from "@/lib/r2-url"
 
 export default function CreateDriverProfilePage() {
   const router = useRouter()
@@ -209,8 +214,8 @@ export default function CreateDriverProfilePage() {
   }
 
   const validateImageFile = (file: File): boolean => {
-    if (!file.type.startsWith("image/")) {
-      toast.error("Please select an image file")
+    if (!isAllowedImageFile(file)) {
+      toast.error(`Please select ${ALLOWED_IMAGE_FORMATS_LABEL}`)
       return false
     }
     if (file.size > MAX_IMAGE_SIZE_BYTES) {
@@ -255,8 +260,7 @@ export default function CreateDriverProfilePage() {
       const { url: uploadUrl, key } = result
       await uploadImageToR2(file, uploadUrl)
 
-      const imageKitUrl = imagePresets.avatar(key)
-      setAvatarUrl(imageKitUrl)
+      setAvatarUrl(r2Url(key))
       toast.success("Driver image uploaded successfully")
     } catch {
       toast.error("An error occurred")
@@ -359,7 +363,7 @@ export default function CreateDriverProfilePage() {
                         </Button>
                       </Label>
                       <input
-                        accept="image/*"
+                        accept={IMAGE_ACCEPT_ATTR}
                         className="hidden"
                         id="avatar-upload"
                         onChange={handleAvatarChange}
@@ -367,7 +371,7 @@ export default function CreateDriverProfilePage() {
                         type="file"
                       />
                       <p className="mt-2 text-muted-foreground text-xs">
-                        JPG, PNG or GIF. Max size: {MAX_IMAGE_SIZE_MB}MB
+                        {ALLOWED_IMAGE_FORMATS_LABEL}. Max size: {MAX_IMAGE_SIZE_MB}MB
                       </p>
                     </div>
                   </div>

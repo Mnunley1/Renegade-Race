@@ -19,10 +19,12 @@ import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import { useState } from "react"
 import { toast } from "sonner"
-import { usePhotoUpload } from "@/hooks/usePhotoUpload"
+import { useReservationPhotoUpload } from "@/hooks/useReservationPhotoUpload"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
+import { IMAGE_ACCEPT_ATTR } from "@/lib/image-validation"
+import { r2Url } from "@/lib/r2-url"
 
 export default function DamageClaimPage() {
   const params = useParams()
@@ -47,7 +49,7 @@ export default function DamageClaimPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const { photos, isUploading, fileInputRef, handlePhotoUpload, handleRemovePhoto } =
-    usePhotoUpload({ maxFiles: 10 })
+    useReservationPhotoUpload({ kind: "damage", reservationId, maxFiles: 10 })
 
   // Check if there's already an open claim
   const hasOpenClaim = existingInvoices?.some(
@@ -233,7 +235,7 @@ export default function DamageClaimPage() {
               <Label>Evidence Photos * (at least 1 required)</Label>
               <div className="rounded-lg border-2 border-dashed p-6">
                 <input
-                  accept="image/*"
+                  accept={IMAGE_ACCEPT_ATTR}
                   className="hidden"
                   multiple
                   onChange={handlePhotoUpload}
@@ -271,8 +273,9 @@ export default function DamageClaimPage() {
                         alt={`Damage photo ${index + 1}`}
                         className="object-cover"
                         fill
+                        quality={80}
                         sizes="(max-width: 768px) 33vw, 200px"
-                        src={`https://ik.imagekit.io/renegaderace/${photo}?tr=w-300,h-200,q-80,f-auto`}
+                        src={r2Url(photo)}
                       />
                       <button
                         className="absolute top-1 right-1 rounded-full bg-black/60 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100"

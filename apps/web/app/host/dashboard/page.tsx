@@ -1,7 +1,6 @@
 "use client"
 
 import { useUser } from "@clerk/nextjs"
-import { Image, ImageKitProvider } from "@imagekit/next"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import {
@@ -30,6 +29,7 @@ import {
   Star,
   XCircle,
 } from "lucide-react"
+import Image from "next/image"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Suspense, useEffect, useMemo, useState } from "react"
@@ -37,6 +37,7 @@ import { toast } from "sonner"
 import { HostOnboardingChecklist } from "@/components/host-onboarding-checklist"
 import { api } from "@/lib/convex"
 import { handleError } from "@/lib/error-handler"
+import { r2Url } from "@/lib/r2-url"
 
 function HostDashboardContent() {
   const { user } = useUser()
@@ -530,19 +531,20 @@ function HostDashboardContent() {
                           (img: { isPrimary: boolean }) => img.isPrimary
                         ) || reservation.vehicle?.images?.[0]
 
-                      const hasImage = primaryImage?.cardUrl
+                      const primaryImageKey = primaryImage?.r2Key
 
                       return (
                         <Link href={`/host/reservations/${reservation._id}`} key={reservation._id}>
                           <div className="flex items-center gap-4 rounded-lg border bg-background p-4 transition-colors hover:bg-muted/50">
                             <div className="relative flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted">
-                              {hasImage && primaryImage?.cardUrl ? (
+                              {primaryImageKey ? (
                                 <Image
                                   alt={vehicleName}
                                   className="object-cover"
                                   fill
+                                  quality={75}
                                   sizes="64px"
-                                  src={primaryImage.cardUrl}
+                                  src={r2Url(primaryImageKey)}
                                 />
                               ) : (
                                 <Car className="size-6 text-muted-foreground/40" />
@@ -619,20 +621,14 @@ function HostDashboardContent() {
                               {/* Vehicle Image - Larger and more prominent */}
                               <div className="relative flex h-48 w-full shrink-0 items-center justify-center overflow-hidden bg-muted sm:h-auto sm:w-48">
                                 {vehicle.imageKey && vehicle.imageKey.trim() !== "" ? (
-                                  <ImageKitProvider
-                                    urlEndpoint={
-                                      process.env.NEXT_PUBLIC_IMAGEKIT_URL_ENDPOINT ||
-                                      "https://ik.imagekit.io/renegaderace"
-                                    }
-                                  >
-                                    <Image
-                                      alt={vehicle.name}
-                                      className="object-cover transition-transform duration-300 group-hover:scale-105"
-                                      fill
-                                      src={`/${vehicle.imageKey}`}
-                                      transformation={[{ width: 400, height: 300, quality: 80 }]}
-                                    />
-                                  </ImageKitProvider>
+                                  <Image
+                                    alt={vehicle.name}
+                                    className="object-cover transition-transform duration-300 group-hover:scale-105"
+                                    fill
+                                    quality={80}
+                                    sizes="(max-width: 640px) 100vw, 400px"
+                                    src={r2Url(vehicle.imageKey)}
+                                  />
                                 ) : (
                                   <div className="flex flex-col items-center gap-2 text-center">
                                     <Car className="size-12 text-muted-foreground/40" />

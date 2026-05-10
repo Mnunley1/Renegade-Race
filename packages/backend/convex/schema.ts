@@ -361,6 +361,7 @@ export default defineSchema({
     name: v.string(),
     description: v.string(),
     logoUrl: v.optional(v.string()),
+    logoR2Key: v.optional(v.string()),
     location: v.string(),
     racingType: v.optional(
       v.union(v.literal("real-world"), v.literal("sim-racing"), v.literal("both"))

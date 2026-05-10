@@ -7,89 +7,6 @@ import { getCurrentUser } from "./users"
 // Initialize R2 client
 export const r2 = new R2(components.r2)
 
-// ImageKit configuration
-// These should be set as environment variables in Convex
-// IMAGEKIT_URL_ENDPOINT - Your ImageKit URL endpoint (e.g., https://ik.imgkit.net/your_imagekit_id)
-// IMAGEKIT_PUBLIC_KEY - Your ImageKit public key (optional, for signed URLs)
-// IMAGEKIT_PRIVATE_KEY - Your ImageKit private key (optional, for signed URLs)
-
-/**
- * Generate ImageKit URL with transformations
- * ImageKit must be configured with R2 as an external S3-compatible origin
- * @param key - R2 object key
- * @param options - ImageKit transformation options
- */
-export function getImageKitUrl(
-  key: string,
-  options?: {
-    width?: number
-    height?: number
-    quality?: number
-    format?: "auto" | "webp" | "jpeg" | "png"
-    focus?: "auto" | "center" | "top" | "left" | "bottom" | "right" | "faces"
-    fit?: "inside" | "outside" | "cover" | "contain"
-  }
-): string {
-  // ImageKit URL endpoint - set via: npx convex env set IMAGEKIT_URL_ENDPOINT https://ik.imagekit.io/your_id
-  // ImageKit must be configured with your R2 bucket as an external S3-compatible origin
-  const imageKitEndpoint = process.env.IMAGEKIT_URL_ENDPOINT
-
-  if (!imageKitEndpoint) {
-    console.warn(
-      "[R2] IMAGEKIT_URL_ENDPOINT is not configured. Set it via: npx convex env set IMAGEKIT_URL_ENDPOINT https://ik.imagekit.io/your_id"
-    )
-    // Return a placeholder - won't work but helps with debugging
-    return `/api/image/${key}`
-  }
-
-  // Build transformation parameters for ImageKit
-  const transformations: string[] = []
-
-  if (options?.width) {
-    transformations.push(`w-${options.width}`)
-  }
-  if (options?.height) {
-    transformations.push(`h-${options.height}`)
-  }
-  if (options?.quality) {
-    transformations.push(`q-${options.quality}`)
-  }
-  if (options?.format) {
-    transformations.push(`f-${options.format}`)
-  }
-  if (options?.focus) {
-    transformations.push(`fo-${options.focus}`)
-  }
-  if (options?.fit) {
-    transformations.push(`c-${options.fit}`)
-  }
-
-  // Default transformations for better performance
-  if (transformations.length === 0) {
-    transformations.push("f-auto", "q-80")
-  }
-
-  const transformString = transformations.join(",")
-  return `${imageKitEndpoint}/${key}?tr=${transformString}`
-}
-
-/**
- * Preset transformation helpers for common image sizes
- */
-export const imagePresets = {
-  thumbnail: (key: string) =>
-    getImageKitUrl(key, { width: 240, height: 160, quality: 70, format: "auto" }),
-  card: (key: string) =>
-    getImageKitUrl(key, { width: 600, height: 400, quality: 80, format: "auto" }),
-  detail: (key: string) =>
-    getImageKitUrl(key, { width: 1600, height: 900, quality: 80, format: "auto" }),
-  hero: (key: string) =>
-    getImageKitUrl(key, { width: 1920, height: 1080, quality: 75, format: "auto" }),
-  original: (key: string) => getImageKitUrl(key, { quality: 90, format: "auto" }),
-  avatar: (key: string) =>
-    getImageKitUrl(key, { width: 200, height: 200, quality: 80, format: "auto", fit: "cover" }),
-}
-
 // R2 Client API with validation
 export const { generateUploadUrl, syncMetadata } = r2.clientApi({
   checkUpload: async (ctx, _bucket) => {
@@ -163,6 +80,42 @@ export const generateProfileImageUploadUrl = mutation({
     const uploadResult = await r2.generateUploadUrl(key)
     return { ...uploadResult, key }
   },
+})
+
+// Sensitive-content uploads: prefixed by context so a future split into a
+// private bucket (or a per-kind ACL change) can filter on the key prefix.
+async function generateReservationPhotoUploadUrl(
+  ctx: Parameters<typeof getCurrentUser>[0],
+  reservationId: string,
+  prefix: "disputes" | "reviews" | "damage" | "returns"
+) {
+  const user = await getCurrentUser(ctx)
+  if (!user) {
+    throw new Error("Not authenticated")
+  }
+  const key = `images/${prefix}/${reservationId}/${user._id}-${crypto.randomUUID()}`
+  const uploadResult = await r2.generateUploadUrl(key)
+  return { ...uploadResult, key }
+}
+
+export const generateDisputePhotoUploadUrl = mutation({
+  args: { reservationId: v.id("reservations") },
+  handler: (ctx, args) => generateReservationPhotoUploadUrl(ctx, args.reservationId, "disputes"),
+})
+
+export const generateReviewPhotoUploadUrl = mutation({
+  args: { reservationId: v.id("reservations") },
+  handler: (ctx, args) => generateReservationPhotoUploadUrl(ctx, args.reservationId, "reviews"),
+})
+
+export const generateDamagePhotoUploadUrl = mutation({
+  args: { reservationId: v.id("reservations") },
+  handler: (ctx, args) => generateReservationPhotoUploadUrl(ctx, args.reservationId, "damage"),
+})
+
+export const generateReturnPhotoUploadUrl = mutation({
+  args: { reservationId: v.id("reservations") },
+  handler: (ctx, args) => generateReservationPhotoUploadUrl(ctx, args.reservationId, "returns"),
 })
 
 // Diagnostic mutation to test R2 configuration

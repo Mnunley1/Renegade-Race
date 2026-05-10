@@ -3,7 +3,7 @@ import { api, internal } from "./_generated/api"
 import { action, internalMutation, mutation, query } from "./_generated/server"
 import { checkAdmin } from "./admin"
 import { calculateDistance } from "./geocoding"
-import { imagePresets, r2 } from "./r2"
+import { r2 } from "./r2"
 
 // Get all active and approved vehicles with optimized images
 export const getAllWithOptimizedImages = query({
@@ -68,16 +68,7 @@ export const getAllWithOptimizedImages = query({
         const hostStripeReady =
           !!owner?.stripeAccountId && owner.stripeAccountStatus === "enabled"
 
-        const optimizedImages = images
-          .filter((image) => image.r2Key)
-          .map((image) => ({
-            ...image,
-            thumbnailUrl: imagePresets.thumbnail(image.r2Key as string),
-            cardUrl: imagePresets.card(image.r2Key as string),
-            detailUrl: imagePresets.detail(image.r2Key as string),
-            heroUrl: imagePresets.hero(image.r2Key as string),
-            originalUrl: imagePresets.original(image.r2Key as string),
-          }))
+        const optimizedImages = images.filter((image) => image.r2Key)
 
         return {
           ...vehicle,
@@ -242,16 +233,7 @@ export const searchWithAvailability = query({
         const hostStripeReady =
           !!owner?.stripeAccountId && owner.stripeAccountStatus === "enabled"
 
-        const optimizedImages = images
-          .filter((image) => image.r2Key)
-          .map((image) => ({
-            ...image,
-            thumbnailUrl: imagePresets.thumbnail(image.r2Key as string),
-            cardUrl: imagePresets.card(image.r2Key as string),
-            detailUrl: imagePresets.detail(image.r2Key as string),
-            heroUrl: imagePresets.hero(image.r2Key as string),
-            originalUrl: imagePresets.original(image.r2Key as string),
-          }))
+        const optimizedImages = images.filter((image) => image.r2Key)
 
         return {
           ...vehicle,
@@ -424,26 +406,12 @@ export const getById = query({
         .collect(),
     ])
 
-    const optimizedImages = images.map((image) => {
-      if (!image.r2Key) {
-        return image
-      }
-      return {
-        ...image,
-        thumbnailUrl: imagePresets.thumbnail(image.r2Key),
-        cardUrl: imagePresets.card(image.r2Key),
-        detailUrl: imagePresets.detail(image.r2Key),
-        heroUrl: imagePresets.hero(image.r2Key),
-        originalUrl: imagePresets.original(image.r2Key),
-      }
-    })
-
     const hostStripeReady =
       !!owner?.stripeAccountId && owner.stripeAccountStatus === "enabled"
 
     return {
       ...vehicle,
-      images: optimizedImages,
+      images,
       owner,
       track,
       availability,
@@ -460,15 +428,7 @@ export const getVehicleImageById = query({
     if (!image?.r2Key) {
       return null
     }
-
-    return {
-      ...image,
-      thumbnailUrl: imagePresets.thumbnail(image.r2Key),
-      cardUrl: imagePresets.card(image.r2Key),
-      detailUrl: imagePresets.detail(image.r2Key),
-      heroUrl: imagePresets.hero(image.r2Key),
-      originalUrl: imagePresets.original(image.r2Key),
-    }
+    return image
   },
 })
 
@@ -501,16 +461,7 @@ export const getByOwner = query({
           ctx.db.get(vehicle.trackId),
         ])
 
-        const optimizedImages = images
-          .filter((image) => image.r2Key)
-          .map((image) => ({
-            ...image,
-            thumbnailUrl: imagePresets.thumbnail(image.r2Key as string),
-            cardUrl: imagePresets.card(image.r2Key as string),
-            detailUrl: imagePresets.detail(image.r2Key as string),
-            heroUrl: imagePresets.hero(image.r2Key as string),
-            originalUrl: imagePresets.original(image.r2Key as string),
-          }))
+        const optimizedImages = images.filter((image) => image.r2Key)
 
         return {
           ...vehicle,

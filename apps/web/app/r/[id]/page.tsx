@@ -28,6 +28,7 @@ import { useMemo, useState } from "react"
 import { VehicleCard } from "@/components/vehicle-card"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
+import { r2Url } from "@/lib/r2-url"
 
 // Time constants
 const MS_PER_SECOND = 1000
@@ -125,6 +126,7 @@ type UserData = {
   name?: string
   email?: string
   profileImage?: string
+  profileImageR2Key?: string
   location?: string
   bio?: string
   memberSince?: string
@@ -195,7 +197,10 @@ function ProfileHero({
           <div className="flex flex-col items-center gap-4">
             <div className="relative">
               <Avatar className="size-36 shadow-2xl ring-4 ring-background md:size-44">
-                <AvatarImage alt={user.name || "User"} src={user.profileImage} />
+                <AvatarImage
+                  alt={user.name || "User"}
+                  src={user.profileImageR2Key ? r2Url(user.profileImageR2Key) : user.profileImage}
+                />
                 <AvatarFallback className="bg-gradient-to-br from-primary to-primary/80 text-4xl text-white">
                   {userInitials}
                 </AvatarFallback>
@@ -482,7 +487,7 @@ type ReviewData = {
   review: string
   createdAt: number
   vehicleId: string
-  reviewer?: { name?: string; profileImage?: string }
+  reviewer?: { name?: string; profileImage?: string; profileImageR2Key?: string }
   vehicle?: { year: number; make: string; model: string }
   response?: { text: string }
 }
@@ -495,7 +500,11 @@ function ReviewCard({ review, firstName }: { review: ReviewData; firstName: stri
           <Avatar className="size-12">
             <AvatarImage
               alt={review.reviewer?.name || "Reviewer"}
-              src={review.reviewer?.profileImage}
+              src={
+                review.reviewer?.profileImageR2Key
+                  ? r2Url(review.reviewer.profileImageR2Key)
+                  : review.reviewer?.profileImage
+              }
             />
             <AvatarFallback>{review.reviewer?.name?.[0]?.toUpperCase() || "R"}</AvatarFallback>
           </Avatar>
@@ -581,8 +590,8 @@ export default function UserProfilePage() {
       const stats = userVehicleStats?.[vehicle._id]
       return {
         id: vehicle._id,
-        image: primaryImage?.cardUrl ?? "",
-        imageKey: primaryImage?.r2Key, // Pass R2 key for ImageKit optimization
+        image: "",
+        imageKey: primaryImage?.r2Key,
         name: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
         year: vehicle.year,
         make: vehicle.make,

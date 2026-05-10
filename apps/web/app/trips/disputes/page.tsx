@@ -6,8 +6,10 @@ import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent } from "@workspace/ui/components/card"
 import { useQuery } from "convex/react"
 import { AlertTriangle, Calendar, Loader2, MessageSquare } from "lucide-react"
+import Image from "next/image"
 import Link from "next/link"
 import { api } from "@/lib/convex"
+import { r2Url } from "@/lib/r2-url"
 
 export default function DisputesPage() {
   const { user } = useUser()
@@ -84,17 +86,24 @@ export default function DisputesPage() {
             if (!(vehicle && reservation)) return null
 
             const vehicleName = `${vehicle.year} ${vehicle.make} ${vehicle.model}`
-            const vehicleImage =
-              vehicle.images?.[0]?.cardUrl ||
-              vehicle.images?.[0]?.cardUrl ||
-              "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=400"
+            const primaryImageKey = vehicle.images?.[0]?.r2Key
+            const vehicleImage = primaryImageKey
+              ? r2Url(primaryImageKey)
+              : "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=400"
 
             return (
               <Card key={dispute._id}>
                 <div className="flex flex-col md:flex-row">
                   {/* Vehicle Image */}
                   <div className="relative h-48 w-full shrink-0 overflow-hidden md:h-auto md:w-64">
-                    <img alt={vehicleName} className="size-full object-cover" src={vehicleImage} />
+                    <Image
+                      alt={vehicleName}
+                      className="object-cover"
+                      fill
+                      quality={75}
+                      sizes="(max-width: 768px) 100vw, 256px"
+                      src={vehicleImage}
+                    />
                   </div>
 
                   {/* Dispute Details */}

@@ -22,6 +22,7 @@ import { useMemo, useState } from "react"
 import { TripCard } from "@/components/trip-card"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
+import { r2Url } from "@/lib/r2-url"
 
 type Trip = {
   reservationId: Id<"reservations">
@@ -53,7 +54,7 @@ function mapReservation(res: any): Trip | null {
     reservationId: res._id,
     vehicleId: vehicle._id,
     vehicleName: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
-    vehicleImage: primaryImage?.cardUrl ?? "",
+    vehicleImage: primaryImage?.r2Key ? r2Url(primaryImage.r2Key) : "",
     vehicleYear: vehicle.year,
     vehicleMake: vehicle.make,
     vehicleModel: vehicle.model,

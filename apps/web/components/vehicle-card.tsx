@@ -1,7 +1,6 @@
 "use client"
 
 import { useUser } from "@clerk/nextjs"
-import { Image, ImageKitProvider } from "@imagekit/next"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent } from "@workspace/ui/components/card"
@@ -9,6 +8,7 @@ import { Dialog, DialogContent } from "@workspace/ui/components/dialog"
 import { cn } from "@workspace/ui/lib/utils"
 import { useMutation, useQuery } from "convex/react"
 import { Car, Gauge, Heart, LogIn, MapPin, Star, UserPlus } from "lucide-react"
+import Image from "next/image"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import type { ComponentProps } from "react"
@@ -16,6 +16,7 @@ import { useState } from "react"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
+import { r2Url } from "@/lib/r2-url"
 
 interface VehicleCardProps extends ComponentProps<"div"> {
   id: string
@@ -135,21 +136,14 @@ export function VehicleCard({
           {/* Image Section */}
           <div className="relative aspect-[4/3] w-full shrink-0 overflow-hidden bg-muted">
             {imageKey || image ? (
-              <ImageKitProvider
-                urlEndpoint={
-                  process.env.NEXT_PUBLIC_IMAGEKIT_URL_ENDPOINT ||
-                  "https://ik.imagekit.io/renegaderace"
-                }
-              >
-                <Image
-                  alt={name}
-                  className="object-cover transition-transform duration-500 group-hover:scale-105"
-                  fill
-                  sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                  src={imageKey ? `/${imageKey}` : image}
-                  transformation={imageKey ? [{ width: 600, height: 400, quality: 80 }] : undefined}
-                />
-              </ImageKitProvider>
+              <Image
+                alt={name}
+                className="object-cover transition-transform duration-500 group-hover:scale-105"
+                fill
+                quality={80}
+                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                src={imageKey ? r2Url(imageKey) : image}
+              />
             ) : (
               <div className="flex h-full items-center justify-center bg-muted">
                 <Car className="size-16 text-muted-foreground/50" />
