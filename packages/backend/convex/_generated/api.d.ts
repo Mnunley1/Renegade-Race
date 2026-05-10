@@ -29,6 +29,7 @@ import type * as init from "../init.js";
 import type * as logger from "../logger.js";
 import type * as messageTemplates from "../messageTemplates.js";
 import type * as messages from "../messages.js";
+import type * as migrations from "../migrations.js";
 import type * as motorsportsMatching from "../motorsportsMatching.js";
 import type * as notificationCron from "../notificationCron.js";
 import type * as notifications from "../notifications.js";
@@ -93,6 +94,7 @@ declare const fullApi: ApiFromModules<{
   logger: typeof logger;
   messageTemplates: typeof messageTemplates;
   messages: typeof messages;
+  migrations: typeof migrations;
   motorsportsMatching: typeof motorsportsMatching;
   notificationCron: typeof notificationCron;
   notifications: typeof notifications;
