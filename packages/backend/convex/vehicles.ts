@@ -565,10 +565,9 @@ export const createVehicleWithImages = mutation({
     const userId = identity.subject
     const now = Date.now()
 
-    // If no trackId provided, we need to handle it - but schema requires trackId
-    // For now, we'll require it or throw an error
-    if (!args.trackId) {
-      // Get the first active track as default
+    // Schema requires trackId; fall back to the first active track when omitted.
+    let trackId = args.trackId
+    if (!trackId) {
       const defaultTrack = await ctx.db
         .query("tracks")
         .withIndex("by_active", (q) => q.eq("isActive", true))
@@ -576,13 +575,13 @@ export const createVehicleWithImages = mutation({
       if (!defaultTrack) {
         throw new Error("No active tracks available. Please select a track.")
       }
-      args.trackId = defaultTrack._id
+      trackId = defaultTrack._id
     }
 
     // Create the vehicle (geocoding happens async after creation)
     const vehicleId = await ctx.db.insert("vehicles", {
       ownerId: userId,
-      trackId: args.trackId,
+      trackId,
       make: normalizeMake(args.make),
       model: args.model,
       year: args.year,
@@ -607,11 +606,16 @@ export const createVehicleWithImages = mutation({
       updatedAt: now,
     })
 
-    // Schedule geocoding action if address provided
+    // Schedule geocoding action if address provided (omit lat/lng — action args are strict)
     if (args.address) {
       await ctx.scheduler.runAfter(0, api.vehicles.geocodeVehicleAddress, {
         vehicleId,
-        address: args.address,
+        address: {
+          street: args.address.street,
+          city: args.address.city,
+          state: args.address.state,
+          zipCode: args.address.zipCode,
+        },
       })
     }
 
@@ -764,11 +768,16 @@ export const update = mutation({
       updatedAt: Date.now(),
     })
 
-    // Schedule geocoding action if address changed
+    // Schedule geocoding action if address changed (omit lat/lng — action args are strict)
     if (addressChanged && args.address) {
       await ctx.scheduler.runAfter(0, api.vehicles.geocodeVehicleAddress, {
         vehicleId: args.id,
-        address: args.address,
+        address: {
+          street: args.address.street,
+          city: args.address.city,
+          state: args.address.state,
+          zipCode: args.address.zipCode,
+        },
       })
     }
 

@@ -19,12 +19,23 @@ import { r2Url } from "@/lib/r2-url"
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "")
 
+function formatUsdFromCents(cents: number) {
+  return (cents / 100).toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+}
+
 function PaymentForm({
   reservationId,
-  totalAmount,
+  listingAmountCents,
+  processingFeeCents,
+  chargeAmountCents,
 }: {
   reservationId: string
-  totalAmount: number
+  listingAmountCents: number
+  processingFeeCents: number
+  chargeAmountCents: number
 }) {
   const stripe = useStripe()
   const elements = useElements()
@@ -86,13 +97,19 @@ function PaymentForm({
 
       <div className="space-y-4">
         <div className="flex items-center justify-between text-sm">
-          <span className="text-muted-foreground">Subtotal</span>
-          <span className="font-medium">${totalAmount.toLocaleString()}</span>
+          <span className="text-muted-foreground">Rental total</span>
+          <span className="font-medium">${formatUsdFromCents(listingAmountCents)}</span>
         </div>
+        {processingFeeCents > 0 && (
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">Card processing fee</span>
+            <span className="font-medium">${formatUsdFromCents(processingFeeCents)}</span>
+          </div>
+        )}
         <Separator />
         <div className="flex items-center justify-between">
-          <span className="font-semibold text-lg">Total</span>
-          <span className="font-bold text-2xl">${totalAmount.toLocaleString()}</span>
+          <span className="font-semibold text-lg">Total due</span>
+          <span className="font-bold text-2xl">${formatUsdFromCents(chargeAmountCents)}</span>
         </div>
       </div>
 
@@ -103,7 +120,7 @@ function PaymentForm({
             Processing...
           </>
         ) : (
-          `Pay $${totalAmount.toLocaleString()}`
+          `Pay $${formatUsdFromCents(chargeAmountCents)}`
         )}
       </Button>
     </form>
@@ -124,6 +141,8 @@ function PayPageContent() {
   const createPaymentIntent = useAction(api.stripe.createPaymentIntent)
 
   const [clientSecret, setClientSecret] = useState<string | null>(null)
+  const [processingFeeCents, setProcessingFeeCents] = useState(0)
+  const [chargeAmountCents, setChargeAmountCents] = useState(0)
   const [isCreatingPayment, setIsCreatingPayment] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -158,11 +177,13 @@ function PayPageContent() {
     const initPayment = async () => {
       setIsCreatingPayment(true)
       try {
-        const { clientSecret: newClientSecret } = await createPaymentIntent({
+        const result = await createPaymentIntent({
           reservationId: reservation._id,
           amount: reservation.totalAmount,
         })
-        setClientSecret(newClientSecret)
+        setClientSecret(result.clientSecret)
+        setProcessingFeeCents(result.processingFee)
+        setChargeAmountCents(result.chargeAmount)
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to initialize payment")
       } finally {
@@ -367,8 +388,10 @@ function PayPageContent() {
               {options && (
                 <Elements options={options} stripe={stripePromise}>
                   <PaymentForm
+                    chargeAmountCents={chargeAmountCents}
+                    listingAmountCents={reservation.totalAmount || 0}
+                    processingFeeCents={processingFeeCents}
                     reservationId={reservationId!}
-                    totalAmount={reservation.totalAmount || 0}
                   />
                 </Elements>
               )}
@@ -385,7 +408,7 @@ function PayPageContent() {
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Daily Rate</span>
-                  <span>${(reservation.dailyRate || 0).toLocaleString()}/day</span>
+                  <span>${formatUsdFromCents(reservation.dailyRate || 0)}/day</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Duration</span>
@@ -398,16 +421,30 @@ function PayPageContent() {
                   reservation.addOns.map((addOn: { name: string; price: number }) => (
                     <div className="flex justify-between text-sm" key={addOn.name}>
                       <span className="text-muted-foreground">{addOn.name}</span>
-                      <span>+${addOn.price.toLocaleString()}</span>
+                      <span>+${formatUsdFromCents(addOn.price)}</span>
                     </div>
                   ))}
                 <Separator />
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Rental total</span>
+                  <span>${formatUsdFromCents(reservation.totalAmount || 0)}</span>
+                </div>
+                {processingFeeCents > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Card processing fee</span>
+                    <span>${formatUsdFromCents(processingFeeCents)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between">
-                  <span className="font-semibold">Total</span>
+                  <span className="font-semibold">Total due</span>
                   <span className="font-bold text-lg">
-                    ${(reservation.totalAmount || 0).toLocaleString()}
+                    ${formatUsdFromCents(chargeAmountCents || reservation.totalAmount || 0)}
                   </span>
                 </div>
+                <p className="text-muted-foreground text-xs">
+                  Card processing is paid by the renter. The host's Renegade fee is taken from the
+                  rental total, not added here.
+                </p>
               </div>
 
               {reservation.pickupTime && (

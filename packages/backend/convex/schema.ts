@@ -44,6 +44,10 @@ export default defineSchema({
     ownerCancellationCount: v.optional(v.number()),
     // Timestamp of last message digest email sent (to prevent spam)
     lastMessageDigestAt: v.optional(v.number()),
+    // Platform fee cap: provider never pays more than this % (effective = min(global, cap))
+    platformFeeCapPercentage: v.optional(v.number()),
+    isEarlyAdopter: v.optional(v.boolean()),
+    earlyAdopterGrantedAt: v.optional(v.number()),
     // User profile fields
     bio: v.optional(v.string()),
     location: v.optional(v.string()),
@@ -652,9 +656,10 @@ export default defineSchema({
     reservationId: v.id("reservations"),
     renterId: v.string(),
     ownerId: v.string(),
-    amount: v.number(), // Total amount in cents
-    platformFee: v.number(), // Platform fee in cents
+    amount: v.number(), // Listing/service total in cents (before card processing)
+    platformFee: v.number(), // Renegade platform fee in cents
     ownerAmount: v.number(), // Amount owner receives in cents
+    processingFee: v.optional(v.number()), // Estimated Stripe card fee paid by renter (cents)
     currency: v.string(), // 'usd'
     status: v.union(
       v.literal("pending"),
@@ -815,8 +820,13 @@ export default defineSchema({
   // Platform settings for fees and configuration
   platformSettings: defineTable({
     platformFeePercentage: v.number(), // e.g., 5 for 5%
-    minimumPlatformFee: v.number(), // Minimum fee in cents
-    maximumPlatformFee: v.optional(v.number()), // Maximum fee in cents
+    // Deprecated: kept optional for existing documents; no longer applied
+    minimumPlatformFee: v.optional(v.number()),
+    maximumPlatformFee: v.optional(v.number()),
+    // Early adopter promo: new signups in [startsAt, endsAt] get fee cap
+    earlyAdopterPromoStartsAt: v.optional(v.number()),
+    earlyAdopterPromoEndsAt: v.optional(v.number()),
+    earlyAdopterFeeCapPercentage: v.optional(v.number()), // default 3
     stripeAccountId: v.optional(v.string()), // Main platform account
     isActive: v.boolean(),
     createdAt: v.number(),

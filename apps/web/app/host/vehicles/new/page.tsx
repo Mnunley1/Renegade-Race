@@ -30,6 +30,7 @@ import { toast } from "sonner"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
+import { areVehiclePhotosRequired } from "@/lib/feature-flags"
 import { IMAGE_ACCEPT_ATTR, isAllowedImageFile } from "@/lib/image-validation"
 
 const ADVANCE_NOTICE_OPTIONS = [
@@ -122,6 +123,7 @@ export default function CreateVehiclePage() {
 
   // Uploaded image keys (stored after step 2)
   const [uploadedImageKeys, setUploadedImageKeys] = useState<string[]>([])
+  const photosRequired = areVehiclePhotosRequired()
 
   // Step 1 Handlers
   const handleVehicleChange = (
@@ -188,8 +190,15 @@ export default function CreateVehiclePage() {
   }
 
   const handlePhotosContinue = async () => {
-    if (images.length === 0) {
+    if (photosRequired && images.length === 0) {
       toast.error("Please upload at least one photo")
+      return
+    }
+
+    if (images.length === 0) {
+      setUploadedImageKeys([])
+      toast.success("Skipped photos (test mode)")
+      setCurrentStep(3)
       return
     }
 
@@ -270,7 +279,7 @@ export default function CreateVehiclePage() {
       return
     }
 
-    if (uploadedImageKeys.length === 0) {
+    if (photosRequired && uploadedImageKeys.length === 0) {
       toast.error("Please upload at least one photo")
       setCurrentStep(2)
       return
@@ -599,9 +608,11 @@ export default function CreateVehiclePage() {
           <CardContent className="space-y-6">
             <div className="space-y-4">
               <div>
-                <Label>Vehicle Photos *</Label>
+                <Label>Vehicle Photos{photosRequired ? " *" : " (optional)"}</Label>
                 <p className="text-muted-foreground text-xs">
-                  Upload at least one photo. The first image will be used as the main image.
+                  {photosRequired
+                    ? "Upload at least one photo. The first image will be used as the main image."
+                    : "Optional in test mode. The first image will be used as the main image."}
                 </p>
               </div>
 
@@ -654,13 +665,18 @@ export default function CreateVehiclePage() {
                 Back
               </Button>
               <Button
-                disabled={images.length === 0 || isSubmittingPhotos}
+                disabled={(photosRequired && images.length === 0) || isSubmittingPhotos}
                 onClick={handlePhotosContinue}
               >
                 {isSubmittingPhotos ? (
                   <>
                     <Loader2 className="mr-2 size-4 animate-spin" />
                     Uploading...
+                  </>
+                ) : images.length === 0 && !photosRequired ? (
+                  <>
+                    Skip Photos
+                    <ArrowRight className="ml-2 size-4" />
                   </>
                 ) : (
                   <>
