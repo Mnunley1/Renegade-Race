@@ -188,7 +188,10 @@ type TeamSeatRequestView = {
 export function TeamSeatOfferings({ teamId, isOwner }: TeamSeatOfferingsProps) {
   const { isSignedIn } = useUser()
   const router = useRouter()
-  const offeringsResult = useQuery(api.seatOfferings.listByTeam, { teamId })
+  const offeringsResult = useQuery(api.seatOfferings.listByTeam, {
+    teamId,
+    includeInactive: isOwner,
+  })
   const upcomingEventsResult = useQuery(api.raceEvents.listUpcoming, {})
   const currentUser = useQuery(api.users.current)
   const pendingBookings = useQuery(

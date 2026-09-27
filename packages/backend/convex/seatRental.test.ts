@@ -196,6 +196,29 @@ describe("team cars and seat offerings", () => {
       asOwner.mutation(api.seatOfferings.update, { offeringId, spotCount: 1 })
     ).rejects.toThrow("CONFLICT")
   })
+
+  it("only exposes active upcoming seats publicly while owners can manage inactive listings", async () => {
+    const t = convexTest(schema, modules)
+    const teamId = await seedTeam(t)
+    const { eventId } = await seedCatalog(t, teamId)
+    const { offeringId } = await seedOffering(t, teamId, eventId)
+    const asOwner = t.withIdentity({ subject: OWNER })
+
+    await asOwner.mutation(api.seatOfferings.update, { offeringId, isActive: false })
+
+    expect(await t.query(api.seatOfferings.listByTeam, { teamId })).toEqual([])
+    const ownerListings = await asOwner.query(api.seatOfferings.listByTeam, {
+      teamId,
+      includeInactive: true,
+    })
+    expect(ownerListings).toHaveLength(1)
+    expect(ownerListings[0]?.isActive).toBe(false)
+
+    const asStranger = t.withIdentity({ subject: STRANGER })
+    await expect(
+      asStranger.query(api.seatOfferings.listByTeam, { teamId, includeInactive: true })
+    ).rejects.toThrow("FORBIDDEN")
+  })
 })
 
 describe("seat bookings — request / waitlist / approve", () => {

@@ -1,6 +1,7 @@
 import { v } from "convex/values"
 import { internal } from "./_generated/api"
-import { mutation, query } from "./_generated/server"
+import type { Doc } from "./_generated/dataModel"
+import { mutation, query, type QueryCtx } from "./_generated/server"
 import { ErrorCode, throwError } from "./errors"
 import { rateLimiter } from "./rateLimiter"
 import { sanitizeMessage, sanitizeShortText } from "./sanitize"
@@ -180,7 +181,7 @@ export const update = mutation({
   },
 })
 
-async function enrichOffering(ctx: any, offering: any) {
+async function enrichOffering(ctx: QueryCtx, offering: Doc<"seatOfferings">) {
   const [teamCar, team, event, inventory] = await Promise.all([
     ctx.db.get(offering.teamCarId),
     ctx.db.get(offering.teamId),
@@ -239,12 +240,36 @@ export const listByTeamCar = query({
 })
 
 export const listByTeam = query({
-  args: { teamId: v.id("teams") },
+  args: {
+    teamId: v.id("teams"),
+    includeInactive: v.optional(v.boolean()),
+  },
   handler: async (ctx, args) => {
+    const team = await ctx.db.get(args.teamId)
+    if (!team) return []
+
+    let canManage = false
+    if (args.includeInactive) {
+      const identity = await requireIdentity(ctx)
+      await requireTeamManager(ctx, args.teamId, identity.subject)
+      canManage = true
+    }
+    if (!(team.isActive || canManage)) return []
+
     const offerings = await ctx.db
       .query("seatOfferings")
       .withIndex("by_team", (q) => q.eq("teamId", args.teamId))
       .collect()
-    return await Promise.all(offerings.map((offering) => enrichOffering(ctx, offering)))
+    const enriched = await Promise.all(offerings.map((offering) => enrichOffering(ctx, offering)))
+    if (canManage) return enriched
+
+    const today = new Date().toISOString().slice(0, 10)
+    return enriched.filter(
+      (offering) =>
+        offering.isActive &&
+        offering.teamCar?.isActive &&
+        offering.event?.isActive &&
+        offering.event.endDate >= today
+    )
   },
 })
