@@ -167,20 +167,6 @@ export const getBookingForPayment = internalQuery({
   },
 })
 
-export const getPlatformFeeBounds = internalQuery({
-  args: {},
-  handler: async (ctx) => {
-    const settings = await ctx.db
-      .query("platformSettings")
-      .withIndex("by_active", (q) => q.eq("isActive", true))
-      .first()
-    return {
-      minimumPlatformFee: settings?.minimumPlatformFee ?? 0,
-      maximumPlatformFee: settings?.maximumPlatformFee ?? null,
-    }
-  },
-})
-
 async function loadPayableBooking(ctx: ActionCtx, bookingId: Id<"seatBookings">, driverId: string) {
   const booking = await ctx.runQuery(internal.seatPayments.getBookingForPayment, { bookingId })
   if (!booking) {
@@ -234,19 +220,13 @@ async function startCheckout(
     booking.hostUserId
   )
 
-  const bounds = await ctx.runQuery(internal.seatPayments.getPlatformFeeBounds, {})
   // Snapshot is the ceiling (later global rate changes do not raise it). A provider
-  // fee cap can only lower it. Dollar min/max from the live settings still clamp.
+  // fee cap can only lower it. Dollar min/max on platformSettings are not applied.
   const feePercentage = resolvePlatformFeePercentage(
     booking.platformFeePercentage,
     platformFeeCapPercentage
   )
-  const { platformFee } = calculatePlatformFeeAmount(
-    amount,
-    feePercentage,
-    bounds.minimumPlatformFee,
-    bounds.maximumPlatformFee ?? undefined
-  )
+  const { platformFee } = calculatePlatformFeeAmount(amount, feePercentage)
   const { chargeAmountCents, processingFeeCents, applicationFeeCents } =
     buildDestinationChargeAmounts({
       listingAmountCents: amount,
@@ -776,7 +756,7 @@ async function refundCapturedCharge(
 ): Promise<boolean> {
   // Refund a share of the grossed-up charge (listing + card processing), not only the
   // listing. refund_application_fee then returns that same share of the application
-  // fee, so the clamped platform fee comes back proportionally without recomputing it.
+  // fee, so the platform fee comes back proportionally without recomputing it.
   const chargeAmountCents = grossUpForStripeCardFees(args.capturedCents)
   const amount =
     args.percentage >= 100 ? undefined : calculateRefundAmount(chargeAmountCents, args.percentage)
@@ -800,7 +780,7 @@ async function refundCapturedCharge(
  * A partial amount is that percentage of the grossed-up charge (listing plus the
  * card-processing pass-through). `refund_application_fee: true` tells Stripe to
  * refund the application fee in proportion to the charge amount refunded, which
- * returns the clamped platform fee at the same percentage without recomputing it.
+ * returns the platform fee at the same percentage without recomputing it.
  * A full refund omits `amount` so Stripe returns the entire PaymentIntent.
  * Vehicle rentals intentionally keep the fee on partials; seats do not.
  * `reverse_transfer` likewise returns a proportional share of the Connect transfer.

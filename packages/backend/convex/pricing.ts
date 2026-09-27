@@ -61,19 +61,12 @@ export function isEarlyAdopterPromoActive(
   return now >= start && now <= end
 }
 
-/**
- * Platform fee as a percentage of `amount`.
- * Vehicle and coaching omit the dollar bounds, so the fee is exactly the percentage.
- * Seat checkouts still pass `platformSettings` minimum/maximum, which clamp that fee.
- */
+/** Calculate platform fee as a percentage of amount (no min/max dollar clamps). */
 export function calculatePlatformFeeAmount(
   amount: number,
-  feePercentage: number,
-  minimumFee = 0,
-  maximumFee?: number
+  feePercentage: number
 ): { platformFee: number; ownerAmount: number } {
-  const calculatedFee = Math.round((amount * feePercentage) / 100)
-  const platformFee = Math.max(minimumFee, Math.min(calculatedFee, maximumFee ?? calculatedFee))
+  const platformFee = Math.round((amount * feePercentage) / 100)
   return {
     platformFee,
     ownerAmount: amount - platformFee,

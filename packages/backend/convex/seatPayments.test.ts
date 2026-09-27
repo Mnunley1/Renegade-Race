@@ -226,7 +226,7 @@ async function insertActiveFee(
   t: ReturnType<typeof convexTest>,
   settings: {
     platformFeePercentage: number
-    minimumPlatformFee: number
+    minimumPlatformFee?: number
     maximumPlatformFee?: number
   }
 ) {
@@ -237,8 +237,12 @@ async function insertActiveFee(
     }
     await ctx.db.insert("platformSettings", {
       platformFeePercentage: settings.platformFeePercentage,
-      minimumPlatformFee: settings.minimumPlatformFee,
-      maximumPlatformFee: settings.maximumPlatformFee,
+      ...(settings.minimumPlatformFee !== undefined
+        ? { minimumPlatformFee: settings.minimumPlatformFee }
+        : {}),
+      ...(settings.maximumPlatformFee !== undefined
+        ? { maximumPlatformFee: settings.maximumPlatformFee }
+        : {}),
       isActive: true,
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -322,52 +326,62 @@ describe("seat checkout", () => {
     expect(paid?.balancePaymentStatus).toBeUndefined()
   })
 
-  it("clamps the snapshotted percentage to the active min and max fee", async () => {
+  it("does not raise a capped seat fee to a configured dollar minimum", async () => {
     const t = convexTest(schema, modules)
+    await insertActiveFee(t, { platformFeePercentage: 10 })
     const { bookingId } = await seedApprovedBooking(t)
     await t.run(async (ctx) => {
-      await ctx.db.patch(bookingId, { platformFeePercentage: 1 })
+      const host = await ctx.db
+        .query("users")
+        .withIndex("by_external_id", (q) => q.eq("externalId", OWNER))
+        .first()
+      if (!host) throw new Error("host missing")
+      await ctx.db.patch(host._id, { platformFeeCapPercentage: 3 })
     })
-    await insertActiveFee(t, { platformFeePercentage: 20, minimumPlatformFee: 8_000 })
+    // $800 minimum and $10 maximum would have clamped the old fee. Neither applies.
+    await insertActiveFee(t, {
+      platformFeePercentage: 20,
+      minimumPlatformFee: 80_000,
+      maximumPlatformFee: 1_000,
+    })
 
     const asDriver = t.withIdentity({ subject: DRIVER_A })
     await asDriver.action(api.seatPayments.createDepositCheckoutSession, { bookingId })
     const depositCents = 500_000
-    const minClamped = calculatePlatformFeeAmount(depositCents, 1, 8_000)
-    const minAmounts = buildDestinationChargeAmounts({
+    const depositFee = calculatePlatformFeeAmount(depositCents, 3)
+    const depositAmounts = buildDestinationChargeAmounts({
       listingAmountCents: depositCents,
-      platformFeeCents: minClamped.platformFee,
+      platformFeeCents: depositFee.platformFee,
     })
-    expect(minClamped.platformFee).toBe(8_000)
+    expect(depositFee.platformFee).toBe(15_000)
     expect(
       checkoutSessionsCreate.mock.calls[0]?.[0]?.payment_intent_data?.metadata?.platformFee
-    ).toBe("8000")
+    ).toBe("15000")
     expect(
       checkoutSessionsCreate.mock.calls[0]?.[0]?.payment_intent_data?.application_fee_amount
-    ).toBe(minAmounts.applicationFeeCents)
+    ).toBe(depositAmounts.applicationFeeCents)
 
+    await t.mutation(internal.seatPayments.handleDepositSuccess, {
+      bookingId,
+      stripePaymentIntentId: "pi_deposit",
+    })
+    await t.finishInProgressScheduledFunctions()
     checkoutSessionsCreate.mockClear()
-    await t.run(async (ctx) => {
-      await ctx.db.patch(bookingId, { platformFeePercentage: 40 })
+
+    await asDriver.action(api.seatPayments.createBalanceCheckoutSession, { bookingId })
+    const balanceCents = 1_000_000
+    const balanceFee = calculatePlatformFeeAmount(balanceCents, 3)
+    const balanceAmounts = buildDestinationChargeAmounts({
+      listingAmountCents: balanceCents,
+      platformFeeCents: balanceFee.platformFee,
     })
-    await insertActiveFee(t, {
-      platformFeePercentage: 1,
-      minimumPlatformFee: 0,
-      maximumPlatformFee: 3_000,
-    })
-    await asDriver.action(api.seatPayments.createDepositCheckoutSession, { bookingId })
-    const maxClamped = calculatePlatformFeeAmount(depositCents, 40, 0, 3_000)
-    const maxAmounts = buildDestinationChargeAmounts({
-      listingAmountCents: depositCents,
-      platformFeeCents: maxClamped.platformFee,
-    })
-    expect(maxClamped.platformFee).toBe(3_000)
+    expect(balanceFee.platformFee).toBe(30_000)
     expect(
       checkoutSessionsCreate.mock.calls[0]?.[0]?.payment_intent_data?.metadata?.platformFee
-    ).toBe("3000")
+    ).toBe("30000")
     expect(
       checkoutSessionsCreate.mock.calls[0]?.[0]?.payment_intent_data?.application_fee_amount
-    ).toBe(maxAmounts.applicationFeeCents)
+    ).toBe(balanceAmounts.applicationFeeCents)
   })
 
   it("lowers the snapshotted percentage to the host fee cap without raising it", async () => {
