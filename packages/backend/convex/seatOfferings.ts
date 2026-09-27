@@ -1,7 +1,7 @@
 import { v } from "convex/values"
 import { internal } from "./_generated/api"
 import type { Doc } from "./_generated/dataModel"
-import { mutation, query, type QueryCtx } from "./_generated/server"
+import { mutation, type QueryCtx, query } from "./_generated/server"
 import { ErrorCode, throwError } from "./errors"
 import { rateLimiter } from "./rateLimiter"
 import { sanitizeMessage, sanitizeShortText } from "./sanitize"
