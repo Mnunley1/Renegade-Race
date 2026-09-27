@@ -32,11 +32,44 @@ export function calculateReservationTotal(
   return baseAmount + calculateAddOnsTotal(addOns, totalDays)
 }
 
-/** Calculate platform fee with percentage, clamped to min/max bounds */
+/**
+ * Resolve the fee % a provider pays: never above their cap, and never above
+ * the current global rate (so if global drops below the cap, they get the lower rate).
+ */
+export function resolvePlatformFeePercentage(
+  globalFeePercentage: number,
+  platformFeeCapPercentage?: number | null
+): number {
+  if (platformFeeCapPercentage == null) {
+    return globalFeePercentage
+  }
+  return Math.min(globalFeePercentage, platformFeeCapPercentage)
+}
+
+/** Whether the early-adopter signup promo is active at `now`. */
+export function isEarlyAdopterPromoActive(
+  settings: {
+    earlyAdopterPromoStartsAt?: number
+    earlyAdopterPromoEndsAt?: number
+  } | null,
+  now: number = Date.now()
+): boolean {
+  if (!settings) return false
+  const start = settings.earlyAdopterPromoStartsAt
+  const end = settings.earlyAdopterPromoEndsAt
+  if (start == null || end == null) return false
+  return now >= start && now <= end
+}
+
+/**
+ * Platform fee as a percentage of `amount`.
+ * Vehicle and coaching omit the dollar bounds, so the fee is exactly the percentage.
+ * Seat checkouts still pass `platformSettings` minimum/maximum, which clamp that fee.
+ */
 export function calculatePlatformFeeAmount(
   amount: number,
   feePercentage: number,
-  minimumFee: number,
+  minimumFee = 0,
   maximumFee?: number
 ): { platformFee: number; ownerAmount: number } {
   const calculatedFee = Math.round((amount * feePercentage) / 100)
@@ -44,6 +77,59 @@ export function calculatePlatformFeeAmount(
   return {
     platformFee,
     ownerAmount: amount - platformFee,
+  }
+}
+
+/**
+ * US card processing estimate (Stripe's standard domestic rate).
+ * Used to gross up charges so the renter covers processing; actual Stripe
+ * fees can differ slightly (Amex, international, etc.).
+ */
+export const STRIPE_CARD_PERCENT = 0.029
+export const STRIPE_CARD_FIXED_CENTS = 30
+
+/**
+ * Charge amount such that after Stripe's card fee, `desiredNetCents` remains
+ * to split between provider and platform.
+ */
+export function grossUpForStripeCardFees(desiredNetCents: number): number {
+  if (desiredNetCents <= 0) return 0
+  return Math.ceil((desiredNetCents + STRIPE_CARD_FIXED_CENTS) / (1 - STRIPE_CARD_PERCENT))
+}
+
+/** Estimated processing fee the renter pays on top of the listing/service total. */
+export function estimateStripeCardProcessingFee(desiredNetCents: number): number {
+  if (desiredNetCents <= 0) return 0
+  return grossUpForStripeCardFees(desiredNetCents) - desiredNetCents
+}
+
+/**
+ * Destination-charge amounts where:
+ * - renter pays listing + estimated card processing
+ * - provider receives listing − Renegade platform fee
+ * - application_fee covers Renegade fee + processing (Stripe fee comes out of platform side)
+ */
+export function buildDestinationChargeAmounts(params: {
+  listingAmountCents: number
+  platformFeeCents: number
+}): {
+  chargeAmountCents: number
+  processingFeeCents: number
+  applicationFeeCents: number
+  ownerAmountCents: number
+  platformFeeCents: number
+} {
+  const { listingAmountCents, platformFeeCents } = params
+  const ownerAmountCents = listingAmountCents - platformFeeCents
+  const chargeAmountCents = grossUpForStripeCardFees(listingAmountCents)
+  const processingFeeCents = chargeAmountCents - listingAmountCents
+  const applicationFeeCents = chargeAmountCents - ownerAmountCents
+  return {
+    chargeAmountCents,
+    processingFeeCents,
+    applicationFeeCents,
+    ownerAmountCents,
+    platformFeeCents,
   }
 }
 

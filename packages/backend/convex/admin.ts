@@ -1866,19 +1866,103 @@ export const getPlatformSettings = query({
       .first()
 
     if (!settings) {
-      // Return defaults if no settings exist yet
       return {
         platformFeePercentage: 5,
-        minimumPlatformFee: 100,
-        maximumPlatformFee: 5000,
+        earlyAdopterFeeCapPercentage: 3,
+        earlyAdopterPromoStartsAt: null,
+        earlyAdopterPromoEndsAt: null,
       }
     }
 
     return {
       platformFeePercentage: settings.platformFeePercentage,
-      minimumPlatformFee: settings.minimumPlatformFee,
-      maximumPlatformFee: settings.maximumPlatformFee ?? 5000,
+      earlyAdopterFeeCapPercentage: settings.earlyAdopterFeeCapPercentage ?? 3,
+      earlyAdopterPromoStartsAt: settings.earlyAdopterPromoStartsAt ?? null,
+      earlyAdopterPromoEndsAt: settings.earlyAdopterPromoEndsAt ?? null,
+      updatedAt: settings.updatedAt,
     }
+  },
+})
+
+/** Grant early-adopter fee cap to all existing users who do not already have one. */
+export const backfillEarlyAdopters = mutation({
+  args: {
+    feeCapPercentage: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    await checkAdmin(ctx)
+
+    const cap = args.feeCapPercentage ?? 3
+    if (cap < 0 || cap > 100) {
+      throw new Error("Fee cap percentage must be between 0 and 100")
+    }
+
+    const users = await ctx.db.query("users").collect()
+    const now = Date.now()
+    let granted = 0
+
+    for (const user of users) {
+      if (user.isEarlyAdopter === true && user.platformFeeCapPercentage != null) {
+        continue
+      }
+      await ctx.db.patch(user._id, {
+        isEarlyAdopter: true,
+        platformFeeCapPercentage: user.platformFeeCapPercentage ?? cap,
+        earlyAdopterGrantedAt: user.earlyAdopterGrantedAt ?? now,
+      })
+      granted++
+    }
+
+    return { granted, total: users.length }
+  },
+})
+
+/** Set or clear a user's platform fee cap (admin intentional override). */
+export const setUserPlatformFeeCap = mutation({
+  args: {
+    userId: v.id("users"),
+    platformFeeCapPercentage: v.union(v.number(), v.null()),
+    isEarlyAdopter: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    await checkAdmin(ctx)
+
+    const user = await ctx.db.get(args.userId)
+    if (!user) {
+      throw new Error("User not found")
+    }
+
+    if (
+      args.platformFeeCapPercentage !== null &&
+      (args.platformFeeCapPercentage < 0 || args.platformFeeCapPercentage > 100)
+    ) {
+      throw new Error("Fee cap percentage must be between 0 and 100")
+    }
+
+    const patch: {
+      platformFeeCapPercentage?: number
+      isEarlyAdopter?: boolean
+      earlyAdopterGrantedAt?: number
+    } = {}
+
+    if (args.platformFeeCapPercentage === null) {
+      // Clear cap — fall back to global rate. Keep early-adopter flag unless explicitly cleared.
+      await ctx.db.patch(args.userId, {
+        platformFeeCapPercentage: undefined,
+        ...(args.isEarlyAdopter !== undefined ? { isEarlyAdopter: args.isEarlyAdopter } : {}),
+      })
+    } else {
+      patch.platformFeeCapPercentage = args.platformFeeCapPercentage
+      if (args.isEarlyAdopter !== undefined) {
+        patch.isEarlyAdopter = args.isEarlyAdopter
+        if (args.isEarlyAdopter && user.earlyAdopterGrantedAt == null) {
+          patch.earlyAdopterGrantedAt = Date.now()
+        }
+      }
+      await ctx.db.patch(args.userId, patch)
+    }
+
+    return args.userId
   },
 })
 

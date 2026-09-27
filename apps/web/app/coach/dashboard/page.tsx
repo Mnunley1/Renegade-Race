@@ -69,6 +69,7 @@ export default function CoachDashboardPage() {
   const { user, isSignedIn, isLoaded } = useUser()
 
   const profile = useQuery(api.coachProfiles.getByUser)
+  const platformFee = useQuery(api.users.getMyPlatformFee, user?.id ? {} : "skip")
   const pending = useQuery(
     api.coachingBookings.getPendingForCoach,
     user?.id ? { coachUserId: user.id } : "skip"
@@ -226,6 +227,19 @@ export default function CoachDashboardPage() {
           </Button>
         </div>
       </div>
+
+      {platformFee?.isEarlyAdopter && (
+        <div className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50/80 px-4 py-3 dark:border-emerald-900/50 dark:bg-emerald-950/20">
+          <p className="font-medium text-emerald-900 text-sm dark:text-emerald-100">
+            Early adopter
+          </p>
+          <p className="mt-0.5 text-emerald-800 text-sm dark:text-emerald-200">
+            Your platform fee is capped at {platformFee.platformFeeCapPercentage ?? 3}%. You
+            currently pay {platformFee.effectiveFeePercentage}% (never higher than your cap; lower
+            if the global rate drops).
+          </p>
+        </div>
+      )}
 
       {/* Stripe Connect banner */}
       {connectStatus && !connectStatus.isComplete && (
