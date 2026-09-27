@@ -25,7 +25,7 @@ interface PolicyTier {
 const policyTiers: PolicyTier[] = [
   {
     name: "Full Refund",
-    timeframe: "7+ days before the rental starts",
+    timeframe: "7+ days before rental start",
     refundPercent: 100,
     icon: CheckCircle2,
     iconColor: "text-green-600",
@@ -33,7 +33,7 @@ const policyTiers: PolicyTier[] = [
   },
   {
     name: "Partial Refund",
-    timeframe: "2-7 days before the rental starts",
+    timeframe: "2-7 days before rental start",
     refundPercent: 50,
     icon: AlertCircle,
     iconColor: "text-amber-600",
