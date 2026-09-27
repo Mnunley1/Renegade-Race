@@ -91,8 +91,11 @@ function SummaryCards({ payment }: { payment: PaymentData }) {
           </p>
           <p className="mt-1 text-muted-foreground text-xs">
             {payment.amount > 0
-              ? `${((payment.platformFee / payment.amount) * 100).toFixed(1)}% of total`
+              ? `${((payment.platformFee / payment.amount) * 100).toFixed(1)}% of rental`
               : "N/A"}
+            {payment.processingFee != null && payment.processingFee > 0
+              ? ` · renter paid ${formatCurrency(payment.processingFee)} processing`
+              : ""}
           </p>
         </CardContent>
       </Card>

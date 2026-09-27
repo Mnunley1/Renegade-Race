@@ -5,19 +5,72 @@ import {
   action,
   internalMutation,
   internalQuery,
+  type MutationCtx,
   mutation,
   type QueryCtx,
   query,
 } from "./_generated/server"
 import { getWelcomeEmailTemplate, sendTransactionalEmail } from "./emails"
+import { isEarlyAdopterPromoActive, resolvePlatformFeePercentage } from "./pricing"
 import { r2 } from "./r2"
 
 /** Matches Clerk/Convex placeholder names like "null null" from `${null} ${null}`. */
 const NULLISH_NAME_RE = /^(null|undefined)(\s+(null|undefined))+$/i
 
+type EarlyAdopterGrant = {
+  isEarlyAdopter: true
+  platformFeeCapPercentage: number
+  earlyAdopterGrantedAt: number
+}
+
+/** Fields to stamp on a new user when the early-adopter promo window is active. */
+async function earlyAdopterGrantIfPromoActive(
+  ctx: MutationCtx
+): Promise<EarlyAdopterGrant | Record<string, never>> {
+  const settings = await ctx.db
+    .query("platformSettings")
+    .withIndex("by_active", (q) => q.eq("isActive", true))
+    .first()
+  if (!isEarlyAdopterPromoActive(settings)) {
+    return {}
+  }
+  const now = Date.now()
+  return {
+    isEarlyAdopter: true,
+    platformFeeCapPercentage: settings?.earlyAdopterFeeCapPercentage ?? 3,
+    earlyAdopterGrantedAt: now,
+  }
+}
+
 export const current = query({
   args: {},
   handler: async (ctx) => await getCurrentUser(ctx),
+})
+
+/** Provider-facing fee summary for host/coach portals. */
+export const getMyPlatformFee = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await getCurrentUser(ctx)
+    if (!user) return null
+
+    const settings = await ctx.db
+      .query("platformSettings")
+      .withIndex("by_active", (q) => q.eq("isActive", true))
+      .first()
+    const globalFeePercentage = settings?.platformFeePercentage ?? 5
+    const effectiveFeePercentage = resolvePlatformFeePercentage(
+      globalFeePercentage,
+      user.platformFeeCapPercentage
+    )
+
+    return {
+      isEarlyAdopter: user.isEarlyAdopter === true,
+      platformFeeCapPercentage: user.platformFeeCapPercentage ?? null,
+      globalFeePercentage,
+      effectiveFeePercentage,
+    }
+  },
 })
 
 export const getByExternalId = query({
@@ -89,10 +142,12 @@ export const upsertFromClerk = internalMutation({
 
     if (isNewUser) {
       const userName = nameFromClerk || fallbackName
+      const earlyAdopter = await earlyAdopterGrantIfPromoActive(ctx)
       await ctx.db.insert("users", {
         externalId: data.id,
         name: userName,
         email: userEmail,
+        ...earlyAdopter,
       })
 
       // Send welcome email to new user
@@ -367,10 +422,12 @@ export const updateProfileImage = mutation({
     let user = await userByExternalId(ctx, userId)
     if (!user) {
       // Create user if they don't exist
+      const earlyAdopter = await earlyAdopterGrantIfPromoActive(ctx)
       const userData = {
         externalId: userId,
         name: identity.name || identity.email || "Unknown User",
         email: identity.email,
+        ...earlyAdopter,
       }
       const newUserId = await ctx.db.insert("users", userData)
       user = await ctx.db.get(newUserId)
@@ -423,6 +480,7 @@ export const updateProfile = mutation({
     let user = await userByExternalId(ctx, userId)
     if (!user) {
       // Create user if they don't exist
+      const earlyAdopter = await earlyAdopterGrantIfPromoActive(ctx)
       const userData = {
         externalId: userId,
         name: args.name || identity.name || identity.email || "Unknown User",
@@ -432,6 +490,7 @@ export const updateProfile = mutation({
         bio: args.bio,
         location: args.location,
         experience: args.experience,
+        ...earlyAdopter,
       }
       const newUserId = await ctx.db.insert("users", userData)
       user = await ctx.db.get(newUserId)
