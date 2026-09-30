@@ -98,9 +98,11 @@ flowchart LR
 
 - New Convex action `packages/backend/convex/raceMonitor.ts` calling `api.race-monitor.com`.
 - New tables: `raceEvents`, `raceResults` (driver-claimed + verified), `lapTimes`.
+  - **Naming note:** seat-calendar tables already use `raceEvents` — prefer distinct names for timing results (see [`ENDURANCE-RELIABILITY-METRICS.md`](./ENDURANCE-RELIABILITY-METRICS.md)).
 - Driver/team profile claim flow: enter race-monitor competitor ID; results auto-link.
 - Cron in [`packages/backend/convex/crons.ts`](../packages/backend/convex/crons.ts) to backfill new results daily.
 - Surface "Recent Results" + "Personal best at this track" on driver and team profile pages.
+- Multi-source follow-on (Speedhive, Al Kamel, AER/LDRL portals) and class-normalized reliability/pace metrics: [`ENDURANCE-RELIABILITY-METRICS.md`](./ENDURANCE-RELIABILITY-METRICS.md) (LDRL, ChampCar, IMSA, Zenith, AER, WRL).
 
 ### 2b. iRacing integration (~2 weeks, July 14 → July 27)
 

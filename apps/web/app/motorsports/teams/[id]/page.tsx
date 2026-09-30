@@ -40,7 +40,10 @@ import { ProfileAnalytics } from "@/components/profile-analytics"
 import { TeamApplicationForm } from "@/components/team-application-form"
 import { TeamCalendar } from "@/components/team-calendar"
 import { TeamCard } from "@/components/team-card"
+import { TeamReliability } from "@/components/team-reliability"
+import { TeamResultClaims } from "@/components/team-result-claims"
 import { TeamRoster } from "@/components/team-roster"
+import { TeamSeatOfferings } from "@/components/team-seat-offerings"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
@@ -404,6 +407,12 @@ export default function TeamDetailPage({ params }: TeamDetailPageProps) {
 
           <TeamCalendar isOwner={isOwner} teamId={teamId} />
 
+          <TeamReliability teamId={teamId} />
+
+          <TeamResultClaims teamId={teamId} />
+
+          <TeamSeatOfferings isOwner={isOwner} teamId={teamId} />
+
           <TeamApplicationForm teamId={teamId} />
 
           {similarTeams && similarTeams.length > 0 && (
@@ -473,7 +482,7 @@ export default function TeamDetailPage({ params }: TeamDetailPageProps) {
                 <div className="flex items-center gap-3">
                   <Users className="size-5 text-primary" />
                   <div>
-                    <p className="font-semibold">Available Seats</p>
+                    <p className="font-semibold">Team Openings</p>
                     <p className="text-muted-foreground text-sm">
                       {team.availableSeats} positions open
                     </p>
