@@ -3,6 +3,7 @@
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
+import { Input } from "@workspace/ui/components/input"
 import { Separator } from "@workspace/ui/components/separator"
 import { useMutation, useQuery } from "convex/react"
 import { format, formatDistanceToNow } from "date-fns"
@@ -278,6 +279,96 @@ function AccountStatusCard({ user }: { user: UserDetail["user"] }) {
             </span>
           </div>
         </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function PlatformFeeCard({ user }: { user: UserDetail["user"] }) {
+  const setUserPlatformFeeCap = useMutation(api.admin.setUserPlatformFeeCap)
+  const [feeCap, setFeeCap] = useState(
+    user.platformFeeCapPercentage != null ? String(user.platformFeeCapPercentage) : ""
+  )
+  const [isEarlyAdopter, setIsEarlyAdopter] = useState(user.isEarlyAdopter === true)
+  const [isSaving, setIsSaving] = useState(false)
+
+  const handleSave = async () => {
+    const trimmed = feeCap.trim()
+    let platformFeeCapPercentage: number | null = null
+    if (trimmed !== "") {
+      const parsed = Number.parseFloat(trimmed)
+      if (Number.isNaN(parsed) || parsed < 0 || parsed > 100) {
+        toast.error("Fee cap must be between 0 and 100, or empty to clear")
+        return
+      }
+      platformFeeCapPercentage = parsed
+    }
+
+    setIsSaving(true)
+    try {
+      await setUserPlatformFeeCap({
+        userId: user._id,
+        platformFeeCapPercentage,
+        isEarlyAdopter,
+      })
+      toast.success("Platform fee settings updated")
+    } catch (error) {
+      handleErrorWithContext(error, { action: "update user platform fee" })
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <CreditCard className="h-4 w-4" />
+          Platform Fee
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-muted-foreground">Early adopter</span>
+          <Badge variant={user.isEarlyAdopter ? "default" : "outline"}>
+            {user.isEarlyAdopter ? "Yes" : "No"}
+          </Badge>
+        </div>
+        {user.earlyAdopterGrantedAt != null && (
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Granted</span>
+            <span className="font-medium">{format(user.earlyAdopterGrantedAt, "MMM d, yyyy")}</span>
+          </div>
+        )}
+        <div className="space-y-2">
+          <label className="font-medium text-sm" htmlFor="feeCap">
+            Fee cap (%)
+          </label>
+          <Input
+            id="feeCap"
+            max={100}
+            min={0}
+            onChange={(e) => setFeeCap(e.target.value)}
+            placeholder="Global rate (no cap)"
+            step="0.1"
+            type="number"
+            value={feeCap}
+          />
+          <p className="text-muted-foreground text-xs">
+            Effective fee is min(global, cap). Leave empty to use the global rate only.
+          </p>
+        </div>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            checked={isEarlyAdopter}
+            onChange={(e) => setIsEarlyAdopter(e.target.checked)}
+            type="checkbox"
+          />
+          Mark as early adopter
+        </label>
+        <Button disabled={isSaving} onClick={handleSave} size="sm">
+          {isSaving ? "Saving..." : "Save fee settings"}
+        </Button>
       </CardContent>
     </Card>
   )
@@ -746,6 +837,14 @@ export default function UserDetailPage() {
       badges={
         <div className="flex items-center gap-2">
           {isBanned && <StatusBadge status="banned" />}
+          {user.isEarlyAdopter && (
+            <Badge
+              className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300"
+              variant="secondary"
+            >
+              Early Adopter
+            </Badge>
+          )}
           {user.isHost && (
             <Badge
               className="bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-400"
@@ -774,6 +873,7 @@ export default function UserDetailPage() {
 
         <div className="space-y-6">
           <AccountStatusCard user={user} />
+          <PlatformFeeCard user={user} />
           <ActivityCard detail={userDetail} />
           <OnboardingStepsCard user={user} />
           <IdentifiersCard user={user} />

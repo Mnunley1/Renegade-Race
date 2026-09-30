@@ -3,14 +3,22 @@ import { convexTest } from "convex-test"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { api, internal } from "./_generated/api"
 import type { Id } from "./_generated/dataModel"
+import {
+  buildDestinationChargeAmounts,
+  calculatePlatformFeeAmount,
+  calculateRefundAmount,
+  grossUpForStripeCardFees,
+} from "./pricing"
 import schema from "./schema"
 import { parseSeatPaymentMetadata } from "./seatPayments"
 
 type CheckoutParams = {
-  metadata?: { phase?: string }
+  metadata?: { phase?: string; platformFee?: string; processingFee?: string }
+  line_items?: Array<{ price_data?: { unit_amount?: number; product_data?: { name?: string } } }>
   payment_intent_data?: {
     application_fee_amount?: number
     transfer_data?: { destination?: string }
+    metadata?: { platformFee?: string; processingFee?: string }
   }
 }
 
@@ -218,7 +226,7 @@ async function insertActiveFee(
   t: ReturnType<typeof convexTest>,
   settings: {
     platformFeePercentage: number
-    minimumPlatformFee: number
+    minimumPlatformFee?: number
     maximumPlatformFee?: number
   }
 ) {
@@ -229,8 +237,12 @@ async function insertActiveFee(
     }
     await ctx.db.insert("platformSettings", {
       platformFeePercentage: settings.platformFeePercentage,
-      minimumPlatformFee: settings.minimumPlatformFee,
-      maximumPlatformFee: settings.maximumPlatformFee,
+      ...(settings.minimumPlatformFee !== undefined
+        ? { minimumPlatformFee: settings.minimumPlatformFee }
+        : {}),
+      ...(settings.maximumPlatformFee !== undefined
+        ? { maximumPlatformFee: settings.maximumPlatformFee }
+        : {}),
       isActive: true,
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -253,16 +265,35 @@ describe("seat checkout", () => {
 
     expect(session.sessionId).toBe("cs_deposit")
     expect(session.url).toContain("checkout.stripe.test")
+    const depositCents = 500_000
+    const platformFee = 50_000 // 10% snapshot, not the live 5%
+    const amounts = buildDestinationChargeAmounts({
+      listingAmountCents: depositCents,
+      platformFeeCents: platformFee,
+    })
     expect(checkoutSessionsCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         mode: "payment",
+        line_items: [
+          expect.objectContaining({
+            price_data: expect.objectContaining({ unit_amount: depositCents }),
+          }),
+          expect.objectContaining({
+            price_data: expect.objectContaining({
+              unit_amount: amounts.processingFeeCents,
+              product_data: expect.objectContaining({ name: "Card processing fee" }),
+            }),
+          }),
+        ],
         payment_intent_data: expect.objectContaining({
-          application_fee_amount: 50_000, // 10% of the $5,000 deposit, not the live 5%
+          application_fee_amount: amounts.applicationFeeCents,
           transfer_data: { destination: "acct_host" },
           metadata: expect.objectContaining({
             bookingType: "seat",
             phase: "deposit",
             seatBookingId: bookingId,
+            platformFee: String(platformFee),
+            processingFee: String(amounts.processingFeeCents),
           }),
         }),
         metadata: expect.objectContaining({ bookingType: "seat", phase: "deposit" }),
@@ -295,33 +326,103 @@ describe("seat checkout", () => {
     expect(paid?.balancePaymentStatus).toBeUndefined()
   })
 
-  it("clamps the snapshotted percentage to the active min and max fee", async () => {
+  it("does not raise a capped seat fee to a configured dollar minimum", async () => {
     const t = convexTest(schema, modules)
+    await insertActiveFee(t, { platformFeePercentage: 10 })
     const { bookingId } = await seedApprovedBooking(t)
     await t.run(async (ctx) => {
-      await ctx.db.patch(bookingId, { platformFeePercentage: 1 })
+      const host = await ctx.db
+        .query("users")
+        .withIndex("by_external_id", (q) => q.eq("externalId", OWNER))
+        .first()
+      if (!host) throw new Error("host missing")
+      await ctx.db.patch(host._id, { platformFeeCapPercentage: 3 })
     })
-    await insertActiveFee(t, { platformFeePercentage: 20, minimumPlatformFee: 8_000 })
+    // $800 minimum and $10 maximum would have clamped the old fee. Neither applies.
+    await insertActiveFee(t, {
+      platformFeePercentage: 20,
+      minimumPlatformFee: 80_000,
+      maximumPlatformFee: 1_000,
+    })
 
     const asDriver = t.withIdentity({ subject: DRIVER_A })
     await asDriver.action(api.seatPayments.createDepositCheckoutSession, { bookingId })
+    const depositCents = 500_000
+    const depositFee = calculatePlatformFeeAmount(depositCents, 3)
+    const depositAmounts = buildDestinationChargeAmounts({
+      listingAmountCents: depositCents,
+      platformFeeCents: depositFee.platformFee,
+    })
+    expect(depositFee.platformFee).toBe(15_000)
+    expect(
+      checkoutSessionsCreate.mock.calls[0]?.[0]?.payment_intent_data?.metadata?.platformFee
+    ).toBe("15000")
     expect(
       checkoutSessionsCreate.mock.calls[0]?.[0]?.payment_intent_data?.application_fee_amount
-    ).toBe(8_000)
+    ).toBe(depositAmounts.applicationFeeCents)
+
+    await t.mutation(internal.seatPayments.handleDepositSuccess, {
+      bookingId,
+      stripePaymentIntentId: "pi_deposit",
+    })
+    await t.finishInProgressScheduledFunctions()
+    checkoutSessionsCreate.mockClear()
+
+    await asDriver.action(api.seatPayments.createBalanceCheckoutSession, { bookingId })
+    const balanceCents = 1_000_000
+    const balanceFee = calculatePlatformFeeAmount(balanceCents, 3)
+    const balanceAmounts = buildDestinationChargeAmounts({
+      listingAmountCents: balanceCents,
+      platformFeeCents: balanceFee.platformFee,
+    })
+    expect(balanceFee.platformFee).toBe(30_000)
+    expect(
+      checkoutSessionsCreate.mock.calls[0]?.[0]?.payment_intent_data?.metadata?.platformFee
+    ).toBe("30000")
+    expect(
+      checkoutSessionsCreate.mock.calls[0]?.[0]?.payment_intent_data?.application_fee_amount
+    ).toBe(balanceAmounts.applicationFeeCents)
+  })
+
+  it("lowers the snapshotted percentage to the host fee cap without raising it", async () => {
+    const t = convexTest(schema, modules)
+    await insertActiveFee(t, { platformFeePercentage: 10, minimumPlatformFee: 0 })
+    const { bookingId } = await seedApprovedBooking(t)
+    await t.run(async (ctx) => {
+      const host = await ctx.db
+        .query("users")
+        .withIndex("by_external_id", (q) => q.eq("externalId", OWNER))
+        .first()
+      if (!host) throw new Error("host missing")
+      await ctx.db.patch(host._id, { platformFeeCapPercentage: 3 })
+    })
+
+    const asDriver = t.withIdentity({ subject: DRIVER_A })
+    await asDriver.action(api.seatPayments.createDepositCheckoutSession, { bookingId })
+    const depositCents = 500_000
+    const capped = calculatePlatformFeeAmount(depositCents, 3)
+    const cappedAmounts = buildDestinationChargeAmounts({
+      listingAmountCents: depositCents,
+      platformFeeCents: capped.platformFee,
+    })
+    expect(capped.platformFee).toBe(15_000)
+    expect(
+      checkoutSessionsCreate.mock.calls[0]?.[0]?.payment_intent_data?.metadata?.platformFee
+    ).toBe("15000")
+    expect(
+      checkoutSessionsCreate.mock.calls[0]?.[0]?.payment_intent_data?.application_fee_amount
+    ).toBe(cappedAmounts.applicationFeeCents)
 
     checkoutSessionsCreate.mockClear()
     await t.run(async (ctx) => {
-      await ctx.db.patch(bookingId, { platformFeePercentage: 40 })
-    })
-    await insertActiveFee(t, {
-      platformFeePercentage: 1,
-      minimumPlatformFee: 0,
-      maximumPlatformFee: 3_000,
+      await ctx.db.patch(bookingId, { platformFeePercentage: 1 })
     })
     await asDriver.action(api.seatPayments.createDepositCheckoutSession, { bookingId })
+    const notRaised = calculatePlatformFeeAmount(depositCents, 1)
+    expect(notRaised.platformFee).toBe(5_000)
     expect(
-      checkoutSessionsCreate.mock.calls[0]?.[0]?.payment_intent_data?.application_fee_amount
-    ).toBe(3_000)
+      checkoutSessionsCreate.mock.calls[0]?.[0]?.payment_intent_data?.metadata?.platformFee
+    ).toBe("5000")
   })
 
   it("confirms the booking when the balance Checkout is paid", async () => {
@@ -338,12 +439,22 @@ describe("seat checkout", () => {
       bookingId,
     })
     expect(session.sessionId).toBe("cs_balance")
+    const balanceCents = 1_000_000
+    const platformFee = 50_000 // default 5% of the $10,000 balance
+    const amounts = buildDestinationChargeAmounts({
+      listingAmountCents: balanceCents,
+      platformFeeCents: platformFee,
+    })
     expect(checkoutSessionsCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         payment_intent_data: expect.objectContaining({
-          application_fee_amount: 50_000, // default 5% of the $10,000 balance
+          application_fee_amount: amounts.applicationFeeCents,
           transfer_data: { destination: "acct_host" },
-          metadata: expect.objectContaining({ bookingType: "seat", phase: "balance" }),
+          metadata: expect.objectContaining({
+            bookingType: "seat",
+            phase: "balance",
+            platformFee: String(platformFee),
+          }),
         }),
       }),
       expect.objectContaining({ idempotencyKey: `cs_seat_balance_${bookingId}` })
@@ -954,12 +1065,13 @@ describe("seat payment races and refunds", () => {
     expect(booking?.status).toBe("cancelled")
     expect(booking?.depositPaymentStatus).toBe("refunded")
     expect(booking?.depositCents).toBe(500_000)
-    // refund_application_fee with a partial amount is Stripe's proportional fee refund.
+    // Partial refund is 50% of the grossed-up charge so the application fee
+    // (platform fee + processing) comes back at the same percentage.
     expect(refundsCreate).toHaveBeenCalledTimes(1)
     expect(refundsCreate).toHaveBeenCalledWith(
       {
         payment_intent: "pi_half_deposit",
-        amount: 250_000,
+        amount: calculateRefundAmount(grossUpForStripeCardFees(500_000), 50),
         reverse_transfer: true,
         refund_application_fee: true,
         reason: "requested_by_customer",
@@ -998,7 +1110,7 @@ describe("seat payment races and refunds", () => {
     expect(refundsCreate).toHaveBeenCalledWith(
       {
         payment_intent: "pi_half_dep",
-        amount: 250_000,
+        amount: calculateRefundAmount(grossUpForStripeCardFees(500_000), 50),
         reverse_transfer: true,
         refund_application_fee: true,
         reason: "requested_by_customer",
@@ -1008,7 +1120,7 @@ describe("seat payment races and refunds", () => {
     expect(refundsCreate).toHaveBeenCalledWith(
       {
         payment_intent: "pi_half_bal",
-        amount: 500_000,
+        amount: calculateRefundAmount(grossUpForStripeCardFees(1_000_000), 50),
         reverse_transfer: true,
         refund_application_fee: true,
         reason: "requested_by_customer",

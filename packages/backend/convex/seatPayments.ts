@@ -13,7 +13,13 @@ import {
 import { ErrorCode, throwError } from "./errors"
 import { getWebUrl } from "./helpers"
 import { logError } from "./logger"
-import { calculatePlatformFeeAmount, calculateRefundAmount } from "./pricing"
+import {
+  buildDestinationChargeAmounts,
+  calculatePlatformFeeAmount,
+  calculateRefundAmount,
+  grossUpForStripeCardFees,
+  resolvePlatformFeePercentage,
+} from "./pricing"
 import { rateLimiter } from "./rateLimiter"
 import {
   holdsSeat,
@@ -91,6 +97,7 @@ export const getStripeUser = internalQuery({
     return {
       stripeAccountId: user.stripeAccountId ?? null,
       stripeCustomerId: user.stripeCustomerId ?? null,
+      platformFeeCapPercentage: user.platformFeeCapPercentage,
     }
   },
 })
@@ -107,7 +114,10 @@ export const setDriverStripeCustomerId = internalMutation({
   },
 })
 
-async function assertTeamConnectReady(ctx: ActionCtx, hostUserId: string): Promise<string> {
+async function assertTeamConnectReady(
+  ctx: ActionCtx,
+  hostUserId: string
+): Promise<{ stripeAccountId: string; platformFeeCapPercentage?: number }> {
   const host = await ctx.runQuery(internal.seatPayments.getStripeUser, { externalId: hostUserId })
   if (!host?.stripeAccountId) {
     throwError(
@@ -133,7 +143,10 @@ async function assertTeamConnectReady(ctx: ActionCtx, hostUserId: string): Promi
       "The team's payout setup isn't complete (transfers not enabled)"
     )
   }
-  return host.stripeAccountId
+  return {
+    stripeAccountId: host.stripeAccountId,
+    platformFeeCapPercentage: host.platformFeeCapPercentage,
+  }
 }
 
 export const getBookingForPayment = internalQuery({
@@ -150,20 +163,6 @@ export const getBookingForPayment = internalQuery({
       offeringTitle: offering?.title ?? "Race seat",
       eventName: event?.name ?? "Race event",
       eventStartDate: event?.startDate ?? booking.availableStartDate,
-    }
-  },
-})
-
-export const getPlatformFeeBounds = internalQuery({
-  args: {},
-  handler: async (ctx) => {
-    const settings = await ctx.db
-      .query("platformSettings")
-      .withIndex("by_active", (q) => q.eq("isActive", true))
-      .first()
-    return {
-      minimumPlatformFee: settings?.minimumPlatformFee ?? 0,
-      maximumPlatformFee: settings?.maximumPlatformFee ?? null,
     }
   },
 })
@@ -216,15 +215,23 @@ async function startCheckout(
     throwError(ErrorCode.INVALID_AMOUNT, "Payment amount out of allowed range")
   }
 
-  const destination = await assertTeamConnectReady(ctx, booking.hostUserId)
-
-  const bounds = await ctx.runQuery(internal.seatPayments.getPlatformFeeBounds, {})
-  const { platformFee } = calculatePlatformFeeAmount(
-    amount,
-    booking.platformFeePercentage,
-    bounds.minimumPlatformFee,
-    bounds.maximumPlatformFee ?? undefined
+  const { stripeAccountId: destination, platformFeeCapPercentage } = await assertTeamConnectReady(
+    ctx,
+    booking.hostUserId
   )
+
+  // Snapshot is the ceiling (later global rate changes do not raise it). A provider
+  // fee cap can only lower it. Dollar min/max on platformSettings are not applied.
+  const feePercentage = resolvePlatformFeePercentage(
+    booking.platformFeePercentage,
+    platformFeeCapPercentage
+  )
+  const { platformFee } = calculatePlatformFeeAmount(amount, feePercentage)
+  const { chargeAmountCents, processingFeeCents, applicationFeeCents } =
+    buildDestinationChargeAmounts({
+      listingAmountCents: amount,
+      platformFeeCents: platformFee,
+    })
 
   const stripe = getStripe()
   const driver = await ctx.runQuery(internal.seatPayments.getStripeUser, {
@@ -259,6 +266,8 @@ async function startCheckout(
     driverId: booking.driverId,
     hostUserId: booking.hostUserId,
     platformFee: platformFee.toString(),
+    processingFee: processingFeeCents.toString(),
+    chargeAmount: chargeAmountCents.toString(),
   }
 
   const session = await stripe.checkout.sessions.create(
@@ -277,9 +286,25 @@ async function startCheckout(
           },
           quantity: 1,
         },
+        ...(processingFeeCents > 0
+          ? [
+              {
+                price_data: {
+                  currency: "usd",
+                  product_data: {
+                    name: "Card processing fee",
+                    description: "Passed through at Stripe's standard US card rate",
+                  },
+                  unit_amount: processingFeeCents,
+                },
+                quantity: 1,
+              },
+            ]
+          : []),
       ],
       payment_intent_data: {
-        application_fee_amount: platformFee,
+        // Includes Renegade fee + processing so the team nets listing − platform fee
+        application_fee_amount: applicationFeeCents,
         transfer_data: { destination },
         metadata,
       },
@@ -729,8 +754,12 @@ async function refundCapturedCharge(
     idempotencyKey: string
   }
 ): Promise<boolean> {
+  // Refund a share of the grossed-up charge (listing + card processing), not only the
+  // listing. refund_application_fee then returns that same share of the application
+  // fee, so the platform fee comes back proportionally without recomputing it.
+  const chargeAmountCents = grossUpForStripeCardFees(args.capturedCents)
   const amount =
-    args.percentage >= 100 ? undefined : calculateRefundAmount(args.capturedCents, args.percentage)
+    args.percentage >= 100 ? undefined : calculateRefundAmount(chargeAmountCents, args.percentage)
   if (amount === 0) return false
   await stripe.refunds.create(
     {
@@ -748,11 +777,12 @@ async function refundCapturedCharge(
 /**
  * Refund captured seat PaymentIntents.
  * `refundPercentage` defaults to 100 so lost-spot refunds stay full.
- * A partial amount is `calculateRefundAmount` of that phase's captured cents.
- * `refund_application_fee: true` tells Stripe to refund the application fee in
- * proportion to the charge amount refunded (a full refund returns the full fee).
- * Vehicle rentals intentionally keep the fee on partials; seats do not, because
- * the clamped fee is not stored on the booking and recomputing it would be wrong.
+ * A partial amount is that percentage of the grossed-up charge (listing plus the
+ * card-processing pass-through). `refund_application_fee: true` tells Stripe to
+ * refund the application fee in proportion to the charge amount refunded, which
+ * returns the platform fee at the same percentage without recomputing it.
+ * A full refund omits `amount` so Stripe returns the entire PaymentIntent.
+ * Vehicle rentals intentionally keep the fee on partials; seats do not.
  * `reverse_transfer` likewise returns a proportional share of the Connect transfer.
  */
 export const refundSeatBooking = internalAction({
