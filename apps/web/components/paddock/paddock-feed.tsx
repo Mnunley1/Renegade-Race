@@ -12,6 +12,12 @@ import { Flame, Heart, MessageCircle, Send, Trophy, UserPlus } from "lucide-reac
 import Link from "next/link"
 import { useMemo, useState } from "react"
 import { api } from "@/lib/convex"
+import { r2Url } from "@/lib/r2-url"
+
+function avatarSrc(person?: { profileImage?: string | null; profileImageR2Key?: string | null }) {
+  if (person?.profileImageR2Key) return r2Url(person.profileImageR2Key)
+  return person?.profileImage || undefined
+}
 
 type FeedScope = "for_you" | "following" | "global"
 
@@ -140,7 +146,7 @@ export function PaddockFeed() {
                 {onlineUsers.map((u: any) => (
                   <li className="flex items-center gap-2" key={u.userId}>
                     <Avatar className="size-7">
-                      <AvatarImage src={u.profileImage} />
+                      <AvatarImage src={avatarSrc(u)} />
                       <AvatarFallback>{u.name?.[0] ?? "?"}</AvatarFallback>
                     </Avatar>
                     <span className="truncate font-medium text-xs">{u.name}</span>
@@ -210,7 +216,7 @@ function FeedItem({ item }: { item: any }) {
       <CardContent className="space-y-3 p-4">
         <div className="flex items-center gap-3">
           <Avatar className="size-10">
-            <AvatarImage src={item.author?.profileImage} />
+            <AvatarImage src={avatarSrc(item.author)} />
             <AvatarFallback>{item.author?.name?.[0] ?? "?"}</AvatarFallback>
           </Avatar>
           <div className="flex-1">

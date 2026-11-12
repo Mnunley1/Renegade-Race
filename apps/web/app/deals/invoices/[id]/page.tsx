@@ -70,6 +70,8 @@ export default function InvoiceDetailPage() {
   const isSender = invoice.senderId === user?.id
   const achDeposit = invoice.depositVehicle?.damageDepositAmount || 0
   const achTotal = invoice.total + achDeposit
+  const cardProcessingFee = invoice.estimatedCardProcessingFee || 0
+  const cardTotal = invoice.total + cardProcessingFee
   const canPay = isRecipient && ["sent", "viewed", "payment_pending"].includes(invoice.status)
   const canRefundDeposit =
     isSender &&
@@ -170,6 +172,19 @@ export default function InvoiceDetailPage() {
                 <span>Invoice total</span>
                 <span>{formatCurrency(invoice.total)}</span>
               </div>
+              {invoice.selectedPaymentMethod === "stripe_card" &&
+              (invoice.processingFee || 0) > 0 ? (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Card processing fee</span>
+                  <span>{formatCurrency(invoice.processingFee || 0)}</span>
+                </div>
+              ) : null}
+              {invoice.amountDue ? (
+                <div className="flex justify-between font-semibold">
+                  <span>Amount due</span>
+                  <span>{formatCurrency(invoice.amountDue)}</span>
+                </div>
+              ) : null}
             </div>
 
             {invoice.stripeCheckoutUrl && (
@@ -189,7 +204,8 @@ export default function InvoiceDetailPage() {
               <CardHeader>
                 <CardTitle>Choose payment method</CardTitle>
                 <CardDescription>
-                  ACH Direct Debit is lower-fee but can take several business days to settle.
+                  Card payments include Stripe&apos;s standard US card processing fee. ACH Direct
+                  Debit does not add that fee, but can take several business days to settle.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -208,7 +224,10 @@ export default function InvoiceDetailPage() {
                     <span className="text-left">
                       <span className="block font-semibold">Pay by card</span>
                       <span className="text-muted-foreground text-sm">
-                        {formatCurrency(invoice.total)}
+                        {formatCurrency(cardTotal)}
+                        {cardProcessingFee > 0
+                          ? ` includes ${formatCurrency(cardProcessingFee)} card processing fee`
+                          : ""}
                       </span>
                     </span>
                   </Button>

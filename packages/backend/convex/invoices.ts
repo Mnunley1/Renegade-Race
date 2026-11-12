@@ -12,6 +12,7 @@ import {
 } from "./emails"
 import { ErrorCode, throwError } from "./errors"
 import { getWebUrl } from "./helpers"
+import { buildDestinationChargeAmounts, estimateStripeCardProcessingFee } from "./pricing"
 
 const stripeClient = new StripeSubscriptions(components.stripe, {})
 
@@ -120,6 +121,74 @@ export function calculatePaymentAmount(args: {
     amountDue: args.invoiceTotal + damageDepositAmount,
     damageDepositAmount,
     depositStatus: damageDepositAmount > 0 ? "pending" : "not_required",
+  }
+}
+
+/**
+ * Settlement for a custom invoice once the payer picks card or ACH.
+ *
+ * Card matches destination charges used by rentals and damage invoices:
+ * the payer covers Stripe's estimated US card fee, the sender nets
+ * invoice total − Renegade platform fee, and `application_fee_amount`
+ * is the platform fee plus that processing fee.
+ *
+ * ACH has no card-processing pass-through in the rest of the billing code.
+ * The payer owes the invoice total plus any refundable damage deposit, and
+ * the platform fee (capped for early adopters) is taken only from the
+ * invoice total — the deposit is not fee'd.
+ */
+export function resolveInvoiceSettlement(args: {
+  invoiceTotal: number
+  selectedPaymentMethod: "stripe_card" | "stripe_ach"
+  damageDepositAmount?: number
+  platformFee: number
+}): {
+  amountDue: number
+  damageDepositAmount: number
+  depositStatus: "not_required" | "pending"
+  platformFee: number
+  processingFee: number
+  applicationFeeAmount: number
+  senderAmount: number
+} {
+  if (
+    !Number.isInteger(args.platformFee) ||
+    args.platformFee < 0 ||
+    args.platformFee > args.invoiceTotal
+  ) {
+    throw new Error("Platform fee must be an integer between 0 and the invoice total")
+  }
+
+  const payment = calculatePaymentAmount({
+    invoiceTotal: args.invoiceTotal,
+    selectedPaymentMethod: args.selectedPaymentMethod,
+    damageDepositAmount: args.damageDepositAmount,
+  })
+
+  if (args.selectedPaymentMethod === "stripe_card") {
+    const charge = buildDestinationChargeAmounts({
+      listingAmountCents: args.invoiceTotal,
+      platformFeeCents: args.platformFee,
+    })
+    return {
+      amountDue: charge.chargeAmountCents,
+      damageDepositAmount: 0,
+      depositStatus: "not_required",
+      platformFee: args.platformFee,
+      processingFee: charge.processingFeeCents,
+      applicationFeeAmount: charge.applicationFeeCents,
+      senderAmount: charge.ownerAmountCents,
+    }
+  }
+
+  return {
+    amountDue: payment.amountDue,
+    damageDepositAmount: payment.damageDepositAmount,
+    depositStatus: payment.depositStatus,
+    platformFee: args.platformFee,
+    processingFee: 0,
+    applicationFeeAmount: args.platformFee,
+    senderAmount: payment.amountDue - args.platformFee,
   }
 }
 
@@ -408,6 +477,8 @@ export const getById = query({
       sender,
       recipient,
       depositVehicle,
+      // Preview of the card pass-through before a method is chosen. ACH does not add this.
+      estimatedCardProcessingFee: estimateStripeCardProcessingFee(invoice.total),
     }
   },
 })
@@ -472,6 +543,7 @@ export const updateWithStripeInvoice = internalMutation({
     damageDepositAmount: v.number(),
     depositStatus: v.union(v.literal("not_required"), v.literal("pending")),
     platformFee: v.number(),
+    processingFee: v.number(),
     senderAmount: v.number(),
     stripeInvoiceId: v.string(),
     stripeCheckoutUrl: v.optional(v.string()),
@@ -485,6 +557,7 @@ export const updateWithStripeInvoice = internalMutation({
       damageDepositAmount: args.damageDepositAmount,
       depositStatus: args.depositStatus,
       platformFee: args.platformFee,
+      processingFee: args.processingFee,
       senderAmount: args.senderAmount,
       stripeInvoiceId: args.stripeInvoiceId,
       stripeCheckoutUrl: args.stripeCheckoutUrl,
@@ -566,15 +639,17 @@ export const choosePaymentMethod = action({
       })
     }
 
-    const paymentAmounts = calculatePaymentAmount({
+    // Fee is on the invoice total (not the ACH deposit). Early-adopter caps apply to the sender.
+    const { platformFee } = await ctx.runMutation(api.stripe.calculatePlatformFee, {
+      amount: invoice.total,
+      providerExternalId: invoice.senderId,
+    })
+    const settlement = resolveInvoiceSettlement({
       invoiceTotal: invoice.total,
       selectedPaymentMethod: args.paymentMethod,
       damageDepositAmount: depositVehicle?.damageDepositAmount,
+      platformFee,
     })
-    const { platformFee } = await ctx.runMutation(api.stripe.calculatePlatformFee, {
-      amount: invoice.total,
-    })
-    const senderAmount = paymentAmounts.amountDue - platformFee
 
     const dueDateTimestamp = invoice.dueDate
       ? Math.floor(new Date(`${invoice.dueDate}T23:59:59.000Z`).getTime() / 1000)
@@ -593,9 +668,12 @@ export const choosePaymentMethod = action({
           senderId: invoice.senderId,
           recipientId: invoice.recipientId,
           paymentMethod: args.paymentMethod,
-          damageDepositAmount: paymentAmounts.damageDepositAmount.toString(),
+          damageDepositAmount: settlement.damageDepositAmount.toString(),
+          platformFee: settlement.platformFee.toString(),
+          processingFee: settlement.processingFee.toString(),
+          senderAmount: settlement.senderAmount.toString(),
         },
-        application_fee_amount: platformFee,
+        application_fee_amount: settlement.applicationFeeAmount,
         transfer_data: {
           destination: sender.stripeAccountId,
         },
@@ -628,14 +706,31 @@ export const choosePaymentMethod = action({
       )
     }
 
-    if (paymentAmounts.damageDepositAmount > 0) {
+    if (settlement.processingFee > 0) {
+      await stripe.invoiceItems.create(
+        {
+          customer: customer.customerId,
+          invoice: stripeInvoice.id,
+          currency: "usd",
+          description: "Card processing fee",
+          amount: settlement.processingFee,
+          metadata: {
+            invoiceId: args.invoiceId,
+            type: "card_processing_fee",
+          },
+        },
+        { idempotencyKey: `invoice_processing_${args.invoiceId}_${stripeInvoice.id}` }
+      )
+    }
+
+    if (settlement.damageDepositAmount > 0) {
       await stripe.invoiceItems.create(
         {
           customer: customer.customerId,
           invoice: stripeInvoice.id,
           currency: "usd",
           description: "Refundable damage deposit",
-          amount: paymentAmounts.damageDepositAmount,
+          amount: settlement.damageDepositAmount,
           metadata: {
             invoiceId: args.invoiceId,
             type: "damage_deposit",
@@ -668,11 +763,12 @@ export const choosePaymentMethod = action({
     await ctx.runMutation(internal.invoices.updateWithStripeInvoice, {
       invoiceId: args.invoiceId,
       selectedPaymentMethod: args.paymentMethod,
-      amountDue: paymentAmounts.amountDue,
-      damageDepositAmount: paymentAmounts.damageDepositAmount,
-      depositStatus: paymentAmounts.depositStatus,
-      platformFee,
-      senderAmount,
+      amountDue: settlement.amountDue,
+      damageDepositAmount: settlement.damageDepositAmount,
+      depositStatus: settlement.depositStatus,
+      platformFee: settlement.platformFee,
+      processingFee: settlement.processingFee,
+      senderAmount: settlement.senderAmount,
       stripeInvoiceId: sent.id,
       stripeCheckoutUrl: sent.hosted_invoice_url || undefined,
       stripeInvoicePdf: sent.invoice_pdf || undefined,

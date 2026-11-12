@@ -2,7 +2,6 @@ import { v } from "convex/values"
 import type { Doc, Id } from "./_generated/dataModel"
 import { mutation, type QueryCtx, query } from "./_generated/server"
 import { logActivityEventInternal } from "./activity"
-import { imagePresets } from "./r2"
 import { getCurrentUser, getCurrentUserOrThrow } from "./users"
 
 const REACTION_TYPES = [
@@ -111,9 +110,7 @@ export const toggleReaction = mutation({
 
     const existing = await ctx.db
       .query("postReactions")
-      .withIndex("by_post_user", (q) =>
-        q.eq("postId", args.postId).eq("userId", user.externalId)
-      )
+      .withIndex("by_post_user", (q) => q.eq("postId", args.postId).eq("userId", user.externalId))
       .first()
 
     if (existing) {
@@ -252,7 +249,9 @@ export const listFeed = query({
         }))
     )
 
-    return [...enrichedPosts, ...activities].sort((a, b) => b.createdAt - a.createdAt).slice(0, limit)
+    return [...enrichedPosts, ...activities]
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .slice(0, limit)
   },
 })
 
@@ -264,7 +263,12 @@ export const listOnlineNow = query({
     const records = await ctx.db.query("presence").collect()
     const recent = records.filter((r) => r.updatedAt >= cutoff)
     const seen = new Set<string>()
-    const result: { userId: string; name: string; profileImage?: string }[] = []
+    const result: {
+      userId: string
+      name: string
+      profileImage?: string
+      profileImageR2Key?: string
+    }[] = []
     for (const r of recent) {
       if (seen.has(r.userId)) continue
       seen.add(r.userId)
@@ -276,9 +280,8 @@ export const listOnlineNow = query({
       result.push({
         userId: user.externalId,
         name: user.name,
-        profileImage: user.profileImageR2Key
-          ? imagePresets.avatar(user.profileImageR2Key)
-          : user.profileImage,
+        profileImage: user.profileImage,
+        profileImageR2Key: user.profileImageR2Key,
       })
       if (result.length >= limit) break
     }
@@ -336,9 +339,8 @@ async function loadActor(ctx: QueryCtx, externalId: string) {
   return {
     userId: user.externalId,
     name: user.name,
-    profileImage: user.profileImageR2Key
-      ? imagePresets.avatar(user.profileImageR2Key)
-      : user.profileImage,
+    profileImage: user.profileImage,
+    profileImageR2Key: user.profileImageR2Key,
   }
 }
 

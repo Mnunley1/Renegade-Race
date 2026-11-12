@@ -3,7 +3,9 @@ import {
   calculateInvoiceTotal,
   calculatePaymentAmount,
   normalizeInvoiceLineItems,
+  resolveInvoiceSettlement,
 } from "./invoices"
+import { buildDestinationChargeAmounts } from "./pricing"
 
 describe("invoice totals", () => {
   it("normalizes line items and calculates subtotal", () => {
@@ -75,5 +77,64 @@ describe("invoice payment amounts", () => {
       damageDepositAmount: 0,
       depositStatus: "not_required",
     })
+  })
+})
+
+describe("invoice settlement", () => {
+  const invoiceTotal = 100_000
+  const platformFee = 3_000
+
+  it("passes the card processing fee to the payer and keeps the sender at total minus platform fee", () => {
+    const card = buildDestinationChargeAmounts({
+      listingAmountCents: invoiceTotal,
+      platformFeeCents: platformFee,
+    })
+    const result = resolveInvoiceSettlement({
+      invoiceTotal,
+      selectedPaymentMethod: "stripe_card",
+      damageDepositAmount: 50_000,
+      platformFee,
+    })
+
+    expect(result).toEqual({
+      amountDue: card.chargeAmountCents,
+      damageDepositAmount: 0,
+      depositStatus: "not_required",
+      platformFee,
+      processingFee: card.processingFeeCents,
+      applicationFeeAmount: card.applicationFeeCents,
+      senderAmount: invoiceTotal - platformFee,
+    })
+    expect(result.processingFee).toBeGreaterThan(0)
+    expect(result.amountDue - result.applicationFeeAmount).toBe(result.senderAmount)
+  })
+
+  it("does not add a card processing fee for ACH and does not fee the damage deposit", () => {
+    const result = resolveInvoiceSettlement({
+      invoiceTotal,
+      selectedPaymentMethod: "stripe_ach",
+      damageDepositAmount: 50_000,
+      platformFee,
+    })
+
+    expect(result).toEqual({
+      amountDue: 150_000,
+      damageDepositAmount: 50_000,
+      depositStatus: "pending",
+      platformFee,
+      processingFee: 0,
+      applicationFeeAmount: platformFee,
+      senderAmount: 150_000 - platformFee,
+    })
+  })
+
+  it("rejects a platform fee larger than the invoice total", () => {
+    expect(() =>
+      resolveInvoiceSettlement({
+        invoiceTotal,
+        selectedPaymentMethod: "stripe_card",
+        platformFee: invoiceTotal + 1,
+      })
+    ).toThrow("Platform fee must be an integer")
   })
 })

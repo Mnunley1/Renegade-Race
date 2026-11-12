@@ -1226,9 +1226,11 @@ export default defineSchema({
       v.union(v.literal("stripe_card"), v.literal("stripe_ach"), v.literal("external"))
     ),
     amountDue: v.optional(v.number()),
-    /** Snapshot of platform fee in cents. */
+    /** Snapshot of Renegade platform fee in cents (not the card processing pass-through). */
     platformFee: v.optional(v.number()),
-    /** Sender → owner of money received (in cents, after platform fee). */
+    /** Estimated Stripe card fee paid by the payer, in cents. ACH payments store 0. */
+    processingFee: v.optional(v.number()),
+    /** Sender → owner of money received (in cents, after platform fee, including any deposit). */
     senderAmount: v.optional(v.number()),
     damageDepositAmount: v.optional(v.number()),
     depositStatus: v.optional(
