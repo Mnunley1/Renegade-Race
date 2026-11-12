@@ -17,12 +17,21 @@ import { useMutation, useQuery } from "convex/react"
 import { ArrowLeft, Loader2, Plus, X } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useEffect, useState } from "react"
+import { type Ref, useEffect, useImperativeHandle, useRef, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 
 type RacingType = "real-world" | "sim-racing" | "both"
+
+type ChipInputHandle = {
+  /** Commit any pending draft text and return the resulting values (sync). */
+  flush: () => string[]
+}
+
+const WHITESPACE_RE = /\s+/
+/** Matches Clerk/Convex placeholder names like "null null" from `${null} ${null}`. */
+const NULLISH_NAME_RE = /^(null|undefined)(\s+(null|undefined))+$/i
 
 function dollarsToCents(value: string): number | undefined {
   const trimmed = value.trim()
@@ -37,46 +46,177 @@ function centsToDollars(cents?: number): string {
   return (cents / 100).toString()
 }
 
+function splitDisplayName(fullName: string): { firstName: string; lastName: string } {
+  const parts = fullName.trim().split(WHITESPACE_RE).filter(Boolean)
+  const first = parts[0] ?? ""
+  if (parts.length <= 1) return { firstName: first, lastName: "" }
+  return { firstName: first, lastName: parts.slice(1).join(" ") }
+}
+
+function optionalContactInfo(email: string, phone: string) {
+  const trimmedEmail = email.trim()
+  const trimmedPhone = phone.trim()
+  if (!(trimmedEmail || trimmedPhone)) return
+  return {
+    email: trimmedEmail || undefined,
+    phone: trimmedPhone || undefined,
+  }
+}
+
+function optionalSocialLinks(instagram: string, website: string) {
+  const trimmedInstagram = instagram.trim()
+  const trimmedWebsite = website.trim()
+  if (!(trimmedInstagram || trimmedWebsite)) return
+  return {
+    instagram: trimmedInstagram || undefined,
+    website: trimmedWebsite || undefined,
+  }
+}
+
+function isUsableDisplayName(name: string | null | undefined): name is string {
+  const trimmed = name?.trim() ?? ""
+  if (!trimmed) return false
+  const lower = trimmed.toLowerCase()
+  if (lower === "unknown user" || lower === "unknown coach") return false
+  if (lower === "null" || lower === "undefined") return false
+  if (NULLISH_NAME_RE.test(trimmed)) return false
+  return true
+}
+
+function resolveInitialDisplayName(
+  convexName: string | undefined,
+  clerkFullName: string | null | undefined,
+  clerkFirstName: string | null | undefined,
+  clerkLastName: string | null | undefined
+) {
+  if (isUsableDisplayName(convexName)) return convexName.trim()
+  if (isUsableDisplayName(clerkFullName)) return clerkFullName.trim()
+  return [clerkFirstName, clerkLastName].filter(isUsableDisplayName).join(" ").trim()
+}
+
+type CoachProfileFormFields = {
+  headline: string | undefined
+  bio: string
+  location: string
+  yearsExperience: number | undefined
+  racingType: RacingType | undefined
+  specialties: string[]
+  certifications: string[] | undefined
+  tracksCoachedAt: string[] | undefined
+  hourlyRate: number | undefined
+  halfDayRate: number | undefined
+  fullDayRate: number | undefined
+  contactInfo: ReturnType<typeof optionalContactInfo>
+  socialLinks: ReturnType<typeof optionalSocialLinks>
+}
+
+function buildCoachProfileFields(input: {
+  displayName: string
+  headline: string
+  bio: string
+  location: string
+  yearsExperience: string
+  racingType: RacingType | "unset"
+  specialties: string[]
+  certifications: string[]
+  tracks: string[]
+  hourlyRate: string
+  halfDayRate: string
+  fullDayRate: string
+  contactEmail: string
+  contactPhone: string
+  instagram: string
+  website: string
+}): { error: string } | { name: string; fields: CoachProfileFormFields } {
+  const name = input.displayName.trim()
+  if (!(name && isUsableDisplayName(name))) {
+    return { error: "Your name is required" }
+  }
+  if (!(input.bio.trim() && input.location.trim() && input.specialties.length > 0)) {
+    return { error: "Bio, location, and at least one specialty are required" }
+  }
+  const hourly = dollarsToCents(input.hourlyRate)
+  const halfDay = dollarsToCents(input.halfDayRate)
+  const fullDay = dollarsToCents(input.fullDayRate)
+  if (!(hourly || halfDay || fullDay)) {
+    return { error: "Set at least one rate (hourly, half-day, or full-day)" }
+  }
+  const yearsNum = input.yearsExperience.trim()
+    ? Number.parseInt(input.yearsExperience, 10)
+    : undefined
+  return {
+    name,
+    fields: {
+      headline: input.headline.trim() || undefined,
+      bio: input.bio,
+      location: input.location,
+      yearsExperience: yearsNum,
+      racingType: input.racingType === "unset" ? undefined : input.racingType,
+      specialties: input.specialties,
+      certifications: input.certifications.length > 0 ? input.certifications : undefined,
+      tracksCoachedAt: input.tracks.length > 0 ? input.tracks : undefined,
+      hourlyRate: hourly,
+      halfDayRate: halfDay,
+      fullDayRate: fullDay,
+      contactInfo: optionalContactInfo(input.contactEmail, input.contactPhone),
+      socialLinks: optionalSocialLinks(input.instagram, input.website),
+    },
+  }
+}
+
 function ChipInput({
   label,
   values,
   onChange,
   placeholder,
+  ref,
 }: {
   label: string
   values: string[]
   onChange: (next: string[]) => void
   placeholder: string
+  ref?: Ref<ChipInputHandle>
 }) {
   const [draft, setDraft] = useState("")
+  const valuesRef = useRef(values)
+  const draftRef = useRef(draft)
+  valuesRef.current = values
+  draftRef.current = draft
 
-  const add = () => {
-    const v = draft.trim()
-    if (!v) return
-    if (values.includes(v)) {
-      setDraft("")
-      return
+  const commitDraft = (raw?: string): string[] => {
+    const v = (raw ?? draftRef.current).trim()
+    let next = valuesRef.current
+    if (v && !next.includes(v)) {
+      next = [...next, v]
+      onChange(next)
+      valuesRef.current = next
     }
-    onChange([...values, v])
     setDraft("")
+    draftRef.current = ""
+    return next
   }
+
+  useImperativeHandle(ref, () => ({ flush: () => commitDraft() }))
 
   return (
     <div className="space-y-2">
       <Label>{label}</Label>
       <div className="flex gap-2">
         <Input
+          onBlur={() => {
+            if (draftRef.current.trim()) commitDraft()
+          }}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault()
-              add()
+              commitDraft()
             }
           }}
           placeholder={placeholder}
           value={draft}
         />
-        <Button onClick={add} type="button" variant="outline">
+        <Button onClick={() => commitDraft()} type="button" variant="outline">
           <Plus className="size-4" />
         </Button>
       </div>
@@ -106,11 +246,14 @@ function ChipInput({
 
 export default function CoachOnboardingPage() {
   const router = useRouter()
-  const { isSignedIn, isLoaded } = useUser()
+  const { isSignedIn, isLoaded, user: clerkUser } = useUser()
   const existing = useQuery(api.coachProfiles.getByUser)
+  const convexUser = useQuery(api.users.current)
   const createProfile = useMutation(api.coachProfiles.create)
   const updateProfile = useMutation(api.coachProfiles.update)
+  const updateUserProfile = useMutation(api.users.updateProfile)
 
+  const [displayName, setDisplayName] = useState("")
   const [headline, setHeadline] = useState("")
   const [bio, setBio] = useState("")
   const [location, setLocation] = useState("")
@@ -128,6 +271,10 @@ export default function CoachOnboardingPage() {
   const [website, setWebsite] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [hydrated, setHydrated] = useState(false)
+  const [nameHydrated, setNameHydrated] = useState(false)
+  const specialtiesInputRef = useRef<ChipInputHandle>(null)
+  const certificationsInputRef = useRef<ChipInputHandle>(null)
+  const tracksInputRef = useRef<ChipInputHandle>(null)
 
   useEffect(() => {
     if (!hydrated && existing) {
@@ -150,6 +297,23 @@ export default function CoachOnboardingPage() {
     }
   }, [existing, hydrated])
 
+  useEffect(() => {
+    if (nameHydrated) return
+    // Wait until Clerk is loaded and Convex user query has settled (or signed-out case handled above).
+    if (!(isLoaded && isSignedIn)) return
+    if (convexUser === undefined) return
+
+    setDisplayName(
+      resolveInitialDisplayName(
+        convexUser?.name,
+        clerkUser?.fullName,
+        clerkUser?.firstName,
+        clerkUser?.lastName
+      )
+    )
+    setNameHydrated(true)
+  }, [convexUser, clerkUser, isLoaded, isSignedIn, nameHydrated])
+
   if (isLoaded && !isSignedIn) {
     return (
       <div className="container mx-auto max-w-2xl px-4 py-16 text-center">
@@ -169,73 +333,49 @@ export default function CoachOnboardingPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!(bio.trim() && location.trim() && specialties.length > 0)) {
-      toast.error("Bio, location, and at least one specialty are required")
+    // Flush chip drafts first — typing without Enter/Plus left text uncommitted, and
+    // blur+submit races left React state empty even after an onBlur commit.
+    const nextSpecialties = specialtiesInputRef.current?.flush() ?? specialties
+    const nextCertifications = certificationsInputRef.current?.flush() ?? certifications
+    const nextTracks = tracksInputRef.current?.flush() ?? tracks
+
+    const built = buildCoachProfileFields({
+      displayName,
+      headline,
+      bio,
+      location,
+      yearsExperience,
+      racingType,
+      specialties: nextSpecialties,
+      certifications: nextCertifications,
+      tracks: nextTracks,
+      hourlyRate,
+      halfDayRate,
+      fullDayRate,
+      contactEmail,
+      contactPhone,
+      instagram,
+      website,
+    })
+    if ("error" in built) {
+      toast.error(built.error)
       return
     }
-
-    const hourly = dollarsToCents(hourlyRate)
-    const halfDay = dollarsToCents(halfDayRate)
-    const fullDay = dollarsToCents(fullDayRate)
-    if (!(hourly || halfDay || fullDay)) {
-      toast.error("Set at least one rate (hourly, half-day, or full-day)")
-      return
-    }
-
-    const contactInfo =
-      contactEmail.trim() || contactPhone.trim()
-        ? {
-            email: contactEmail.trim() || undefined,
-            phone: contactPhone.trim() || undefined,
-          }
-        : undefined
-
-    const socialLinks =
-      instagram.trim() || website.trim()
-        ? {
-            instagram: instagram.trim() || undefined,
-            website: website.trim() || undefined,
-          }
-        : undefined
-
-    const yearsNum = yearsExperience.trim() ? Number.parseInt(yearsExperience, 10) : undefined
 
     setSubmitting(true)
     try {
+      // Coach directory names come from users.name — keep Clerk + Convex in sync.
+      const { firstName, lastName } = splitDisplayName(built.name)
+      if (clerkUser) {
+        await clerkUser.update({ firstName, lastName })
+      }
+      await updateUserProfile({ name: built.name })
+
       if (isEdit) {
-        await updateProfile({
-          profileId: existing._id,
-          headline: headline.trim() || undefined,
-          bio,
-          location,
-          yearsExperience: yearsNum,
-          racingType: racingType === "unset" ? undefined : racingType,
-          specialties,
-          certifications: certifications.length > 0 ? certifications : undefined,
-          tracksCoachedAt: tracks.length > 0 ? tracks : undefined,
-          hourlyRate: hourly,
-          halfDayRate: halfDay,
-          fullDayRate: fullDay,
-          contactInfo,
-          socialLinks,
-        })
+        await updateProfile({ profileId: existing._id, ...built.fields })
         toast.success("Coach profile updated")
       } else {
-        await createProfile({
-          headline: headline.trim() || undefined,
-          bio,
-          location,
-          yearsExperience: yearsNum,
-          racingType: racingType === "unset" ? undefined : racingType,
-          specialties,
-          certifications: certifications.length > 0 ? certifications : undefined,
-          tracksCoachedAt: tracks.length > 0 ? tracks : undefined,
-          hourlyRate: hourly,
-          halfDayRate: halfDay,
-          fullDayRate: fullDay,
-          contactInfo,
-          socialLinks,
-        })
+        await createProfile(built.fields)
         toast.success("Coach profile created")
       }
       router.push("/coach/dashboard")
@@ -270,6 +410,18 @@ export default function CoachOnboardingPage() {
             <CardTitle>About you</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="displayName">Display name *</Label>
+              <Input
+                autoComplete="name"
+                id="displayName"
+                maxLength={80}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder="Your name as shown to drivers"
+                required
+                value={displayName}
+              />
+            </div>
             <div className="space-y-2">
               <Label htmlFor="headline">Headline</Label>
               <Input
@@ -343,18 +495,21 @@ export default function CoachOnboardingPage() {
               label="Specialties * (e.g. HPDE, GT3, Karting, Time Attack)"
               onChange={setSpecialties}
               placeholder="Add a specialty and press Enter"
+              ref={specialtiesInputRef}
               values={specialties}
             />
             <ChipInput
               label="Certifications"
               onChange={setCertifications}
               placeholder="e.g. SCCA Licensed Instructor"
+              ref={certificationsInputRef}
               values={certifications}
             />
             <ChipInput
               label="Tracks you coach at"
               onChange={setTracks}
               placeholder="e.g. Circuit of the Americas"
+              ref={tracksInputRef}
               values={tracks}
             />
           </CardContent>

@@ -11,54 +11,90 @@ import {
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import { useMutation, useQuery } from "convex/react"
-import { DollarSign, Loader2, Save, Settings as SettingsIcon } from "lucide-react"
+import { DollarSign, Loader2, Save, Settings as SettingsIcon, Users } from "lucide-react"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 
+function dateInputFromMs(ms: number | null | undefined): string {
+  if (ms == null) return ""
+  const d = new Date(ms)
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, "0")
+  const day = String(d.getDate()).padStart(2, "0")
+  return `${year}-${month}-${day}`
+}
+
+/** Local calendar date → start of that day (local) as ms. */
+function startOfLocalDayMs(dateStr: string): number {
+  const [yStr, mStr, dStr] = dateStr.split("-")
+  const y = Number(yStr)
+  const m = Number(mStr)
+  const d = Number(dStr)
+  return new Date(y, m - 1, d, 0, 0, 0, 0).getTime()
+}
+
+/** Local calendar date → end of that day (local) as ms. */
+function endOfLocalDayMs(dateStr: string): number {
+  const [yStr, mStr, dStr] = dateStr.split("-")
+  const y = Number(yStr)
+  const m = Number(mStr)
+  const d = Number(dStr)
+  return new Date(y, m - 1, d, 23, 59, 59, 999).getTime()
+}
+
 export default function SettingsPage() {
   const settings = useQuery(api.stripe.getPlatformSettings)
   const updateSettings = useMutation(api.stripe.updatePlatformSettings)
+  const backfillEarlyAdopters = useMutation(api.admin.backfillEarlyAdopters)
 
   const [platformFeePercentage, setPlatformFeePercentage] = useState("")
-  const [minimumPlatformFee, setMinimumPlatformFee] = useState("")
-  const [maximumPlatformFee, setMaximumPlatformFee] = useState("")
+  const [promoStartsAt, setPromoStartsAt] = useState("")
+  const [promoEndsAt, setPromoEndsAt] = useState("")
+  const [earlyAdopterFeeCap, setEarlyAdopterFeeCap] = useState("3")
   const [isSaving, setIsSaving] = useState(false)
+  const [isBackfilling, setIsBackfilling] = useState(false)
 
-  // Load settings into form when they're fetched
   useEffect(() => {
     if (settings) {
       setPlatformFeePercentage(settings.platformFeePercentage.toString())
-      setMinimumPlatformFee((settings.minimumPlatformFee / 100).toFixed(2))
-      setMaximumPlatformFee(
-        settings.maximumPlatformFee ? (settings.maximumPlatformFee / 100).toFixed(2) : ""
-      )
+      setPromoStartsAt(dateInputFromMs(settings.earlyAdopterPromoStartsAt))
+      setPromoEndsAt(dateInputFromMs(settings.earlyAdopterPromoEndsAt))
+      setEarlyAdopterFeeCap((settings.earlyAdopterFeeCapPercentage ?? 3).toString())
     }
   }, [settings])
 
   const handleSave = async () => {
-    if (!(platformFeePercentage && minimumPlatformFee)) {
-      toast.error("Please fill in all required fields")
+    if (!platformFeePercentage) {
+      toast.error("Please enter a platform fee percentage")
       return
     }
 
     const feePercentage = Number.parseFloat(platformFeePercentage)
-    const minFee = Number.parseFloat(minimumPlatformFee)
-    const maxFee = maximumPlatformFee ? Number.parseFloat(maximumPlatformFee) : undefined
+    const feeCap = Number.parseFloat(earlyAdopterFeeCap)
 
     if (Number.isNaN(feePercentage) || feePercentage < 0 || feePercentage > 100) {
       toast.error("Platform fee percentage must be between 0 and 100")
       return
     }
 
-    if (Number.isNaN(minFee) || minFee < 0) {
-      toast.error("Minimum platform fee must be a positive number")
+    if (Number.isNaN(feeCap) || feeCap < 0 || feeCap > 100) {
+      toast.error("Early adopter fee cap must be between 0 and 100")
       return
     }
 
-    if (maxFee !== undefined && (Number.isNaN(maxFee) || maxFee < minFee)) {
-      toast.error("Maximum platform fee must be greater than or equal to minimum fee")
+    if ((promoStartsAt && !promoEndsAt) || (!promoStartsAt && promoEndsAt)) {
+      toast.error("Set both promo start and end dates, or clear both")
+      return
+    }
+
+    if (
+      promoStartsAt &&
+      promoEndsAt &&
+      endOfLocalDayMs(promoEndsAt) < startOfLocalDayMs(promoStartsAt)
+    ) {
+      toast.error("Promo end date must be on or after the start date")
       return
     }
 
@@ -66,14 +102,27 @@ export default function SettingsPage() {
     try {
       await updateSettings({
         platformFeePercentage: feePercentage,
-        minimumPlatformFee: Math.round(minFee * 100), // Convert to cents
-        maximumPlatformFee: maxFee !== undefined ? Math.round(maxFee * 100) : undefined,
+        earlyAdopterFeeCapPercentage: feeCap,
+        earlyAdopterPromoStartsAt: promoStartsAt ? startOfLocalDayMs(promoStartsAt) : null,
+        earlyAdopterPromoEndsAt: promoEndsAt ? endOfLocalDayMs(promoEndsAt) : null,
       })
       toast.success("Platform settings updated successfully")
     } catch (error) {
       handleErrorWithContext(error, { action: "update platform settings" })
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  const handleBackfill = async () => {
+    setIsBackfilling(true)
+    try {
+      const result = await backfillEarlyAdopters({})
+      toast.success(`Early adopter status granted to ${result.granted} of ${result.total} users`)
+    } catch (error) {
+      handleErrorWithContext(error, { action: "backfill early adopters" })
+    } finally {
+      setIsBackfilling(false)
     }
   }
 
@@ -90,7 +139,7 @@ export default function SettingsPage() {
       <div className="mb-8">
         <h1 className="font-bold text-3xl">Platform Settings</h1>
         <p className="mt-2 text-muted-foreground">
-          Manage platform fee structure and payment settings
+          Manage platform fee structure and early adopter promo
         </p>
       </div>
 
@@ -101,7 +150,8 @@ export default function SettingsPage() {
             <CardTitle>Platform Fee Configuration</CardTitle>
           </div>
           <CardDescription>
-            Configure how platform fees are calculated for each rental transaction
+            Global fee percentage for providers. Providers with a fee cap pay the lower of global
+            and their cap.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -126,54 +176,7 @@ export default function SettingsPage() {
               </span>
             </div>
             <p className="text-muted-foreground text-sm">
-              Percentage of each transaction that goes to the platform (e.g., 5 for 5%)
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="minFee">
-              Minimum Platform Fee <span className="text-destructive">*</span>
-            </Label>
-            <div className="relative">
-              <span className="absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground">
-                $
-              </span>
-              <Input
-                className="pl-7"
-                id="minFee"
-                min="0"
-                onChange={(e) => setMinimumPlatformFee(e.target.value)}
-                placeholder="1.00"
-                step="0.01"
-                type="number"
-                value={minimumPlatformFee}
-              />
-            </div>
-            <p className="text-muted-foreground text-sm">
-              Minimum fee amount in USD (e.g., $1.00). The platform will always charge at least this
-              amount.
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="maxFee">Maximum Platform Fee (Optional)</Label>
-            <div className="relative">
-              <span className="absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground">
-                $
-              </span>
-              <Input
-                className="pl-7"
-                id="maxFee"
-                min="0"
-                onChange={(e) => setMaximumPlatformFee(e.target.value)}
-                placeholder="50.00"
-                step="0.01"
-                type="number"
-                value={maximumPlatformFee}
-              />
-            </div>
-            <p className="text-muted-foreground text-sm">
-              Maximum fee amount in USD (e.g., $50.00). Leave empty for no maximum limit.
+              Default percentage of each transaction that goes to the platform (e.g., 5 for 5%)
             </p>
           </div>
 
@@ -185,16 +188,6 @@ export default function SettingsPage() {
                   <span className="text-muted-foreground">Fee Percentage:</span>{" "}
                   {settings.platformFeePercentage}%
                 </p>
-                <p>
-                  <span className="text-muted-foreground">Minimum Fee:</span> $
-                  {(settings.minimumPlatformFee / 100).toFixed(2)}
-                </p>
-                {settings.maximumPlatformFee && (
-                  <p>
-                    <span className="text-muted-foreground">Maximum Fee:</span> $
-                    {(settings.maximumPlatformFee / 100).toFixed(2)}
-                  </p>
-                )}
                 <p className="mt-2 text-muted-foreground text-xs">
                   Last updated:{" "}
                   {new Date(settings.updatedAt).toLocaleString("en-US", {
@@ -230,6 +223,95 @@ export default function SettingsPage() {
       <Card className="mt-6">
         <CardHeader>
           <div className="flex items-center gap-2">
+            <Users className="size-5" />
+            <CardTitle>Early Adopter Promo</CardTitle>
+          </div>
+          <CardDescription>
+            New accounts created during this window get a permanent fee cap. Effective fee is always
+            min(global, cap).
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="promoStart">Promo start date</Label>
+              <Input
+                id="promoStart"
+                onChange={(e) => setPromoStartsAt(e.target.value)}
+                type="date"
+                value={promoStartsAt}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="promoEnd">Promo end date</Label>
+              <Input
+                id="promoEnd"
+                onChange={(e) => setPromoEndsAt(e.target.value)}
+                type="date"
+                value={promoEndsAt}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="earlyAdopterCap">Early adopter fee cap (%)</Label>
+            <div className="relative max-w-xs">
+              <Input
+                className="pr-8"
+                id="earlyAdopterCap"
+                max="100"
+                min="0"
+                onChange={(e) => setEarlyAdopterFeeCap(e.target.value)}
+                step="0.1"
+                type="number"
+                value={earlyAdopterFeeCap}
+              />
+              <span className="absolute top-1/2 right-3 -translate-y-1/2 text-muted-foreground">
+                %
+              </span>
+            </div>
+            <p className="text-muted-foreground text-sm">
+              Providers in the promo never pay more than this rate. Clear both dates to pause
+              auto-grants for new signups.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap justify-end gap-3 pt-2">
+            <Button
+              disabled={isBackfilling}
+              onClick={handleBackfill}
+              type="button"
+              variant="outline"
+            >
+              {isBackfilling ? (
+                <>
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                  Backfilling...
+                </>
+              ) : (
+                "Grant early adopter to all existing users"
+              )}
+            </Button>
+            <Button className="min-w-[120px]" disabled={isSaving} onClick={handleSave}>
+              {isSaving ? (
+                <>
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="mr-2 size-4" />
+                  Save Promo
+                </>
+              )}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="mt-6">
+        <CardHeader>
+          <div className="flex items-center gap-2">
             <SettingsIcon className="size-5" />
             <CardTitle>How Platform Fees Work</CardTitle>
           </div>
@@ -239,17 +321,17 @@ export default function SettingsPage() {
             <div>
               <h4 className="mb-1 font-semibold text-foreground">Fee Calculation</h4>
               <p>
-                Platform fees are calculated as a percentage of the total transaction amount, with
-                minimum and maximum limits applied.
+                Platform fees are a percentage of the transaction. If a provider has a fee cap, they
+                pay the lower of the global rate and their cap.
               </p>
             </div>
             <div>
               <h4 className="mb-1 font-semibold text-foreground">Example</h4>
-              <p>For a $100 rental with 5% fee, $1 minimum, and $50 maximum:</p>
+              <p>For a $100 rental with a 5% global fee and a 3% early-adopter cap:</p>
               <ul className="mt-1 list-inside list-disc space-y-1">
-                <li>Calculated fee: $100 × 5% = $5.00</li>
-                <li>Applied fee: $5.00 (within min/max range)</li>
-                <li>Owner receives: $95.00</li>
+                <li>Effective fee: min(5%, 3%) = 3%</li>
+                <li>Platform fee: $3.00</li>
+                <li>Provider receives: $97.00</li>
               </ul>
             </div>
             <div>

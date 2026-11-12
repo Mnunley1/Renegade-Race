@@ -3,7 +3,7 @@
 import { api } from "@renegade/backend/convex/_generated/api"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { useQuery } from "convex/react"
-import { Calendar, DollarSign, Percent, TrendingUp } from "lucide-react"
+import { Calendar, Percent, TrendingUp } from "lucide-react"
 import { LoadingState } from "@/components/loading-state"
 import { PageHeader } from "@/components/page-header"
 import { StatCard } from "@/components/stat-card"
@@ -14,6 +14,12 @@ export default function FeesPage() {
 
   if (stats === undefined || settings === undefined)
     return <LoadingState message="Loading fee data..." />
+
+  const promoActive =
+    settings.earlyAdopterPromoStartsAt != null &&
+    settings.earlyAdopterPromoEndsAt != null &&
+    Date.now() >= settings.earlyAdopterPromoStartsAt &&
+    Date.now() <= settings.earlyAdopterPromoEndsAt
 
   return (
     <div>
@@ -26,18 +32,18 @@ export default function FeesPage() {
       <div className="mb-6 grid gap-4 md:grid-cols-3">
         <StatCard
           icon={<Percent className="h-4 w-4 text-muted-foreground" />}
-          label="Fee Rate"
+          label="Global Fee Rate"
           value={`${settings?.platformFeePercentage ?? 0}%`}
         />
         <StatCard
-          icon={<DollarSign className="h-4 w-4 text-muted-foreground" />}
-          label="Min Fee"
-          value={`$${((settings?.minimumPlatformFee ?? 0) / 100).toFixed(2)}`}
+          icon={<Percent className="h-4 w-4 text-muted-foreground" />}
+          label="Early Adopter Cap"
+          value={`${settings?.earlyAdopterFeeCapPercentage ?? 3}%`}
         />
         <StatCard
-          icon={<DollarSign className="h-4 w-4 text-muted-foreground" />}
-          label="Max Fee"
-          value={`$${((settings?.maximumPlatformFee ?? 0) / 100).toFixed(2)}`}
+          icon={<Calendar className="h-4 w-4 text-muted-foreground" />}
+          label="Promo Status"
+          value={promoActive ? "Active" : "Inactive"}
         />
       </div>
 
@@ -112,21 +118,16 @@ export default function FeesPage() {
                 <span>${((1000 * (settings?.platformFeePercentage ?? 0)) / 100).toFixed(2)}</span>
               </div>
               <div className="flex justify-between border-t pt-2 font-medium">
-                <span>Total Charged to Renter:</span>
+                <span>Provider Receives:</span>
                 <span>
-                  ${(1000 + (1000 * (settings?.platformFeePercentage ?? 0)) / 100).toFixed(2)}
+                  ${(1000 - (1000 * (settings?.platformFeePercentage ?? 0)) / 100).toFixed(2)}
                 </span>
-              </div>
-              <div className="flex justify-between text-muted-foreground">
-                <span>Host Receives:</span>
-                <span>$1,000.00</span>
               </div>
             </div>
           </div>
           <p className="text-muted-foreground text-xs">
-            Note: Actual fees are capped by the minimum ($
-            {((settings?.minimumPlatformFee ?? 0) / 100).toFixed(2)}) and maximum ($
-            {((settings?.maximumPlatformFee ?? 0) / 100).toFixed(2)}) fee limits.
+            Providers with a fee cap pay min(global rate, their cap). There is no dollar min/max
+            clamp on the fee.
           </p>
         </CardContent>
       </Card>

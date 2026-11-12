@@ -1,10 +1,17 @@
 import {
+  buildDestinationChargeAmounts,
   calculateAddOnsTotal,
-  calculateReservationTotal,
   calculatePlatformFeeAmount,
-  datesOverlap,
   calculateRefundAmount,
+  calculateReservationTotal,
+  datesOverlap,
+  estimateStripeCardProcessingFee,
+  grossUpForStripeCardFees,
   isCoachingCancellationRefundable,
+  isEarlyAdopterPromoActive,
+  resolvePlatformFeePercentage,
+  STRIPE_CARD_FIXED_CENTS,
+  STRIPE_CARD_PERCENT,
 } from "./pricing"
 
 // ============================================================================
@@ -95,55 +102,129 @@ describe("calculateReservationTotal", () => {
 
 describe("calculatePlatformFeeAmount", () => {
   it("calculates 5% of 10000 cents", () => {
-    const result = calculatePlatformFeeAmount(10000, 5, 100)
+    const result = calculatePlatformFeeAmount(10000, 5)
     expect(result.platformFee).toBe(500)
     expect(result.ownerAmount).toBe(9500)
   })
 
-  it("clamps to minimum fee for small amounts", () => {
-    // 5% of 500 = 25, but minimum is 100
-    const result = calculatePlatformFeeAmount(500, 5, 100)
-    expect(result.platformFee).toBe(100)
-    expect(result.ownerAmount).toBe(400)
+  it("applies percentage on small amounts with no dollar floor", () => {
+    // 5% of 500 = 25
+    const result = calculatePlatformFeeAmount(500, 5)
+    expect(result.platformFee).toBe(25)
+    expect(result.ownerAmount).toBe(475)
   })
 
-  it("clamps to maximum fee for large amounts", () => {
-    // 5% of 200000 = 10000, but max is 5000
-    const result = calculatePlatformFeeAmount(200000, 5, 100, 5000)
-    expect(result.platformFee).toBe(5000)
-    expect(result.ownerAmount).toBe(195000)
-  })
-
-  it("does not apply upper cap when maximumFee is undefined", () => {
-    // 5% of 200000 = 10000, no max
-    const result = calculatePlatformFeeAmount(200000, 5, 100)
+  it("applies percentage on large amounts with no dollar ceiling", () => {
+    // 5% of 200000 = 10000
+    const result = calculatePlatformFeeAmount(200000, 5)
     expect(result.platformFee).toBe(10000)
     expect(result.ownerAmount).toBe(190000)
   })
 
-  it("returns 0 fee for 0% percentage (clamped to min)", () => {
-    // 0% of anything = 0, but minimum is 100
-    const result = calculatePlatformFeeAmount(10000, 0, 100)
-    expect(result.platformFee).toBe(100)
-    expect(result.ownerAmount).toBe(9900)
-  })
-
-  it("returns 0 fee for 0% with 0 minimum", () => {
-    const result = calculatePlatformFeeAmount(10000, 0, 0)
+  it("returns 0 fee for 0% percentage", () => {
+    const result = calculatePlatformFeeAmount(10000, 0)
     expect(result.platformFee).toBe(0)
     expect(result.ownerAmount).toBe(10000)
   })
 
   it("rounds to nearest cent", () => {
     // 5% of 333 = 16.65, rounds to 17
-    const result = calculatePlatformFeeAmount(333, 5, 0)
+    const result = calculatePlatformFeeAmount(333, 5)
     expect(result.platformFee).toBe(17)
     expect(result.ownerAmount).toBe(316)
   })
 
   it("fee + ownerAmount always equals original amount", () => {
-    const result = calculatePlatformFeeAmount(9999, 7, 50, 5000)
+    const result = calculatePlatformFeeAmount(9999, 7)
     expect(result.platformFee + result.ownerAmount).toBe(9999)
+  })
+})
+
+describe("grossUpForStripeCardFees / buildDestinationChargeAmounts", () => {
+  it("grosses up so net after estimated Stripe fees equals listing", () => {
+    const listing = 100_00 // $100.00
+    const charge = grossUpForStripeCardFees(listing)
+    const estimatedStripeFee = Math.round(charge * STRIPE_CARD_PERCENT) + STRIPE_CARD_FIXED_CENTS
+    // charge - stripeFee >= listing (ceil can leave a cent or two of slack)
+    expect(charge - estimatedStripeFee).toBeGreaterThanOrEqual(listing - 1)
+    expect(estimateStripeCardProcessingFee(listing)).toBe(charge - listing)
+  })
+
+  it("keeps provider at listing minus Renegade fee", () => {
+    const listing = 100_000 // $1,000
+    const platformFee = 3_000 // 3%
+    const amounts = buildDestinationChargeAmounts({
+      listingAmountCents: listing,
+      platformFeeCents: platformFee,
+    })
+    expect(amounts.ownerAmountCents).toBe(97_000)
+    expect(amounts.chargeAmountCents - amounts.applicationFeeCents).toBe(97_000)
+    expect(amounts.applicationFeeCents).toBe(platformFee + amounts.processingFeeCents)
+    expect(amounts.chargeAmountCents).toBe(listing + amounts.processingFeeCents)
+  })
+
+  it("with 0% platform fee still passes processing to the payer", () => {
+    const listing = 50_000
+    const amounts = buildDestinationChargeAmounts({
+      listingAmountCents: listing,
+      platformFeeCents: 0,
+    })
+    expect(amounts.ownerAmountCents).toBe(listing)
+    expect(amounts.applicationFeeCents).toBe(amounts.processingFeeCents)
+    expect(amounts.chargeAmountCents - amounts.applicationFeeCents).toBe(listing)
+  })
+})
+
+describe("resolvePlatformFeePercentage", () => {
+  it("returns global when no cap is set", () => {
+    expect(resolvePlatformFeePercentage(5, null)).toBe(5)
+    expect(resolvePlatformFeePercentage(5, undefined)).toBe(5)
+  })
+
+  it("returns the lower of global and cap", () => {
+    expect(resolvePlatformFeePercentage(5, 3)).toBe(3)
+    expect(resolvePlatformFeePercentage(2, 3)).toBe(2)
+    expect(resolvePlatformFeePercentage(3, 3)).toBe(3)
+  })
+})
+
+describe("isEarlyAdopterPromoActive", () => {
+  const now = 1_700_000_000_000
+
+  it("is inactive when dates are missing", () => {
+    expect(isEarlyAdopterPromoActive(null, now)).toBe(false)
+    expect(isEarlyAdopterPromoActive({}, now)).toBe(false)
+    expect(isEarlyAdopterPromoActive({ earlyAdopterPromoStartsAt: now }, now)).toBe(false)
+  })
+
+  it("is active inside the window inclusive", () => {
+    expect(
+      isEarlyAdopterPromoActive(
+        { earlyAdopterPromoStartsAt: now - 1, earlyAdopterPromoEndsAt: now + 1 },
+        now
+      )
+    ).toBe(true)
+    expect(
+      isEarlyAdopterPromoActive(
+        { earlyAdopterPromoStartsAt: now, earlyAdopterPromoEndsAt: now },
+        now
+      )
+    ).toBe(true)
+  })
+
+  it("is inactive outside the window", () => {
+    expect(
+      isEarlyAdopterPromoActive(
+        { earlyAdopterPromoStartsAt: now + 1, earlyAdopterPromoEndsAt: now + 10 },
+        now
+      )
+    ).toBe(false)
+    expect(
+      isEarlyAdopterPromoActive(
+        { earlyAdopterPromoStartsAt: now - 10, earlyAdopterPromoEndsAt: now - 1 },
+        now
+      )
+    ).toBe(false)
   })
 })
 

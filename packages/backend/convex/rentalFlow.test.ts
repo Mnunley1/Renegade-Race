@@ -1,13 +1,13 @@
 import { calculateDaysBetween } from "./dateUtils"
 import {
-  calculateReservationTotal,
   calculatePlatformFeeAmount,
-  datesOverlap,
   calculateRefundAmount,
+  calculateReservationTotal,
+  datesOverlap,
 } from "./pricing"
-import { calculateRefundTier } from "./stripe"
 import { calculateUserReviewStats, calculateVehicleReviewStats } from "./reviewStats"
 import { sanitizeMessage, sanitizeReview, sanitizeShortText } from "./sanitize"
+import { calculateRefundTier } from "./stripe"
 
 // ============================================================================
 // 1. Happy Path: Book → Pay → Complete → Review
@@ -30,9 +30,9 @@ describe("Happy Path: Book → Pay → Complete → Review", () => {
     // base: 15000 * 4 = 60000, daily add-on: 2000 * 4 = 8000, one-time: 5000
     expect(total).toBe(73000)
 
-    // 5% fee, $1 min, $50 max (all in cents: 100 min, 5000 max)
-    const { platformFee, ownerAmount } = calculatePlatformFeeAmount(total, 5, 100, 5000)
-    // 5% of 73000 = 3650, within bounds
+    // 5% fee, no dollar min/max clamps
+    const { platformFee, ownerAmount } = calculatePlatformFeeAmount(total, 5)
+    // 5% of 73000 = 3650
     expect(platformFee).toBe(3650)
     expect(platformFee + ownerAmount).toBe(total)
   })
@@ -142,7 +142,7 @@ describe("Owner Cancellation - forced 100% refund", () => {
     const dailyRate = 25000
     const totalDays = calculateDaysBetween("2024-08-01", "2024-08-04") // 3 days
     const total = calculateReservationTotal(dailyRate, totalDays) // 75000
-    const { platformFee } = calculatePlatformFeeAmount(total, 5, 100, 5000)
+    const { platformFee } = calculatePlatformFeeAmount(total, 5)
 
     // Owner cancels → forced 100%, ignoring the policy tier
     const forcedPercentage = 100
@@ -401,19 +401,19 @@ describe("Add-On Edge Cases in Pricing", () => {
     expect(total).toBe(12500)
   })
 
-  it("platform fee clamped to minimum on small reservation", () => {
-    // $5 reservation → 5% = 25 cents, but min is $1 (100 cents)
+  it("platform fee is exact percentage on small reservation", () => {
+    // $5 reservation → 5% = 25 cents
     const smallTotal = 500
-    const { platformFee, ownerAmount } = calculatePlatformFeeAmount(smallTotal, 5, 100, 5000)
-    expect(platformFee).toBe(100)
+    const { platformFee, ownerAmount } = calculatePlatformFeeAmount(smallTotal, 5)
+    expect(platformFee).toBe(25)
     expect(platformFee + ownerAmount).toBe(smallTotal)
   })
 
-  it("platform fee clamped to maximum on large reservation", () => {
-    // $5000 reservation → 5% = $250, but max is $50 (5000 cents)
+  it("platform fee is exact percentage on large reservation", () => {
+    // $5000 reservation → 5% = $250
     const largeTotal = 500000
-    const { platformFee, ownerAmount } = calculatePlatformFeeAmount(largeTotal, 5, 100, 5000)
-    expect(platformFee).toBe(5000)
+    const { platformFee, ownerAmount } = calculatePlatformFeeAmount(largeTotal, 5)
+    expect(platformFee).toBe(25000)
     expect(platformFee + ownerAmount).toBe(largeTotal)
   })
 })

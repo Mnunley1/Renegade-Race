@@ -8,6 +8,7 @@ import { calculateDaysBetween } from "./dateUtils"
 import { ErrorCode, throwError } from "./errors"
 import { getWebUrl } from "./helpers"
 import { logError } from "./logger"
+import { buildDestinationChargeAmounts } from "./pricing"
 import { rateLimiter } from "./rateLimiter"
 
 function getStripe(): Stripe {
@@ -144,7 +145,13 @@ export const createCheckoutSession = action({
 
     const { platformFee } = await ctx.runMutation(api.stripe.calculatePlatformFee, {
       amount: booking.totalAmount,
+      providerExternalId: booking.coachUserId,
     })
+    const { chargeAmountCents, processingFeeCents, applicationFeeCents } =
+      buildDestinationChargeAmounts({
+        listingAmountCents: booking.totalAmount,
+        platformFeeCents: platformFee,
+      })
 
     // Get or create Stripe customer for the renter (no component, direct Stripe API)
     const renter = await ctx.runQuery(api.users.getByExternalId, {
@@ -188,9 +195,24 @@ export const createCheckoutSession = action({
             },
             quantity: 1,
           },
+          ...(processingFeeCents > 0
+            ? [
+                {
+                  price_data: {
+                    currency: "usd",
+                    product_data: {
+                      name: "Card processing fee",
+                      description: "Passed through at Stripe's standard US card rate",
+                    },
+                    unit_amount: processingFeeCents,
+                  },
+                  quantity: 1,
+                },
+              ]
+            : []),
         ],
         payment_intent_data: {
-          application_fee_amount: platformFee,
+          application_fee_amount: applicationFeeCents,
           transfer_data: {
             destination: coach.stripeAccountId,
           },
@@ -200,6 +222,9 @@ export const createCheckoutSession = action({
             renterId: booking.renterId,
             coachUserId: booking.coachUserId,
             coachProfileId: booking.coachProfileId,
+            platformFee: platformFee.toString(),
+            processingFee: processingFeeCents.toString(),
+            chargeAmount: chargeAmountCents.toString(),
           },
         },
         success_url: `${webUrl}/checkout/success?coachingBookingId=${args.bookingId}`,

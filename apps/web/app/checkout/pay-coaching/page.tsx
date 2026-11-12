@@ -164,9 +164,13 @@ function PayCoachingInner() {
             <span className="font-semibold">{formatCents(summary.totalAmount)}</span>
           </div>
           <div className="flex items-baseline justify-between pt-3">
-            <span className="font-semibold">Total</span>
+            <span className="font-semibold">Session total</span>
             <span className="font-bold text-2xl">{formatCents(summary.totalAmount)}</span>
           </div>
+          <p className="mt-3 text-muted-foreground text-xs">
+            A card processing fee (~2.9% + $0.30) is added on the Stripe checkout page and paid by
+            you, not the coach.
+          </p>
         </CardContent>
       </Card>
 
@@ -176,10 +180,10 @@ function PayCoachingInner() {
         ) : (
           <ShieldCheck className="mr-2 size-4" />
         )}
-        Pay {formatCents(summary.totalAmount)}
+        Continue to payment
       </Button>
       <p className="mt-3 text-center text-muted-foreground text-xs">
-        Secure payment powered by Stripe. Your card isn't charged until you complete checkout.
+        Secure payment powered by Stripe. Your card isn&apos;t charged until you complete checkout.
       </p>
     </div>
   )

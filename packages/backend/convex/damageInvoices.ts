@@ -12,6 +12,7 @@ import {
 } from "./emails"
 import { ErrorCode, throwError } from "./errors"
 import { getWebUrl } from "./helpers"
+import { buildDestinationChargeAmounts } from "./pricing"
 
 // ============================================================================
 // Queries
@@ -532,6 +533,12 @@ export const adminApprove: ReturnType<typeof action> = action({
 
     const webUrl = getWebUrl()
 
+    // Renter covers card processing; owner receives the full damage amount (0% Renegade fee).
+    const { processingFeeCents, applicationFeeCents } = buildDestinationChargeAmounts({
+      listingAmountCents: invoice.amount,
+      platformFeeCents: 0,
+    })
+
     // Create Stripe Checkout Session with 0% platform fee
     const checkoutSession = await stripe.checkout.sessions.create({
       mode: "payment",
@@ -547,9 +554,24 @@ export const adminApprove: ReturnType<typeof action> = action({
           },
           quantity: 1,
         },
+        ...(processingFeeCents > 0
+          ? [
+              {
+                price_data: {
+                  currency: "usd",
+                  product_data: {
+                    name: "Card processing fee",
+                    description: "Passed through at Stripe's standard US card rate",
+                  },
+                  unit_amount: processingFeeCents,
+                },
+                quantity: 1,
+              },
+            ]
+          : []),
       ],
       payment_intent_data: {
-        application_fee_amount: 0, // 0% platform fee on damage charges
+        application_fee_amount: applicationFeeCents,
         transfer_data: {
           destination: owner.stripeAccountId,
         },
@@ -560,6 +582,7 @@ export const adminApprove: ReturnType<typeof action> = action({
           renterId: invoice.renterId,
           ownerId: invoice.ownerId,
           vehicleId: invoice.vehicleId as string,
+          processingFee: processingFeeCents.toString(),
         },
       },
       success_url: `${webUrl}/damage-payment/success?damageInvoiceId=${args.damageInvoiceId}`,
