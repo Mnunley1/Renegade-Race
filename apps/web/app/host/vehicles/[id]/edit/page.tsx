@@ -121,7 +121,7 @@ export default function EditVehiclePage() {
       isRequired?: boolean
       priceType?: "daily" | "one-time"
     }>,
-    // Pickup location
+    // Listing location
     zipCode: "",
   })
 
@@ -144,7 +144,7 @@ export default function EditVehiclePage() {
         engineType: vehicle.engineType || "",
         mileage: vehicle.mileage || 0,
         addOns: vehicle.addOns || [],
-        // Pickup location
+        // Listing location
         zipCode: vehicle.address?.zipCode || "",
       })
 
@@ -958,11 +958,9 @@ export default function EditVehiclePage() {
               <div>
                 <h3 className="flex items-center gap-2 font-semibold text-lg">
                   <MapPin className="size-5" />
-                  Pickup Location
+                  Location
                 </h3>
-                <p className="text-muted-foreground text-sm">
-                  Where renters will pick up and return the vehicle
-                </p>
+                <p className="text-muted-foreground text-sm">Where the car is based</p>
               </div>
 
               <div className="md:w-1/2">
