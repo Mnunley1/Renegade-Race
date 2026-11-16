@@ -133,7 +133,8 @@ export default defineSchema({
     ),
   })
     .index("by_external_id", ["externalId"])
-    .index("by_stripe_account", ["stripeAccountId"]),
+    .index("by_stripe_account", ["stripeAccountId"])
+    .index("by_stripe_customer", ["stripeCustomerId"]),
 
   tracks: defineTable({
     name: v.string(),

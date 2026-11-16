@@ -1,5 +1,6 @@
 import { v } from "convex/values"
 import { mutation, query } from "./_generated/server"
+import { publicUserProfile } from "./userProfile"
 import { getCurrentUserOrThrow } from "./users"
 
 export const addMember = mutation({
@@ -118,7 +119,7 @@ export const getByTeam = query({
           ? await ctx.db.get(member.driverProfileId)
           : null
 
-        return { ...member, user, driverProfile }
+        return { ...member, user: publicUserProfile(user), driverProfile }
       })
     )
   },

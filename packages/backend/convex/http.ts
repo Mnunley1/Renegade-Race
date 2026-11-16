@@ -3,9 +3,10 @@ import { registerRoutes } from "@convex-dev/stripe"
 import { httpRouter } from "convex/server"
 import type Stripe from "stripe"
 import { Webhook } from "svix"
-import { api, components, internal } from "./_generated/api"
+import { components, internal } from "./_generated/api"
 import { type ActionCtx, httpAction } from "./_generated/server"
 import { resendComponent } from "./emails"
+import { logError } from "./logger"
 import { rateLimiter } from "./rateLimiter"
 import { isSeatPaymentMetadata } from "./seatPayments"
 
@@ -442,11 +443,12 @@ registerRoutes(http, components.stripe, {
       }
 
       // Find user by Stripe account ID
-      const user = await ctx.runQuery(api.users.getByStripeAccountId, {
+      const user = await ctx.runQuery(internal.users.getByStripeAccountId, {
         stripeAccountId: account.id,
       })
 
-      if (!user) {
+      const stripeOwner = account.metadata?.renegadeUserId
+      if (!user || (stripeOwner !== undefined && stripeOwner !== user.externalId)) {
         // Record even if user not found to prevent reprocessing
         await ctx.runMutation(internal.webhookIdempotency.recordWebhookEvent, {
           eventId: event.id,
@@ -553,8 +555,9 @@ http.route({
         break
 
       case "user.deleted": {
-        const clerkUserId = event.data.id!
-        await ctx.runMutation(internal.users.deleteFromClerk, { clerkUserId })
+        const clerkUserId = event.data.id
+        if (!clerkUserId) return new Response("Missing deleted Clerk user ID", { status: 400 })
+        await ctx.runAction(internal.users.performUserDeletionWithChecks, { clerkUserId })
         break
       }
       default:
@@ -577,17 +580,19 @@ http.route({
 
 async function validateRequest(req: Request): Promise<WebhookEvent | null> {
   const payloadString = await req.text()
-  const svixHeaders = {
-    "svix-id": req.headers.get("svix-id")!,
-    "svix-timestamp": req.headers.get("svix-timestamp")!,
-    "svix-signature": req.headers.get("svix-signature")!,
-  }
-  const wh = new Webhook(process.env.CLERK_WEBHOOK_SECRET!)
+  const id = req.headers.get("svix-id")
+  const timestamp = req.headers.get("svix-timestamp")
+  const signature = req.headers.get("svix-signature")
+  if (!(id && timestamp && signature)) return null
+  const secret = process.env.CLERK_WEBHOOK_SECRET
+  if (!secret) throw new Error("Clerk webhook secret is not configured")
   try {
-    return wh.verify(payloadString, svixHeaders) as unknown as WebhookEvent
+    return new Webhook(secret).verify(payloadString, {
+      "svix-id": id,
+      "svix-timestamp": timestamp,
+      "svix-signature": signature,
+    }) as unknown as WebhookEvent
   } catch (error) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { logError } = require("./logger")
     logError(error, "Error verifying webhook event")
     return null
   }

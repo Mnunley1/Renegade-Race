@@ -1,5 +1,6 @@
 import { v } from "convex/values"
 import { mutation, query } from "./_generated/server"
+import { publicUserProfile } from "./userProfile"
 
 // Get user's favorites
 export const getUserFavorites = query({
@@ -41,7 +42,7 @@ export const getUserFavorites = query({
           vehicle: {
             ...vehicle,
             images,
-            owner,
+            owner: publicUserProfile(owner),
             track,
           },
         }

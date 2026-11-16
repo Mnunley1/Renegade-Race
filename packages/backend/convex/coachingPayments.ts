@@ -9,6 +9,7 @@ import { ErrorCode, throwError } from "./errors"
 import { getWebUrl } from "./helpers"
 import { logError } from "./logger"
 import { buildDestinationChargeAmounts } from "./pricing"
+import { billingCustomerId, retrieveLinkedConnectAccount } from "./stripeOwnership"
 import { rateLimiter } from "./rateLimiter"
 
 function getStripe(): Stripe {
@@ -115,7 +116,7 @@ export const createCheckoutSession = action({
     }
 
     // Verify coach's Stripe Connect account is ready
-    const coach = await ctx.runQuery(api.users.getByExternalId, {
+    const coach = await ctx.runQuery(internal.users.getByExternalIdInternal, {
       externalId: booking.coachUserId,
     })
     if (!coach?.stripeAccountId) {
@@ -126,7 +127,12 @@ export const createCheckoutSession = action({
     }
 
     const stripe = getStripe()
-    const connectAccount = await stripe.accounts.retrieve(coach.stripeAccountId)
+    const connectAccount = await retrieveLinkedConnectAccount(
+      ctx,
+      stripe,
+      coach.stripeAccountId,
+      coach.externalId
+    )
     if (!connectAccount.details_submitted) {
       throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE, "Coach's payout setup isn't complete yet")
     }
@@ -153,23 +159,7 @@ export const createCheckoutSession = action({
         platformFeeCents: platformFee,
       })
 
-    // Get or create Stripe customer for the renter (no component, direct Stripe API)
-    const renter = await ctx.runQuery(api.users.getByExternalId, {
-      externalId: identity.subject,
-    })
-    let customerId = renter?.stripeCustomerId
-    if (!customerId) {
-      const created = await stripe.customers.create({
-        email: identity.email || undefined,
-        name: identity.name || undefined,
-        metadata: { userId: identity.subject },
-      })
-      customerId = created.id
-      await ctx.runMutation(api.users.setStripeCustomerId, {
-        userId: identity.subject,
-        stripeCustomerId: customerId,
-      })
-    }
+    const customerId = await billingCustomerId(ctx, stripe, identity)
 
     const webUrl = getWebUrl()
     const coachName = booking.coach?.name || "Coach"

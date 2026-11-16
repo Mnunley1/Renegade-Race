@@ -7,6 +7,7 @@ import { ErrorCode, throwError } from "./errors"
 import { rateLimiter } from "./rateLimiter"
 import { calculateCoachReviewStats } from "./reviewStats"
 import { sanitizeReview, sanitizeShortText } from "./sanitize"
+import { publicDisplayName } from "./userProfile"
 
 function validateScore(label: string, value?: number) {
   if (value === undefined) return
@@ -137,7 +138,7 @@ async function enrichReview(ctx: any, review: Doc<"coachingReviews">) {
     ...review,
     reviewer: reviewer
       ? {
-          name: reviewer.name as string,
+          name: publicDisplayName(reviewer),
           avatarUrl: reviewer.profileImage as string | undefined,
         }
       : { name: "Driver", avatarUrl: undefined as string | undefined },

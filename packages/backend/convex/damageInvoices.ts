@@ -3,6 +3,8 @@ import Stripe from "stripe"
 import { api, internal } from "./_generated/api"
 
 import { action, internalMutation, internalQuery, mutation, query } from "./_generated/server"
+import { userProfileWithAdminContact } from "./userProfile"
+import { retrieveLinkedConnectAccount } from "./stripeOwnership"
 import { checkAdmin } from "./admin"
 import {
   getDamageClaimSubmittedEmailTemplate,
@@ -57,8 +59,8 @@ export const getById = query({
       ...invoice,
       reservation,
       vehicle,
-      renter,
-      owner,
+      renter: userProfileWithAdminContact(renter, isAdmin),
+      owner: userProfileWithAdminContact(owner, isAdmin),
     }
   },
 })
@@ -503,7 +505,7 @@ export const adminApprove: ReturnType<typeof action> = action({
     }
 
     // Get owner's Connect account
-    const owner = await ctx.runQuery(api.users.getByExternalId, {
+    const owner = await ctx.runQuery(internal.users.getByExternalIdInternal, {
       externalId: invoice.ownerId,
     })
 
@@ -523,7 +525,12 @@ export const adminApprove: ReturnType<typeof action> = action({
       apiVersion: "2025-08-27.basil",
     })
 
-    const connectAccount = await stripe.accounts.retrieve(owner.stripeAccountId)
+    const connectAccount = await retrieveLinkedConnectAccount(
+      ctx,
+      stripe,
+      owner.stripeAccountId,
+      owner.externalId
+    )
     if (!connectAccount.charges_enabled) {
       throwError(
         ErrorCode.STRIPE_ACCOUNT_DISABLED,
@@ -609,7 +616,7 @@ export const adminApprove: ReturnType<typeof action> = action({
       : "Vehicle"
 
     // Send email to renter with payment link
-    const renter = await ctx.runQuery(api.users.getByExternalId, {
+    const renter = await ctx.runQuery(internal.users.getByExternalIdInternal, {
       externalId: invoice.renterId,
     })
 

@@ -8,6 +8,8 @@ import {
 } from "./emails"
 import { getWebUrl } from "./helpers"
 import { rateLimiter } from "./rateLimiter"
+import { isAdminIdentity } from "./seatHelpers"
+import { publicUserProfile, userProfileWithAdminContact } from "./userProfile"
 
 // Create a dispute for a rental completion
 export const create = mutation({
@@ -158,13 +160,15 @@ export const getById = query({
         .first(),
     ])
 
+    const identity = await ctx.auth.getUserIdentity()
+    const isAdmin = !!identity && isAdminIdentity(identity)
     return {
       ...dispute,
       completion,
       reservation,
       vehicle,
-      renter,
-      owner,
+      renter: userProfileWithAdminContact(renter, isAdmin),
+      owner: userProfileWithAdminContact(owner, isAdmin),
     }
   },
 })
@@ -200,8 +204,8 @@ export const getByReservation = query({
       completion,
       reservation,
       vehicle,
-      renter,
-      owner,
+      renter: publicUserProfile(renter),
+      owner: publicUserProfile(owner),
     }
   },
 })
@@ -268,8 +272,8 @@ export const getByUser = query({
           completion,
           reservation,
           vehicle,
-          renter,
-          owner,
+          renter: publicUserProfile(renter),
+          owner: publicUserProfile(owner),
         }
       })
     )

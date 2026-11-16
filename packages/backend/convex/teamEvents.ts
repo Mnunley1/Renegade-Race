@@ -1,6 +1,7 @@
 import { v } from "convex/values"
 import { internal } from "./_generated/api"
 import { mutation, query } from "./_generated/server"
+import { publicUserProfile } from "./userProfile"
 import { getCurrentUserOrThrow } from "./users"
 
 export const create = mutation({
@@ -183,7 +184,7 @@ export const getRsvps = query({
           .query("users")
           .withIndex("by_external_id", (q) => q.eq("externalId", rsvp.userId))
           .first()
-        return { ...rsvp, user }
+        return { ...rsvp, user: publicUserProfile(user) }
       })
     )
   },

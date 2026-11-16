@@ -30,6 +30,7 @@ type RefundParams = {
 }
 
 type ConnectAccount = {
+  type: "express"
   id: string
   details_submitted: boolean
   charges_enabled: boolean
@@ -52,6 +53,7 @@ const { refundsCreate, checkoutSessionsCreate, customersCreate, accountsRetrieve
     accountsRetrieve: vi.fn(
       async (): Promise<ConnectAccount> => ({
         id: "acct_host",
+        type: "express",
         details_submitted: true,
         charges_enabled: true,
         capabilities: { transfers: "active" },
@@ -60,11 +62,15 @@ const { refundsCreate, checkoutSessionsCreate, customersCreate, accountsRetrieve
   })
 )
 
+vi.mock("./r2", () => ({ r2: {} }))
 vi.mock("stripe", () => ({
   default: class {
     refunds = { create: refundsCreate }
     checkout = { sessions: { create: checkoutSessionsCreate } }
-    customers = { create: customersCreate }
+    customers = {
+      create: customersCreate,
+      retrieve: async (id: string) => ({ id, metadata: { userId: "driver_a" } }),
+    }
     accounts = { retrieve: accountsRetrieve }
   },
 }))
@@ -103,6 +109,7 @@ function requestArgs(offeringId: Id<"seatOfferings">) {
 function readyConnectAccount(): ConnectAccount {
   return {
     id: "acct_host",
+    type: "express",
     details_submitted: true,
     charges_enabled: true,
     capabilities: { transfers: "active" },

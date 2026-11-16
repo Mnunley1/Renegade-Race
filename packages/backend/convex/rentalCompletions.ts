@@ -3,6 +3,7 @@ import { api } from "./_generated/api"
 import { mutation, query } from "./_generated/server"
 import { getNewReviewEmailTemplate, sendTransactionalEmail } from "./emails"
 import { getWebUrl } from "./helpers"
+import { publicUserProfile } from "./userProfile"
 
 // Create a new rental completion record
 export const create = mutation({
@@ -416,8 +417,8 @@ export const getById = query({
       ...completion,
       reservation,
       vehicle,
-      renter,
-      owner,
+      renter: publicUserProfile(renter),
+      owner: publicUserProfile(owner),
     }
   },
 })
@@ -451,8 +452,8 @@ export const getByReservation = query({
       ...completion,
       reservation,
       vehicle,
-      renter,
-      owner,
+      renter: publicUserProfile(renter),
+      owner: publicUserProfile(owner),
     }
   },
 })
@@ -499,8 +500,8 @@ export const getByUser = query({
           ...completion,
           reservation,
           vehicle,
-          renter,
-          owner,
+          renter: publicUserProfile(renter),
+          owner: publicUserProfile(owner),
         }
       })
     )
@@ -544,8 +545,8 @@ export const getPendingCompletions = query({
           ...completion,
           reservation,
           vehicle,
-          renter,
-          owner,
+          renter: publicUserProfile(renter),
+          owner: publicUserProfile(owner),
         }
       })
     )

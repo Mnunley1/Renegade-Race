@@ -1,6 +1,7 @@
 import { v } from "convex/values"
 import { mutation, query } from "./_generated/server"
 import { getCurrentUser, getCurrentUserOrThrow } from "./users"
+import { publicDisplayName } from "./userProfile"
 
 export const create = mutation({
   args: {
@@ -183,7 +184,7 @@ export const list = query({
           ...profile,
           user: user
             ? {
-                name: user.name,
+                name: publicDisplayName(user),
                 avatarUrl: user.profileImage,
               }
             : {
@@ -228,7 +229,7 @@ export const getById = query({
       isOwner,
       user: user
         ? {
-            name: user.name,
+            name: publicDisplayName(user),
             avatarUrl: user.profileImage,
           }
         : {
@@ -328,7 +329,7 @@ export const getSimilar = query({
           ...p,
           user: user
             ? {
-                name: user.name,
+                name: publicDisplayName(user),
                 avatarUrl: user.profileImage,
               }
             : {

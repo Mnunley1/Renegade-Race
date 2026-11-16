@@ -3,6 +3,7 @@ import type { Doc, Id } from "./_generated/dataModel"
 import type { MutationCtx, QueryCtx } from "./_generated/server"
 import { parseLocalDate } from "./dateUtils"
 import { ErrorCode, throwError } from "./errors"
+import { publicDisplayName } from "./userProfile"
 
 export const SEAT_HOLDING_STATUSES = ["pending", "approved", "deposit_paid", "confirmed"] as const
 
@@ -282,17 +283,10 @@ export function omitHostUserId<T extends { hostUserId?: string }>(doc: T) {
 export function toHostDisplay(user: Doc<"users"> | null) {
   if (!user) return null
   return {
-    name: user.name,
+    name: publicDisplayName(user),
     profileImage: user.profileImage,
     profileImageR2Key: user.profileImageR2Key,
   }
-}
-
-/** Drop email/phone from a user payload — seat chat stays in-platform. */
-export function omitUserContact<T extends { email?: string; phone?: string }>(user: T | null) {
-  if (!user) return null
-  const { email: _email, phone: _phone, ...rest } = user
-  return rest
 }
 
 export const SEAT_REQUEST_INTRO = "Send a rental request to chat with the team/owner."

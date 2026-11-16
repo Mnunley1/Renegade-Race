@@ -12,6 +12,8 @@ import {
 import { checkAdmin } from "./admin"
 import { calculateDistance } from "./geocoding"
 import { r2 } from "./r2"
+import { isAdminIdentity } from "./seatHelpers"
+import { publicUserProfile, userProfileWithAdminContact } from "./userProfile"
 import { normalizeMake } from "./vehicleMakes"
 
 // Get all active and approved vehicles with optimized images
@@ -81,7 +83,7 @@ export const getAllWithOptimizedImages = query({
         return {
           ...vehicle,
           images: optimizedImages,
-          owner,
+          owner: publicUserProfile(owner),
           track,
           hostStripeReady,
         }
@@ -274,7 +276,7 @@ export const searchWithAvailability = query({
         return {
           ...vehicle,
           images: optimizedImages,
-          owner,
+          owner: publicUserProfile(owner),
           track,
           hostStripeReady,
         }
@@ -350,7 +352,7 @@ export const getAll = query({
         return {
           ...vehicle,
           images,
-          owner,
+          owner: publicUserProfile(owner),
           track,
           hostStripeReady,
         }
@@ -390,10 +392,12 @@ export const getById = query({
 
     const hostStripeReady = !!owner?.stripeAccountId && owner.stripeAccountStatus === "enabled"
 
+    const identity = await ctx.auth.getUserIdentity()
+    const isAdmin = !!identity && isAdminIdentity(identity)
     return {
       ...vehicle,
       images,
-      owner,
+      owner: userProfileWithAdminContact(owner, isAdmin),
       track,
       availability,
       hostStripeReady,

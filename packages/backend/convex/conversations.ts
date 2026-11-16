@@ -1,7 +1,8 @@
 import { v } from "convex/values"
 import type { Doc, Id } from "./_generated/dataModel"
 import { mutation, type QueryCtx, query } from "./_generated/server"
-import { omitUserContact, toPublicTeamListing } from "./seatHelpers"
+import { toPublicTeamListing } from "./seatHelpers"
+import { publicUserProfile } from "./userProfile"
 
 // Resolve the primary (or first available) image key for a vehicle thumbnail
 async function getVehicleThumbnailKey(
@@ -43,14 +44,6 @@ function seatConversationTeam(
 ) {
   if (conversationType !== "seat") return team
   return toPublicTeamListing(team as Doc<"teams"> | null)
-}
-
-function seatConversationParty<T extends { email?: string; phone?: string }>(
-  conversationType: string | undefined,
-  user: T | null
-) {
-  if (conversationType !== "seat") return user
-  return omitUserContact(user)
 }
 
 // Get conversations for a user (as renter or owner)
@@ -145,8 +138,8 @@ export const getByUser = query({
           ...conversation,
           vehicle,
           vehicleImageKey,
-          renter: seatConversationParty(conversation.conversationType, renter),
-          owner: seatConversationParty(conversation.conversationType, owner),
+          renter: publicUserProfile(renter),
+          owner: publicUserProfile(owner),
           team: seatConversationTeam(conversation.conversationType, team),
           driverProfile,
           coachProfile,
@@ -270,8 +263,8 @@ export const getById = query({
       ...conversation,
       vehicle,
       vehicleImageKey,
-      renter: seatConversationParty(conversation.conversationType, renter),
-      owner: seatConversationParty(conversation.conversationType, owner),
+      renter: publicUserProfile(renter),
+      owner: publicUserProfile(owner),
       team: seatConversationTeam(conversation.conversationType, team),
       driverProfile,
       coachProfile,
@@ -326,8 +319,8 @@ export const getByVehicleAndParticipants = query({
     return {
       ...conversation,
       vehicle,
-      renter,
-      owner,
+      renter: publicUserProfile(renter),
+      owner: publicUserProfile(owner),
     }
   },
 })
@@ -711,7 +704,7 @@ export const getHostConversationsByVehicle = query({
 
         return {
           ...conversation,
-          renter,
+          renter: publicUserProfile(renter),
         }
       })
     )

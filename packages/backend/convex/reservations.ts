@@ -22,6 +22,8 @@ import { getWebUrl } from "./helpers"
 import { calculateReservationTotal } from "./pricing"
 import { rateLimiter } from "./rateLimiter"
 import { sanitizeMessage, sanitizeShortText } from "./sanitize"
+import { isAdminIdentity } from "./seatHelpers"
+import { publicUserProfile, userProfileWithAdminContact } from "./userProfile"
 
 // Get reservations for a user (as renter or owner)
 export const getByUser = query({
@@ -92,8 +94,8 @@ export const getByUser = query({
         return {
           ...reservation,
           vehicle: vehicleWithImages,
-          renter,
-          owner,
+          renter: publicUserProfile(renter),
+          owner: publicUserProfile(owner),
         }
       })
     )
@@ -138,11 +140,13 @@ export const getById = query({
       } as typeof vehicle & { images: typeof images }
     }
 
+    const identity = await ctx.auth.getUserIdentity()
+    const isAdmin = !!identity && isAdminIdentity(identity)
     return {
       ...reservation,
       vehicle: vehicleWithImages,
-      renter,
-      owner,
+      renter: userProfileWithAdminContact(renter, isAdmin),
+      owner: userProfileWithAdminContact(owner, isAdmin),
     }
   },
 })
@@ -903,7 +907,7 @@ export const getPendingForOwner = query({
         return {
           ...reservation,
           vehicle,
-          renter,
+          renter: publicUserProfile(renter),
         }
       })
     )
@@ -938,7 +942,7 @@ export const getApprovedForRenter = query({
         return {
           ...reservation,
           vehicle,
-          owner,
+          owner: publicUserProfile(owner),
         }
       })
     )
@@ -971,7 +975,7 @@ export const getConfirmedForOwner = query({
         return {
           ...reservation,
           vehicle,
-          renter,
+          renter: publicUserProfile(renter),
         }
       })
     )
@@ -1024,8 +1028,8 @@ export const getUpcoming = query({
         return {
           ...reservation,
           vehicle,
-          renter,
-          owner,
+          renter: publicUserProfile(renter),
+          owner: publicUserProfile(owner),
         }
       })
     )
@@ -1068,8 +1072,8 @@ export const getCompletedReservationForVehicle = query({
     return {
       ...reservation,
       vehicle,
-      renter,
-      owner,
+      renter: publicUserProfile(renter),
+      owner: publicUserProfile(owner),
     }
   },
 })

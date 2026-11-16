@@ -20,6 +20,7 @@ import {
   grossUpForStripeCardFees,
   resolvePlatformFeePercentage,
 } from "./pricing"
+import { billingCustomerId, retrieveLinkedConnectAccount } from "./stripeOwnership"
 import { rateLimiter } from "./rateLimiter"
 import {
   holdsSeat,
@@ -86,39 +87,13 @@ async function countSecuredSpots(
   ).length
 }
 
-export const getStripeUser = internalQuery({
-  args: { externalId: v.string() },
-  handler: async (ctx, args) => {
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_external_id", (q) => q.eq("externalId", args.externalId))
-      .first()
-    if (!user) return null
-    return {
-      stripeAccountId: user.stripeAccountId ?? null,
-      stripeCustomerId: user.stripeCustomerId ?? null,
-      platformFeeCapPercentage: user.platformFeeCapPercentage,
-    }
-  },
-})
-
-export const setDriverStripeCustomerId = internalMutation({
-  args: { externalId: v.string(), stripeCustomerId: v.string() },
-  handler: async (ctx, args) => {
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_external_id", (q) => q.eq("externalId", args.externalId))
-      .first()
-    if (!user) return
-    await ctx.db.patch(user._id, { stripeCustomerId: args.stripeCustomerId })
-  },
-})
-
 async function assertTeamConnectReady(
   ctx: ActionCtx,
   hostUserId: string
 ): Promise<{ stripeAccountId: string; platformFeeCapPercentage?: number }> {
-  const host = await ctx.runQuery(internal.seatPayments.getStripeUser, { externalId: hostUserId })
+  const host = await ctx.runQuery(internal.users.getByExternalIdInternal, {
+    externalId: hostUserId,
+  })
   if (!host?.stripeAccountId) {
     throwError(
       ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,
@@ -127,7 +102,12 @@ async function assertTeamConnectReady(
   }
 
   const stripe = getStripe()
-  const connectAccount = await stripe.accounts.retrieve(host.stripeAccountId)
+  const connectAccount = await retrieveLinkedConnectAccount(
+    ctx,
+    stripe,
+    host.stripeAccountId,
+    hostUserId
+  )
   if (!connectAccount.details_submitted) {
     throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE, "The team's payout setup isn't complete yet")
   }
@@ -234,25 +214,7 @@ async function startCheckout(
     })
 
   const stripe = getStripe()
-  const driver = await ctx.runQuery(internal.seatPayments.getStripeUser, {
-    externalId: identity.subject,
-  })
-  let customerId = driver?.stripeCustomerId
-  if (!customerId) {
-    if (!driver) {
-      throwError(ErrorCode.NOT_FOUND, "Driver account not found")
-    }
-    const created = await stripe.customers.create({
-      email: identity.email || undefined,
-      name: identity.name || undefined,
-      metadata: { userId: identity.subject },
-    })
-    customerId = created.id
-    await ctx.runMutation(internal.seatPayments.setDriverStripeCustomerId, {
-      externalId: identity.subject,
-      stripeCustomerId: customerId,
-    })
-  }
+  const customerId = await billingCustomerId(ctx, stripe, identity)
 
   const webUrl = getWebUrl()
   const label =

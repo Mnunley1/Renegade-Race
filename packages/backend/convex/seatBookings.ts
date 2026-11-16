@@ -26,6 +26,7 @@ import {
   toHostDisplay,
   toPublicTeamListing,
 } from "./seatHelpers"
+import { publicUserProfile } from "./userProfile"
 
 const bookingStatusValidator = v.union(
   v.literal("pending"),
@@ -673,7 +674,7 @@ async function enrichBooking(ctx: any, booking: any, viewer: "driver" | "team" |
   return {
     ...booking,
     ...shared,
-    driver,
+    driver: viewer === "admin" ? driver : publicUserProfile(driver),
   }
 }
 
