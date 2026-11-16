@@ -54,6 +54,7 @@ import type * as r2 from "../r2.js";
 import type * as rateLimitHelpers from "../rateLimitHelpers.js";
 import type * as rateLimiter from "../rateLimiter.js";
 import type * as rentalCompletions from "../rentalCompletions.js";
+import type * as rentalRefunds from "../rentalRefunds.js";
 import type * as reports from "../reports.js";
 import type * as reservations from "../reservations.js";
 import type * as reviewStats from "../reviewStats.js";
@@ -130,6 +131,7 @@ declare const fullApi: ApiFromModules<{
   rateLimitHelpers: typeof rateLimitHelpers;
   rateLimiter: typeof rateLimiter;
   rentalCompletions: typeof rentalCompletions;
+  rentalRefunds: typeof rentalRefunds;
   reports: typeof reports;
   reservations: typeof reservations;
   reviewStats: typeof reviewStats;
