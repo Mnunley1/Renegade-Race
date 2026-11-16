@@ -30,6 +30,7 @@ type RefundParams = {
 }
 
 type ConnectAccount = {
+  metadata?: { renegadeUserId?: string }
   type: "express"
   id: string
   details_submitted: boolean
@@ -108,6 +109,7 @@ function requestArgs(offeringId: Id<"seatOfferings">) {
 
 function readyConnectAccount(): ConnectAccount {
   return {
+    metadata: { renegadeUserId: OWNER },
     id: "acct_host",
     type: "express",
     details_submitted: true,
@@ -582,6 +584,30 @@ describe("seat checkout gating", () => {
       })
     ).rejects.toThrow("FORBIDDEN")
     expect(checkoutSessionsCreate).not.toHaveBeenCalled()
+  })
+
+  it("holds a payable seat until Stripe verifies the linked destination for this owner", async () => {
+    const t = convexTest(schema, modules)
+    const { bookingId } = await seedApprovedBooking(t)
+    const driver = t.withIdentity({ subject: DRIVER_A })
+    accountsRetrieve.mockResolvedValueOnce({ ...readyConnectAccount(), metadata: {} })
+    await expect(
+      driver.action(api.seatPayments.createDepositCheckoutSession, { bookingId })
+    ).rejects.toThrow("Payments are on hold")
+    accountsRetrieve.mockResolvedValueOnce({
+      ...readyConnectAccount(),
+      metadata: { renegadeUserId: STRANGER },
+    })
+    await expect(
+      driver.action(api.seatPayments.createDepositCheckoutSession, { bookingId })
+    ).rejects.toThrow("ownership")
+    expect(checkoutSessionsCreate).not.toHaveBeenCalled()
+
+    const session = await driver.action(api.seatPayments.createDepositCheckoutSession, {
+      bookingId,
+    })
+    expect(session.sessionId).toBe("cs_deposit")
+    expect(checkoutSessionsCreate).toHaveBeenCalledTimes(1)
   })
 
   it("requires a usable Stripe Connect account on the team owner", async () => {

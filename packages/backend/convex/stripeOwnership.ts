@@ -7,8 +7,7 @@ import { ErrorCode, throwError } from "./errors"
 export const EXPRESS_SIGN_IN_URL = "https://connect.stripe.com/express_login"
 
 // Historically the platform created Express accounts without owner metadata.
-// Keep established, unique destinations usable, but never mint a bearer link
-// for one without independent ownership evidence from Stripe.
+// Owners of older accounts can still check their status and sign in through Stripe.
 export async function retrieveLinkedConnectAccount(
   ctx: ActionCtx,
   stripe: Stripe,
@@ -28,6 +27,23 @@ export async function retrieveLinkedConnectAccount(
     throwError(
       ErrorCode.FORBIDDEN,
       "Stripe account ownership could not be verified. Contact support."
+    )
+  }
+  return account
+}
+
+// Every new destination charge must match both the unique local link and Stripe's owner tag.
+export async function verifiedPaymentDestination(
+  ctx: ActionCtx,
+  stripe: Stripe,
+  stripeAccountId: string,
+  ownerId: string
+): Promise<Stripe.Account> {
+  const account = await retrieveLinkedConnectAccount(ctx, stripe, stripeAccountId, ownerId)
+  if (account.metadata?.renegadeUserId !== ownerId) {
+    throwError(
+      ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,
+      "Payments are on hold until the payout account owner is verified. Please contact support."
     )
   }
   return account

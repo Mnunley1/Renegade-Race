@@ -9,7 +9,7 @@ import { ErrorCode, throwError } from "./errors"
 import { getWebUrl } from "./helpers"
 import { logError } from "./logger"
 import { buildDestinationChargeAmounts } from "./pricing"
-import { billingCustomerId, retrieveLinkedConnectAccount } from "./stripeOwnership"
+import { billingCustomerId, verifiedPaymentDestination } from "./stripeOwnership"
 import { rateLimiter } from "./rateLimiter"
 
 function getStripe(): Stripe {
@@ -127,7 +127,7 @@ export const createCheckoutSession = action({
     }
 
     const stripe = getStripe()
-    const connectAccount = await retrieveLinkedConnectAccount(
+    const connectAccount = await verifiedPaymentDestination(
       ctx,
       stripe,
       coach.stripeAccountId,

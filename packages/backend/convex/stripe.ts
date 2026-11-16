@@ -36,6 +36,7 @@ import {
   EXPRESS_SIGN_IN_URL,
   retrieveLinkedConnectAccount,
   retrieveOwnedCustomer,
+  verifiedPaymentDestination,
 } from "./stripeOwnership"
 import type { ActionCtx } from "./_generated/server"
 import type { UserIdentity } from "convex/server"
@@ -768,7 +769,7 @@ export const createCheckoutSession = action({
 
     // Verify Connect account is ready
     const stripe = getStripe()
-    const connectAccount = await retrieveLinkedConnectAccount(
+    const connectAccount = await verifiedPaymentDestination(
       ctx,
       stripe,
       owner.stripeAccountId,
@@ -1029,7 +1030,7 @@ export const createPaymentIntent = action({
 
     // Verify Connect account is ready and has required capabilities
     const stripe = getStripe()
-    const connectAccount = await retrieveLinkedConnectAccount(
+    const connectAccount = await verifiedPaymentDestination(
       ctx,
       stripe,
       owner.stripeAccountId,

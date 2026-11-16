@@ -4,7 +4,7 @@ import { api, internal } from "./_generated/api"
 
 import { action, internalMutation, internalQuery, mutation, query } from "./_generated/server"
 import { userProfileWithAdminContact } from "./userProfile"
-import { retrieveLinkedConnectAccount } from "./stripeOwnership"
+import { verifiedPaymentDestination } from "./stripeOwnership"
 import { checkAdmin } from "./admin"
 import {
   getDamageClaimSubmittedEmailTemplate,
@@ -525,7 +525,7 @@ export const adminApprove: ReturnType<typeof action> = action({
       apiVersion: "2025-08-27.basil",
     })
 
-    const connectAccount = await retrieveLinkedConnectAccount(
+    const connectAccount = await verifiedPaymentDestination(
       ctx,
       stripe,
       owner.stripeAccountId,

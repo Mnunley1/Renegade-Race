@@ -78,6 +78,12 @@ pnpm dev:backend   # Convex backend only
 | `pnpm lint:fix` | Auto-fix lint issues |
 | `pnpm format` | Format code with Biome |
 
+## Verifying a payout destination
+
+New rental, seat, coaching, and damage payments require a unique local Stripe Connect link. At checkout, the backend reads the Express account from Stripe and checks that its `renegadeUserId` metadata matches the payee's Clerk user ID. New onboarding sets this value automatically.
+
+For an older account, verify control of both the signed-in Renegade identity and the specific Stripe account through independent evidence. The saved link and a matching email alone do not establish ownership. Record the evidence in restricted support records. Once verified, a platform operator can set `renegadeUserId` on that one connected account in Stripe. The next checkout reads the updated ownership directly. Keep the hold in place if the evidence is incomplete or the account is linked to multiple users.
+
 ## Environment Variables
 
 See `.env.example` files in each app/package for required variables:

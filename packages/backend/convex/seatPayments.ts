@@ -20,7 +20,7 @@ import {
   grossUpForStripeCardFees,
   resolvePlatformFeePercentage,
 } from "./pricing"
-import { billingCustomerId, retrieveLinkedConnectAccount } from "./stripeOwnership"
+import { billingCustomerId, verifiedPaymentDestination } from "./stripeOwnership"
 import { rateLimiter } from "./rateLimiter"
 import {
   holdsSeat,
@@ -102,7 +102,7 @@ async function assertTeamConnectReady(
   }
 
   const stripe = getStripe()
-  const connectAccount = await retrieveLinkedConnectAccount(
+  const connectAccount = await verifiedPaymentDestination(
     ctx,
     stripe,
     host.stripeAccountId,
