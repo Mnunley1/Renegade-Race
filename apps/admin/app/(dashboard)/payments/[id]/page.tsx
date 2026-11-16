@@ -33,7 +33,7 @@ import {
   User,
 } from "lucide-react"
 import { useParams, useRouter } from "next/navigation"
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { toast } from "sonner"
 import { DetailPageLayout } from "@/components/detail-page-layout"
 import { LoadingState } from "@/components/loading-state"
@@ -58,9 +58,20 @@ type VehicleWithImages = NonNullable<PaymentData["vehicle"]> & {
   track?: { name: string; location?: string }
 }
 
+function chargedAmount(payment: PaymentData) {
+  if ("capturedAmount" in payment && typeof payment.capturedAmount === "number") {
+    return payment.capturedAmount
+  }
+  return payment.amount + (payment.processingFee ?? 0)
+}
+
+function remainingRefund(payment: PaymentData) {
+  return Math.max(0, chargedAmount(payment) - (payment.refundAmount ?? 0))
+}
+
 function SummaryCards({ payment }: { payment: PaymentData }) {
   const refundedAmount = payment.refundAmount || 0
-  const maxRefundable = payment.amount - refundedAmount
+  const maxRefundable = remainingRefund(payment)
 
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -72,7 +83,9 @@ function SummaryCards({ payment }: { payment: PaymentData }) {
               <DollarSign className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
             </div>
           </div>
-          <p className="mt-3 font-bold text-2xl tracking-tight">{formatCurrency(payment.amount)}</p>
+          <p className="mt-3 font-bold text-2xl tracking-tight">
+            {formatCurrency(chargedAmount(payment))}
+          </p>
           <p className="mt-1 text-muted-foreground text-xs">
             {payment.currency?.toUpperCase() || "USD"}
           </p>
@@ -137,7 +150,7 @@ function SummaryCards({ payment }: { payment: PaymentData }) {
 
 function PaymentBreakdownCard({ payment }: { payment: PaymentData }) {
   const refundedAmount = payment.refundAmount || 0
-  const netAmount = payment.amount - refundedAmount
+  const netAmount = chargedAmount(payment) - refundedAmount
 
   return (
     <Card>
@@ -151,7 +164,7 @@ function PaymentBreakdownCard({ payment }: { payment: PaymentData }) {
         <div className="space-y-3">
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Gross Amount</span>
-            <span className="font-medium">{formatCurrency(payment.amount)}</span>
+            <span className="font-medium">{formatCurrency(chargedAmount(payment))}</span>
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Platform Fee</span>
@@ -551,11 +564,12 @@ function RefundDialog({
   onOpenChange: (open: boolean) => void
 }) {
   const initiateRefund = useAction(api.admin.initiateRefund)
+  const attempt = useRef<{ id: string; amount: number; reason: string } | null>(null)
   const [refundAmount, setRefundAmount] = useState("")
   const [refundReason, setRefundReason] = useState("")
   const [isProcessing, setIsProcessing] = useState(false)
 
-  const maxRefundable = payment.amount - (payment.refundAmount || 0)
+  const maxRefundable = remainingRefund(payment)
 
   const handleRefund = async () => {
     const amountInCents = Math.round(Number.parseFloat(refundAmount) * 100)
@@ -574,14 +588,24 @@ function RefundDialog({
       return
     }
 
+    const reason = refundReason.trim()
+    if (
+      !attempt.current ||
+      attempt.current.amount !== amountInCents ||
+      attempt.current.reason !== reason
+    ) {
+      attempt.current = { id: crypto.randomUUID(), amount: amountInCents, reason }
+    }
     setIsProcessing(true)
     try {
       await initiateRefund({
         paymentId: payment._id,
         amount: amountInCents,
-        reason: refundReason,
+        reason,
+        requestId: attempt.current.id,
       })
-      toast.success("Refund processed successfully")
+      attempt.current = null
+      toast.success("Refund submitted")
       onOpenChange(false)
       setRefundAmount("")
       setRefundReason("")
@@ -680,7 +704,8 @@ export default function PaymentDetailPage() {
   }
 
   const canRefund =
-    payment.status === "succeeded" && payment.amount - (payment.refundAmount || 0) > 0
+    (payment.status === "succeeded" || payment.status === "partially_refunded") &&
+    remainingRefund(payment) > 0
 
   return (
     <DetailPageLayout
