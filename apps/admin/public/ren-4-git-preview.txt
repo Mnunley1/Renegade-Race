@@ -1,1 +1,1 @@
-REN-4 automatic Git preview check for admin.
+REN-17 verified Git connection preview for admin.
