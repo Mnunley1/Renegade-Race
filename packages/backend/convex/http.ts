@@ -1,23 +1,51 @@
 import type { WebhookEvent } from "@clerk/backend"
 import { registerRoutes } from "@convex-dev/stripe"
 import { httpRouter } from "convex/server"
-import Stripe from "stripe"
+import type Stripe from "stripe"
 import { Webhook } from "svix"
 import { api, components, internal } from "./_generated/api"
-import { httpAction } from "./_generated/server"
+import { type ActionCtx, httpAction } from "./_generated/server"
 import { resendComponent } from "./emails"
 import { rateLimiter } from "./rateLimiter"
 import { isSeatPaymentMetadata } from "./seatPayments"
 
-// Helper function to get Stripe instance
-function _getStripe(): Stripe {
-  const secretKey = process.env.STRIPE_SECRET_KEY
-  if (!secretKey) {
-    throw new Error("STRIPE_SECRET_KEY environment variable is not set")
+function stripeObjectId(value: string | { id: string } | null): string | undefined {
+  return typeof value === "string" ? value : value?.id
+}
+
+// Rental checkout creates destination charges on our platform account. Connected
+// accounts can set arbitrary metadata on their own charges.
+function rentalMetadata(metadata: Stripe.Metadata | null, account?: string) {
+  if (
+    account ||
+    !metadata ||
+    metadata.type ||
+    !metadata.reservationId ||
+    !metadata.renterId ||
+    !metadata.ownerId
+  ) {
+    return null
   }
-  return new Stripe(secretKey, {
-    apiVersion: "2025-08-27.basil",
-  })
+  return {
+    reservationId: metadata.reservationId,
+    renterId: metadata.renterId,
+    ownerId: metadata.ownerId,
+  }
+}
+
+async function syncRefundEvent(
+  ctx: Pick<ActionCtx, "runAction">,
+  event: Stripe.RefundUpdatedEvent | Stripe.RefundFailedEvent
+) {
+  if (event.account) return
+  const refund = event.data.object
+  const intentId = stripeObjectId(refund.payment_intent)
+  if (intentId) {
+    await ctx.runAction(internal.stripe.syncChargeRefunds, {
+      stripePaymentIntentId: intentId,
+      chargeId: stripeObjectId(refund.charge),
+    })
+  }
 }
 
 const http = httpRouter()
@@ -51,18 +79,20 @@ registerRoutes(http, components.stripe, {
         return
       }
 
-      // Find payment by Stripe payment intent ID
-      const payment = await ctx.runQuery(api.stripe.findPaymentByStripeIntent, {
-        stripePaymentIntentId: paymentIntent.id,
-      })
-
-      if (payment) {
-        // Update your custom payment record
-        await ctx.runMutation(api.stripe.handlePaymentSuccess, {
-          paymentId: payment._id,
-          stripeChargeId: paymentIntent.latest_charge as string,
+      const rental = rentalMetadata(paymentIntent.metadata, event.account)
+      if (rental) {
+        await ctx.runMutation(internal.stripe.ingestRentalPaymentEvent, {
+          eventId: event.id,
+          eventType: event.type,
+          stripePaymentIntentId: paymentIntent.id,
+          currency: paymentIntent.currency,
+          amount: paymentIntent.amount_received,
+          stripeChargeId: stripeObjectId(paymentIntent.latest_charge),
+          ...rental,
         })
-      } else if (paymentIntent.metadata?.type === "damage_invoice") {
+        return
+      }
+      if (paymentIntent.metadata?.type === "damage_invoice") {
         // Handle damage invoice payment
         const damageInvoiceId = paymentIntent.metadata.damageInvoiceId
         if (damageInvoiceId) {
@@ -116,16 +146,20 @@ registerRoutes(http, components.stripe, {
         return
       }
 
-      const payment = await ctx.runQuery(api.stripe.findPaymentByStripeIntent, {
-        stripePaymentIntentId: paymentIntent.id,
-      })
-
-      if (payment) {
-        await ctx.runMutation(api.stripe.handlePaymentFailure, {
-          paymentId: payment._id,
+      const rental = rentalMetadata(paymentIntent.metadata, event.account)
+      if (rental) {
+        await ctx.runMutation(internal.stripe.ingestRentalPaymentEvent, {
+          eventId: event.id,
+          eventType: event.type,
+          stripePaymentIntentId: paymentIntent.id,
+          currency: paymentIntent.currency,
+          amount: paymentIntent.amount,
           failureReason: paymentIntent.last_payment_error?.message,
+          ...rental,
         })
-      } else if (paymentIntent.metadata?.type === "coaching_booking") {
+        return
+      }
+      if (paymentIntent.metadata?.type === "coaching_booking") {
         const bookingId = paymentIntent.metadata.coachingBookingId
         if (bookingId) {
           await ctx.runMutation(internal.coachingPayments.handlePaymentFailure, {
@@ -159,7 +193,7 @@ registerRoutes(http, components.stripe, {
       const paymentIntentId = dispute.payment_intent as string
 
       if (paymentIntentId) {
-        await ctx.runMutation(api.stripe.handleDisputeCreated, {
+        await ctx.runMutation(internal.stripe.handleDisputeCreated, {
           stripePaymentIntentId: paymentIntentId,
           disputeId: dispute.id,
           disputeReason: dispute.reason || undefined,
@@ -187,14 +221,16 @@ registerRoutes(http, components.stripe, {
         return
       }
 
+      if (event.account) return
       const charge = event.data.object
-      const paymentIntentId = charge.payment_intent as string
-
+      const paymentIntentId = stripeObjectId(charge.payment_intent)
+      const rental = rentalMetadata(charge.metadata)
       if (paymentIntentId && charge.amount_refunded > 0) {
-        await ctx.runMutation(api.stripe.handleChargeRefunded, {
+        await ctx.runAction(internal.stripe.syncChargeRefunds, {
           stripePaymentIntentId: paymentIntentId,
-          refundAmount: charge.amount_refunded,
-          refundId: charge.refunds?.data[0]?.id || "unknown",
+          chargeId: charge.id,
+          reservationId: rental?.reservationId,
+          requireMatchingPayment: Boolean(rental),
         })
       }
 
@@ -205,6 +241,9 @@ registerRoutes(http, components.stripe, {
         eventType: event.type,
       })
     },
+
+    "refund.updated": syncRefundEvent,
+    "refund.failed": syncRefundEvent,
 
     // Handle transfer.failed
     // @ts-expect-error - StripeEventHandlers type doesn't include transfer.failed
@@ -221,7 +260,7 @@ registerRoutes(http, components.stripe, {
 
       const transfer = event.data.object
 
-      await ctx.runMutation(api.stripe.handleTransferFailed, {
+      await ctx.runMutation(internal.stripe.handleTransferFailed, {
         stripeTransferId: transfer.id,
         failureReason: (transfer as unknown as { failure_message?: string }).failure_message,
       })
@@ -248,7 +287,7 @@ registerRoutes(http, components.stripe, {
 
       const payout = event.data.object
 
-      await ctx.runMutation(api.stripe.handlePayoutFailed, {
+      await ctx.runMutation(internal.stripe.handlePayoutFailed, {
         stripeAccountId: (payout.destination as string) || "",
         payoutId: payout.id,
         failureReason: payout.failure_message || undefined,
@@ -287,9 +326,18 @@ registerRoutes(http, components.stripe, {
         return
       }
 
-      await ctx.runMutation(api.stripe.handlePaymentCanceled, {
-        stripePaymentIntentId: paymentIntent.id,
-      })
+      const rental = rentalMetadata(paymentIntent.metadata, event.account)
+      if (rental) {
+        await ctx.runMutation(internal.stripe.ingestRentalPaymentEvent, {
+          eventId: event.id,
+          eventType: event.type,
+          stripePaymentIntentId: paymentIntent.id,
+          currency: paymentIntent.currency,
+          amount: paymentIntent.amount,
+          ...rental,
+        })
+        return
+      }
 
       // Record successful processing
       await ctx.runMutation(internal.webhookIdempotency.recordWebhookEvent, {
@@ -319,7 +367,7 @@ registerRoutes(http, components.stripe, {
       const accountId = event.account
 
       if (accountId) {
-        await ctx.runMutation(api.stripe.handleAccountDeauthorized, {
+        await ctx.runMutation(internal.stripe.handleAccountDeauthorized, {
           stripeAccountId: accountId,
         })
       }
@@ -345,17 +393,19 @@ registerRoutes(http, components.stripe, {
       }
 
       const session = event.data.object
-      const paymentIntentId = session.payment_intent as string
-
-      if (paymentIntentId) {
-        const payment = await ctx.runQuery(api.stripe.findPaymentByStripeIntent, {
-          stripePaymentIntentId: paymentIntentId,
-        })
-
-        if (payment) {
-          // Payment success is already handled by payment_intent.succeeded
-          // But we can add additional logic here if needed
+      const intentId = stripeObjectId(session.payment_intent)
+      const rental = rentalMetadata(session.metadata, event.account)
+      if (session.mode === "payment" && intentId && rental) {
+        if (session.amount_total == null || !session.currency) {
+          throw new Error("Missing rental checkout total")
         }
+        await ctx.runMutation(internal.stripe.bindRentalCheckoutIntent, {
+          stripeCheckoutSessionId: session.id,
+          stripePaymentIntentId: intentId,
+          amount: session.amount_total,
+          currency: session.currency,
+          ...rental,
+        })
       }
 
       // Record successful processing

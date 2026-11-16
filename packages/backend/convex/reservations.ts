@@ -9,7 +9,6 @@ import {
   MAX_RENTAL_DURATION_DAYS,
   MIN_RENTAL_DURATION_DAYS,
 } from "./dateUtils"
-import { calculateReservationTotal } from "./pricing"
 import {
   getReservationApprovedRenterEmailTemplate,
   getReservationCancelledEmailTemplate,
@@ -20,6 +19,7 @@ import {
 } from "./emails"
 import { ErrorCode, throwError } from "./errors"
 import { getWebUrl } from "./helpers"
+import { calculateReservationTotal } from "./pricing"
 import { rateLimiter } from "./rateLimiter"
 import { sanitizeMessage, sanitizeShortText } from "./sanitize"
 
@@ -679,7 +679,13 @@ export const cancel = mutation({
     if (reservation.paymentId) {
       try {
         const payment = await ctx.db.get(reservation.paymentId)
-        if (payment && payment.status === "succeeded" && payment.stripeChargeId) {
+        if (
+          payment &&
+          (payment.status === "succeeded" || payment.status === "partially_refunded") &&
+          (payment.stripeChargeId ||
+            payment.stripePaymentIntentId ||
+            payment.stripeCheckoutSessionId)
+        ) {
           // If owner is cancelling a confirmed reservation, force 100% refund
           const forceFullRefund = isOwnerCancelling && reservation.status === "confirmed"
 
@@ -689,6 +695,7 @@ export const cancel = mutation({
             reservationId: args.reservationId,
             reason: args.cancellationReason || "Reservation cancelled",
             forceFullRefund,
+            cancelledAt: Date.now(),
           })
 
           // If owner cancelled a confirmed reservation, increment their cancellation count

@@ -279,7 +279,13 @@ export default defineSchema({
     // Payment-related fields
     paymentId: v.optional(v.id("payments")),
     paymentStatus: v.optional(
-      v.union(v.literal("pending"), v.literal("paid"), v.literal("failed"), v.literal("refunded"))
+      v.union(
+        v.literal("pending"),
+        v.literal("paid"),
+        v.literal("failed"),
+        v.literal("refunded"),
+        v.literal("partially_refunded")
+      )
     ),
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -685,6 +691,8 @@ export default defineSchema({
     stripeChargeId: v.optional(v.string()),
     stripeTransferId: v.optional(v.string()), // For Connect transfers
     stripeAccountId: v.optional(v.string()), // Owner's Connect account ID
+    capturedAmount: v.optional(v.number()), // Actual Stripe charge amount including processing
+    refundSyncVersion: v.optional(v.number()),
     refundAmount: v.optional(v.number()),
     refundPercentage: v.optional(v.number()), // Percentage of original amount refunded (0-100)
     refundPolicy: v.optional(
@@ -707,6 +715,7 @@ export default defineSchema({
     .index("by_renter", ["renterId"])
     .index("by_owner", ["ownerId"])
     .index("by_status", ["status"])
+    .index("by_stripe_charge", ["stripeChargeId"])
     .index("by_stripe_payment_intent", ["stripePaymentIntentId"])
     .index("by_stripe_checkout_session", ["stripeCheckoutSessionId"])
     .index("by_stripe_customer", ["stripeCustomerId"])
