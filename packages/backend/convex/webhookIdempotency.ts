@@ -69,7 +69,9 @@ export const recordWebhookEvent = internalMutation({
     eventType: v.string(),
   },
   handler: async (ctx, args) => {
-    await _recordWebhookEvent(ctx, args.eventId, args.source, args.eventType)
+    if (!(await _isWebhookEventProcessed(ctx, args.eventId, args.source))) {
+      await _recordWebhookEvent(ctx, args.eventId, args.source, args.eventType)
+    }
   },
 })
 
