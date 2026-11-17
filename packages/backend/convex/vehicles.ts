@@ -459,7 +459,7 @@ export const getByOwner = query({
   },
 })
 
-// Generate upload URL for file storage (legacy - use R2 mutations instead)
+// Retired: legacy storage uploads cannot be attributed to their uploader.
 export const generateUploadUrl = mutation({
   args: {},
   handler: async (ctx) => {
@@ -468,7 +468,7 @@ export const generateUploadUrl = mutation({
       throw new Error("Not authenticated")
     }
 
-    return await ctx.storage.generateUploadUrl()
+    throw new Error("Legacy uploads are unavailable; use the R2 image upload flow")
   },
 })
 
