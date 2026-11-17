@@ -9,12 +9,14 @@ const sdk = vi.hoisted(() => ({
   payments: vi.fn(),
   list: vi.fn(),
   create: vi.fn(),
+  charge: vi.fn(),
   retrieve: vi.fn(),
 }))
 vi.mock("stripe", () => ({
   default: class {
     invoices = { retrieve: sdk.invoice }
     invoicePayments = { list: sdk.payments }
+    charges = { retrieve: sdk.charge }
     refunds = { list: sdk.list, create: sdk.create, retrieve: sdk.retrieve }
   },
 }))
@@ -59,15 +61,17 @@ async function setup() {
   })
   sdk.invoice.mockResolvedValue({
     id: "in_origin",
+    customer: "cus_original",
     status: "paid",
     metadata: { type: "custom_invoice", invoiceId, senderId: "seller", recipientId: "buyer" },
   })
   sdk.payments.mockResolvedValue({
     data: [
       {
+        invoice: "in_origin",
         payment: {
           type: "payment_intent",
-          payment_intent: { id: "pi_orig", latest_charge: "ch_original" },
+          payment_intent: { id: "pi_orig", customer: "cus_original", latest_charge: "ch_original" },
         },
       },
     ],
@@ -113,6 +117,40 @@ describe("invoice damage deposit refunds", () => {
       expect.objectContaining({ charge: "ch_original", amount: 750, reverse_transfer: true }),
       expect.anything()
     )
+  })
+  it("fails closed for a different recorded intent, different payer, or ambiguous paid invoice", async () => {
+    const { issue, t, invoiceId } = await setup()
+    await t.run(({ db }) => db.patch(invoiceId, { stripePaymentIntentId: "pi_recorded" }))
+    await expect(issue("wrong-intent")).rejects.toThrow("original Stripe invoice charge")
+    const paid = (customer: string) => ({
+      invoice: "in_origin",
+      payment: {
+        type: "payment_intent",
+        payment_intent: { id: "pi_recorded", customer, latest_charge: "ch_original" },
+      },
+    })
+    sdk.payments.mockResolvedValueOnce({ data: [paid("cus_unrelated")], has_more: false })
+    await expect(issue("wrong-payer")).rejects.toThrow("original Stripe invoice payment")
+    sdk.payments.mockResolvedValueOnce({
+      data: [paid("cus_original"), paid("cus_original")],
+      has_more: false,
+    })
+    await expect(issue("ambiguous")).rejects.toThrow("original Stripe invoice payment")
+    sdk.payments.mockResolvedValueOnce({
+      data: [{ invoice: "in_origin", payment: { type: "charge", charge: "ch_direct" } }],
+      has_more: false,
+    })
+    sdk.charge.mockResolvedValueOnce({
+      id: "ch_direct",
+      customer: "cus_original",
+      payment_intent: "pi_unrelated",
+    })
+    await expect(issue("direct-charge-wrong-intent")).rejects.toThrow(
+      "original Stripe invoice charge"
+    )
+    expect(sdk.create).not.toHaveBeenCalled()
+    sdk.payments.mockResolvedValueOnce({ data: [paid("cus_original")], has_more: false })
+    await expect(issue("matching-intent", 400)).resolves.toMatchObject({ status: "succeeded" })
   })
   it("replays a completed partial request and permits a distinct second partial", async () => {
     const { issue, current } = await setup()

@@ -1213,28 +1213,59 @@ async function paidInvoiceCharge(stripe: Stripe, local: Doc<"invoices">): Promis
   const remote = await stripe.invoices.retrieve(local.stripeInvoiceId)
   verifyStripeInvoice(local, remote)
   if (remote.status !== "paid") throwError(ErrorCode.INVALID_STATUS, "Stripe invoice is not paid")
-  const legacy = remote as Stripe.Invoice & { charge?: string | Stripe.Charge }
-  let charge = stripeId(legacy.charge)
-  if (!charge) {
+  const customer = stripeId(remote.customer)
+  if (!customer)
+    throwError(ErrorCode.FORBIDDEN, "The original invoice customer could not be verified")
+  const legacy = remote as Stripe.Invoice & {
+    charge?: string | Stripe.Charge
+    payment_intent?: string | Stripe.PaymentIntent
+  }
+  let directCharge = legacy.charge
+  let intentId = stripeId(legacy.payment_intent)
+  let charge: string | undefined
+  if (!directCharge) {
     const payments = await stripe.invoicePayments.list({
       invoice: remote.id,
       status: "paid",
       limit: 2,
       expand: ["data.payment.payment_intent"],
     })
-    const payment = payments.data[0]?.payment
-    if (payment && payments.data.length === 1 && !payments.has_more) {
-      if (payment.type === "charge") charge = stripeId(payment.charge)
-      else if (payment.type === "payment_intent" && payment.payment_intent) {
-        const intent =
-          typeof payment.payment_intent === "string"
-            ? await stripe.paymentIntents.retrieve(payment.payment_intent)
-            : payment.payment_intent
-        charge = stripeId(intent.latest_charge)
-      }
+    const paid = payments.data[0]
+    const sourceInvoiceId = typeof paid?.invoice === "string" ? paid.invoice : paid?.invoice.id
+    if (
+      !paid ||
+      sourceInvoiceId !== remote.id ||
+      payments.data.length !== 1 ||
+      payments.has_more
+    )
+      throwError(ErrorCode.FORBIDDEN, "The original Stripe invoice payment could not be verified")
+    const payment = paid.payment
+    if (payment.type === "charge") directCharge = payment.charge ?? undefined
+    else if (payment.type === "payment_intent" && payment.payment_intent) {
+      const intent =
+        typeof payment.payment_intent === "string"
+          ? await stripe.paymentIntents.retrieve(payment.payment_intent)
+          : payment.payment_intent
+      if (stripeId(intent.customer) !== customer || (intentId && intent.id !== intentId))
+        throwError(ErrorCode.FORBIDDEN, "The original Stripe invoice payment does not match")
+      intentId = intent.id
+      charge = stripeId(intent.latest_charge)
     }
   }
-  if (!charge || (local.stripeChargeId && charge !== local.stripeChargeId)) {
+  if (directCharge) {
+    const paidCharge =
+      typeof directCharge === "string" ? await stripe.charges.retrieve(directCharge) : directCharge
+    const chargeIntent = stripeId(paidCharge.payment_intent)
+    if (stripeId(paidCharge.customer) !== customer || (intentId && chargeIntent !== intentId))
+      throwError(ErrorCode.FORBIDDEN, "The original Stripe invoice charge does not match")
+    intentId = chargeIntent
+    charge = paidCharge.id
+  }
+  if (
+    !charge ||
+    (local.stripeChargeId && charge !== local.stripeChargeId) ||
+    (local.stripePaymentIntentId && intentId !== local.stripePaymentIntentId)
+  ) {
     throwError(ErrorCode.FORBIDDEN, "The original Stripe invoice charge could not be verified")
   }
   return charge
