@@ -1,3 +1,5 @@
+import { ConvexError } from "convex/values"
+
 export const ALLOWED_IMAGE_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"] as const
 
 export const ALLOWED_IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"] as const
@@ -15,3 +17,7 @@ export function isAllowedImageFile(file: File): boolean {
 }
 
 export const ALLOWED_IMAGE_FORMATS_LABEL = "JPEG, PNG, or WebP"
+
+export function needsVehiclePhotoReupload(error: unknown) {
+  return error instanceof ConvexError && error.data?.code === "REUPLOAD_VEHICLE_PHOTO"
+}
