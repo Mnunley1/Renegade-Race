@@ -75,3 +75,22 @@ Production remains on the tagged baselines until a separately approved release.
 Seat-specific frontend parity and seat checkout hardening require separate review;
 the rental smoke test does not establish seat-flow readiness. Passing CI alone
 does not establish production compatibility.
+
+## Profile image ownership (REN-23)
+
+New profile photos must use `r2.generateProfileImageUploadUrl`, then pass its key
+to `users.updateProfileImage`. The backend checks the issuance record's bucket,
+owner and profile namespace. Other users' uploads, unrecorded keys and reservation
+evidence cannot be assigned as profile photos. Existing server-recorded profile
+uploads remain supported; the current client does not need a metadata-sync call.
+
+The unused `vehicles.generateUploadUrl` Convex-storage signer and new
+`storageId` profile assignments are retired with a re-upload error. Legacy blobs
+have no reliable uploader record, so their ownership cannot be inferred from a
+supplied ID. Existing profile URLs and stored bytes remain unchanged. There is
+no data migration, deletion or historical-publication audit in this change.
+
+Validate the profile ownership, return evidence and onboarding ownership suites
+against the reconciled backend and the production-compatible patch before a
+separately approved backend release. Other public media writers are tracked in
+REN-30; reservation attachment validation remains REN-25.

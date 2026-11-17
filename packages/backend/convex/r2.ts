@@ -71,6 +71,22 @@ export async function requireDraftUpload(ctx: QueryCtx, ownerId: string, key: st
   }
 }
 
+export async function requireProfileUpload(ctx: QueryCtx, user: Doc<"users">, key: string) {
+  const upload = await findUpload(ctx, key)
+  // Profile and reservation uploads historically share purpose "other". Require
+  // the recorded profile namespace as well as ownership; a key prefix alone is
+  // not proof that this server issued the upload.
+  if (
+    !upload ||
+    upload.ownerId !== user.externalId ||
+    upload.purpose !== "other" ||
+    !upload.key.startsWith(`images/profiles/${user._id}/`) ||
+    upload.imageId
+  ) {
+    throw new Error("Upload this profile photo again to verify ownership")
+  }
+}
+
 export async function clearDraftUploads(
   ctx: MutationCtx,
   user: Doc<"users">,

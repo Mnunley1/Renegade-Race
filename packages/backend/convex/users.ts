@@ -14,7 +14,7 @@ import {
 } from "./_generated/server"
 import { getWelcomeEmailTemplate, sendTransactionalEmail } from "./emails"
 import { isEarlyAdopterPromoActive, resolvePlatformFeePercentage } from "./pricing"
-import { clearDraftUploads, requireDraftUpload } from "./r2"
+import { clearDraftUploads, requireDraftUpload, requireProfileUpload } from "./r2"
 import { retrieveLinkedConnectAccount } from "./stripeOwnership"
 import { publicDisplayName, publicUserProfile } from "./userProfile"
 
@@ -352,12 +352,21 @@ export const performUserDeletion = internalMutation({
 export const updateProfileImage = mutation({
   args: {
     r2Key: v.optional(v.string()), // R2 object key (preferred)
-    storageId: v.optional(v.id("_storage")), // Legacy Convex storage ID
+    storageId: v.optional(v.id("_storage")), // Retained to give legacy clients a re-upload error.
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) {
       throw new Error("Not authenticated")
+    }
+
+    // Legacy blobs have no server-proven uploader. Keep existing profile URLs
+    // readable, but never publish a new URL from an arbitrary storage ID.
+    if (args.storageId) {
+      throw new Error("Legacy storage is unavailable for profile use; upload a new profile photo")
+    }
+    if (!args.r2Key) {
+      throw new Error("A profile photo upload is required")
     }
 
     const userId = identity.subject
@@ -381,27 +390,8 @@ export const updateProfileImage = mutation({
       throw new Error("Failed to create or retrieve user")
     }
 
-    if (args.r2Key) {
-      await ctx.db.patch(user._id, {
-        profileImageR2Key: args.r2Key,
-      })
-    } else if (args.storageId) {
-      // Legacy: Get the URL from the storage ID
-      const storageId = args.storageId
-      const returnEvidence = await ctx.db.query("returnEvidence")
-        .withIndex("by_storage", (q) => q.eq("storageId", storageId))
-        .first()
-      if (returnEvidence) throw new Error("File is unavailable for profile use")
-      const profileImageUrl = await ctx.storage.getUrl(args.storageId)
-      if (!profileImageUrl) {
-        throw new Error("Failed to get image URL from storage")
-      }
-      await ctx.db.patch(user._id, {
-        profileImage: profileImageUrl,
-      })
-    } else {
-      throw new Error("Either r2Key or storageId must be provided")
-    }
+    await requireProfileUpload(ctx, user, args.r2Key)
+    await ctx.db.patch(user._id, { profileImageR2Key: args.r2Key })
 
     return user._id
   },
