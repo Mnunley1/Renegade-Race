@@ -3,6 +3,8 @@ name: CI
 on:
   pull_request:
     branches: [main, dev]
+    # Recheck the release source when a PR is retargeted to another base.
+    types: [opened, synchronize, reopened, edited]
   push:
     branches: [main, dev]
 
@@ -18,6 +20,23 @@ env:
   PNPM_VERSION: "10.4.1"
 
 jobs:
+  branch-flow:
+    name: Branch Flow
+    runs-on: ubuntu-latest
+    env:
+      PR_BASE: ${{ github.base_ref }}
+      PR_HEAD: ${{ github.head_ref }}
+      PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+    steps:
+      - name: Require releases to come from dev
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ] && [ "$PR_BASE" = "main" ]; then
+            if [ "$PR_HEAD" != "dev" ] || [ "$PR_HEAD_REPO" != "$GITHUB_REPOSITORY" ]; then
+              echo "::error::Release PRs into main must come from this repository's dev branch. Send feature PRs to dev for staging first."
+              exit 1
+            fi
+          fi
+
   backend-tests:
     name: Backend Tests
     runs-on: ubuntu-latest
