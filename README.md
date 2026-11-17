@@ -70,6 +70,8 @@ pnpm dev:backend   # Convex backend only
 
 ## Scripts
 
+For required CI checks and the separate production promotion procedure, see [Releases](docs/releases.md).
+
 | Command | Description |
 |---------|-------------|
 | `pnpm dev` | Start all services |

@@ -9,9 +9,12 @@
 ## Testing
 
 - [ ] Tested locally
-- [ ] Existing tests pass (`pnpm typecheck`, `pnpm lint:check`)
+- [ ] Backend tests pass (`pnpm --filter @renegade/backend test`)
+- [ ] Web tests pass (`pnpm --filter web test`)
+- [ ] Types and lint pass (`pnpm typecheck`, `pnpm lint:check`)
 - [ ] Build succeeds (`pnpm build`)
 
 ## Notes
 
-<!-- Any additional context, screenshots, or considerations -->
+<!-- Include backend/frontend compatibility, migrations, and rollback considerations. -->
+<!-- Merging stages a production build; promotion is a separate approved action. See docs/releases.md. -->
