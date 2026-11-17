@@ -1232,12 +1232,7 @@ async function paidInvoiceCharge(stripe: Stripe, local: Doc<"invoices">): Promis
     })
     const paid = payments.data[0]
     const sourceInvoiceId = typeof paid?.invoice === "string" ? paid.invoice : paid?.invoice.id
-    if (
-      !paid ||
-      sourceInvoiceId !== remote.id ||
-      payments.data.length !== 1 ||
-      payments.has_more
-    )
+    if (!paid || sourceInvoiceId !== remote.id || payments.data.length !== 1 || payments.has_more)
       throwError(ErrorCode.FORBIDDEN, "The original Stripe invoice payment could not be verified")
     const payment = paid.payment
     if (payment.type === "charge") directCharge = payment.charge ?? undefined
