@@ -92,6 +92,52 @@ function CoachingSuccessCard({ bookingId }: { bookingId: Id<"coachingBookings"> 
   )
 }
 
+function rentalPaymentNotice(reservation: { status: string; paymentStatus?: string } | null): {
+  title: string
+  message: string
+  canRetry?: boolean
+} {
+  if (!reservation) {
+    return {
+      title: "Reservation unavailable",
+      message: "We could not find this reservation. Check your trips for its current status.",
+    }
+  }
+  if (reservation.paymentStatus === "refunded") {
+    return {
+      title: "Payment refunded",
+      message:
+        "This payment has been refunded. Check your trips for the reservation's current status.",
+    }
+  }
+  if (reservation.status === "pending") {
+    return {
+      title: "Awaiting host approval",
+      message: "Your host must approve this request before you can pay.",
+    }
+  }
+  if (reservation.status === "approved" && reservation.paymentStatus === "failed") {
+    return {
+      title: "Payment failed",
+      message:
+        "Your payment did not complete. Your reservation is not confirmed. You can try again.",
+      canRetry: true,
+    }
+  }
+  if (reservation.status === "approved" || reservation.status === "confirmed") {
+    return {
+      title: "Awaiting payment confirmation",
+      message:
+        "Your reservation is not confirmed yet. This page will update when payment confirmation arrives. Check your trips before trying another payment.",
+    }
+  }
+  return {
+    title: "Reservation not confirmed",
+    message:
+      "This reservation is no longer awaiting payment. Check your trips for its current status.",
+  }
+}
+
 function CheckoutSuccessContent() {
   const searchParams = useSearchParams()
   const reservationId = searchParams.get("reservationId")
@@ -122,12 +168,43 @@ function CheckoutSuccessContent() {
     )
   }
 
-  if (!reservation) {
+  if (reservation === undefined) {
     return (
       <div className="container mx-auto max-w-4xl px-4 py-8">
         <Card>
           <CardContent className="py-12 text-center">
             <p className="text-muted-foreground">Loading reservation details...</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (
+    !reservation ||
+    reservation.status !== "confirmed" ||
+    (reservation.paymentStatus !== "paid" && reservation.paymentStatus !== "partially_refunded")
+  ) {
+    const { title, message, canRetry } = rentalPaymentNotice(reservation)
+
+    return (
+      <div className="container mx-auto max-w-4xl px-4 py-8">
+        <Card>
+          <CardContent aria-live="polite" className="py-12 text-center">
+            <h1 className="mb-2 font-bold text-2xl">{title}</h1>
+            <p className="mb-6 text-muted-foreground">{message}</p>
+            <div className="flex flex-col gap-4 sm:flex-row sm:justify-center">
+              {canRetry && (
+                <Button asChild>
+                  <Link href={`/checkout/pay?reservationId=${reservationId}`}>
+                    Try Payment Again
+                  </Link>
+                </Button>
+              )}
+              <Button asChild variant="outline">
+                <Link href="/trips">View My Trips</Link>
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>

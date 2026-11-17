@@ -13,7 +13,7 @@ import {
 } from "./_generated/server"
 import type { MutationCtx, QueryCtx } from "./_generated/server"
 import { checkAdmin } from "./admin"
-import { calculateDaysBetween, parseLocalDate } from "./dateUtils"
+import { parseLocalDate } from "./dateUtils"
 import {
   getPaymentFailedEmailTemplate,
   getPaymentSucceededEmailTemplate,
@@ -716,8 +716,8 @@ export const createCheckoutSession = action({
       throwError(ErrorCode.NOT_FOUND, "Vehicle not found")
     }
 
-    // Recalculate total from current pricing (server-side validation)
-    const totalDays = calculateDaysBetween(reservation.startDate, reservation.endDate)
+    // Recalculate using the persisted occupied-day count, including historical rentals.
+    const totalDays = reservation.totalDays
     const baseAmount = totalDays * vehicle.dailyRate
 
     // Validate add-ons against vehicle's current add-ons
@@ -975,8 +975,8 @@ export const createPaymentIntent = action({
       throwError(ErrorCode.NOT_FOUND, "Vehicle not found")
     }
 
-    // Recalculate total from current pricing (server-side validation)
-    const totalDays = calculateDaysBetween(reservation.startDate, reservation.endDate)
+    // Recalculate using the persisted occupied-day count, including historical rentals.
+    const totalDays = reservation.totalDays
     const baseAmount = totalDays * vehicle.dailyRate
 
     // Validate add-ons against vehicle's current add-ons

@@ -75,8 +75,7 @@ export const getAllWithOptimizedImages = query({
           ctx.db.get(vehicle.trackId),
         ])
 
-        const hostStripeReady =
-          !!owner?.stripeAccountId && owner.stripeAccountStatus === "enabled"
+        const hostStripeReady = !!owner?.stripeAccountId && owner.stripeAccountStatus === "enabled"
 
         const optimizedImages = images.filter((image) => image.r2Key)
 
@@ -147,10 +146,7 @@ export const searchWithAvailability = query({
     // Apply optional filters. When using by_track we still need to enforce
     // active/approved/non-deleted; when using by_active_approved those are implicit.
     const filtered = baseQuery.filter((q) => {
-      const preds = [
-        q.eq(q.field("deletedAt"), undefined),
-        q.neq(q.field("isSuspended"), true),
-      ]
+      const preds = [q.eq(q.field("deletedAt"), undefined), q.neq(q.field("isSuspended"), true)]
       if (args.trackId) {
         preds.push(q.eq(q.field("isActive"), true))
         preds.push(q.eq(q.field("isApproved"), true))
@@ -217,7 +213,9 @@ export const searchWithAvailability = query({
       pageVehicles = pageVehicles.filter((vehicle) => vehicle.ownerId !== currentUserId)
     }
 
-    // Date availability filter (only over the current page)
+    // Date availability filter (only over the current page).
+    // Owner-blocked dates still hide a vehicle from date search. Existing
+    // bookings/requests do not — multiple renters can request the same days.
     if (startDate && endDate && pageVehicles.length > 0) {
       const blockedDatesInRange = await ctx.db
         .query("availability")
@@ -231,26 +229,7 @@ export const searchWithAvailability = query({
         .collect()
       const vehiclesWithBlockedDates = new Set(blockedDatesInRange.map((a) => a.vehicleId))
 
-      const overlappingReservations = await ctx.db
-        .query("reservations")
-        .withIndex("by_dates", (q) => q.lte("startDate", endDate))
-        .filter((q) =>
-          q.and(
-            q.gte(q.field("endDate"), startDate),
-            q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "confirmed"))
-          )
-        )
-        .collect()
-      const conflictingReservations = overlappingReservations.filter(
-        (reservation) =>
-          reservation.startDate <= endDate && reservation.endDate >= startDate
-      )
-      const vehiclesWithConflicts = new Set(conflictingReservations.map((r) => r.vehicleId))
-
-      pageVehicles = pageVehicles.filter(
-        (vehicle) =>
-          !(vehiclesWithBlockedDates.has(vehicle._id) || vehiclesWithConflicts.has(vehicle._id))
-      )
+      pageVehicles = pageVehicles.filter((vehicle) => !vehiclesWithBlockedDates.has(vehicle._id))
     }
 
     // Distance filter (within the page only — cross-page distance sort isn't possible here)
@@ -290,8 +269,7 @@ export const searchWithAvailability = query({
           ctx.db.get(vehicle.trackId),
         ])
 
-        const hostStripeReady =
-          !!owner?.stripeAccountId && owner.stripeAccountStatus === "enabled"
+        const hostStripeReady = !!owner?.stripeAccountId && owner.stripeAccountStatus === "enabled"
         const optimizedImages = images.filter((image) => image.r2Key)
 
         return {
@@ -368,8 +346,7 @@ export const getAll = query({
           ctx.db.get(vehicle.trackId),
         ])
 
-        const hostStripeReady =
-          !!owner?.stripeAccountId && owner.stripeAccountStatus === "enabled"
+        const hostStripeReady = !!owner?.stripeAccountId && owner.stripeAccountStatus === "enabled"
 
         return {
           ...vehicle,
@@ -412,8 +389,7 @@ export const getById = query({
         .collect(),
     ])
 
-    const hostStripeReady =
-      !!owner?.stripeAccountId && owner.stripeAccountStatus === "enabled"
+    const hostStripeReady = !!owner?.stripeAccountId && owner.stripeAccountStatus === "enabled"
 
     const identity = await ctx.auth.getUserIdentity()
     const isAdmin = !!identity && isAdminIdentity(identity)

@@ -8,6 +8,7 @@ import { type ActionCtx, httpAction } from "./_generated/server"
 import { resendComponent } from "./emails"
 import { logError } from "./logger"
 import { rateLimiter } from "./rateLimiter"
+import { isSeatPaymentMetadata } from "./seatPayments"
 import { readReturnPhoto, uploadReturnPhoto, returnPhotoOptions } from "./returnEvidence"
 
 function stripeObjectId(value: string | { id: string } | null): string | undefined {
@@ -84,6 +85,18 @@ registerRoutes(http, components.stripe, {
 
       const paymentIntent = event.data.object
 
+      if (isSeatPaymentMetadata(paymentIntent.metadata)) {
+        // Seat destination charges belong to the platform, never a connected account.
+        if (event.account) return
+        await ctx.runMutation(internal.seatPayments.ingestPaymentIntentEvent, {
+          eventId: event.id,
+          eventType: "payment_intent.succeeded",
+          paymentIntentId: paymentIntent.id,
+          metadata: paymentIntent.metadata ?? {},
+        })
+        return
+      }
+
       const rental = rentalMetadata(paymentIntent.metadata, event.account)
       if (rental) {
         await ctx.runMutation(internal.stripe.ingestRentalPaymentEvent, {
@@ -155,6 +168,19 @@ registerRoutes(http, components.stripe, {
       }
 
       const paymentIntent = event.data.object
+
+      if (isSeatPaymentMetadata(paymentIntent.metadata)) {
+        // Seat destination charges belong to the platform, never a connected account.
+        if (event.account) return
+        await ctx.runMutation(internal.seatPayments.ingestPaymentIntentEvent, {
+          eventId: event.id,
+          eventType: "payment_intent.payment_failed",
+          paymentIntentId: paymentIntent.id,
+          metadata: paymentIntent.metadata ?? {},
+          failureReason: paymentIntent.last_payment_error?.message,
+        })
+        return
+      }
 
       const rental = rentalMetadata(paymentIntent.metadata, event.account)
       if (rental) {
@@ -355,6 +381,19 @@ registerRoutes(http, components.stripe, {
       }
 
       const paymentIntent = event.data.object
+
+      if (isSeatPaymentMetadata(paymentIntent.metadata)) {
+        // Seat destination charges belong to the platform, never a connected account.
+        if (event.account) return
+        await ctx.runMutation(internal.seatPayments.ingestPaymentIntentEvent, {
+          eventId: event.id,
+          eventType: "payment_intent.canceled",
+          paymentIntentId: paymentIntent.id,
+          metadata: paymentIntent.metadata ?? {},
+          failureReason: "Payment was canceled",
+        })
+        return
+      }
 
       const rental = rentalMetadata(paymentIntent.metadata, event.account)
       if (rental) {

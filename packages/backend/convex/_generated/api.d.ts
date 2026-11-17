@@ -92,7 +92,43 @@ import type {
   FunctionReference,
 } from "convex/server";
 
+import type * as raceEvents from "../raceEvents.js";
+
+import type * as raceSeries from "../raceSeries.js";
+
+import type * as reliability from "../reliability.js";
+
+import type * as reliabilityMetrics from "../reliabilityMetrics.js";
+
+import type * as seatBookings from "../seatBookings.js";
+
+import type * as seatHelpers from "../seatHelpers.js";
+
+import type * as seatOfferings from "../seatOfferings.js";
+
+import type * as seatPayments from "../seatPayments.js";
+
+import type * as speedhive from "../speedhive.js";
+
+import type * as teamCars from "../teamCars.js";
+
+import type * as teamResultLinks from "../teamResultLinks.js";
+
+import type * as timingResults from "../timingResults.js";
+
 declare const fullApi: ApiFromModules<{
+  timingResults: typeof timingResults;
+  teamResultLinks: typeof teamResultLinks;
+  teamCars: typeof teamCars;
+  speedhive: typeof speedhive;
+  seatPayments: typeof seatPayments;
+  seatOfferings: typeof seatOfferings;
+  seatHelpers: typeof seatHelpers;
+  seatBookings: typeof seatBookings;
+  reliabilityMetrics: typeof reliabilityMetrics;
+  reliability: typeof reliability;
+  raceSeries: typeof raceSeries;
+  raceEvents: typeof raceEvents;
   activity: typeof activity;
   admin: typeof admin;
   auditLog: typeof auditLog;

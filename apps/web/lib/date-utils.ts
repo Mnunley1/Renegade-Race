@@ -1,3 +1,5 @@
+export { inclusiveRentalDays, isValidRentalDuration } from "@renegade/backend/convex/dateUtils"
+
 /**
  * Date utility functions for consistent date handling across the application.
  * All dates are stored in the database as YYYY-MM-DD strings (date-only, no time).
