@@ -70,5 +70,8 @@ CLAUDE.md
 *.csv
 
 # Migration scripts (kept locally, not tracked)
-scripts/
+scripts/*
+!scripts/ren6-staging-smoke.py
+!scripts/ren6-staging-smoke.test.py
+!scripts/ren6-staging-smoke.md
 packages/backend/scripts/

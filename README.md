@@ -70,7 +70,8 @@ pnpm dev:backend   # Convex backend only
 
 ## Scripts
 
-For required CI checks and the separate production promotion procedure, see [Releases](docs/releases.md).
+For required CI checks and the dev-to-main release procedure, see [Releases](docs/releases.md).
+For the isolated renter/host/payment staging check, see [Staging smoke test](scripts/ren6-staging-smoke.md).
 
 | Command | Description |
 |---------|-------------|

@@ -170,6 +170,129 @@ describe("signed rental Stripe webhooks", () => {
     expect(result.receipts.filter((e) => e.eventId === "evt_success")).toHaveLength(1)
   })
 
+  it("ignores connected-account seat metadata and routes platform seat success exactly once", async () => {
+    const { t, post, intent, state } = await setup()
+    const bookingId = await t.run(async ({ db }) => {
+      const now = Date.now()
+      const teamId = await db.insert("teams", {
+        ownerId: "host",
+        name: "Test team",
+        description: "Test",
+        location: "WI",
+        specialties: [],
+        availableSeats: 1,
+        requirements: [],
+        contactInfo: {},
+        isActive: true,
+        createdAt: now,
+        updatedAt: now,
+      })
+      const seriesId = await db.insert("raceSeries", {
+        name: "Test series",
+        isActive: true,
+        createdByUserId: "host",
+        createdAt: now,
+        updatedAt: now,
+      })
+      const raceEventId = await db.insert("raceEvents", {
+        name: "Test event",
+        seriesId,
+        startDate: "2031-08-01",
+        endDate: "2031-08-01",
+        isActive: true,
+        createdByUserId: "host",
+        createdAt: now,
+        updatedAt: now,
+      })
+      const teamCarId = await db.insert("teamCars", {
+        teamId,
+        raceEventId,
+        hostUserId: "host",
+        make: "BMW",
+        model: "M3",
+        isActive: true,
+        createdAt: now,
+        updatedAt: now,
+      })
+      const seatOfferingId = await db.insert("seatOfferings", {
+        teamId,
+        raceEventId,
+        teamCarId,
+        hostUserId: "host",
+        title: "Test seat",
+        spotCount: 1,
+        priceCents: 10000,
+        depositCents: 10000,
+        isActive: true,
+        createdAt: now,
+        updatedAt: now,
+      })
+      return db.insert("seatBookings", {
+        seatOfferingId,
+        teamCarId,
+        raceEventId,
+        teamId,
+        hostUserId: "host",
+        driverId: "driver",
+        status: "approved",
+        priceCents: 10000,
+        depositCents: 10000,
+        balanceCents: 0,
+        platformFeePercentage: 5,
+        availableStartDate: "2031-08-01",
+        availableEndDate: "2031-08-01",
+        driverExperience: "intermediate",
+        budgetBand: "test",
+        seriesClass: "test",
+        whyBuying: "test",
+        depositPaymentStatus: "pending",
+        createdAt: now,
+        updatedAt: now,
+      })
+    })
+    const seatIntent = {
+      ...intent,
+      id: "pi_seat",
+      metadata: {
+        bookingType: "seat",
+        phase: "deposit",
+        seatBookingId: bookingId,
+      },
+    }
+    for (const type of ["succeeded", "payment_failed", "canceled"]) {
+      expect(
+        (
+          await post(`payment_intent.${type}`, `evt_seat_connected_${type}`, seatIntent, {
+            account: "acct_connected",
+          })
+        ).status
+      ).toBe(200)
+    }
+    expect(await t.run(({ db }) => db.get(bookingId))).toMatchObject({
+      status: "approved",
+      depositPaymentStatus: "pending",
+    })
+    expect((await post("payment_intent.succeeded", "evt_seat_platform", seatIntent)).status).toBe(
+      200
+    )
+    expect((await post("payment_intent.succeeded", "evt_seat_platform", seatIntent)).status).toBe(
+      200
+    )
+    await t.finishAllScheduledFunctions(vi.runAllTimers)
+    expect(await t.run(({ db }) => db.get(bookingId))).toMatchObject({
+      status: "confirmed",
+      depositPaymentStatus: "paid",
+      stripeDepositPaymentIntentId: "pi_seat",
+    })
+    const result = await state()
+    expect(result.payment?.status).toBe("pending")
+    expect(result.reservation?.status).toBe("approved")
+    expect(result.receipts.filter((event) => event.eventId === "evt_seat_platform")).toHaveLength(1)
+    expect(result.receipts.some((event) => event.eventId.startsWith("evt_seat_connected"))).toBe(
+      false
+    )
+  })
+
   it("routes a custom invoice through the invoice handlers even if a rental references its intent", async () => {
     const { t, post, intent, state } = await setup()
     const invoiceId = await t.run((ctx) =>

@@ -24,14 +24,21 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { Suspense, useEffect, useState } from "react"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
-import { formatDateToISO, parseLocalDate } from "@/lib/date-utils"
+import {
+  formatDateToISO,
+  inclusiveRentalDays,
+  isValidRentalDuration,
+  parseLocalDate,
+} from "@/lib/date-utils"
 import { r2Url } from "@/lib/r2-url"
+import { calculateRentalEstimate, formatRentalUsd } from "@/lib/rental-checkout"
 
 interface AddOn {
   name: string
   price: number
   description?: string
   isRequired?: boolean
+  priceType?: "daily" | "one-time"
 }
 
 function CheckoutPageContent() {
@@ -138,31 +145,6 @@ function CheckoutPageContent() {
       .map((item: { date: string }) => parseLocalDate(item.date))
       .filter((d: Date | null): d is Date => d !== null) || []
 
-  // Combine blocked dates (availability already accounts for reservations)
-  const unavailableDates = new Set(blockedDates.map((d: Date) => formatDateToISO(d)))
-
-  // Function to check if a date is unavailable
-  const isDateUnavailable = (date: Date): boolean => {
-    const dateStr = formatDateToISO(date)
-    return unavailableDates.has(dateStr)
-  }
-
-  // Function to check if a date range contains any unavailable dates
-  const isDateRangeUnavailable = (startDate: Date, endDate: Date): boolean => {
-    const start = new Date(startDate)
-    const end = new Date(endDate)
-    start.setHours(0, 0, 0, 0)
-    end.setHours(0, 0, 0, 0)
-
-    // Check each date in the range
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      if (isDateUnavailable(d)) {
-        return true
-      }
-    }
-    return false
-  }
-
   // Toggle add-on selection
   const toggleAddOn = (addOn: AddOn) => {
     if (addOn.isRequired) return // Can't deselect required add-ons
@@ -182,19 +164,12 @@ function CheckoutPageContent() {
       return { days: 0, total: 0, addOnsTotal: 0 }
     }
 
-    const start = new Date(pickupDate)
-    const end = new Date(dropoffDate)
-    start.setHours(0, 0, 0, 0)
-    end.setHours(0, 0, 0, 0)
-    const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
-
-    if (days <= 0) return { days: 0, total: 0, addOnsTotal: 0 }
-
-    const baseTotal = days * vehicle.dailyRate
-    const addOnsTotal = selectedAddOns.reduce((sum, addOn) => sum + addOn.price, 0)
-    const total = baseTotal + addOnsTotal
-
-    return { days, total, addOnsTotal }
+    return calculateRentalEstimate(
+      formatDateToISO(pickupDate),
+      formatDateToISO(dropoffDate),
+      vehicle.dailyRate,
+      selectedAddOns
+    )
   }
 
   const { days, total } = calculateTotal()
@@ -210,9 +185,8 @@ function CheckoutPageContent() {
       return
     }
 
-    // Validate that the selected date range doesn't contain blocked dates
-    if (isDateRangeUnavailable(pickupDate, dropoffDate)) {
-      setError("The selected dates include unavailable dates. Please select different dates.")
+    if (!isValidRentalDuration(days)) {
+      setError("Choose a rental of 1, 2, or 3 calendar days.")
       return
     }
 
@@ -227,6 +201,7 @@ function CheckoutPageContent() {
               name: addOn.name,
               price: addOn.price,
               description: addOn.description,
+              priceType: addOn.priceType,
             }))
           : undefined
 
@@ -295,14 +270,9 @@ function CheckoutPageContent() {
   const primaryImageData = vehicleImages?.find((img) => img.isPrimary) || vehicleImages?.[0]
   const primaryImage =
     (primaryImageData?.r2Key ? r2Url(primaryImageData.r2Key) : primaryImageData?.imageUrl) || ""
-  // Check if form is valid and dates don't contain blocked dates
+  // Availability is informational; the host decides whether to approve a request.
   const isValid =
-    pickupDate &&
-    dropoffDate &&
-    pickupTime &&
-    dropoffTime &&
-    days > 0 &&
-    !isDateRangeUnavailable(pickupDate, dropoffDate)
+    pickupDate && dropoffDate && pickupTime && dropoffTime && isValidRentalDuration(days)
 
   return (
     <div className="container mx-auto max-w-6xl px-4 py-8">
@@ -333,7 +303,7 @@ function CheckoutPageContent() {
                       {vehicle.year} {vehicle.make} {vehicle.model}
                     </h3>
                     <p className="text-muted-foreground text-sm">
-                      ${vehicle.dailyRate.toLocaleString()}/day
+                      {formatRentalUsd(vehicle.dailyRate)}/day
                     </p>
                   </div>
                 </div>
@@ -370,7 +340,7 @@ function CheckoutPageContent() {
                         disabled={(date: Date) => {
                           const dateStart = new Date(date)
                           dateStart.setHours(0, 0, 0, 0)
-                          return dateStart < minPickupDate || isDateUnavailable(dateStart)
+                          return dateStart < minPickupDate
                         }}
                         initialFocus
                         mode="single"
@@ -382,19 +352,17 @@ function CheckoutPageContent() {
                         }}
                         onSelect={(date) => {
                           if (date) {
-                            if (isDateUnavailable(date)) {
-                              setError("This date is unavailable. Please select a different date.")
-                              return
-                            }
                             setPickupDate(date)
                             setError(null)
-                            // Reset dropoff date if it's before new pickup date or if it's unavailable
-                            if (dropoffDate && date && dropoffDate < date) {
-                              setDropoffDate(undefined)
-                            } else if (dropoffDate && isDateRangeUnavailable(date, dropoffDate)) {
-                              setError(
-                                "The selected date range includes unavailable dates. Please select different dates."
+                            if (
+                              dropoffDate &&
+                              !isValidRentalDuration(
+                                inclusiveRentalDays(
+                                  formatDateToISO(date),
+                                  formatDateToISO(dropoffDate)
+                                )
                               )
+                            ) {
                               setDropoffDate(undefined)
                             }
                             setOpenPickupDate(false)
@@ -407,7 +375,7 @@ function CheckoutPageContent() {
                   {blockedDates.length > 0 && (
                     <div className="mt-2 flex items-center gap-2 text-muted-foreground text-xs">
                       <div className="size-3 rounded bg-red-100 dark:bg-red-900/20" />
-                      <span>Unavailable dates</span>
+                      <span>Host-marked dates; you can still send a request.</span>
                     </div>
                   )}
                 </div>
@@ -464,7 +432,16 @@ function CheckoutPageContent() {
                           dateStart.setHours(0, 0, 0, 0)
                           const minDate = new Date(minDropoffDate)
                           minDate.setHours(0, 0, 0, 0)
-                          return dateStart < minDate || isDateUnavailable(dateStart)
+                          return (
+                            dateStart < minDate ||
+                            (pickupDate !== undefined &&
+                              !isValidRentalDuration(
+                                inclusiveRentalDays(
+                                  formatDateToISO(pickupDate),
+                                  formatDateToISO(dateStart)
+                                )
+                              ))
+                          )
                         }}
                         initialFocus
                         mode="single"
@@ -476,17 +453,6 @@ function CheckoutPageContent() {
                         }}
                         onSelect={(date) => {
                           if (date) {
-                            if (isDateUnavailable(date)) {
-                              setError("This date is unavailable. Please select a different date.")
-                              return
-                            }
-                            // Validate that the date range from pickup to dropoff doesn't contain blocked dates
-                            if (pickupDate && isDateRangeUnavailable(pickupDate, date)) {
-                              setError(
-                                "The selected date range includes unavailable dates. Please select different dates."
-                              )
-                              return
-                            }
                             setDropoffDate(date)
                             setError(null)
                             setOpenDropoffDate(false)
@@ -499,7 +465,7 @@ function CheckoutPageContent() {
                   {blockedDates.length > 0 && (
                     <div className="mt-2 flex items-center gap-2 text-muted-foreground text-xs">
                       <div className="size-3 rounded bg-red-100 dark:bg-red-900/20" />
-                      <span>Unavailable dates</span>
+                      <span>Host-marked dates; you can still send a request.</span>
                     </div>
                   )}
                 </div>
@@ -566,7 +532,8 @@ function CheckoutPageContent() {
                                       )}
                                     </div>
                                     <span className="font-semibold">
-                                      +${addOn.price.toLocaleString()}
+                                      +{formatRentalUsd(addOn.price)}
+                                      {addOn.priceType === "daily" ? "/day" : ""}
                                     </span>
                                   </div>
                                   {addOn.description && (
@@ -617,7 +584,7 @@ function CheckoutPageContent() {
                   <>
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Daily Rate</span>
-                      <span>${vehicle.dailyRate.toLocaleString()}/day</span>
+                      <span>{formatRentalUsd(vehicle.dailyRate)}/day</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Duration</span>
@@ -627,7 +594,7 @@ function CheckoutPageContent() {
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Base Price</span>
-                      <span>${(days * vehicle.dailyRate).toLocaleString()}</span>
+                      <span>{formatRentalUsd(days * vehicle.dailyRate)}</span>
                     </div>
                   </>
                 )}
@@ -635,19 +602,22 @@ function CheckoutPageContent() {
                   selectedAddOns.map((addOn) => (
                     <div className="flex justify-between text-sm" key={addOn.name}>
                       <span className="text-muted-foreground">{addOn.name}</span>
-                      <span>+${addOn.price.toLocaleString()}</span>
+                      <span>
+                        +{formatRentalUsd(addOn.price * (addOn.priceType === "daily" ? days : 1))}
+                      </span>
                     </div>
                   ))}
                 <Separator />
                 <div className="flex justify-between">
                   <span className="font-semibold">Estimated Total</span>
-                  <span className="font-bold text-lg">${total.toLocaleString()}</span>
+                  <span className="font-bold text-lg">{formatRentalUsd(total)}</span>
                 </div>
               </div>
 
               <div className="rounded-lg border bg-muted/50 p-3 text-muted-foreground text-sm">
-                No payment required now. The host will review your request and you'll only pay if
-                approved.
+                Rentals last 1, 2, or 3 calendar days, including pickup and dropoff dates. No
+                payment is required now. You can request host-marked or booked dates; the host will
+                review your request and you'll only pay if approved.
               </div>
 
               {error && (

@@ -61,6 +61,17 @@ The protected tags `production-web-2026-11-17`, `production-admin-2026-11-17` an
 `production-convex-2026-11-17` record the verified live baselines when this branch
 flow was adopted. Production's backend includes endurance-seat work absent from
 `main`; `main` includes invoice/ACH and Paddock work absent from that backend.
-Reconcile those feature/schema differences and complete staging verification
-before the first application release through this flow. Passing CI alone does
-not establish production compatibility.
+REN-6 reconciles those backend features additively on `dev`: endurance seats and
+timing coexist with invoices/ACH and Paddock. Legacy and endurance race-event
+records remain valid. Rental requests retain the live inclusive 1–3 day rules;
+REN-11 tracks any later policy change. Existing reservations retain their stored
+duration at payment time.
+
+The reconciled backend targets the nonproduction `earnest-panther-585` deployment,
+with Clerk's `sure-rattler-22` test instance, Stripe test mode, and the separate
+`renegade-race-dev` bucket. Run the [staging smoke test](../scripts/ren6-staging-smoke.md)
+and record its exact frontend/backend revisions before an application release.
+Production remains on the tagged baselines until a separately approved release.
+Seat-specific frontend parity and seat checkout hardening require separate review;
+the rental smoke test does not establish seat-flow readiness. Passing CI alone
+does not establish production compatibility.

@@ -561,6 +561,18 @@ async function hasPayoutHistory(ctx: QueryCtx, userId: string): Promise<boolean>
         )
       )
       .first(),
+    ctx.db
+      .query("seatBookings")
+      .withIndex("by_host", (q) => q.eq("hostUserId", userId))
+      .filter((q) =>
+        q.or(
+          q.neq(q.field("stripeDepositCheckoutSessionId"), undefined),
+          q.neq(q.field("stripeBalanceCheckoutSessionId"), undefined),
+          q.neq(q.field("stripeDepositPaymentIntentId"), undefined),
+          q.neq(q.field("stripeBalancePaymentIntentId"), undefined)
+        )
+      )
+      .first(),
   ])
   return records.some(Boolean)
 }
