@@ -14,8 +14,9 @@
 5. Merge `main` back into `dev` through a passing PR after a release so the next
    release includes the previous release merge commit. Do not reset either branch.
 
-`dev` is the default branch and PR target. Keep release PRs as merge commits to
-preserve ancestry between the long-lived branches. A release PR is the production
+`dev` is the default branch and PR target. Use merge commits in both directions
+between `dev` and `main`; squash/rebase are only for short-lived feature PRs.
+This preserves ancestry between the long-lived branches. A release PR is the production
 approval boundary; there is no additional routine Vercel promotion step.
 
 ## Required checks
