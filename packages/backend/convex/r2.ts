@@ -1,30 +1,133 @@
 import { R2 } from "@convex-dev/r2"
-import { v } from "convex/values"
+import { ConvexError, v } from "convex/values"
 import { components } from "./_generated/api"
-import { mutation } from "./_generated/server"
+import type { DataModel, Doc, Id } from "./_generated/dataModel"
+import { mutation, type MutationCtx, type QueryCtx } from "./_generated/server"
 import { getCurrentUser } from "./users"
 
 // Initialize R2 client
 export const r2 = new R2(components.r2)
 
-// R2 Client API with validation
-export const { generateUploadUrl, syncMetadata } = r2.clientApi({
-  checkUpload: async (ctx, _bucket) => {
-    // Verify user is authenticated
-    // @ts-expect-error - GenericQueryCtx type mismatch with QueryCtx
-    const user = await getCurrentUser(ctx)
-    if (!user) {
-      throw new Error("Not authenticated")
-    }
+function findUpload(ctx: QueryCtx, key: string) {
+  return ctx.db
+    .query("r2Uploads")
+    .withIndex("by_bucket_key", (q) => q.eq("bucket", r2.config.bucket).eq("key", key))
+    .unique()
+}
 
-    // Additional validation can be added here (file size, type, etc.)
-    // The actual file validation happens client-side before upload
-  },
-  onUpload: async (_ctx, _bucket, _key) => {
-    // Optional: Log upload or perform additional actions
-    // This runs after the file is uploaded to R2 and metadata is synced
+async function issueUpload(
+  ctx: MutationCtx,
+  ownerId: string,
+  upload: Pick<Doc<"r2Uploads">, "key" | "purpose" | "targetVehicleId">
+) {
+  const result = await r2.generateUploadUrl(upload.key)
+  await ctx.db.insert("r2Uploads", { bucket: r2.config.bucket, ownerId, ...upload })
+  return result
+}
+
+async function issueUserUpload(ctx: MutationCtx, purpose: "onboarding" | "vehicle" | "general") {
+  const user = await getCurrentUser(ctx)
+  if (!user) throw new Error("Not authenticated")
+  const key = `images/${purpose}/${user._id}/${crypto.randomUUID()}`
+  return issueUpload(ctx, user.externalId, { purpose, key })
+}
+
+// Older clients use the shared endpoint for both listings and other media.
+// Their verified uploads can be attached, but shared-purpose bytes are retained.
+export const generateUploadUrl = mutation({
+  args: {},
+  handler: (ctx) => issueUserUpload(ctx, "general"),
+})
+
+export const generateOnboardingImageUploadUrl = mutation({
+  args: {},
+  handler: (ctx) => issueUserUpload(ctx, "onboarding"),
+})
+
+export const generateListingImageUploadUrl = mutation({
+  args: {},
+  handler: (ctx) => issueUserUpload(ctx, "vehicle"),
+})
+
+export const { syncMetadata } = r2.clientApi<DataModel>({
+  onUpload: async (ctx, _bucket, key) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) throw new Error("Not authenticated")
+    const upload = await findUpload(ctx, key)
+    if (upload?.ownerId !== identity.subject)
+      throw new Error("Upload ownership could not be verified")
   },
 })
+
+export async function requireDraftUpload(ctx: QueryCtx, ownerId: string, key: string) {
+  const upload = await findUpload(ctx, key)
+  if (
+    !upload ||
+    upload.ownerId !== ownerId ||
+    upload.imageId ||
+    (upload.purpose !== "onboarding" && upload.purpose !== "general")
+  ) {
+    throw new Error("Upload this onboarding photo again to verify ownership")
+  }
+}
+
+export async function clearDraftUploads(
+  ctx: MutationCtx,
+  user: Doc<"users">,
+  keep: ReadonlySet<string> = new Set()
+) {
+  const keys = new Set(user.hostOnboardingDraft?.images?.map((image) => image.r2Key))
+  for (const key of keys) {
+    if (keep.has(key)) continue
+    const upload = await findUpload(ctx, key)
+    if (upload?.ownerId === user.externalId && upload.purpose === "onboarding" && !upload.imageId) {
+      // The component schedules its retried R2 delete in this same transaction.
+      await r2.deleteObject(ctx, key)
+      await ctx.db.delete(upload._id)
+    }
+  }
+}
+
+export async function attachVehicleUpload(
+  ctx: MutationCtx,
+  ownerId: string,
+  {
+    vehicleId,
+    imageId,
+    key,
+  }: { vehicleId: Id<"vehicles">; imageId: Id<"vehicleImages">; key: string }
+) {
+  const upload = await findUpload(ctx, key)
+  if (
+    !upload ||
+    upload.ownerId !== ownerId ||
+    upload.purpose === "other" ||
+    upload.imageId ||
+    (upload.targetVehicleId && upload.targetVehicleId !== vehicleId)
+  ) {
+    throw new ConvexError({
+      code: "REUPLOAD_VEHICLE_PHOTO",
+      message: "Upload this vehicle photo again to verify ownership",
+    })
+  }
+  await ctx.db.patch(upload._id, { imageId })
+}
+
+export async function removeVehicleUpload(
+  ctx: MutationCtx,
+  ownerId: string,
+  image: Doc<"vehicleImages">
+) {
+  if (!image.r2Key) return
+  const upload = await findUpload(ctx, image.r2Key)
+  if (upload?.ownerId !== ownerId || upload.imageId !== image._id) return
+  if (upload.purpose === "onboarding" || upload.purpose === "vehicle") {
+    await r2.deleteObject(ctx, image.r2Key)
+    await ctx.db.delete(upload._id)
+  } else {
+    await ctx.db.patch(upload._id, { imageId: undefined })
+  }
+}
 
 // Custom mutation to generate upload URL with organized key structure
 export const generateUploadUrlWithKey = mutation({
@@ -38,7 +141,7 @@ export const generateUploadUrlWithKey = mutation({
     // Generate organized key structure: images/{type}/{userId}/{uuid}.{ext}
     // For now, we'll use a simple UUID - the extension will be determined by the file
     const key = `images/uploads/${user._id}/${crypto.randomUUID()}`
-    return r2.generateUploadUrl(key)
+    return issueUpload(ctx, user.externalId, { purpose: "general", key })
   },
 })
 
@@ -62,7 +165,11 @@ export const generateVehicleImageUploadUrl = mutation({
 
     // Generate organized key: images/vehicles/{vehicleId}/{index}-{uuid}
     const key = `images/vehicles/${args.vehicleId}/${args.imageIndex}-${crypto.randomUUID()}`
-    return r2.generateUploadUrl(key)
+    return issueUpload(ctx, user.externalId, {
+      purpose: "vehicle",
+      key,
+      targetVehicleId: args.vehicleId,
+    })
   },
 })
 
@@ -77,25 +184,31 @@ export const generateProfileImageUploadUrl = mutation({
 
     // Generate organized key: images/profiles/{userId}/{uuid}
     const key = `images/profiles/${user._id}/${crypto.randomUUID()}`
-    const uploadResult = await r2.generateUploadUrl(key)
-    return { ...uploadResult, key }
+    return issueUpload(ctx, user.externalId, { purpose: "other", key })
   },
 })
 
 // Sensitive-content uploads: prefixed by context so a future split into a
 // private bucket (or a per-kind ACL change) can filter on the key prefix.
 async function generateReservationPhotoUploadUrl(
-  ctx: Parameters<typeof getCurrentUser>[0],
-  reservationId: string,
+  ctx: MutationCtx,
+  reservationId: Id<"reservations">,
   prefix: "disputes" | "reviews" | "damage"
 ) {
   const user = await getCurrentUser(ctx)
   if (!user) {
     throw new Error("Not authenticated")
   }
+  const reservation = await ctx.db.get(reservationId)
+  const canUpload =
+    reservation &&
+    (reservation.ownerId === user.externalId ||
+      (prefix !== "damage" && reservation.renterId === user.externalId))
+  if (!canUpload) {
+    throw new Error("Not authorized to upload photos for this reservation")
+  }
   const key = `images/${prefix}/${reservationId}/${user._id}-${crypto.randomUUID()}`
-  const uploadResult = await r2.generateUploadUrl(key)
-  return { ...uploadResult, key }
+  return issueUpload(ctx, user.externalId, { purpose: "other", key })
 }
 
 export const generateDisputePhotoUploadUrl = mutation({

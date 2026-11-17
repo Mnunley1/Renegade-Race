@@ -8,7 +8,7 @@ A marketplace platform for track day vehicle rentals, connecting vehicle owners 
 - **Backend:** [Convex](https://convex.dev) (serverless database, functions, and scheduling)
 - **Auth:** [Clerk](https://clerk.com)
 - **Payments:** [Stripe Connect](https://stripe.com/connect) (marketplace payouts)
-- **Storage:** Cloudflare R2 + ImageKit (image optimization)
+- **Storage:** Cloudflare R2 + Vercel image optimization; private Convex storage for return evidence
 - **Email:** Resend
 - **Monitoring:** Sentry
 - **UI:** shadcn/ui + Tailwind CSS 4
@@ -84,6 +84,12 @@ New rental, seat, coaching, and damage payments require a unique local Stripe Co
 
 For an older account, verify control of both the signed-in Renegade identity and the specific Stripe account through independent evidence. The saved link and a matching email alone do not establish ownership. Record the evidence in restricted support records. Once verified, a platform operator can set `renegadeUserId` on that one connected account in Stripe. The next checkout reads the updated ownership directly. Keep the hold in place if the evidence is incomplete or the account is linked to multiple users.
 
+## Onboarding and listing photos
+
+Convex records the uploader, R2 bucket, key, and intended use when it issues an upload URL. Saving a draft checks that record. Creating a listing binds the upload to its vehicle image, so clearing or restarting onboarding preserves published photos.
+
+Cleanup removes unused onboarding photos issued to the signed-in user. Clearing a legacy draft or removing a legacy listing image removes its reference and retains the stored file when its uploader is unknown. A host resuming an older draft must re-upload any unverified photos before publishing. Older clients can still attach their newly issued general-purpose uploads. Cleanup retains those files because they may be used elsewhere.
+
 ## Environment Variables
 
 See `.env.example` files in each app/package for required variables:
@@ -94,7 +100,6 @@ See `.env.example` files in each app/package for required variables:
 - **Resend** — `RESEND_API_KEY`
 - **Cloudflare R2** — `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`
 - **Google Maps** — `GOOGLE_MAPS_API_KEY`
-- **ImageKit** — `IMAGEKIT_URL_ENDPOINT`
 - **Sentry** — `NEXT_PUBLIC_SENTRY_DSN`
 
 ## Adding UI Components
