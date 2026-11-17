@@ -2,8 +2,9 @@ import { v } from "convex/values"
 import { internal } from "./_generated/api"
 import type { Id } from "./_generated/dataModel"
 import { action, internalQuery, mutation, query } from "./_generated/server"
-
 import { ErrorCode, throwError } from "./errors"
+import { participantCompletion } from "./helpers"
+import { visibleReturnPhotos } from "./returnEvidence"
 
 export function isAdminIdentity(identity: { subject: string }): boolean {
   const claims = identity as {
@@ -170,7 +171,7 @@ export const getAllDisputes = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    await checkAdmin(ctx)
+    const identity = await checkAdmin(ctx)
 
     const { status, limit = 50 } = args
 
@@ -199,9 +200,10 @@ export const getAllDisputes = query({
             .first(),
         ])
 
+        const permitted = participantCompletion(completion, reservation, identity.subject)
         return {
           ...dispute,
-          completion,
+          completion: permitted ? await visibleReturnPhotos(ctx, permitted) : null,
           reservation,
           vehicle,
           renter,

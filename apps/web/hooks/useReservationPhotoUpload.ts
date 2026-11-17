@@ -4,13 +4,12 @@ import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { type UploadFn, usePhotoUpload } from "./usePhotoUpload"
 
-type ReservationPhotoKind = "dispute" | "review" | "damage" | "return"
+type ReservationPhotoKind = "dispute" | "review" | "damage"
 
 const mutationByKind = {
   dispute: api.r2.generateDisputePhotoUploadUrl,
   review: api.r2.generateReviewPhotoUploadUrl,
   damage: api.r2.generateDamagePhotoUploadUrl,
-  return: api.r2.generateReturnPhotoUploadUrl,
 } as const
 
 type Options = {

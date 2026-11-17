@@ -1,4 +1,5 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server"
+import { convexSiteOrigin } from "./lib/return-photo"
 
 const isPublicRoute = createRouteMatcher([
   "/",
@@ -32,6 +33,7 @@ export default clerkMiddleware(
         "connect-src": [
           "accounts.renegaderace.com",
           "*.convex.cloud",
+          convexSiteOrigin(),
           "wss://*.convex.cloud",
           "*.sentry.io",
           "*.r2.cloudflarestorage.com",
@@ -39,6 +41,7 @@ export default clerkMiddleware(
           "*.vercel.app",
         ],
         "img-src": [
+          "blob:",
           "*.r2.dev",
           "*.r2.cloudflarestorage.com",
           "images.renegaderace.com",

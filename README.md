@@ -8,7 +8,7 @@ A marketplace platform for track day vehicle rentals, connecting vehicle owners 
 - **Backend:** [Convex](https://convex.dev) (serverless database, functions, and scheduling)
 - **Auth:** [Clerk](https://clerk.com)
 - **Payments:** [Stripe Connect](https://stripe.com/connect) (marketplace payouts)
-- **Storage:** Cloudflare R2 + ImageKit (image optimization)
+- **Storage:** Cloudflare R2 + Vercel image optimization; private Convex storage for return evidence
 - **Email:** Resend
 - **Monitoring:** Sentry
 - **UI:** shadcn/ui + Tailwind CSS 4
@@ -86,6 +86,10 @@ For an older account, verify control of both the signed-in Renegade identity and
 
 Custom invoices recheck the destination when opening a Stripe payment link or the billing portal. A payout hold still allows access to paid receipts. The invoice sender can refund a settled ACH damage deposit to its original charge. Pending refunds reserve that amount until Stripe confirms success or failure.
 
+## Return evidence
+
+For participant access, private photo delivery, and migration of historical R2 attachments, see [Return evidence access and release](docs/return-evidence.md).
+
 ## Environment Variables
 
 See `.env.example` files in each app/package for required variables:
@@ -96,7 +100,6 @@ See `.env.example` files in each app/package for required variables:
 - **Resend** — `RESEND_API_KEY`
 - **Cloudflare R2** — `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`
 - **Google Maps** — `GOOGLE_MAPS_API_KEY`
-- **ImageKit** — `IMAGEKIT_URL_ENDPOINT`
 - **Sentry** — `NEXT_PUBLIC_SENTRY_DSN`
 
 ## Adding UI Components
