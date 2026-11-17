@@ -3,6 +3,8 @@ name: CI
 on:
   pull_request:
     branches: [main, dev]
+    # Recheck the release source when a PR is retargeted to another base.
+    types: [opened, synchronize, reopened, edited]
   push:
     branches: [main, dev]
 
