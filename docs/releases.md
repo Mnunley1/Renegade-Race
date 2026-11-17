@@ -1,74 +1,65 @@
 # Releases
 
-## Merge gate
+**Feature branch → `dev` (staging and testing) → `main` (production).**
 
-Open a pull request against `main`. The active GitHub ruleset requires the branch
-to be up to date and these GitHub Actions checks to succeed:
+## Daily work
 
+1. Create a feature branch from the latest `dev` and open its PR against `dev`.
+2. Pass CI and review the change, then merge. Vercel deploys `dev` to staging.
+3. Test the combined changes on staging. Record the tested SHA and results on the
+   release PR or Linear issue.
+4. Open a PR from this repository's `dev` branch to `main`. Once staging is
+   accepted and required checks pass, merge it to release. Both Vercel projects
+   automatically build and assign the new production deployments to live domains.
+5. Merge `main` back into `dev` through a passing PR after a release so the next
+   release includes the previous release merge commit. Do not reset either branch.
+
+`dev` is the default branch and PR target. Keep release PRs as merge commits to
+preserve ancestry between the long-lived branches. A release PR is the production
+approval boundary; there is no additional routine Vercel promotion step.
+
+## Required checks
+
+Both `dev` and `main` require an up-to-date PR, resolved review conversations and
+these GitHub Actions checks:
+
+- `Branch Flow` (PRs into `main` must come from this repository's `dev`)
 - `Lint & Type Check`
 - `Backend Tests`
 - `Web Tests`
-- `Build` (both web and admin)
+- `Build` (web and admin)
 
-CI runs on pull requests and pushes to `main` and `dev`, using Node 22 and
-pnpm 10.4.1 with frozen lockfile installs. Tests use their isolated test runtimes;
-CI has no production deployment credentials. Compilation uses placeholder service
-configuration and is not an end-to-end staging test.
+Force pushes and deletion are blocked, with no bypass actors. The owner can merge
+their own passing PR; a second-account approval is not required. CI uses Node 22,
+pnpm 10.4.1 and frozen installs on PRs and pushes to both branches. The build uses
+placeholder service configuration; it is not a staging integration test.
 
-The ruleset requires a PR and resolution of review conversations, blocks force
-pushes and deletion of `main`, and has no bypass actors. It does not require a
-second GitHub account's approval: the repository owner can merge their own PR
-after the checks pass. Record independent review evidence on significant changes.
-Keep the required check names synchronized with the workflow when changing them.
+## Environments and backend compatibility
 
-## Production promotion gate
+Web's Vercel `staging` environment tracks `dev`. Admin's staging domain tracks
+the `dev` Preview deployment. Production tracks `main` in both projects, with
+**Auto-assign Custom Production Domains enabled**. Feature branches get previews.
 
-For both Vercel projects (`nineonenine/renegade-web` and
-`nineonenine/renegade-race-admin`), Production tracks `main`, but **Auto-assign
-Custom Production Domains is disabled**. Merging can build a production-target
-deployment; it does not move the live domains. Preview deployments remain enabled.
-Keep this setting disabled. Do not use the Ignored Build Step as a routine release
-gate, and do not add a production Convex deploy to either app's build command.
+Convex deployment is currently separate from Vercel Git builds. Neither frontend
+build deploys the shared backend, and GitHub CI has no deployment credentials.
+Before accepting staging, verify that both apps use the intended nonproduction
+Convex revision. Exercise authentication, authorization, uploads and sandbox
+payments. Set `NEXT_PUBLIC_SKIP_REQUIRED_PHOTOS=false` for production-parity tests.
 
-An authorized operator can still explicitly promote a deployment in Vercel. This
-is a manual promotion boundary, not a second-person approval mechanism or a check
-on every use of Vercel's API. GitHub CI does not automatically deploy Convex or
-promote Vercel. Changes to a deployment's domain assignment require a release
-decision, even when its build is green.
+Before merging a release to `main`, verify compatibility with the live backend.
+If backend/schema changes are needed, obtain approval and deploy compatible
+Convex changes once for both apps before the frontend release. Existing frontends
+and open browser sessions must continue to work. Record backend and frontend SHAs,
+migration steps and rollback constraints. Reverting a frontend does not revert
+backend code or data. Coordinated backend automation is separate work; do not
+silently add production deploy commands to frontend builds.
 
-## Release procedure
+## Existing production baselines
 
-1. Select a reviewed, passing commit and record the current live Convex revision
-   and both Vercel deployment IDs before changing anything.
-2. Validate matching frontend/backend revisions in an isolated nonproduction
-   environment. Exercise sign-in, authorization, uploads and sandbox payments.
-   For production-parity checks, set `NEXT_PUBLIC_SKIP_REQUIRED_PHOTOS=false`.
-3. Review schema/API compatibility, migrations, and rollback. Obtain explicit
-   release approval before any production backend or schema change. One release
-   operator deploys backward-compatible Convex changes once for the shared backend. Existing
-   frontends and open browser sessions must keep working throughout the rollout.
-4. Verify the exact production-target Vercel builds, their source SHAs, environment
-   and backend URL. Test those staged builds before moving domains. Promoting a
-   Preview build can rebuild it with Production variables; it is not proof that
-   the identical preview artifact was released.
-5. After explicit release approval, use **Promote** on the intended staged
-   production deployment in each project's Vercel dashboard. Confirm the public
-   domain serves the intended deployment and run production-safe smoke checks.
-6. Record Git SHAs, Convex revision, Vercel deployment IDs, validation and any
-   migration/rollback constraints in the release's Linear issue. Frontend rollback
-   does not revert backend code or data; retain backward compatibility or follow
-   the reviewed backend recovery procedure.
-
-## Current release divergence
-
-At adoption of this gate, live web is `3c0d1bc`, admin is `ceadf7f`, and Convex is
-`c8c1265`. These are historical baseline identifiers, not dynamically updated
-release pointers. Production's backend contains endurance-seat work absent from
-`main`; `main` contains invoice/ACH and Paddock work absent from that backend.
-Passing CI alone does not authorize deploying `main` over that backend. Reconcile
-the feature/schema differences and complete staging validation first. Web's
-existing staging environment still tracks `dev`; migrating that environment is
-separate from this release gate.
-
-References: [Vercel staged production promotion](https://vercel.com/docs/deployments/promoting-a-deployment),
-[Convex deployment environments](https://docs.convex.dev/production/multiple-deployments).
+The protected tags `production-web-2026-11-17`, `production-admin-2026-11-17` and
+`production-convex-2026-11-17` record the verified live baselines when this branch
+flow was adopted. Production's backend includes endurance-seat work absent from
+`main`; `main` includes invoice/ACH and Paddock work absent from that backend.
+Reconcile those feature/schema differences and complete staging verification
+before the first application release through this flow. Passing CI alone does
+not establish production compatibility.

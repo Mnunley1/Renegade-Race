@@ -1,6 +1,7 @@
 ## What
 
 <!-- Brief description of the changes -->
+<!-- Feature PRs target dev. Release PRs target main from this repository's dev branch. -->
 
 ## Why
 
@@ -17,4 +18,4 @@
 ## Notes
 
 <!-- Include backend/frontend compatibility, migrations, and rollback considerations. -->
-<!-- Merging stages a production build; promotion is a separate approved action. See docs/releases.md. -->
+<!-- For dev → main releases, record the tested staging SHA and backend compatibility evidence. Merging to main automatically deploys web/admin to production. See docs/releases.md. -->
