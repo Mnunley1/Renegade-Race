@@ -43,8 +43,9 @@ decision, even when its build is green.
 2. Validate matching frontend/backend revisions in an isolated nonproduction
    environment. Exercise sign-in, authorization, uploads and sandbox payments.
    For production-parity checks, set `NEXT_PUBLIC_SKIP_REQUIRED_PHOTOS=false`.
-3. Review schema/API compatibility, migrations, and rollback. One release operator
-   deploys backward-compatible Convex changes once for the shared backend. Existing
+3. Review schema/API compatibility, migrations, and rollback. Obtain explicit
+   release approval before any production backend or schema change. One release
+   operator deploys backward-compatible Convex changes once for the shared backend. Existing
    frontends and open browser sessions must keep working throughout the rollout.
 4. Verify the exact production-target Vercel builds, their source SHAs, environment
    and backend URL. Test those staged builds before moving domains. Promoting a
