@@ -1,6 +1,7 @@
 import { v } from "convex/values"
 import { internal } from "./_generated/api"
 import { mutation, query } from "./_generated/server"
+import { publicDisplayName, publicUserProfile } from "./userProfile"
 import { getCurrentUserOrThrow } from "./users"
 
 export const endorse = mutation({
@@ -53,7 +54,7 @@ export const endorse = mutation({
       userId: profile.userId,
       type: "endorsement_received",
       title: "New Endorsement",
-      message: `${user.name} endorsed you for ${args.type.replace(/_/g, " ")}`,
+      message: `${publicDisplayName(user)} endorsed you for ${args.type.replace(/_/g, " ")}`,
       link: `/motorsports/drivers/${args.driverProfileId}`,
       metadata: { endorsementId },
     })
@@ -96,7 +97,7 @@ export const getByDriver = query({
           .query("users")
           .withIndex("by_external_id", (q) => q.eq("externalId", e.endorserId))
           .first()
-        return { ...e, endorser }
+        return { ...e, endorser: publicUserProfile(endorser) }
       })
     )
   },

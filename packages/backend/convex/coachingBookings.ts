@@ -7,6 +7,7 @@ import { ErrorCode, throwError } from "./errors"
 import { isCoachingCancellationRefundable } from "./pricing"
 import { rateLimiter } from "./rateLimiter"
 import { sanitizeMessage, sanitizeShortText } from "./sanitize"
+import { publicUserProfile } from "./userProfile"
 
 const sessionTypeValidator = v.union(
   v.literal("hourly"),
@@ -609,8 +610,8 @@ async function enrichBooking(ctx: any, booking: any) {
   return {
     ...booking,
     coachProfile: profile,
-    coach: coachUser,
-    renter,
+    coach: publicUserProfile(coachUser),
+    renter: publicUserProfile(renter),
   }
 }
 

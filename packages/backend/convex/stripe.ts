@@ -21,6 +21,7 @@ import {
 } from "./emails"
 import { ErrorCode, throwError } from "./errors"
 import { getWebUrl } from "./helpers"
+import { verifyPayableInvoice } from "./invoices"
 import {
   buildDestinationChargeAmounts,
   calculateAddOnsTotal,
@@ -29,6 +30,17 @@ import {
 } from "./pricing"
 import { rateLimiter } from "./rateLimiter"
 import { issueRentalRefund, syncRentalRefunds } from "./rentalRefunds"
+
+import { publicUserProfile } from "./userProfile"
+import {
+  billingCustomerId,
+  EXPRESS_SIGN_IN_URL,
+  retrieveLinkedConnectAccount,
+  retrieveOwnedCustomer,
+  verifiedPaymentDestination,
+} from "./stripeOwnership"
+import type { ActionCtx } from "./_generated/server"
+import type { UserIdentity } from "convex/server"
 
 // ============================================================================
 // Cancellation Policy - Tiered Refund Calculation
@@ -107,6 +119,16 @@ export function calculateRefundTier(
 
 // Initialize Stripe client from component
 const stripeClient = new StripeSubscriptions(components.stripe, {})
+
+function rentalBillingCustomer(ctx: ActionCtx, stripe: Stripe, identity: UserIdentity) {
+  return billingCustomerId(ctx, stripe, identity, () =>
+    stripeClient.getOrCreateCustomer(ctx, {
+      userId: identity.subject,
+      email: identity.email || "",
+      name: identity.name || "",
+    })
+  )
+}
 
 // Helper function to get Stripe instance (for Connect operations)
 function getStripe(): Stripe {
@@ -320,6 +342,46 @@ export const updatePlatformSettings = mutation({
 // Stripe Connect - Account Management
 // ============================================================================
 
+// Old versions created a new Express account on every incomplete onboarding attempt.
+async function canRestartUnusedOnboarding(
+  ctx: ActionCtx,
+  stripe: Stripe,
+  account: Stripe.Account,
+  owner: Doc<"users">
+) {
+  if (
+    owner.stripeAccountStatus !== "pending" ||
+    account.details_submitted ||
+    account.charges_enabled ||
+    account.payouts_enabled ||
+    !account.external_accounts ||
+    account.external_accounts.data.length ||
+    account.external_accounts.has_more ||
+    Object.keys(account.metadata ?? {}).length ||
+    (await ctx.runQuery(internal.users.hasPayoutHistoryForOnboarding, { userId: owner.externalId }))
+  )
+    return false
+  const options = { stripeAccount: account.id }
+  const [balance, transactions, transfers] = await Promise.all([
+    stripe.balance.retrieve({}, options),
+    stripe.balanceTransactions.list({ limit: 1 }, options),
+    stripe.transfers.list({ destination: account.id, limit: 1 }),
+  ])
+  return (
+    transactions.data.length === 0 &&
+    transfers.data.length === 0 &&
+    [
+      ...balance.available,
+      ...balance.pending,
+      ...(balance.connect_reserved ?? []),
+      ...(balance.instant_available ?? []),
+      ...(balance.issuing?.available ?? []),
+      ...(balance.refund_and_dispute_prefunding?.available ?? []),
+      ...(balance.refund_and_dispute_prefunding?.pending ?? []),
+    ].every((row) => row.amount === 0)
+  )
+}
+
 // Create Stripe Connect account for vehicle owners
 export const createConnectAccount = action({
   args: {
@@ -336,42 +398,55 @@ export const createConnectAccount = action({
     }
 
     // Check if user already has a Connect account
-    const user = await ctx.runQuery(api.users.getByExternalId, {
+    const user = await ctx.runQuery(internal.users.getByExternalIdInternal, {
       externalId: args.ownerId,
     })
 
-    if (user?.stripeAccountId) {
-      // Check account status
-      const stripe = getStripe()
-      const account = await stripe.accounts.retrieve(user.stripeAccountId)
-
-      if (account.details_submitted) {
-        return {
-          accountId: account.id,
-          onboardingUrl: null,
-          isComplete: true,
-        }
+    if (!user) throwError(ErrorCode.NOT_FOUND, "User not found")
+    const stripe = getStripe()
+    let account: Stripe.Account | undefined
+    let replaceUnusedAccount: string | undefined
+    if (user.stripeAccountId) {
+      const linked = await retrieveLinkedConnectAccount(
+        ctx,
+        stripe,
+        user.stripeAccountId,
+        identity.subject
+      )
+      if (linked.details_submitted) {
+        return { accountId: linked.id, onboardingUrl: null, isComplete: true }
+      }
+      if (linked.metadata?.renegadeUserId === identity.subject) {
+        account = linked
+      } else if (await canRestartUnusedOnboarding(ctx, stripe, linked, user)) {
+        replaceUnusedAccount = linked.id
+      } else {
+        throwError(
+          ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,
+          "Contact support to verify your existing Stripe account and resume onboarding."
+        )
       }
     }
-
-    const stripe = getStripe()
-
-    // Create a Connect Express account for the owner
-    const account = await stripe.accounts.create({
-      type: "express",
-      country: "US",
-      email: user?.email || identity.email || "",
-      capabilities: {
-        card_payments: { requested: true },
-        transfers: { requested: true },
-      },
-    })
-
-    // Store the Connect account ID
-    await ctx.runMutation(api.users.setStripeAccountId, {
-      userId: args.ownerId,
-      stripeAccountId: account.id,
-    })
+    if (!account) {
+      account = await stripe.accounts.create(
+        {
+          type: "express",
+          country: "US",
+          email: identity.email || undefined,
+          metadata: { renegadeUserId: identity.subject },
+          capabilities: {
+            card_payments: { requested: true },
+            transfers: { requested: true },
+          },
+        },
+        { idempotencyKey: `renegade_connect_${identity.subject}_${replaceUnusedAccount ?? "new"}` }
+      )
+      await ctx.runMutation(internal.users.setStripeAccountId, {
+        userId: identity.subject,
+        stripeAccountId: account.id,
+        replaceUnusedAccount,
+      })
+    }
 
     // Mark payoutSetup step as complete in onboarding (account created, even if not fully onboarded)
     await ctx.runMutation(api.users.updateHostOnboardingStep, {
@@ -379,38 +454,16 @@ export const createConnectAccount = action({
       completed: true,
     })
 
-    // Determine the base URL to use for redirects
-    // Priority: client-provided URL > WEB_URL env var > production default
-    let baseUrl = args.returnUrlBase || getWebUrl()
-
-    // Validate the URL is allowed (security check)
-    // In development, allow localhost, ngrok, and 127.0.0.1
-    // In production, only allow configured production domains
-    const isDevelopment =
-      baseUrl.includes("localhost") ||
-      baseUrl.includes("ngrok") ||
-      baseUrl.includes("127.0.0.1") ||
-      baseUrl.startsWith("http://")
-
-    // Production allowed domains
-    const allowedProductionDomains = ["https://renegaderace.com", "https://www.renegaderace.com"]
-
-    // If not development, validate against allowed domains
-    if (!isDevelopment) {
-      const isAllowed = allowedProductionDomains.some((domain) => baseUrl.startsWith(domain))
-      if (!isAllowed) {
-        throwError(
-          ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,
-          `Invalid return URL: ${baseUrl}. ` +
-            `Allowed domains: ${allowedProductionDomains.join(", ")}`
-        )
-      }
-    }
-
-    // Ensure baseUrl doesn't end with a slash
-    if (baseUrl.endsWith("/")) {
-      baseUrl = baseUrl.slice(0, -1)
-    }
+    const configuredOrigin = new URL(getWebUrl()).origin
+    const permittedOrigins = [
+      configuredOrigin,
+      "https://renegaderace.com",
+      "https://www.renegaderace.com",
+    ]
+    const baseUrl =
+      args.returnUrlBase && permittedOrigins.includes(args.returnUrlBase)
+        ? args.returnUrlBase
+        : configuredOrigin
 
     // Create account link for onboarding
     const accountLink = await stripe.accountLinks.create(
@@ -448,7 +501,10 @@ export const getConnectAccountStatus = action({
     payoutsEnabled?: boolean
     accountId?: string
   }> => {
-    const user = await ctx.runQuery(api.users.getByExternalId, {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity || identity.subject !== args.ownerId)
+      throwError(ErrorCode.FORBIDDEN, "Not authorized")
+    const user = await ctx.runQuery(internal.users.getByExternalIdInternal, {
       externalId: args.ownerId,
     })
 
@@ -460,7 +516,12 @@ export const getConnectAccountStatus = action({
     }
 
     const stripe = getStripe()
-    const account = await stripe.accounts.retrieve(user.stripeAccountId)
+    const account = await retrieveLinkedConnectAccount(
+      ctx,
+      stripe,
+      user.stripeAccountId,
+      identity.subject
+    )
 
     return {
       hasAccount: true,
@@ -489,7 +550,10 @@ export const refreshConnectAccountStatus = action({
     payoutsEnabled?: boolean
     detailsSubmitted?: boolean
   }> => {
-    const user = await ctx.runQuery(api.users.getByExternalId, {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity || identity.subject !== args.ownerId)
+      throwError(ErrorCode.FORBIDDEN, "Not authorized")
+    const user = await ctx.runQuery(internal.users.getByExternalIdInternal, {
       externalId: args.ownerId,
     })
 
@@ -501,7 +565,12 @@ export const refreshConnectAccountStatus = action({
     }
 
     const stripe = getStripe()
-    const account = await stripe.accounts.retrieve(user.stripeAccountId)
+    const account = await retrieveLinkedConnectAccount(
+      ctx,
+      stripe,
+      user.stripeAccountId,
+      identity.subject
+    )
 
     // Determine account status based on Stripe account state
     // Same logic as the webhook handler
@@ -556,7 +625,7 @@ export const createConnectLoginLink = action({
       throwError(ErrorCode.FORBIDDEN, "Not authorized")
     }
 
-    const user = await ctx.runQuery(api.users.getByExternalId, {
+    const user = await ctx.runQuery(internal.users.getByExternalIdInternal, {
       externalId: args.ownerId,
     })
 
@@ -565,7 +634,14 @@ export const createConnectLoginLink = action({
     }
 
     const stripe = getStripe()
-    const loginLink = await stripe.accounts.createLoginLink(user.stripeAccountId)
+    const account = await retrieveLinkedConnectAccount(
+      ctx,
+      stripe,
+      user.stripeAccountId,
+      identity.subject
+    )
+    if (account.metadata?.renegadeUserId !== identity.subject) return { url: EXPRESS_SIGN_IN_URL }
+    const loginLink = await stripe.accounts.createLoginLink(account.id)
 
     return {
       url: loginLink.url,
@@ -679,7 +755,7 @@ export const createCheckoutSession = action({
     }
 
     // Get owner's Stripe Connect account
-    const owner = await ctx.runQuery(api.users.getByExternalId, {
+    const owner = await ctx.runQuery(internal.users.getByExternalIdInternal, {
       externalId: reservation.ownerId,
     })
 
@@ -692,7 +768,12 @@ export const createCheckoutSession = action({
 
     // Verify Connect account is ready
     const stripe = getStripe()
-    const connectAccount = await stripe.accounts.retrieve(owner.stripeAccountId)
+    const connectAccount = await verifiedPaymentDestination(
+      ctx,
+      stripe,
+      owner.stripeAccountId,
+      owner.externalId
+    )
 
     if (!connectAccount.details_submitted) {
       throwError(
@@ -732,22 +813,7 @@ export const createCheckoutSession = action({
       })
 
     // Get or create Stripe customer (component handles this)
-    const customer = await stripeClient.getOrCreateCustomer(ctx, {
-      userId: identity.subject,
-      email: identity.email || "",
-      name: identity.name || "",
-    })
-
-    // Store customer ID on user record if not already stored
-    const user = await ctx.runQuery(api.users.getByExternalId, {
-      externalId: identity.subject,
-    })
-    if (user && !user.stripeCustomerId) {
-      await ctx.runMutation(api.users.setStripeCustomerId, {
-        userId: identity.subject,
-        stripeCustomerId: customer.customerId,
-      })
-    }
+    const customerId = await rentalBillingCustomer(ctx, stripe, identity)
 
     const webUrl = getWebUrl()
 
@@ -755,7 +821,7 @@ export const createCheckoutSession = action({
     // but we use the component's customer management
     const checkoutSession = await stripe.checkout.sessions.create(
       {
-        customer: customer.customerId,
+        customer: customerId,
         mode: "payment",
         line_items: [
           {
@@ -823,7 +889,7 @@ export const createCheckoutSession = action({
       platformFee,
       ownerAmount,
       processingFee: processingFeeCents,
-      stripeCustomerId: customer.customerId,
+      stripeCustomerId: customerId,
       stripeCheckoutSessionId: checkoutSession.id,
       stripeAccountId: owner.stripeAccountId,
       metadata: {
@@ -948,7 +1014,7 @@ export const createPaymentIntent = action({
     }
 
     // Get owner's Stripe Connect account
-    const owner = await ctx.runQuery(api.users.getByExternalId, {
+    const owner = await ctx.runQuery(internal.users.getByExternalIdInternal, {
       externalId: reservation.ownerId,
     })
 
@@ -961,7 +1027,12 @@ export const createPaymentIntent = action({
 
     // Verify Connect account is ready and has required capabilities
     const stripe = getStripe()
-    const connectAccount = await stripe.accounts.retrieve(owner.stripeAccountId)
+    const connectAccount = await verifiedPaymentDestination(
+      ctx,
+      stripe,
+      owner.stripeAccountId,
+      owner.externalId
+    )
 
     if (!connectAccount.details_submitted) {
       throwError(
@@ -1001,29 +1072,14 @@ export const createPaymentIntent = action({
       })
 
     // Get or create Stripe customer (component handles this)
-    const customer = await stripeClient.getOrCreateCustomer(ctx, {
-      userId: identity.subject,
-      email: identity.email || "",
-      name: identity.name || "",
-    })
-
-    // Store customer ID on user record if not already stored
-    const renter = await ctx.runQuery(api.users.getByExternalId, {
-      externalId: identity.subject,
-    })
-    if (renter && !renter.stripeCustomerId) {
-      await ctx.runMutation(api.users.setStripeCustomerId, {
-        userId: identity.subject,
-        stripeCustomerId: customer.customerId,
-      })
-    }
+    const customerId = await rentalBillingCustomer(ctx, stripe, identity)
 
     // Create Stripe Payment Intent with Connect
     const paymentIntent = await stripe.paymentIntents.create(
       {
         amount: chargeAmountCents,
         currency: "usd",
-        customer: customer.customerId,
+        customer: customerId,
         // Includes Renegade fee + processing so the provider nets ownerAmount
         application_fee_amount: applicationFeeCents,
         transfer_data: {
@@ -1058,7 +1114,7 @@ export const createPaymentIntent = action({
       ownerAmount,
       processingFee: processingFeeCents,
       stripePaymentIntentId: paymentIntent.id,
-      stripeCustomerId: customer.customerId,
+      stripeCustomerId: customerId,
       stripeAccountId: owner.stripeAccountId,
       metadata: {
         vehicleId: reservation.vehicleId,
@@ -1461,16 +1517,31 @@ export const createCustomerPortalSession = action({
       throwError(ErrorCode.AUTH_REQUIRED, "Not authenticated")
     }
 
-    // Get or create customer
-    const customer = await stripeClient.getOrCreateCustomer(ctx, {
-      userId: identity.subject,
-      email: identity.email || "",
-      name: identity.name || "",
-    })
+    const stripe = getStripe()
+    const customerId = await rentalBillingCustomer(ctx, stripe, identity)
+
+    // The portal can expose a payment link for any payable invoice on the customer.
+    for (const status of ["open", "uncollectible"] as const) {
+      for await (const invoice of stripe.invoices.list({
+        customer: customerId,
+        status,
+        limit: 100,
+      })) {
+        if (invoice.metadata?.type !== "custom_invoice") continue
+        if (!invoice.id) throwError(ErrorCode.FORBIDDEN, "Missing Stripe invoice ID")
+        const local = await ctx.runQuery(internal.invoices.findByStripeInvoiceId, {
+          stripeInvoiceId: invoice.id,
+        })
+        if (!local || local.recipientId !== identity.subject) {
+          throwError(ErrorCode.FORBIDDEN, "Invoice ownership could not be verified")
+        }
+        await verifyPayableInvoice(ctx, stripe, local, invoice)
+      }
+    }
 
     // Create portal session
     const session = await stripeClient.createCustomerPortalSession(ctx, {
-      customerId: customer.customerId,
+      customerId,
       returnUrl: args.returnUrl,
     })
 
@@ -1773,7 +1844,7 @@ export const getUserPayments = query({
           ...payment,
           reservation,
           vehicle,
-          owner,
+          owner: publicUserProfile(owner),
         }
       })
     )
@@ -1843,7 +1914,7 @@ export const getCustomerPaymentMethods = action({
     }
 
     // Verify the customer belongs to the current user
-    const user = await ctx.runQuery(api.users.getByExternalId, {
+    const user = await ctx.runQuery(internal.users.getByExternalIdInternal, {
       externalId: identity.subject,
     })
 
@@ -1852,6 +1923,7 @@ export const getCustomerPaymentMethods = action({
     }
 
     const stripe = getStripe()
+    await retrieveOwnedCustomer(stripe, args.customerId, identity.subject)
     const paymentMethods = await stripe.paymentMethods.list({
       customer: args.customerId,
       type: "card",
@@ -1903,7 +1975,7 @@ export const getCustomerInvoices = action({
     }
 
     // Verify the customer belongs to the current user
-    const user = await ctx.runQuery(api.users.getByExternalId, {
+    const user = await ctx.runQuery(internal.users.getByExternalIdInternal, {
       externalId: identity.subject,
     })
 
@@ -1912,23 +1984,37 @@ export const getCustomerInvoices = action({
     }
 
     const stripe = getStripe()
+    await retrieveOwnedCustomer(stripe, args.customerId, identity.subject)
     const invoices = await stripe.invoices.list({
       customer: args.customerId,
       limit: args.limit || 10,
     })
 
-    return invoices.data.map((invoice) => ({
-      id: invoice.id!,
-      number: invoice.number,
-      amount: invoice.amount_paid,
-      currency: invoice.currency,
-      status: invoice.status,
-      created: invoice.created,
-      dueDate: invoice.due_date,
-      hostedInvoiceUrl: invoice.hosted_invoice_url ?? null,
-      invoicePdf: invoice.invoice_pdf ?? null,
-      description: invoice.description || invoice.lines?.data[0]?.description || "Vehicle rental",
-    }))
+    return invoices.data.map((invoice) => {
+      // A Stripe PDF can contain the same pay link as the hosted invoice.
+      // Route unpaid custom invoices back through the recipient's guarded payment flow.
+      const requiresPaymentCheck =
+        invoice.metadata?.type === "custom_invoice" &&
+        invoice.status !== "paid" &&
+        invoice.status !== "void"
+      const localId = invoice.metadata?.invoiceId
+      return {
+        id: invoice.id!,
+        number: invoice.number,
+        amount: invoice.amount_paid,
+        currency: invoice.currency,
+        status: invoice.status,
+        created: invoice.created,
+        dueDate: invoice.due_date,
+        hostedInvoiceUrl: requiresPaymentCheck
+          ? localId
+            ? `${getWebUrl()}/deals/invoices/${encodeURIComponent(localId)}`
+            : null
+          : (invoice.hosted_invoice_url ?? null),
+        invoicePdf: requiresPaymentCheck ? null : (invoice.invoice_pdf ?? null),
+        description: invoice.description || invoice.lines?.data[0]?.description || "Vehicle rental",
+      }
+    })
   },
 })
 
@@ -1955,7 +2041,7 @@ export const getCustomerDetails = action({
     }
 
     // Verify the customer belongs to the current user
-    const user = await ctx.runQuery(api.users.getByExternalId, {
+    const user = await ctx.runQuery(internal.users.getByExternalIdInternal, {
       externalId: identity.subject,
     })
 
@@ -1964,11 +2050,7 @@ export const getCustomerDetails = action({
     }
 
     const stripe = getStripe()
-    const customer = await stripe.customers.retrieve(args.customerId)
-
-    if (customer.deleted) {
-      throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE, "Customer not found")
-    }
+    const customer = await retrieveOwnedCustomer(stripe, args.customerId, identity.subject)
 
     return {
       id: customer.id,
@@ -2080,8 +2162,10 @@ export const handlePayoutFailed = internalMutation({
   },
   handler: async (ctx, args): Promise<void> => {
     // Find user by Stripe account ID
-    const users = await ctx.db.query("users").collect()
-    const user = users.find((u) => u.stripeAccountId === args.stripeAccountId)
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_stripe_account", (q) => q.eq("stripeAccountId", args.stripeAccountId))
+      .unique()
 
     if (user) {
       // TODO: handle payout failure notification
@@ -2096,8 +2180,10 @@ export const handleAccountDeauthorized = internalMutation({
   },
   handler: async (ctx, args): Promise<void> => {
     // Find user by Stripe account ID
-    const users = await ctx.db.query("users").collect()
-    const user = users.find((u) => u.stripeAccountId === args.stripeAccountId)
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_stripe_account", (q) => q.eq("stripeAccountId", args.stripeAccountId))
+      .unique()
 
     if (!user) {
       return

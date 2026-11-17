@@ -133,7 +133,8 @@ export default defineSchema({
     ),
   })
     .index("by_external_id", ["externalId"])
-    .index("by_stripe_account", ["stripeAccountId"]),
+    .index("by_stripe_account", ["stripeAccountId"])
+    .index("by_stripe_customer", ["stripeCustomerId"]),
 
   tracks: defineTable({
     name: v.string(),
@@ -1179,6 +1180,18 @@ export default defineSchema({
   // Universal invoices (Phase 1c) — supersedes coachInvoices + damageInvoices
   // ============================================================
 
+  invoiceDepositRefundRequests: defineTable({
+    invoiceId: v.id("invoices"),
+    requestId: v.string(),
+    requestedAmount: v.optional(v.number()),
+    amount: v.number(),
+    reason: v.optional(v.string()),
+    state: v.union(v.literal("reserved"), v.literal("submitted"), v.literal("rejected")),
+    stripeRefundId: v.optional(v.string()),
+  })
+    .index("by_invoice_request", ["invoiceId", "requestId"])
+    .index("by_invoice_state", ["invoiceId", "state"]),
+
   invoices: defineTable({
     senderId: v.string(),
     recipientId: v.string(),
@@ -1253,6 +1266,9 @@ export default defineSchema({
       )
     ),
     depositRefundAmount: v.optional(v.number()),
+    depositRefundPendingAmount: v.optional(v.number()),
+    depositLatestRefundStatus: v.optional(v.string()),
+    depositRefundSyncVersion: v.optional(v.number()),
     depositRefundReason: v.optional(v.string()),
     stripeDepositRefundId: v.optional(v.string()),
     depositRefundedAt: v.optional(v.number()),
@@ -1284,6 +1300,7 @@ export default defineSchema({
     .index("by_sender_status", ["senderId", "status"])
     .index("by_recipient_status", ["recipientId", "status"])
     .index("by_stripe_checkout_session", ["stripeCheckoutSessionId"])
+    .index("by_stripe_invoice", ["stripeInvoiceId"])
     .index("by_stripe_payment_intent", ["stripePaymentIntentId"])
     .index("by_legacy", ["legacySource", "legacyId"]),
 

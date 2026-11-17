@@ -7,6 +7,7 @@ import { ErrorCode, throwError } from "./errors"
 import { rateLimiter } from "./rateLimiter"
 import { sanitizeMessage, sanitizeShortText } from "./sanitize"
 import { getCurrentUser, getCurrentUserOrThrow } from "./users"
+import { publicDisplayName } from "./userProfile"
 
 const contactInfoValidator = v.object({
   phone: v.optional(v.string()),
@@ -189,7 +190,7 @@ async function enrichWithUser(ctx: any, profile: Doc<"coachProfiles">) {
     ...profile,
     user: user
       ? {
-          name: user.name as string,
+          name: publicDisplayName(user),
           avatarUrl: user.profileImage as string | undefined,
           memberSince: user.memberSince as string | undefined,
         }

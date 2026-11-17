@@ -192,6 +192,15 @@ describe("signed rental Stripe webhooks", () => {
     const invoiceIntent = { ...intent, metadata: { type: "custom_invoice", invoiceId } }
     const invoice = () => t.run((ctx) => ctx.db.get(invoiceId))
 
+    for (const [event, candidate, options] of [
+      ["wrong_intent", { ...invoiceIntent, id: "pi_unrelated" }, {}],
+      ["connected", invoiceIntent, { account: "acct_other" }],
+      ["wrong_amount", { ...invoiceIntent, amount_received: 1 }, {}],
+      ["wrong_currency", { ...invoiceIntent, currency: "eur" }, {}],
+    ] as const) {
+      expect((await post("payment_intent.succeeded", event, candidate, options)).status).toBe(200)
+      expect((await invoice())?.status).toBe("sent")
+    }
     expect(
       (await post("payment_intent.processing", "evt_invoice_processing", invoiceIntent)).status
     ).toBe(200)
@@ -204,10 +213,80 @@ describe("signed rental Stripe webhooks", () => {
       200
     )
     expect(await invoice()).toMatchObject({ status: "paid", stripeChargeId: intent.latest_charge })
+    const paidAt = (await invoice())?.paidAt
+    await post("payment_intent.succeeded", "evt_invoice_paid_replay", invoiceIntent)
+    await post("payment_intent.payment_failed", "evt_invoice_failed_replay", invoiceIntent)
+    expect(await invoice()).toMatchObject({ status: "paid", paidAt })
     const result = await state()
     expect(result.payment?.status).toBe("pending")
     expect(result.reservation?.paymentStatus).toBe("pending")
     await t.finishAllScheduledFunctions(vi.runAllTimers)
+  })
+
+  it("ignores a connected account's attempts to update coaching bookings and damage invoices", async () => {
+    const { t, ids, post, intent } = await setup()
+    const { booking, damage } = await t.run(async ({ db }) => {
+      const timestamps = { createdAt: 1, updatedAt: 1 }
+      const coachProfileId = await db.insert("coachProfiles", {
+        userId: "coach",
+        bio: "coach",
+        specialties: [],
+        hourlyRate: 10000,
+        location: "WI",
+        isActive: true,
+        verificationStatus: "verified",
+        ...timestamps,
+      })
+      const booking = await db.insert("coachingBookings", {
+        coachProfileId,
+        coachUserId: "coach",
+        renterId: "renter",
+        startDate: "2031-08-01",
+        endDate: "2031-08-01",
+        sessionType: "hourly",
+        hours: 1,
+        totalDays: 1,
+        rate: 10000,
+        totalAmount: 10000,
+        status: "approved",
+        paymentStatus: "pending",
+        ...timestamps,
+      })
+      const rental = {
+        reservationId: ids.reservationId,
+        vehicleId: ids.vehicleId,
+        renterId: ids.renterId,
+        ownerId: ids.ownerId,
+        ...timestamps,
+      }
+      const completionId = await db.insert("rentalCompletions", { ...rental, status: "completed" })
+      const damage = await db.insert("damageInvoices", {
+        ...rental,
+        completionId,
+        amount: 10000,
+        description: "mirror",
+        photos: [],
+        status: "payment_pending",
+      })
+      return { booking, damage }
+    })
+    const connected = { account: "acct_connected" }
+    const coaching = {
+      ...intent,
+      metadata: { type: "coaching_booking", coachingBookingId: booking },
+    }
+    const invoice = { ...intent, metadata: { type: "damage_invoice", damageInvoiceId: damage } }
+    for (const [type, event, object] of [
+      ["payment_intent.succeeded", "evt_coaching_paid", coaching],
+      ["payment_intent.payment_failed", "evt_coaching_fail", coaching],
+      ["payment_intent.succeeded", "evt_damage_paid", invoice],
+    ] as const)
+      expect((await post(type, event, object, connected)).status).toBe(200)
+    expect(await t.run(({ db }) => db.get(booking))).toMatchObject({
+      status: "approved",
+      paymentStatus: "pending",
+    })
+    expect(await t.run(({ db }) => db.get(damage))).toMatchObject({ status: "payment_pending" })
   })
 
   it("ignores matching metadata on a connected account's own payment", async () => {
