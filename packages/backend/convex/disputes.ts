@@ -1,5 +1,6 @@
 import { v } from "convex/values"
-import { mutation, query } from "./_generated/server"
+import type { Doc } from "./_generated/dataModel"
+import { mutation, type QueryCtx, query } from "./_generated/server"
 import { isAdminIdentity } from "./admin"
 import {
   getDisputeCreatedEmailTemplate,
@@ -7,9 +8,10 @@ import {
   getSupportEmail,
   sendTransactionalEmail,
 } from "./emails"
-import { getWebUrl } from "./helpers"
+import { getWebUrl, isReservationParticipant, participantCompletion } from "./helpers"
 import { rateLimiter } from "./rateLimiter"
-import { publicUserProfile, userProfileWithAdminContact } from "./userProfile"
+import { visibleReturnPhotos } from "./returnEvidence"
+import { userProfileWithAdminContact } from "./userProfile"
 
 // Create a dispute for a rental completion
 export const create = mutation({
@@ -138,75 +140,57 @@ export const create = mutation({
   },
 })
 
-// Get dispute by ID
+async function disputeDetails(
+  ctx: QueryCtx,
+  dispute: Doc<"disputes"> | null,
+  subject: string,
+  admin = false
+) {
+  if (!dispute) return null
+  const reservation = await ctx.db.get(dispute.reservationId)
+  if (!(admin || isReservationParticipant(reservation, subject))) return null
+  const [completion, vehicle, renter, owner] = await Promise.all([
+    ctx.db.get(dispute.completionId),
+    ctx.db.get(dispute.vehicleId),
+    ctx.db
+      .query("users")
+      .withIndex("by_external_id", (q) => q.eq("externalId", dispute.renterId))
+      .first(),
+    ctx.db
+      .query("users")
+      .withIndex("by_external_id", (q) => q.eq("externalId", dispute.ownerId))
+      .first(),
+  ])
+  const permitted = participantCompletion(completion, reservation, subject)
+  return {
+    ...dispute,
+    completion: permitted ? await visibleReturnPhotos(ctx, permitted) : null,
+    reservation,
+    vehicle,
+    renter: userProfileWithAdminContact(renter, admin),
+    owner: userProfileWithAdminContact(owner, admin),
+  }
+}
+
 export const getById = query({
   args: { id: v.id("disputes") },
-  handler: async (ctx, args) => {
-    const dispute = await ctx.db.get(args.id)
-    if (!dispute) return null
-
-    // Get related data
-    const [completion, reservation, vehicle, renter, owner] = await Promise.all([
-      ctx.db.get(dispute.completionId),
-      ctx.db.get(dispute.reservationId),
-      ctx.db.get(dispute.vehicleId),
-      ctx.db
-        .query("users")
-        .withIndex("by_external_id", (q) => q.eq("externalId", dispute.renterId))
-        .first(),
-      ctx.db
-        .query("users")
-        .withIndex("by_external_id", (q) => q.eq("externalId", dispute.ownerId))
-        .first(),
-    ])
-
+  handler: async (ctx, { id }) => {
     const identity = await ctx.auth.getUserIdentity()
-    const isAdmin = !!identity && isAdminIdentity(identity)
-    return {
-      ...dispute,
-      completion,
-      reservation,
-      vehicle,
-      renter: userProfileWithAdminContact(renter, isAdmin),
-      owner: userProfileWithAdminContact(owner, isAdmin),
-    }
+    if (!identity) return null
+    return disputeDetails(ctx, await ctx.db.get(id), identity.subject, isAdminIdentity(identity))
   },
 })
 
-// Get dispute by reservation ID
 export const getByReservation = query({
   args: { reservationId: v.id("reservations") },
-  handler: async (ctx, args) => {
+  handler: async (ctx, { reservationId }) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) return null
     const dispute = await ctx.db
       .query("disputes")
-      .withIndex("by_reservation", (q) => q.eq("reservationId", args.reservationId))
+      .withIndex("by_reservation", (q) => q.eq("reservationId", reservationId))
       .first()
-
-    if (!dispute) return null
-
-    // Get related data
-    const [completion, reservation, vehicle, renter, owner] = await Promise.all([
-      ctx.db.get(dispute.completionId),
-      ctx.db.get(dispute.reservationId),
-      ctx.db.get(dispute.vehicleId),
-      ctx.db
-        .query("users")
-        .withIndex("by_external_id", (q) => q.eq("externalId", dispute.renterId))
-        .first(),
-      ctx.db
-        .query("users")
-        .withIndex("by_external_id", (q) => q.eq("externalId", dispute.ownerId))
-        .first(),
-    ])
-
-    return {
-      ...dispute,
-      completion,
-      reservation,
-      vehicle,
-      renter: publicUserProfile(renter),
-      owner: publicUserProfile(owner),
-    }
+    return disputeDetails(ctx, dispute, identity.subject)
   },
 })
 
@@ -218,6 +202,8 @@ export const getByUser = query({
   },
   handler: async (ctx, args) => {
     const { userId, role } = args
+    const identity = await ctx.auth.getUserIdentity()
+    if (identity?.subject !== userId) return []
 
     let disputes
     if (role === "renter") {
@@ -250,35 +236,10 @@ export const getByUser = query({
       disputes.sort((a, b) => b.createdAt - a.createdAt)
     }
 
-    // Get related data
-    const disputesWithDetails = await Promise.all(
-      disputes.map(async (dispute) => {
-        const [completion, reservation, vehicle, renter, owner] = await Promise.all([
-          ctx.db.get(dispute.completionId),
-          ctx.db.get(dispute.reservationId),
-          ctx.db.get(dispute.vehicleId),
-          ctx.db
-            .query("users")
-            .withIndex("by_external_id", (q) => q.eq("externalId", dispute.renterId))
-            .first(),
-          ctx.db
-            .query("users")
-            .withIndex("by_external_id", (q) => q.eq("externalId", dispute.ownerId))
-            .first(),
-        ])
-
-        return {
-          ...dispute,
-          completion,
-          reservation,
-          vehicle,
-          renter: publicUserProfile(renter),
-          owner: publicUserProfile(owner),
-        }
-      })
+    const rows = await Promise.all(
+      disputes.map((dispute) => disputeDetails(ctx, dispute, identity.subject))
     )
-
-    return disputesWithDetails
+    return rows.filter((row) => row !== null)
   },
 })
 

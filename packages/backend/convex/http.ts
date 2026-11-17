@@ -8,6 +8,7 @@ import { type ActionCtx, httpAction } from "./_generated/server"
 import { resendComponent } from "./emails"
 import { logError } from "./logger"
 import { rateLimiter } from "./rateLimiter"
+import { readReturnPhoto, uploadReturnPhoto, returnPhotoOptions } from "./returnEvidence"
 
 function stripeObjectId(value: string | { id: string } | null): string | undefined {
   return typeof value === "string" ? value : value?.id
@@ -60,6 +61,9 @@ async function syncRefundEvent(
 }
 
 const http = httpRouter()
+http.route({ path: "/return-photo", method: "GET", handler: readReturnPhoto })
+http.route({ path: "/return-photo", method: "POST", handler: uploadReturnPhoto })
+http.route({ path: "/return-photo", method: "OPTIONS", handler: returnPhotoOptions })
 
 // Register Stripe component webhook routes with custom event handlers
 registerRoutes(http, components.stripe, {

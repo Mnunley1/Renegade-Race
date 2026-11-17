@@ -387,6 +387,11 @@ export const updateProfileImage = mutation({
       })
     } else if (args.storageId) {
       // Legacy: Get the URL from the storage ID
+      const storageId = args.storageId
+      const returnEvidence = await ctx.db.query("returnEvidence")
+        .withIndex("by_storage", (q) => q.eq("storageId", storageId))
+        .first()
+      if (returnEvidence) throw new Error("File is unavailable for profile use")
       const profileImageUrl = await ctx.storage.getUrl(args.storageId)
       if (!profileImageUrl) {
         throw new Error("Failed to get image URL from storage")
