@@ -1,6 +1,6 @@
 "use client"
 
-import { useUser } from "@clerk/nextjs"
+import { useAuth } from "@clerk/nextjs"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
@@ -13,25 +13,37 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select"
 import { Textarea } from "@workspace/ui/components/textarea"
-import { useMutation, useQuery } from "convex/react"
+import { useConvexAuth, useMutation, useQuery } from "convex/react"
 import { ArrowLeft, Calendar, Loader2, Upload, X } from "lucide-react"
-import Image from "next/image"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import { useState } from "react"
 import { toast } from "sonner"
-import { useReservationPhotoUpload } from "@/hooks/useReservationPhotoUpload"
+import { ReturnEvidence, ReturnPhoto } from "@/components/return-photo"
+import { useReturnPhotoUpload } from "@/hooks/useReturnPhoto"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 import { IMAGE_ACCEPT_ATTR } from "@/lib/image-validation"
-import { r2Url } from "@/lib/r2-url"
 
 export default function ReturnSubmissionPage() {
-  const { user: _user } = useUser()
-  const params = useParams()
+  const { isLoaded, userId, sessionId } = useAuth()
+  const { isLoading, isAuthenticated } = useConvexAuth()
+  const { reservationId } = useParams<{ reservationId: string }>()
+  if (!isLoaded || isLoading)
+    return <Loader2 aria-label="Loading return" className="mx-auto my-12 animate-spin" />
+  if (!(userId && isAuthenticated)) return <p className="my-12 text-center">Return unavailable</p>
+  return (
+    <ReturnForm
+      key={JSON.stringify([sessionId, reservationId])}
+      reservationId={reservationId}
+      userId={userId}
+    />
+  )
+}
+
+function ReturnForm({ reservationId, userId }: { reservationId: string; userId: string }) {
   const router = useRouter()
-  const reservationId = params.reservationId as string
 
   const [returnDate, setReturnDate] = useState("")
   const [vehicleCondition, setVehicleCondition] = useState<
@@ -42,14 +54,8 @@ export default function ReturnSubmissionPage() {
   const [notes, setNotes] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const {
-    photos,
-    setPhotos: _setPhotos,
-    isUploading,
-    fileInputRef,
-    handlePhotoUpload,
-    handleRemovePhoto,
-  } = useReservationPhotoUpload({ kind: "return", reservationId })
+  const { photos, isUploading, fileInputRef, handlePhotoUpload, handleRemovePhoto } =
+    useReturnPhotoUpload(reservationId)
 
   // Fetch reservation and completion data
   const reservation = useQuery(
@@ -119,7 +125,7 @@ export default function ReturnSubmissionPage() {
     }
   }
 
-  if (!reservation) {
+  if (reservation === undefined || completion === undefined) {
     return (
       <div className="container mx-auto max-w-4xl px-4 py-8">
         <div className="flex min-h-[60vh] items-center justify-center">
@@ -128,6 +134,9 @@ export default function ReturnSubmissionPage() {
       </div>
     )
   }
+
+  if (!reservation || reservation.renterId !== userId)
+    return <p className="my-12 text-center">Return unavailable</p>
 
   const vehicle = reservation.vehicle
   if (!vehicle) {
@@ -143,8 +152,7 @@ export default function ReturnSubmissionPage() {
   }
 
   const vehicleName = `${vehicle.year} ${vehicle.make} ${vehicle.model}`
-  const isAlreadySubmitted =
-    completion?.status === "pending_owner" || completion?.status === "completed"
+  const isAlreadySubmitted = !!completion?.renterReturnForm
 
   return (
     <div className="container mx-auto max-w-4xl px-4 py-8">
@@ -168,8 +176,20 @@ export default function ReturnSubmissionPage() {
             <Calendar className="mx-auto mb-4 size-12 text-muted-foreground" />
             <p className="mb-2 font-semibold text-lg">Return Form Already Submitted</p>
             <p className="mb-6 text-muted-foreground">
-              Your return form has been submitted and is awaiting owner review.
+              {completion.status === "pending_owner"
+                ? "Your return form is awaiting owner review."
+                : "The owner has reviewed your return."}
             </p>
+            <ReturnEvidence
+              evidence={completion.renterReturnForm}
+              reservationId={reservationId}
+              title="Renter’s notes and photos"
+            />
+            <ReturnEvidence
+              evidence={completion.ownerReturnReview}
+              reservationId={reservationId}
+              title="Owner’s notes and photos"
+            />
             <Link href="/trips">
               <Button>Back to Trips</Button>
             </Link>
@@ -293,13 +313,10 @@ export default function ReturnSubmissionPage() {
                 <div className="mt-2 flex flex-wrap gap-2">
                   {photos.map((photoKey, index) => (
                     <div className="group relative h-24 w-24" key={index}>
-                      <Image
+                      <ReturnPhoto
                         alt={`Return photo ${index + 1}`}
-                        className="rounded-lg object-cover"
-                        fill
-                        quality={80}
-                        sizes="96px"
-                        src={r2Url(photoKey)}
+                        photoKey={photoKey}
+                        reservationId={reservationId}
                       />
                       <button
                         className="absolute top-1 right-1 rounded-full bg-destructive p-1 opacity-0 transition-opacity group-hover:opacity-100"

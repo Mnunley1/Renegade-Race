@@ -5,6 +5,7 @@ import { mutation, query } from "./_generated/server"
 import { checkAdmin } from "./admin"
 import { rateLimiter } from "./rateLimiter"
 import { sanitizeMessage } from "./sanitize"
+import { publicUserProfile } from "./userProfile"
 
 // Get messages for a conversation
 export const getByConversation = query({
@@ -63,7 +64,7 @@ export const getByConversation = query({
           .first()
 
         // Get replied-to message if it exists and is visible (after reopening timestamp)
-        let repliedToMessage: (typeof message & { sender: typeof sender }) | null = null
+        let repliedToMessage: (typeof message & { sender: ReturnType<typeof publicUserProfile> }) | null = null
         if (message.replyTo) {
           const replyToMsg = await ctx.db.get(message.replyTo)
           if (replyToMsg && (!reopenedAt || replyToMsg.createdAt >= reopenedAt)) {
@@ -74,14 +75,14 @@ export const getByConversation = query({
 
             repliedToMessage = {
               ...replyToMsg,
-              sender: replyToSender,
+              sender: publicUserProfile(replyToSender),
             }
           }
         }
 
         return {
           ...message,
-          sender,
+          sender: publicUserProfile(sender),
           repliedToMessage,
         }
       })
@@ -565,7 +566,7 @@ export const getHostConversations = query({
         return {
           ...conversation,
           vehicle,
-          renter,
+          renter: publicUserProfile(renter),
           latestMessage,
         }
       })

@@ -1,9 +1,20 @@
 import { v } from "convex/values"
 import { internal } from "./_generated/api"
 import type { Id } from "./_generated/dataModel"
-import { action, internalMutation, internalQuery, mutation, query } from "./_generated/server"
-
+import { action, internalQuery, mutation, query } from "./_generated/server"
 import { ErrorCode, throwError } from "./errors"
+import { participantCompletion } from "./helpers"
+import { visibleReturnPhotos } from "./returnEvidence"
+
+export function isAdminIdentity(identity: { subject: string }): boolean {
+  const claims = identity as {
+    metadata?: { role?: string }
+    publicMetadata?: { role?: string }
+    orgRole?: string
+  }
+  return (claims.metadata?.role || claims.publicMetadata?.role || claims.orgRole) === "admin"
+}
+
 // Helper function to check if user is admin via Clerk metadata
 // Exported for reuse across all backend files
 // biome-ignore lint: ctx type is provided by Convex
@@ -13,11 +24,7 @@ export async function checkAdmin(ctx: any) {
     throwError(ErrorCode.AUTH_REQUIRED, "Not authenticated")
   }
 
-  // Check all possible locations where admin role can be stored
-  const metadata = identity as any
-  const role = metadata.metadata?.role || metadata.publicMetadata?.role || metadata.orgRole
-
-  if (role !== "admin") {
+  if (!isAdminIdentity(identity)) {
     throwError(ErrorCode.ADMIN_REQUIRED, "Admin access required")
   }
 
@@ -164,7 +171,7 @@ export const getAllDisputes = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    await checkAdmin(ctx)
+    const identity = await checkAdmin(ctx)
 
     const { status, limit = 50 } = args
 
@@ -193,9 +200,10 @@ export const getAllDisputes = query({
             .first(),
         ])
 
+        const permitted = participantCompletion(completion, reservation, identity.subject)
         return {
           ...dispute,
-          completion,
+          completion: permitted ? await visibleReturnPhotos(ctx, permitted) : null,
           reservation,
           vehicle,
           renter,
@@ -1660,147 +1668,21 @@ export const getRevenueTimeSeries = query({
   },
 })
 
-// Process admin refund (action that handles Stripe API call)
+// Admin refunds and owner/cancellation refunds reconcile against the same Stripe charge.
 export const initiateRefund: ReturnType<typeof action> = action({
-  args: {
-    paymentId: v.id("payments"),
-    amount: v.number(), // Amount in cents to refund
-    reason: v.string(),
-    refundPolicy: v.optional(v.union(v.literal("full"), v.literal("partial"), v.literal("custom"))),
-  },
-  handler: async (ctx, args) => {
-    // Verify admin access
-    const identity = await ctx.auth.getUserIdentity()
-    if (!identity) {
-      throwError(ErrorCode.AUTH_REQUIRED, "Not authenticated")
-    }
-
-    const role = (identity as any).metadata?.role
-    if (role !== "admin") {
-      throwError(ErrorCode.ADMIN_REQUIRED, "Admin access required")
-    }
-
-    // Get payment details
-    const payment = await ctx.runQuery(internal.admin.getPaymentForRefund, {
-      paymentId: args.paymentId,
-    })
-
-    if (!payment) {
-      throw new Error("Payment not found")
-    }
-
-    if (payment.status !== "succeeded") {
-      throw new Error(`Cannot refund payment with status: ${payment.status}`)
-    }
-
-    if (args.amount <= 0) {
-      throw new Error("Refund amount must be positive")
-    }
-
-    const maxRefundable = payment.amount - (payment.refundAmount || 0)
-    if (args.amount > maxRefundable) {
-      throw new Error(
-        `Refund amount (${args.amount}) exceeds maximum refundable (${maxRefundable})`
-      )
-    }
-
-    if (!payment.stripeChargeId) {
-      throw new Error("Payment does not have a Stripe charge ID")
-    }
-
-    // Process the Stripe refund
-    const Stripe = (await import("stripe")).default
-    const secretKey = process.env.STRIPE_SECRET_KEY
-    if (!secretKey) {
-      throw new Error("STRIPE_SECRET_KEY environment variable is not set")
-    }
-    const stripe = new Stripe(secretKey, {
-      apiVersion: "2025-08-27.basil",
-    })
-
-    const isFullRefund = args.amount >= maxRefundable
-
-    // Create the refund in Stripe
-    const refund = await stripe.refunds.create({
-      charge: payment.stripeChargeId,
-      amount: args.amount,
-      reverse_transfer: true,
-      refund_application_fee: isFullRefund,
-      reason: "requested_by_customer",
-    })
-
-    // Update the database
-    await ctx.runMutation(internal.admin.recordRefund, {
-      paymentId: args.paymentId,
-      amount: args.amount,
-      reason: args.reason,
-      refundPolicy: args.refundPolicy,
-      refundId: refund.id,
-      adminId: identity.subject,
-    })
-
-    return {
-      paymentId: args.paymentId,
-      refundAmount: args.amount,
-      refundId: refund.id,
-    }
-  },
-})
-
-// Internal mutation to record the refund in the database
-export const recordRefund = internalMutation({
   args: {
     paymentId: v.id("payments"),
     amount: v.number(),
     reason: v.string(),
     refundPolicy: v.optional(v.union(v.literal("full"), v.literal("partial"), v.literal("custom"))),
-    refundId: v.string(),
-    adminId: v.string(),
+    requestId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const payment = await ctx.db.get(args.paymentId)
-    if (!payment) {
-      throw new Error("Payment not found")
-    }
-
-    const maxRefundable = payment.amount - (payment.refundAmount || 0)
-    const isFullRefund = args.amount >= maxRefundable
-    const newStatus = isFullRefund ? "refunded" : "partially_refunded"
-    const refundPercentage = Math.round((args.amount / payment.amount) * 100)
-
-    // Update payment record
-    await ctx.db.patch(args.paymentId, {
-      refundAmount: (payment.refundAmount || 0) + args.amount,
-      refundReason: args.reason,
-      refundPercentage,
-      refundPolicy: args.refundPolicy || (isFullRefund ? "full" : "partial"),
-      status: newStatus,
-      updatedAt: Date.now(),
+    const identity = await checkAdmin(ctx)
+    return await ctx.runAction(internal.stripe.refundRentalAsAdmin, {
+      ...args,
+      adminId: identity.subject,
     })
-
-    // Log the admin action
-    await ctx.db.insert("auditLogs", {
-      entityType: "payment",
-      entityId: args.paymentId,
-      action: "admin_refund_processed",
-      userId: args.adminId,
-      previousState: { status: payment.status, refundAmount: payment.refundAmount },
-      newState: { status: newStatus, refundAmount: (payment.refundAmount || 0) + args.amount },
-      metadata: { reason: args.reason, amount: args.amount, refundId: args.refundId },
-      timestamp: Date.now(),
-    })
-
-    // Update reservation status if full refund
-    if (isFullRefund) {
-      await ctx.db.patch(payment.reservationId, {
-        paymentStatus: "refunded",
-        status: "cancelled",
-        cancellationReason: args.reason,
-        updatedAt: Date.now(),
-      })
-    }
-
-    return args.paymentId
   },
 })
 
@@ -1866,19 +1748,103 @@ export const getPlatformSettings = query({
       .first()
 
     if (!settings) {
-      // Return defaults if no settings exist yet
       return {
         platformFeePercentage: 5,
-        minimumPlatformFee: 100,
-        maximumPlatformFee: 5000,
+        earlyAdopterFeeCapPercentage: 3,
+        earlyAdopterPromoStartsAt: null,
+        earlyAdopterPromoEndsAt: null,
       }
     }
 
     return {
       platformFeePercentage: settings.platformFeePercentage,
-      minimumPlatformFee: settings.minimumPlatformFee,
-      maximumPlatformFee: settings.maximumPlatformFee ?? 5000,
+      earlyAdopterFeeCapPercentage: settings.earlyAdopterFeeCapPercentage ?? 3,
+      earlyAdopterPromoStartsAt: settings.earlyAdopterPromoStartsAt ?? null,
+      earlyAdopterPromoEndsAt: settings.earlyAdopterPromoEndsAt ?? null,
+      updatedAt: settings.updatedAt,
     }
+  },
+})
+
+/** Grant early-adopter fee cap to all existing users who do not already have one. */
+export const backfillEarlyAdopters = mutation({
+  args: {
+    feeCapPercentage: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    await checkAdmin(ctx)
+
+    const cap = args.feeCapPercentage ?? 3
+    if (cap < 0 || cap > 100) {
+      throw new Error("Fee cap percentage must be between 0 and 100")
+    }
+
+    const users = await ctx.db.query("users").collect()
+    const now = Date.now()
+    let granted = 0
+
+    for (const user of users) {
+      if (user.isEarlyAdopter === true && user.platformFeeCapPercentage != null) {
+        continue
+      }
+      await ctx.db.patch(user._id, {
+        isEarlyAdopter: true,
+        platformFeeCapPercentage: user.platformFeeCapPercentage ?? cap,
+        earlyAdopterGrantedAt: user.earlyAdopterGrantedAt ?? now,
+      })
+      granted++
+    }
+
+    return { granted, total: users.length }
+  },
+})
+
+/** Set or clear a user's platform fee cap (admin intentional override). */
+export const setUserPlatformFeeCap = mutation({
+  args: {
+    userId: v.id("users"),
+    platformFeeCapPercentage: v.union(v.number(), v.null()),
+    isEarlyAdopter: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    await checkAdmin(ctx)
+
+    const user = await ctx.db.get(args.userId)
+    if (!user) {
+      throw new Error("User not found")
+    }
+
+    if (
+      args.platformFeeCapPercentage !== null &&
+      (args.platformFeeCapPercentage < 0 || args.platformFeeCapPercentage > 100)
+    ) {
+      throw new Error("Fee cap percentage must be between 0 and 100")
+    }
+
+    const patch: {
+      platformFeeCapPercentage?: number
+      isEarlyAdopter?: boolean
+      earlyAdopterGrantedAt?: number
+    } = {}
+
+    if (args.platformFeeCapPercentage === null) {
+      // Clear cap — fall back to global rate. Keep early-adopter flag unless explicitly cleared.
+      await ctx.db.patch(args.userId, {
+        platformFeeCapPercentage: undefined,
+        ...(args.isEarlyAdopter !== undefined ? { isEarlyAdopter: args.isEarlyAdopter } : {}),
+      })
+    } else {
+      patch.platformFeeCapPercentage = args.platformFeeCapPercentage
+      if (args.isEarlyAdopter !== undefined) {
+        patch.isEarlyAdopter = args.isEarlyAdopter
+        if (args.isEarlyAdopter && user.earlyAdopterGrantedAt == null) {
+          patch.earlyAdopterGrantedAt = Date.now()
+        }
+      }
+      await ctx.db.patch(args.userId, patch)
+    }
+
+    return args.userId
   },
 })
 

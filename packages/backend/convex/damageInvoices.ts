@@ -3,7 +3,9 @@ import Stripe from "stripe"
 import { api, internal } from "./_generated/api"
 
 import { action, internalMutation, internalQuery, mutation, query } from "./_generated/server"
-import { checkAdmin } from "./admin"
+import { userProfileWithAdminContact } from "./userProfile"
+import { verifiedPaymentDestination } from "./stripeOwnership"
+import { checkAdmin, isAdminIdentity } from "./admin"
 import {
   getDamageClaimSubmittedEmailTemplate,
   getDamageInvoicePaymentEmailTemplate,
@@ -12,6 +14,7 @@ import {
 } from "./emails"
 import { ErrorCode, throwError } from "./errors"
 import { getWebUrl } from "./helpers"
+import { buildDestinationChargeAmounts } from "./pricing"
 
 // ============================================================================
 // Queries
@@ -29,11 +32,7 @@ export const getById = query({
     if (!invoice) return null
 
     // Only allow renter, owner, or admin to view
-    const isAdmin = (() => {
-      const metadata = identity as any
-      const role = metadata.metadata?.role || metadata.publicMetadata?.role || metadata.orgRole
-      return role === "admin"
-    })()
+    const isAdmin = isAdminIdentity(identity)
 
     if (invoice.renterId !== identity.subject && invoice.ownerId !== identity.subject && !isAdmin) {
       throwError(ErrorCode.FORBIDDEN, "Not authorized to view this damage invoice")
@@ -56,8 +55,8 @@ export const getById = query({
       ...invoice,
       reservation,
       vehicle,
-      renter,
-      owner,
+      renter: userProfileWithAdminContact(renter, isAdmin),
+      owner: userProfileWithAdminContact(owner, isAdmin),
     }
   },
 })
@@ -502,7 +501,7 @@ export const adminApprove: ReturnType<typeof action> = action({
     }
 
     // Get owner's Connect account
-    const owner = await ctx.runQuery(api.users.getByExternalId, {
+    const owner = await ctx.runQuery(internal.users.getByExternalIdInternal, {
       externalId: invoice.ownerId,
     })
 
@@ -522,7 +521,12 @@ export const adminApprove: ReturnType<typeof action> = action({
       apiVersion: "2025-08-27.basil",
     })
 
-    const connectAccount = await stripe.accounts.retrieve(owner.stripeAccountId)
+    const connectAccount = await verifiedPaymentDestination(
+      ctx,
+      stripe,
+      owner.stripeAccountId,
+      owner.externalId
+    )
     if (!connectAccount.charges_enabled) {
       throwError(
         ErrorCode.STRIPE_ACCOUNT_DISABLED,
@@ -531,6 +535,12 @@ export const adminApprove: ReturnType<typeof action> = action({
     }
 
     const webUrl = getWebUrl()
+
+    // Renter covers card processing; owner receives the full damage amount (0% Renegade fee).
+    const { processingFeeCents, applicationFeeCents } = buildDestinationChargeAmounts({
+      listingAmountCents: invoice.amount,
+      platformFeeCents: 0,
+    })
 
     // Create Stripe Checkout Session with 0% platform fee
     const checkoutSession = await stripe.checkout.sessions.create({
@@ -547,9 +557,24 @@ export const adminApprove: ReturnType<typeof action> = action({
           },
           quantity: 1,
         },
+        ...(processingFeeCents > 0
+          ? [
+              {
+                price_data: {
+                  currency: "usd",
+                  product_data: {
+                    name: "Card processing fee",
+                    description: "Passed through at Stripe's standard US card rate",
+                  },
+                  unit_amount: processingFeeCents,
+                },
+                quantity: 1,
+              },
+            ]
+          : []),
       ],
       payment_intent_data: {
-        application_fee_amount: 0, // 0% platform fee on damage charges
+        application_fee_amount: applicationFeeCents,
         transfer_data: {
           destination: owner.stripeAccountId,
         },
@@ -560,6 +585,7 @@ export const adminApprove: ReturnType<typeof action> = action({
           renterId: invoice.renterId,
           ownerId: invoice.ownerId,
           vehicleId: invoice.vehicleId as string,
+          processingFee: processingFeeCents.toString(),
         },
       },
       success_url: `${webUrl}/damage-payment/success?damageInvoiceId=${args.damageInvoiceId}`,
@@ -586,7 +612,7 @@ export const adminApprove: ReturnType<typeof action> = action({
       : "Vehicle"
 
     // Send email to renter with payment link
-    const renter = await ctx.runQuery(api.users.getByExternalId, {
+    const renter = await ctx.runQuery(internal.users.getByExternalIdInternal, {
       externalId: invoice.renterId,
     })
 

@@ -9,9 +9,10 @@ import {
   mutation,
   query,
 } from "./_generated/server"
-import { checkAdmin } from "./admin"
+import { checkAdmin, isAdminIdentity } from "./admin"
 import { calculateDistance } from "./geocoding"
-import { r2 } from "./r2"
+import { attachVehicleUpload, removeVehicleUpload } from "./r2"
+import { publicUserProfile, userProfileWithAdminContact } from "./userProfile"
 import { normalizeMake } from "./vehicleMakes"
 
 // Get all active and approved vehicles with optimized images
@@ -82,7 +83,7 @@ export const getAllWithOptimizedImages = query({
         return {
           ...vehicle,
           images: optimizedImages,
-          owner,
+          owner: publicUserProfile(owner),
           track,
           hostStripeReady,
         }
@@ -296,7 +297,7 @@ export const searchWithAvailability = query({
         return {
           ...vehicle,
           images: optimizedImages,
-          owner,
+          owner: publicUserProfile(owner),
           track,
           hostStripeReady,
         }
@@ -373,7 +374,7 @@ export const getAll = query({
         return {
           ...vehicle,
           images,
-          owner,
+          owner: publicUserProfile(owner),
           track,
           hostStripeReady,
         }
@@ -414,10 +415,12 @@ export const getById = query({
     const hostStripeReady =
       !!owner?.stripeAccountId && owner.stripeAccountStatus === "enabled"
 
+    const identity = await ctx.auth.getUserIdentity()
+    const isAdmin = !!identity && isAdminIdentity(identity)
     return {
       ...vehicle,
       images,
-      owner,
+      owner: userProfileWithAdminContact(owner, isAdmin),
       track,
       availability,
       hostStripeReady,
@@ -501,6 +504,7 @@ export const createVehicleWithImages = mutation({
     model: v.string(),
     year: v.number(),
     dailyRate: v.number(),
+    damageDepositAmount: v.optional(v.number()),
     description: v.string(),
     horsepower: v.optional(v.number()),
     transmission: v.optional(v.string()),
@@ -565,10 +569,9 @@ export const createVehicleWithImages = mutation({
     const userId = identity.subject
     const now = Date.now()
 
-    // If no trackId provided, we need to handle it - but schema requires trackId
-    // For now, we'll require it or throw an error
-    if (!args.trackId) {
-      // Get the first active track as default
+    // Schema requires trackId; fall back to the first active track when omitted.
+    let trackId = args.trackId
+    if (!trackId) {
       const defaultTrack = await ctx.db
         .query("tracks")
         .withIndex("by_active", (q) => q.eq("isActive", true))
@@ -576,17 +579,18 @@ export const createVehicleWithImages = mutation({
       if (!defaultTrack) {
         throw new Error("No active tracks available. Please select a track.")
       }
-      args.trackId = defaultTrack._id
+      trackId = defaultTrack._id
     }
 
     // Create the vehicle (geocoding happens async after creation)
     const vehicleId = await ctx.db.insert("vehicles", {
       ownerId: userId,
-      trackId: args.trackId,
+      trackId,
       make: normalizeMake(args.make),
       model: args.model,
       year: args.year,
       dailyRate: args.dailyRate,
+      damageDepositAmount: args.damageDepositAmount,
       description: args.description,
       horsepower: args.horsepower,
       transmission: args.transmission,
@@ -607,26 +611,30 @@ export const createVehicleWithImages = mutation({
       updatedAt: now,
     })
 
-    // Schedule geocoding action if address provided
+    // Schedule geocoding action if address provided (omit lat/lng — action args are strict)
     if (args.address) {
       await ctx.scheduler.runAfter(0, api.vehicles.geocodeVehicleAddress, {
         vehicleId,
-        address: args.address,
+        address: {
+          street: args.address.street,
+          city: args.address.city,
+          state: args.address.state,
+          zipCode: args.address.zipCode,
+        },
       })
     }
 
     // Create vehicle images (R2 only)
-    await Promise.all(
-      args.images.map(async (image) =>
-        ctx.db.insert("vehicleImages", {
-          vehicleId,
-          r2Key: image.r2Key,
-          isPrimary: image.isPrimary,
-          order: image.order,
-          metadata: image.metadata,
-        })
-      )
-    )
+    for (const image of args.images) {
+      const imageId = await ctx.db.insert("vehicleImages", {
+        vehicleId,
+        r2Key: image.r2Key,
+        isPrimary: image.isPrimary,
+        order: image.order,
+        metadata: image.metadata,
+      })
+      await attachVehicleUpload(ctx, userId, { vehicleId, imageId, key: image.r2Key })
+    }
 
     // Check if this is the user's first vehicle and update onboarding status
     const existingVehicles = await ctx.db
@@ -681,6 +689,7 @@ export const update = mutation({
     model: v.optional(v.string()),
     year: v.optional(v.number()),
     dailyRate: v.optional(v.number()),
+    damageDepositAmount: v.optional(v.number()),
     description: v.optional(v.string()),
     horsepower: v.optional(v.number()),
     transmission: v.optional(v.string()),
@@ -764,11 +773,16 @@ export const update = mutation({
       updatedAt: Date.now(),
     })
 
-    // Schedule geocoding action if address changed
+    // Schedule geocoding action if address changed (omit lat/lng — action args are strict)
     if (addressChanged && args.address) {
       await ctx.scheduler.runAfter(0, api.vehicles.geocodeVehicleAddress, {
         vehicleId: args.id,
-        address: args.address,
+        address: {
+          street: args.address.street,
+          city: args.address.city,
+          state: args.address.state,
+          zipCode: args.address.zipCode,
+        },
       })
     }
 
@@ -1123,6 +1137,12 @@ export const addImage = mutation({
       order: existingImages.length,
     })
 
+    await attachVehicleUpload(ctx, identity.subject, {
+      vehicleId: args.vehicleId,
+      imageId,
+      key: args.r2Key,
+    })
+
     // If this is primary, unset other primary images
     if (args.isPrimary) {
       await Promise.all(
@@ -1155,18 +1175,9 @@ export const removeImage = mutation({
       throw new Error("Not authorized to modify this vehicle")
     }
 
-    // Delete from R2 if r2Key exists
-    if (image.r2Key) {
-      try {
-        await r2.deleteObject(ctx, image.r2Key)
-      } catch (error) {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { logError } = require("./logger")
-        logError(error, `Failed to delete R2 object ${image.r2Key}`)
-        // Continue with database deletion even if R2 deletion fails
-      }
-    }
-
+    // Historic image rows have no trusted uploader. Removing the association
+    // must not turn a client-supplied key into authority to delete stored bytes.
+    await removeVehicleUpload(ctx, identity.subject, image)
     await ctx.db.delete(args.imageId)
     return args.imageId
   },
@@ -1198,10 +1209,13 @@ export const updateImageOrder = mutation({
       throw new Error("Not authorized to modify this vehicle")
     }
 
-    // Update all image orders
-    await Promise.all(
-      args.imageOrders.map(({ imageId, order }) => ctx.db.patch(imageId, { order }))
-    )
+    for (const { imageId, order } of args.imageOrders) {
+      const image = await ctx.db.get(imageId)
+      if (image?.vehicleId !== vehicle._id) {
+        throw new Error("Image does not belong to this vehicle")
+      }
+      await ctx.db.patch(imageId, { order })
+    }
 
     return { success: true }
   },

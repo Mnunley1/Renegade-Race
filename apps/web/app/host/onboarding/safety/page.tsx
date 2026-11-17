@@ -18,6 +18,30 @@ import { toast } from "sonner"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
+import { areVehiclePhotosRequired } from "@/lib/feature-flags"
+import { needsVehiclePhotoReupload } from "@/lib/image-validation"
+
+const UNCAUGHT_ERROR_RE = /Uncaught Error:\s*(.+?)(?:\n|$)/i
+const NO_ACTIVE_TRACKS_RE = /no active tracks/i
+
+function toastSubmitListingError(error: unknown) {
+  const raw = error instanceof Error ? error.message : ""
+  const uncaught = raw.match(UNCAUGHT_ERROR_RE)?.[1]?.trim()
+  if (NO_ACTIVE_TRACKS_RE.test(raw)) {
+    toast.error("No active tracks available. Please go back and select a track.")
+    return
+  }
+  if (uncaught && uncaught.length < 160) {
+    toast.error(uncaught)
+    return
+  }
+  handleErrorWithContext(error, {
+    action: "submit listing",
+    customMessages: {
+      generic: "Failed to submit listing. Please try again.",
+    },
+  })
+}
 
 export default function SafetyPage() {
   const router = useRouter()
@@ -46,7 +70,7 @@ export default function SafetyPage() {
       images = draft.images
     }
 
-    if (images.length === 0) {
+    if (areVehiclePhotosRequired() && images.length === 0) {
       toast.error("Please upload at least one photo")
       router.push("/host/onboarding/photos")
       return
@@ -91,12 +115,12 @@ export default function SafetyPage() {
       toast.success("Vehicle listing submitted successfully!")
       router.push("/host/onboarding/complete")
     } catch (error) {
-      handleErrorWithContext(error, {
-        action: "submit listing",
-        customMessages: {
-          generic: "Failed to submit listing. Please try again.",
-        },
-      })
+      if (needsVehiclePhotoReupload(error)) {
+        toast.error("Please upload your vehicle photos again before submitting this listing.")
+        router.push("/host/onboarding/photos")
+        return
+      }
+      toastSubmitListingError(error)
     } finally {
       setIsSubmitting(false)
     }

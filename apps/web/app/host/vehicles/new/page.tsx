@@ -30,7 +30,9 @@ import { toast } from "sonner"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
+import { areVehiclePhotosRequired } from "@/lib/feature-flags"
 import { IMAGE_ACCEPT_ATTR, isAllowedImageFile } from "@/lib/image-validation"
+import { listingImageUploadApi } from "@/lib/vehicle-upload-api"
 
 const ADVANCE_NOTICE_OPTIONS = [
   { value: "same-day", label: "Same day" },
@@ -71,7 +73,7 @@ export default function CreateVehiclePage() {
   // Fetch tracks from Convex
   const tracks = useQuery(api.tracks.getAll, {})
   const createVehicleWithImages = useMutation(api.vehicles.createVehicleWithImages)
-  const uploadFile = useUploadFile(api.r2)
+  const uploadFile = useUploadFile(listingImageUploadApi)
 
   // Step 1: Vehicle & Location state
   const [vehicleFormData, setVehicleFormData] = useState({
@@ -80,6 +82,7 @@ export default function CreateVehiclePage() {
     model: "",
     year: new Date().getFullYear(),
     dailyRate: "",
+    damageDepositAmount: "",
     description: "",
     horsepower: "",
     transmission: "",
@@ -122,6 +125,7 @@ export default function CreateVehiclePage() {
 
   // Uploaded image keys (stored after step 2)
   const [uploadedImageKeys, setUploadedImageKeys] = useState<string[]>([])
+  const photosRequired = areVehiclePhotosRequired()
 
   // Step 1 Handlers
   const handleVehicleChange = (
@@ -188,8 +192,15 @@ export default function CreateVehiclePage() {
   }
 
   const handlePhotosContinue = async () => {
-    if (images.length === 0) {
+    if (photosRequired && images.length === 0) {
       toast.error("Please upload at least one photo")
+      return
+    }
+
+    if (images.length === 0) {
+      setUploadedImageKeys([])
+      toast.success("Skipped photos (test mode)")
+      setCurrentStep(3)
       return
     }
 
@@ -270,7 +281,7 @@ export default function CreateVehiclePage() {
       return
     }
 
-    if (uploadedImageKeys.length === 0) {
+    if (photosRequired && uploadedImageKeys.length === 0) {
       toast.error("Please upload at least one photo")
       setCurrentStep(2)
       return
@@ -284,6 +295,9 @@ export default function CreateVehiclePage() {
         model: vehicleFormData.model,
         year: Number(vehicleFormData.year),
         dailyRate: Number(vehicleFormData.dailyRate),
+        damageDepositAmount: vehicleFormData.damageDepositAmount
+          ? Number(vehicleFormData.damageDepositAmount) * 100
+          : undefined,
         description: vehicleFormData.description,
         horsepower: Number(vehicleFormData.horsepower),
         transmission: vehicleFormData.transmission,
@@ -493,6 +507,21 @@ export default function CreateVehiclePage() {
                   value={vehicleFormData.dailyRate}
                 />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="damageDepositAmount">ACH Damage Deposit ($)</Label>
+                <Input
+                  id="damageDepositAmount"
+                  min="0"
+                  name="damageDepositAmount"
+                  onChange={handleVehicleChange}
+                  placeholder="Optional"
+                  type="number"
+                  value={vehicleFormData.damageDepositAmount}
+                />
+                <p className="text-muted-foreground text-xs">
+                  Collected only when an invoice is paid with ACH/debit.
+                </p>
+              </div>
             </div>
 
             <div className="grid gap-6 md:grid-cols-3">
@@ -599,9 +628,11 @@ export default function CreateVehiclePage() {
           <CardContent className="space-y-6">
             <div className="space-y-4">
               <div>
-                <Label>Vehicle Photos *</Label>
+                <Label>Vehicle Photos{photosRequired ? " *" : " (optional)"}</Label>
                 <p className="text-muted-foreground text-xs">
-                  Upload at least one photo. The first image will be used as the main image.
+                  {photosRequired
+                    ? "Upload at least one photo. The first image will be used as the main image."
+                    : "Optional in test mode. The first image will be used as the main image."}
                 </p>
               </div>
 
@@ -654,13 +685,18 @@ export default function CreateVehiclePage() {
                 Back
               </Button>
               <Button
-                disabled={images.length === 0 || isSubmittingPhotos}
+                disabled={(photosRequired && images.length === 0) || isSubmittingPhotos}
                 onClick={handlePhotosContinue}
               >
                 {isSubmittingPhotos ? (
                   <>
                     <Loader2 className="mr-2 size-4 animate-spin" />
                     Uploading...
+                  </>
+                ) : images.length === 0 && !photosRequired ? (
+                  <>
+                    Skip Photos
+                    <ArrowRight className="ml-2 size-4" />
                   </>
                 ) : (
                   <>

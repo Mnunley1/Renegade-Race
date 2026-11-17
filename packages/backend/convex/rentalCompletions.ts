@@ -1,8 +1,11 @@
 import { v } from "convex/values"
 import { api } from "./_generated/api"
-import { mutation, query } from "./_generated/server"
+import type { Doc } from "./_generated/dataModel"
+import { mutation, type QueryCtx, query } from "./_generated/server"
 import { getNewReviewEmailTemplate, sendTransactionalEmail } from "./emails"
-import { getWebUrl } from "./helpers"
+import { getWebUrl, isReservationParticipant, participantCompletion } from "./helpers"
+import { validateReturnPhotos, visibleReturnPhotos } from "./returnEvidence"
+import { publicUserProfile } from "./userProfile"
 
 // Create a new rental completion record
 export const create = mutation({
@@ -16,8 +19,8 @@ export const create = mutation({
     }
 
     const reservation = await ctx.db.get(args.reservationId)
-    if (!reservation) {
-      throw new Error("Reservation not found")
+    if (!(reservation && isReservationParticipant(reservation, identity.subject))) {
+      throw new Error("Reservation unavailable")
     }
 
     if (reservation.status !== "confirmed") {
@@ -82,13 +85,19 @@ export const submitRenterReturnForm = mutation({
       throw new Error("Rental completion not found")
     }
 
-    if (completion.renterId !== identity.subject) {
+    const reservation = await ctx.db.get(completion.reservationId)
+    if (
+      reservation?.renterId !== identity.subject ||
+      !participantCompletion(completion, reservation, identity.subject)
+    ) {
       throw new Error("Not authorized to submit return form")
     }
 
     if (completion.status !== "pending_renter") {
       throw new Error("Return form already submitted or completion in wrong state")
     }
+
+    await validateReturnPhotos(ctx, completion.reservationId, identity.subject, args.photos)
 
     await ctx.db.patch(args.completionId, {
       status: "pending_owner",
@@ -131,13 +140,19 @@ export const submitOwnerReturnReview = mutation({
       throw new Error("Rental completion not found")
     }
 
-    if (completion.ownerId !== identity.subject) {
+    const reservation = await ctx.db.get(completion.reservationId)
+    if (
+      reservation?.ownerId !== identity.subject ||
+      !participantCompletion(completion, reservation, identity.subject)
+    ) {
       throw new Error("Not authorized to submit return review")
     }
 
     if (completion.status !== "pending_owner") {
       throw new Error("Return review already submitted or completion in wrong state")
     }
+
+    await validateReturnPhotos(ctx, completion.reservationId, identity.subject, args.photos)
 
     await ctx.db.patch(args.completionId, {
       status: "completed",
@@ -255,8 +270,8 @@ export const submitVehicleVitals = mutation({
       throw new Error("Rental completion not found")
     }
 
-    // Check if user is either renter or owner
-    if (completion.renterId !== identity.subject && completion.ownerId !== identity.subject) {
+    const reservation = await ctx.db.get(completion.reservationId)
+    if (!participantCompletion(completion, reservation, identity.subject)) {
       throw new Error("Not authorized to submit vehicle vitals")
     }
 
@@ -306,8 +321,8 @@ export const submitReview = mutation({
       throw new Error("Rental completion not found")
     }
 
-    // Check if user is either renter or owner
-    if (completion.renterId !== identity.subject && completion.ownerId !== identity.subject) {
+    const reservation = await ctx.db.get(completion.reservationId)
+    if (!participantCompletion(completion, reservation, identity.subject)) {
       throw new Error("Not authorized to submit review")
     }
 
@@ -391,71 +406,67 @@ export const submitReview = mutation({
   },
 })
 
-// Get rental completion by ID
+async function completionDetails(
+  ctx: QueryCtx,
+  completion: Doc<"rentalCompletions"> | null,
+  subject: string
+) {
+  if (!completion) return null
+  const reservation = await ctx.db.get(completion.reservationId)
+  if (!participantCompletion(completion, reservation, subject)) return null
+  const [visible, vehicle, renter, owner] = await Promise.all([
+    visibleReturnPhotos(ctx, completion),
+    ctx.db.get(completion.vehicleId),
+    ctx.db
+      .query("users")
+      .withIndex("by_external_id", (q) => q.eq("externalId", completion.renterId))
+      .first(),
+    ctx.db
+      .query("users")
+      .withIndex("by_external_id", (q) => q.eq("externalId", completion.ownerId))
+      .first(),
+  ])
+  return {
+    ...visible,
+    reservation,
+    vehicle,
+    renter: publicUserProfile(renter),
+    owner: publicUserProfile(owner),
+  }
+}
+
 export const getById = query({
   args: { id: v.id("rentalCompletions") },
-  handler: async (ctx, args) => {
-    const completion = await ctx.db.get(args.id)
-    if (!completion) return null
-
-    // Get related data
-    const [reservation, vehicle, renter, owner] = await Promise.all([
-      ctx.db.get(completion.reservationId),
-      ctx.db.get(completion.vehicleId),
-      ctx.db
-        .query("users")
-        .withIndex("by_external_id", (q) => q.eq("externalId", completion.renterId))
-        .first(),
-      ctx.db
-        .query("users")
-        .withIndex("by_external_id", (q) => q.eq("externalId", completion.ownerId))
-        .first(),
-    ])
-
-    return {
-      ...completion,
-      reservation,
-      vehicle,
-      renter,
-      owner,
-    }
+  handler: async (ctx, { id }) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) return null
+    return completionDetails(ctx, await ctx.db.get(id), identity.subject)
   },
 })
 
-// Get rental completion by reservation ID
 export const getByReservation = query({
   args: { reservationId: v.id("reservations") },
-  handler: async (ctx, args) => {
+  handler: async (ctx, { reservationId }) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) return null
     const completion = await ctx.db
       .query("rentalCompletions")
-      .withIndex("by_reservation", (q) => q.eq("reservationId", args.reservationId))
+      .withIndex("by_reservation", (q) => q.eq("reservationId", reservationId))
       .first()
-
-    if (!completion) return null
-
-    // Get related data
-    const [reservation, vehicle, renter, owner] = await Promise.all([
-      ctx.db.get(completion.reservationId),
-      ctx.db.get(completion.vehicleId),
-      ctx.db
-        .query("users")
-        .withIndex("by_external_id", (q) => q.eq("externalId", completion.renterId))
-        .first(),
-      ctx.db
-        .query("users")
-        .withIndex("by_external_id", (q) => q.eq("externalId", completion.ownerId))
-        .first(),
-    ])
-
-    return {
-      ...completion,
-      reservation,
-      vehicle,
-      renter,
-      owner,
-    }
+    return completionDetails(ctx, completion, identity.subject)
   },
 })
+
+async function visibleCompletions(
+  ctx: QueryCtx,
+  completions: Doc<"rentalCompletions">[],
+  subject: string
+) {
+  const rows = await Promise.all(
+    completions.map((completion) => completionDetails(ctx, completion, subject))
+  )
+  return rows.filter((row) => row !== null)
+}
 
 // Get rental completions for a user
 export const getByUser = query({
@@ -465,6 +476,8 @@ export const getByUser = query({
   },
   handler: async (ctx, args) => {
     const { userId, role } = args
+    const identity = await ctx.auth.getUserIdentity()
+    if (identity?.subject !== userId) return []
 
     let completionsQuery
     if (role === "renter") {
@@ -479,33 +492,7 @@ export const getByUser = query({
 
     const completions = await completionsQuery.order("desc").collect()
 
-    // Get related data for each completion
-    const completionsWithDetails = await Promise.all(
-      completions.map(async (completion) => {
-        const [reservation, vehicle, renter, owner] = await Promise.all([
-          ctx.db.get(completion.reservationId),
-          ctx.db.get(completion.vehicleId),
-          ctx.db
-            .query("users")
-            .withIndex("by_external_id", (q) => q.eq("externalId", completion.renterId))
-            .first(),
-          ctx.db
-            .query("users")
-            .withIndex("by_external_id", (q) => q.eq("externalId", completion.ownerId))
-            .first(),
-        ])
-
-        return {
-          ...completion,
-          reservation,
-          vehicle,
-          renter,
-          owner,
-        }
-      })
-    )
-
-    return completionsWithDetails
+    return visibleCompletions(ctx, completions, identity.subject)
   },
 })
 
@@ -513,6 +500,8 @@ export const getByUser = query({
 export const getPendingCompletions = query({
   args: { userId: v.string() },
   handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (identity?.subject !== args.userId) return []
     const completions = await ctx.db
       .query("rentalCompletions")
       .filter((q) =>
@@ -524,32 +513,6 @@ export const getPendingCompletions = query({
       .order("desc")
       .collect()
 
-    // Get related data
-    const completionsWithDetails = await Promise.all(
-      completions.map(async (completion) => {
-        const [reservation, vehicle, renter, owner] = await Promise.all([
-          ctx.db.get(completion.reservationId),
-          ctx.db.get(completion.vehicleId),
-          ctx.db
-            .query("users")
-            .withIndex("by_external_id", (q) => q.eq("externalId", completion.renterId))
-            .first(),
-          ctx.db
-            .query("users")
-            .withIndex("by_external_id", (q) => q.eq("externalId", completion.ownerId))
-            .first(),
-        ])
-
-        return {
-          ...completion,
-          reservation,
-          vehicle,
-          renter,
-          owner,
-        }
-      })
-    )
-
-    return completionsWithDetails
+    return visibleCompletions(ctx, completions, identity.subject)
   },
 })

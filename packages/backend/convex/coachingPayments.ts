@@ -8,6 +8,8 @@ import { calculateDaysBetween } from "./dateUtils"
 import { ErrorCode, throwError } from "./errors"
 import { getWebUrl } from "./helpers"
 import { logError } from "./logger"
+import { buildDestinationChargeAmounts } from "./pricing"
+import { billingCustomerId, verifiedPaymentDestination } from "./stripeOwnership"
 import { rateLimiter } from "./rateLimiter"
 
 function getStripe(): Stripe {
@@ -114,7 +116,7 @@ export const createCheckoutSession = action({
     }
 
     // Verify coach's Stripe Connect account is ready
-    const coach = await ctx.runQuery(api.users.getByExternalId, {
+    const coach = await ctx.runQuery(internal.users.getByExternalIdInternal, {
       externalId: booking.coachUserId,
     })
     if (!coach?.stripeAccountId) {
@@ -125,7 +127,12 @@ export const createCheckoutSession = action({
     }
 
     const stripe = getStripe()
-    const connectAccount = await stripe.accounts.retrieve(coach.stripeAccountId)
+    const connectAccount = await verifiedPaymentDestination(
+      ctx,
+      stripe,
+      coach.stripeAccountId,
+      coach.externalId
+    )
     if (!connectAccount.details_submitted) {
       throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE, "Coach's payout setup isn't complete yet")
     }
@@ -144,25 +151,15 @@ export const createCheckoutSession = action({
 
     const { platformFee } = await ctx.runMutation(api.stripe.calculatePlatformFee, {
       amount: booking.totalAmount,
+      providerExternalId: booking.coachUserId,
     })
+    const { chargeAmountCents, processingFeeCents, applicationFeeCents } =
+      buildDestinationChargeAmounts({
+        listingAmountCents: booking.totalAmount,
+        platformFeeCents: platformFee,
+      })
 
-    // Get or create Stripe customer for the renter (no component, direct Stripe API)
-    const renter = await ctx.runQuery(api.users.getByExternalId, {
-      externalId: identity.subject,
-    })
-    let customerId = renter?.stripeCustomerId
-    if (!customerId) {
-      const created = await stripe.customers.create({
-        email: identity.email || undefined,
-        name: identity.name || undefined,
-        metadata: { userId: identity.subject },
-      })
-      customerId = created.id
-      await ctx.runMutation(api.users.setStripeCustomerId, {
-        userId: identity.subject,
-        stripeCustomerId: customerId,
-      })
-    }
+    const customerId = await billingCustomerId(ctx, stripe, identity)
 
     const webUrl = getWebUrl()
     const coachName = booking.coach?.name || "Coach"
@@ -188,9 +185,24 @@ export const createCheckoutSession = action({
             },
             quantity: 1,
           },
+          ...(processingFeeCents > 0
+            ? [
+                {
+                  price_data: {
+                    currency: "usd",
+                    product_data: {
+                      name: "Card processing fee",
+                      description: "Passed through at Stripe's standard US card rate",
+                    },
+                    unit_amount: processingFeeCents,
+                  },
+                  quantity: 1,
+                },
+              ]
+            : []),
         ],
         payment_intent_data: {
-          application_fee_amount: platformFee,
+          application_fee_amount: applicationFeeCents,
           transfer_data: {
             destination: coach.stripeAccountId,
           },
@@ -200,6 +212,9 @@ export const createCheckoutSession = action({
             renterId: booking.renterId,
             coachUserId: booking.coachUserId,
             coachProfileId: booking.coachProfileId,
+            platformFee: platformFee.toString(),
+            processingFee: processingFeeCents.toString(),
+            chargeAmount: chargeAmountCents.toString(),
           },
         },
         success_url: `${webUrl}/checkout/success?coachingBookingId=${args.bookingId}`,

@@ -2,8 +2,8 @@ import { v } from "convex/values"
 import { internal } from "./_generated/api"
 import type { Id } from "./_generated/dataModel"
 import { mutation, query } from "./_generated/server"
+import { isAdminIdentity } from "./admin"
 import { calculateDaysBetween } from "./dateUtils"
-import { calculateReservationTotal } from "./pricing"
 import {
   getReservationApprovedRenterEmailTemplate,
   getReservationCancelledEmailTemplate,
@@ -14,8 +14,10 @@ import {
 } from "./emails"
 import { ErrorCode, throwError } from "./errors"
 import { getWebUrl } from "./helpers"
+import { calculateReservationTotal } from "./pricing"
 import { rateLimiter } from "./rateLimiter"
 import { sanitizeMessage, sanitizeShortText } from "./sanitize"
+import { publicUserProfile, userProfileWithAdminContact } from "./userProfile"
 
 // Get reservations for a user (as renter or owner)
 export const getByUser = query({
@@ -86,8 +88,8 @@ export const getByUser = query({
         return {
           ...reservation,
           vehicle: vehicleWithImages,
-          renter,
-          owner,
+          renter: publicUserProfile(renter),
+          owner: publicUserProfile(owner),
         }
       })
     )
@@ -132,11 +134,13 @@ export const getById = query({
       } as typeof vehicle & { images: typeof images }
     }
 
+    const identity = await ctx.auth.getUserIdentity()
+    const isAdmin = !!identity && isAdminIdentity(identity)
     return {
       ...reservation,
       vehicle: vehicleWithImages,
-      renter,
-      owner,
+      renter: userProfileWithAdminContact(renter, isAdmin),
+      owner: userProfileWithAdminContact(owner, isAdmin),
     }
   },
 })
@@ -661,7 +665,13 @@ export const cancel = mutation({
     if (reservation.paymentId) {
       try {
         const payment = await ctx.db.get(reservation.paymentId)
-        if (payment && payment.status === "succeeded" && payment.stripeChargeId) {
+        if (
+          payment &&
+          (payment.status === "succeeded" || payment.status === "partially_refunded") &&
+          (payment.stripeChargeId ||
+            payment.stripePaymentIntentId ||
+            payment.stripeCheckoutSessionId)
+        ) {
           // If owner is cancelling a confirmed reservation, force 100% refund
           const forceFullRefund = isOwnerCancelling && reservation.status === "confirmed"
 
@@ -671,6 +681,7 @@ export const cancel = mutation({
             reservationId: args.reservationId,
             reason: args.cancellationReason || "Reservation cancelled",
             forceFullRefund,
+            cancelledAt: Date.now(),
           })
 
           // If owner cancelled a confirmed reservation, increment their cancellation count
@@ -878,7 +889,7 @@ export const getPendingForOwner = query({
         return {
           ...reservation,
           vehicle,
-          renter,
+          renter: publicUserProfile(renter),
         }
       })
     )
@@ -913,7 +924,7 @@ export const getApprovedForRenter = query({
         return {
           ...reservation,
           vehicle,
-          owner,
+          owner: publicUserProfile(owner),
         }
       })
     )
@@ -946,7 +957,7 @@ export const getConfirmedForOwner = query({
         return {
           ...reservation,
           vehicle,
-          renter,
+          renter: publicUserProfile(renter),
         }
       })
     )
@@ -999,8 +1010,8 @@ export const getUpcoming = query({
         return {
           ...reservation,
           vehicle,
-          renter,
-          owner,
+          renter: publicUserProfile(renter),
+          owner: publicUserProfile(owner),
         }
       })
     )
@@ -1043,8 +1054,8 @@ export const getCompletedReservationForVehicle = query({
     return {
       ...reservation,
       vehicle,
-      renter,
-      owner,
+      renter: publicUserProfile(renter),
+      owner: publicUserProfile(owner),
     }
   },
 })

@@ -1,5 +1,6 @@
 import { v } from "convex/values"
 import { mutation, query } from "./_generated/server"
+import { publicDisplayName } from "./userProfile"
 
 // Set typing state for a user in a conversation
 export const setTyping = mutation({
@@ -99,7 +100,7 @@ export const getTypingUsers = query({
           .query("users")
           .withIndex("by_external_id", (q) => q.eq("externalId", typingUserId))
           .first()
-        return user ? { userId: typingUserId, name: user.name } : null
+        return user ? { userId: typingUserId, name: publicDisplayName(user) } : null
       })
     )
 
