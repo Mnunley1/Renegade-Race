@@ -87,7 +87,7 @@ export const generateProfileImageUploadUrl = mutation({
 async function generateReservationPhotoUploadUrl(
   ctx: Parameters<typeof getCurrentUser>[0],
   reservationId: string,
-  prefix: "disputes" | "reviews" | "damage" | "returns"
+  prefix: "disputes" | "reviews" | "damage"
 ) {
   const user = await getCurrentUser(ctx)
   if (!user) {
@@ -111,11 +111,6 @@ export const generateReviewPhotoUploadUrl = mutation({
 export const generateDamagePhotoUploadUrl = mutation({
   args: { reservationId: v.id("reservations") },
   handler: (ctx, args) => generateReservationPhotoUploadUrl(ctx, args.reservationId, "damage"),
-})
-
-export const generateReturnPhotoUploadUrl = mutation({
-  args: { reservationId: v.id("reservations") },
-  handler: (ctx, args) => generateReservationPhotoUploadUrl(ctx, args.reservationId, "returns"),
 })
 
 // Diagnostic mutation to test R2 configuration

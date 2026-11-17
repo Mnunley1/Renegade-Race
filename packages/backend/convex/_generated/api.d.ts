@@ -51,6 +51,7 @@ import type * as rentalCompletions from "../rentalCompletions.js";
 import type * as rentalRefunds from "../rentalRefunds.js";
 import type * as reports from "../reports.js";
 import type * as reservations from "../reservations.js";
+import type * as returnEvidence from "../returnEvidence.js";
 import type * as reviewStats from "../reviewStats.js";
 import type * as reviews from "../reviews.js";
 import type * as sanitize from "../sanitize.js";
@@ -129,6 +130,7 @@ declare const fullApi: ApiFromModules<{
   rentalRefunds: typeof rentalRefunds;
   reports: typeof reports;
   reservations: typeof reservations;
+  returnEvidence: typeof returnEvidence;
   reviewStats: typeof reviewStats;
   reviews: typeof reviews;
   sanitize: typeof sanitize;

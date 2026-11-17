@@ -477,6 +477,13 @@ export default defineSchema({
     .index("by_status", ["status"])
     .index("by_team_status", ["teamId", "status"]),
 
+  // Only the opaque returnEvidence row ID leaves the server.
+  returnEvidence: defineTable({
+    reservationId: v.id("reservations"),
+    uploader: v.string(),
+    storageId: v.id("_storage"),
+  }).index("by_storage", ["storageId"]),
+
   // New tables for rental completion system
   rentalCompletions: defineTable({
     reservationId: v.id("reservations"),
@@ -509,7 +516,7 @@ export default defineSchema({
         ),
         mileage: v.number(),
         notes: v.optional(v.string()),
-        photos: v.array(v.string()), // URLs to return photos
+        photos: v.array(v.string()), // Private evidence references or historical R2 keys
         submittedAt: v.number(),
       })
     ),
@@ -521,7 +528,7 @@ export default defineSchema({
         fuelLevelMatches: v.boolean(),
         mileageMatches: v.boolean(),
         damageReported: v.optional(v.string()),
-        photos: v.array(v.string()), // URLs to owner photos
+        photos: v.array(v.string()), // Private evidence references or historical R2 keys
         notes: v.optional(v.string()),
         submittedAt: v.number(),
       })
