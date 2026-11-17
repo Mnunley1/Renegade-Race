@@ -19,6 +19,7 @@ import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 import { areVehiclePhotosRequired } from "@/lib/feature-flags"
+import { needsVehiclePhotoReupload } from "@/lib/image-validation"
 
 const UNCAUGHT_ERROR_RE = /Uncaught Error:\s*(.+?)(?:\n|$)/i
 const NO_ACTIVE_TRACKS_RE = /no active tracks/i
@@ -114,6 +115,11 @@ export default function SafetyPage() {
       toast.success("Vehicle listing submitted successfully!")
       router.push("/host/onboarding/complete")
     } catch (error) {
+      if (needsVehiclePhotoReupload(error)) {
+        toast.error("Please upload your vehicle photos again before submitting this listing.")
+        router.push("/host/onboarding/photos")
+        return
+      }
       toastSubmitListingError(error)
     } finally {
       setIsSubmitting(false)

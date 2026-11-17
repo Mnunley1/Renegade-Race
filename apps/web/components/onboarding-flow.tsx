@@ -29,7 +29,12 @@ import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 import { areVehiclePhotosRequired } from "@/lib/feature-flags"
-import { IMAGE_ACCEPT_ATTR, isAllowedImageFile } from "@/lib/image-validation"
+import {
+  IMAGE_ACCEPT_ATTR,
+  isAllowedImageFile,
+  needsVehiclePhotoReupload,
+} from "@/lib/image-validation"
+import { onboardingImageUploadApi } from "@/lib/vehicle-upload-api"
 
 const ADVANCE_NOTICE_OPTIONS = [
   { value: "same-day", label: "Same day" },
@@ -60,7 +65,7 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
   const tracks = useQuery(api.tracks.getAll, {})
   const draft = useQuery(api.users.getOnboardingDraft, {})
   const saveDraft = useMutation(api.users.saveOnboardingDraft)
-  const uploadFile = useUploadFile(api.r2)
+  const uploadFile = useUploadFile(onboardingImageUploadApi)
   const createVehicleWithImages = useMutation(api.vehicles.createVehicleWithImages)
   const updateOnboardingStep = useMutation(api.users.updateHostOnboardingStep)
   const completeOnboarding = useMutation(api.users.completeHostOnboarding)
@@ -484,6 +489,11 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
       toast.success("Vehicle listing submitted successfully!")
       router.push("/host/onboarding/complete")
     } catch (error) {
+      if (needsVehiclePhotoReupload(error)) {
+        toast.error("Please upload your vehicle photos again before submitting this listing.")
+        setCurrentStep(2)
+        return
+      }
       handleErrorWithContext(error, {
         action: "submit vehicle listing",
         customMessages: {

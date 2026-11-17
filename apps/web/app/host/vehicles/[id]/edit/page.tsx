@@ -49,6 +49,7 @@ import {
   isAllowedImageFile,
 } from "@/lib/image-validation"
 import { r2Url } from "@/lib/r2-url"
+import { listingImageUploadApi } from "@/lib/vehicle-upload-api"
 
 const TRANSMISSION_OPTIONS = ["Manual", "Automatic", "PDK", "DCT", "CVT"]
 const DRIVETRAIN_OPTIONS = ["RWD", "AWD", "FWD"]
@@ -73,7 +74,7 @@ export default function EditVehiclePage() {
   const removeImage = useMutation(api.vehicles.removeImage)
   const updateImageOrder = useMutation(api.vehicles.updateImageOrder)
   const updateImage = useMutation(api.vehicles.updateImage)
-  const uploadFile = useUploadFile(api.r2)
+  const uploadFile = useUploadFile(listingImageUploadApi)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [selectedImageIds, setSelectedImageIds] = useState<Set<string>>(new Set())
   const [isBulkDeleting, setIsBulkDeleting] = useState(false)

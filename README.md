@@ -86,6 +86,12 @@ For an older account, verify control of both the signed-in Renegade identity and
 
 Custom invoices recheck the destination when opening a Stripe payment link or the billing portal. A payout hold still allows access to paid receipts. The invoice sender can refund a settled ACH damage deposit to its original charge. Pending refunds reserve that amount until Stripe confirms success or failure.
 
+## Onboarding and listing photos
+
+Convex records the uploader, R2 bucket, key, and intended use when it issues an upload URL. Saving a draft checks that record. Creating a listing binds the upload to its vehicle image, so clearing or restarting onboarding preserves published photos.
+
+Cleanup removes unused onboarding photos issued to the signed-in user. Clearing a legacy draft or removing a legacy listing image removes its reference and retains the stored file when its uploader is unknown. A host resuming an older draft must re-upload any unverified photos before publishing. Older clients can still attach their newly issued general-purpose uploads. Cleanup retains those files because they may be used elsewhere.
+
 ## Return evidence
 
 For participant access, private photo delivery, and migration of historical R2 attachments, see [Return evidence access and release](docs/return-evidence.md).

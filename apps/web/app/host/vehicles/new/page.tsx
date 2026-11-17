@@ -32,6 +32,7 @@ import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 import { areVehiclePhotosRequired } from "@/lib/feature-flags"
 import { IMAGE_ACCEPT_ATTR, isAllowedImageFile } from "@/lib/image-validation"
+import { listingImageUploadApi } from "@/lib/vehicle-upload-api"
 
 const ADVANCE_NOTICE_OPTIONS = [
   { value: "same-day", label: "Same day" },
@@ -72,7 +73,7 @@ export default function CreateVehiclePage() {
   // Fetch tracks from Convex
   const tracks = useQuery(api.tracks.getAll, {})
   const createVehicleWithImages = useMutation(api.vehicles.createVehicleWithImages)
-  const uploadFile = useUploadFile(api.r2)
+  const uploadFile = useUploadFile(listingImageUploadApi)
 
   // Step 1: Vehicle & Location state
   const [vehicleFormData, setVehicleFormData] = useState({
