@@ -11,7 +11,7 @@ import {
 } from "./_generated/server"
 import { checkAdmin, isAdminIdentity } from "./admin"
 import { calculateDistance } from "./geocoding"
-import { r2 } from "./r2"
+import { attachVehicleUpload, removeVehicleUpload } from "./r2"
 import { publicUserProfile, userProfileWithAdminContact } from "./userProfile"
 import { normalizeMake } from "./vehicleMakes"
 
@@ -625,17 +625,16 @@ export const createVehicleWithImages = mutation({
     }
 
     // Create vehicle images (R2 only)
-    await Promise.all(
-      args.images.map(async (image) =>
-        ctx.db.insert("vehicleImages", {
-          vehicleId,
-          r2Key: image.r2Key,
-          isPrimary: image.isPrimary,
-          order: image.order,
-          metadata: image.metadata,
-        })
-      )
-    )
+    for (const image of args.images) {
+      const imageId = await ctx.db.insert("vehicleImages", {
+        vehicleId,
+        r2Key: image.r2Key,
+        isPrimary: image.isPrimary,
+        order: image.order,
+        metadata: image.metadata,
+      })
+      await attachVehicleUpload(ctx, userId, { vehicleId, imageId, key: image.r2Key })
+    }
 
     // Check if this is the user's first vehicle and update onboarding status
     const existingVehicles = await ctx.db
@@ -1138,6 +1137,12 @@ export const addImage = mutation({
       order: existingImages.length,
     })
 
+    await attachVehicleUpload(ctx, identity.subject, {
+      vehicleId: args.vehicleId,
+      imageId,
+      key: args.r2Key,
+    })
+
     // If this is primary, unset other primary images
     if (args.isPrimary) {
       await Promise.all(
@@ -1170,18 +1175,9 @@ export const removeImage = mutation({
       throw new Error("Not authorized to modify this vehicle")
     }
 
-    // Delete from R2 if r2Key exists
-    if (image.r2Key) {
-      try {
-        await r2.deleteObject(ctx, image.r2Key)
-      } catch (error) {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { logError } = require("./logger")
-        logError(error, `Failed to delete R2 object ${image.r2Key}`)
-        // Continue with database deletion even if R2 deletion fails
-      }
-    }
-
+    // Historic image rows have no trusted uploader. Removing the association
+    // must not turn a client-supplied key into authority to delete stored bytes.
+    await removeVehicleUpload(ctx, identity.subject, image)
     await ctx.db.delete(args.imageId)
     return args.imageId
   },
@@ -1213,10 +1209,13 @@ export const updateImageOrder = mutation({
       throw new Error("Not authorized to modify this vehicle")
     }
 
-    // Update all image orders
-    await Promise.all(
-      args.imageOrders.map(({ imageId, order }) => ctx.db.patch(imageId, { order }))
-    )
+    for (const { imageId, order } of args.imageOrders) {
+      const image = await ctx.db.get(imageId)
+      if (image?.vehicleId !== vehicle._id) {
+        throw new Error("Image does not belong to this vehicle")
+      }
+      await ctx.db.patch(imageId, { order })
+    }
 
     return { success: true }
   },

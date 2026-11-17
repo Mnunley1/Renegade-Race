@@ -14,7 +14,7 @@ import {
 } from "./_generated/server"
 import { getWelcomeEmailTemplate, sendTransactionalEmail } from "./emails"
 import { isEarlyAdopterPromoActive, resolvePlatformFeePercentage } from "./pricing"
-import { r2 } from "./r2"
+import { clearDraftUploads, requireDraftUpload } from "./r2"
 import { retrieveLinkedConnectAccount } from "./stripeOwnership"
 import { publicDisplayName, publicUserProfile } from "./userProfile"
 
@@ -905,10 +905,11 @@ export const completeHostOnboarding = mutation({
       throw new Error("User not found")
     }
 
+    // Publishing binds vehicle images before this mutation. Only unused, owned
+    // onboarding uploads are eligible for cleanup.
+    await clearDraftUploads(ctx, user)
     await ctx.db.patch(user._id, {
       hostOnboardingStatus: "completed",
-      // Clear temporary onboarding data after completion
-      // Note: Images are already associated with the vehicle, so we don't delete them
       onboardingVehicleAddress: undefined,
       hostOnboardingDraft: undefined,
     })
@@ -1023,6 +1024,13 @@ export const saveOnboardingDraft = mutation({
       throw new Error("User not found")
     }
 
+    if (args.images) {
+      const keys = new Set(args.images.map((image) => image.r2Key))
+      if (keys.size !== args.images.length) throw new Error("Choose distinct onboarding photos")
+      for (const key of keys) await requireDraftUpload(ctx, user.externalId, key)
+      await clearDraftUploads(ctx, user, keys)
+    }
+
     const currentDraft = user.hostOnboardingDraft || {}
     const updatedDraft = {
       ...currentDraft,
@@ -1077,21 +1085,7 @@ export const clearOnboardingDraft = mutation({
       throw new Error("User not found")
     }
 
-    // Clean up orphaned images from R2 before clearing draft
-    if (user.hostOnboardingDraft?.images) {
-      for (const image of user.hostOnboardingDraft.images) {
-        if (image.r2Key) {
-          try {
-            await r2.deleteObject(ctx, image.r2Key)
-          } catch (error) {
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            const { logError } = require("./logger")
-            logError(error, `Failed to delete orphaned R2 image ${image.r2Key}`)
-            // Continue with cleanup even if R2 deletion fails
-          }
-        }
-      }
-    }
+    await clearDraftUploads(ctx, user)
 
     await ctx.db.patch(user._id, {
       hostOnboardingDraft: undefined,
@@ -1115,21 +1109,7 @@ export const startOverOnboarding = mutation({
       throw new Error("User not found")
     }
 
-    // Clean up orphaned images from R2 before clearing draft
-    if (user.hostOnboardingDraft?.images) {
-      for (const image of user.hostOnboardingDraft.images) {
-        if (image.r2Key) {
-          try {
-            await r2.deleteObject(ctx, image.r2Key)
-          } catch (error) {
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            const { logError } = require("./logger")
-            logError(error, `Failed to delete orphaned R2 image ${image.r2Key}`)
-            // Continue with cleanup even if R2 deletion fails
-          }
-        }
-      }
-    }
+    await clearDraftUploads(ctx, user)
 
     // Reset onboarding status and clear all draft data
     await ctx.db.patch(user._id, {

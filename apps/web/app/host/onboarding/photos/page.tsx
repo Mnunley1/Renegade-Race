@@ -19,6 +19,7 @@ import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 import { areVehiclePhotosRequired } from "@/lib/feature-flags"
 import { IMAGE_ACCEPT_ATTR, isAllowedImageFile } from "@/lib/image-validation"
+import { onboardingImageUploadApi } from "@/lib/vehicle-upload-api"
 
 export default function PhotosPage() {
   const router = useRouter()
@@ -26,7 +27,7 @@ export default function PhotosPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const photosRequired = areVehiclePhotosRequired()
 
-  const uploadFile = useUploadFile(api.r2)
+  const uploadFile = useUploadFile(onboardingImageUploadApi)
   const saveDraft = useMutation(api.users.saveOnboardingDraft)
   const _draft = useQuery(api.users.getOnboardingDraft, {})
 

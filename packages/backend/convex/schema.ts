@@ -210,6 +210,22 @@ export default defineSchema({
     .index("by_approved", ["isApproved"])
     .index("by_active_approved", ["isActive", "isApproved"]),
 
+  // An upload is owned when the server issues its single-object PUT URL. Drafts
+  // and vehicle rows are client-supplied references and cannot establish ownership.
+  r2Uploads: defineTable({
+    bucket: v.string(),
+    key: v.string(),
+    ownerId: v.string(),
+    purpose: v.union(
+      v.literal("onboarding"),
+      v.literal("vehicle"),
+      v.literal("general"),
+      v.literal("other")
+    ),
+    targetVehicleId: v.optional(v.id("vehicles")),
+    imageId: v.optional(v.id("vehicleImages")),
+  }).index("by_bucket_key", ["bucket", "key"]),
+
   vehicleImages: defineTable({
     vehicleId: v.id("vehicles"),
     r2Key: v.optional(v.string()), // R2 object key for the original image
