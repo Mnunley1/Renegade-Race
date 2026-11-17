@@ -1,6 +1,7 @@
 import { v } from "convex/values"
 import type { Id } from "./_generated/dataModel"
 import { mutation, type QueryCtx, query } from "./_generated/server"
+import { publicUserProfile } from "./userProfile"
 
 // Resolve the primary (or first available) image key for a vehicle thumbnail
 async function getVehicleThumbnailKey(
@@ -111,8 +112,8 @@ export const getByUser = query({
           ...conversation,
           vehicle,
           vehicleImageKey,
-          renter,
-          owner,
+          renter: publicUserProfile(renter),
+          owner: publicUserProfile(owner),
           team,
           driverProfile,
           coachProfile,
@@ -233,8 +234,8 @@ export const getById = query({
       ...conversation,
       vehicle,
       vehicleImageKey,
-      renter,
-      owner,
+      renter: publicUserProfile(renter),
+      owner: publicUserProfile(owner),
       team,
       driverProfile,
       coachProfile,
@@ -288,8 +289,8 @@ export const getByVehicleAndParticipants = query({
     return {
       ...conversation,
       vehicle,
-      renter,
-      owner,
+      renter: publicUserProfile(renter),
+      owner: publicUserProfile(owner),
     }
   },
 })
@@ -673,7 +674,7 @@ export const getHostConversationsByVehicle = query({
 
         return {
           ...conversation,
-          renter,
+          renter: publicUserProfile(renter),
         }
       })
     )

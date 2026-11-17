@@ -35,6 +35,8 @@ export default function InvoiceDetailPage() {
   const invoice = useQuery(api.invoices.getById, { invoiceId })
   const markViewed = useMutation(api.invoices.markViewed)
   const choosePaymentMethod = useAction(api.invoices.choosePaymentMethod)
+  const openHostedInvoice = useAction(api.invoices.openHostedInvoice)
+  const [isOpening, setIsOpening] = useState(false)
   const refundDeposit = useAction(api.invoices.refundDeposit)
   const [isChoosing, setIsChoosing] = useState<"stripe_card" | "stripe_ach" | null>(null)
   const [refundAmount, setRefundAmount] = useState("")
@@ -77,8 +79,13 @@ export default function InvoiceDetailPage() {
     isSender &&
     invoice.status === "paid" &&
     (invoice.damageDepositAmount || 0) > 0 &&
-    invoice.depositStatus !== "refunded"
-  const remainingDeposit = (invoice.damageDepositAmount || 0) - (invoice.depositRefundAmount || 0)
+    invoice.depositStatus !== "refunded" &&
+    (invoice.damageDepositAmount || 0) >
+      (invoice.depositRefundAmount || 0) + (invoice.depositRefundPendingAmount || 0)
+  const remainingDeposit =
+    (invoice.damageDepositAmount || 0) -
+    (invoice.depositRefundAmount || 0) -
+    (invoice.depositRefundPendingAmount || 0)
 
   const handleChoosePayment = async (paymentMethod: "stripe_card" | "stripe_ach") => {
     setIsChoosing(paymentMethod)
@@ -96,12 +103,33 @@ export default function InvoiceDetailPage() {
     }
   }
 
+  const handleOpenInvoice = async () => {
+    setIsOpening(true)
+    try {
+      const url = await openHostedInvoice({ invoiceId })
+      if (url) window.location.href = url
+      else toast.error("Stripe has not provided an invoice link yet.")
+    } catch (error) {
+      handleErrorWithContext(error, { action: "open Stripe invoice" })
+    } finally {
+      setIsOpening(false)
+    }
+  }
+
   const handleRefundDeposit = async () => {
     setIsRefunding(true)
     try {
       const amount = refundAmount ? Math.round(Number(refundAmount) * 100) : undefined
-      await refundDeposit({ invoiceId, amount })
-      toast.success("Deposit refund issued")
+      const key = `deposit-refund:${invoiceId}:${amount ?? "remaining"}`
+      const requestId = sessionStorage.getItem(key) || crypto.randomUUID()
+      sessionStorage.setItem(key, requestId)
+      const result = await refundDeposit({ invoiceId, amount, requestId })
+      sessionStorage.removeItem(key)
+      if (result.status === "failed" || result.status === "canceled") {
+        toast.error("Stripe declined this refund. You can try again.")
+        return
+      }
+      toast.success(result.status === "succeeded" ? "Deposit refunded" : "Deposit refund pending")
       setRefundAmount("")
     } catch (error) {
       handleErrorWithContext(error, { action: "refund deposit" })
@@ -187,12 +215,10 @@ export default function InvoiceDetailPage() {
               ) : null}
             </div>
 
-            {invoice.stripeCheckoutUrl && (
-              <Button asChild variant="outline">
-                <a href={invoice.stripeCheckoutUrl} rel="noreferrer" target="_blank">
-                  <ExternalLink className="mr-2 size-4" />
-                  Open Stripe invoice
-                </a>
+            {invoice.hasHostedInvoice && (
+              <Button disabled={isOpening} onClick={handleOpenInvoice} variant="outline">
+                <ExternalLink className="mr-2 size-4" />
+                Open Stripe invoice
               </Button>
             )}
           </CardContent>
@@ -212,7 +238,7 @@ export default function InvoiceDetailPage() {
                 {invoice.paymentMethods.includes("stripe_card") && (
                   <Button
                     className="h-auto w-full justify-start p-4"
-                    disabled={isChoosing !== null}
+                    disabled={isChoosing !== null || invoice.selectedPaymentMethod === "stripe_ach"}
                     onClick={() => handleChoosePayment("stripe_card")}
                     variant="outline"
                   >
@@ -236,7 +262,9 @@ export default function InvoiceDetailPage() {
                 {invoice.paymentMethods.includes("stripe_ach") && (
                   <Button
                     className="h-auto w-full justify-start p-4"
-                    disabled={isChoosing !== null}
+                    disabled={
+                      isChoosing !== null || invoice.selectedPaymentMethod === "stripe_card"
+                    }
                     onClick={() => handleChoosePayment("stripe_ach")}
                     variant="outline"
                   >
@@ -286,6 +314,15 @@ export default function InvoiceDetailPage() {
                   </div>
                 ) : null}
 
+                {["failed", "canceled"].includes(invoice.depositLatestRefundStatus || "") && (
+                  <p className="text-muted-foreground text-sm">The latest deposit refund failed.</p>
+                )}
+                {!!invoice.depositRefundPendingAmount && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Refund pending</span>
+                    <span>{formatCurrency(invoice.depositRefundPendingAmount)}</span>
+                  </div>
+                )}
                 {canRefundDeposit && (
                   <div className="space-y-2 pt-2">
                     <Label htmlFor="refundAmount">Refund amount</Label>

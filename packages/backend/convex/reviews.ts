@@ -6,6 +6,7 @@ import { getReviewResponseEmailTemplate, sendTransactionalEmail } from "./emails
 import { getWebUrl } from "./helpers"
 import { calculateUserReviewStats, calculateVehicleReviewStats } from "./reviewStats"
 import { sanitizeReview, sanitizeShortText } from "./sanitize"
+import { publicUserProfile } from "./userProfile"
 
 // Get review by completion ID for current user
 export const getByCompletion = query({
@@ -43,8 +44,8 @@ export const getByCompletion = query({
     return {
       ...review,
       vehicle,
-      reviewer,
-      reviewed,
+      reviewer: publicUserProfile(reviewer),
+      reviewed: publicUserProfile(reviewed),
       reservation,
     }
   },
@@ -94,8 +95,8 @@ export const getByUser = query({
         return {
           ...review,
           vehicle,
-          reviewer,
-          reviewed,
+          reviewer: publicUserProfile(reviewer),
+          reviewed: publicUserProfile(reviewed),
           reservation,
         }
       })
@@ -135,8 +136,8 @@ export const getByVehicle = query({
 
         return {
           ...review,
-          reviewer,
-          reviewed,
+          reviewer: publicUserProfile(reviewer),
+          reviewed: publicUserProfile(reviewed),
           reservation,
         }
       })
@@ -188,8 +189,8 @@ export const getByVehiclePaginated = query({
 
         return {
           ...review,
-          reviewer,
-          reviewed,
+          reviewer: publicUserProfile(reviewer),
+          reviewed: publicUserProfile(reviewed),
         }
       })
     )
@@ -423,7 +424,7 @@ export const getPendingResponses = query({
         return {
           ...review,
           vehicle,
-          reviewer,
+          reviewer: publicUserProfile(reviewer),
           reservation,
         }
       })
@@ -520,8 +521,8 @@ export const getById = query({
     return {
       ...review,
       vehicle,
-      reviewer,
-      reviewed,
+      reviewer: publicUserProfile(reviewer),
+      reviewed: publicUserProfile(reviewed),
       reservation,
     }
   },

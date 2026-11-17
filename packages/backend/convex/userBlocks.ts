@@ -1,5 +1,6 @@
 import { v } from "convex/values"
 import { mutation, query } from "./_generated/server"
+import { publicUserProfile } from "./userProfile"
 
 // Block a user
 export const blockUser = mutation({
@@ -105,7 +106,7 @@ export const getBlockedUsers = query({
 
         return {
           ...block,
-          user,
+          user: publicUserProfile(user),
         }
       })
     )

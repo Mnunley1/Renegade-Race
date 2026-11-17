@@ -4,6 +4,16 @@ import type { Id } from "./_generated/dataModel"
 import { action, internalQuery, mutation, query } from "./_generated/server"
 
 import { ErrorCode, throwError } from "./errors"
+
+export function isAdminIdentity(identity: { subject: string }): boolean {
+  const claims = identity as {
+    metadata?: { role?: string }
+    publicMetadata?: { role?: string }
+    orgRole?: string
+  }
+  return (claims.metadata?.role || claims.publicMetadata?.role || claims.orgRole) === "admin"
+}
+
 // Helper function to check if user is admin via Clerk metadata
 // Exported for reuse across all backend files
 // biome-ignore lint: ctx type is provided by Convex
@@ -13,11 +23,7 @@ export async function checkAdmin(ctx: any) {
     throwError(ErrorCode.AUTH_REQUIRED, "Not authenticated")
   }
 
-  // Check all possible locations where admin role can be stored
-  const metadata = identity as any
-  const role = metadata.metadata?.role || metadata.publicMetadata?.role || metadata.orgRole
-
-  if (role !== "admin") {
+  if (!isAdminIdentity(identity)) {
     throwError(ErrorCode.ADMIN_REQUIRED, "Admin access required")
   }
 

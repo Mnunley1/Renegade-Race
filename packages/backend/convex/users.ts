@@ -1,8 +1,10 @@
 import type { UserJSON } from "@clerk/backend"
 import { type Validator, v } from "convex/values"
-import { api, internal } from "./_generated/api"
+import { internal } from "./_generated/api"
 import {
   action,
+  type ActionCtx,
+  internalAction,
   internalMutation,
   internalQuery,
   type MutationCtx,
@@ -13,6 +15,8 @@ import {
 import { getWelcomeEmailTemplate, sendTransactionalEmail } from "./emails"
 import { isEarlyAdopterPromoActive, resolvePlatformFeePercentage } from "./pricing"
 import { r2 } from "./r2"
+import { retrieveLinkedConnectAccount } from "./stripeOwnership"
+import { publicDisplayName, publicUserProfile } from "./userProfile"
 
 /** Matches Clerk/Convex placeholder names like "null null" from `${null} ${null}`. */
 const NULLISH_NAME_RE = /^(null|undefined)(\s+(null|undefined))+$/i
@@ -75,7 +79,22 @@ export const getMyPlatformFee = query({
 
 export const getByExternalId = query({
   args: { externalId: v.string() },
-  handler: async (ctx, args) => await userByExternalId(ctx, args.externalId),
+  handler: async (ctx, { externalId }) => {
+    const user = await userByExternalId(ctx, externalId)
+    const profile = publicUserProfile(user)
+    if (!profile) return null
+    // The deployed settings page uses this field to load the caller's billing settings.
+    const identity = await ctx.auth.getUserIdentity()
+    return {
+      ...profile,
+      ...(identity?.subject === externalId ? { stripeCustomerId: user?.stripeCustomerId } : {}),
+    }
+  },
+})
+
+export const getByExternalIdInternal = internalQuery({
+  args: { externalId: v.string() },
+  handler: (ctx, { externalId }) => userByExternalId(ctx, externalId),
 })
 
 export const searchForInvoiceRecipients = query({
@@ -90,7 +109,7 @@ export const searchForInvoiceRecipients = query({
     }
 
     const search = (args.search || "").trim().toLowerCase()
-    const limit = Math.min(args.limit || 25, 50)
+    const limit = Math.max(0, Math.min(args.limit ?? 25, 50))
     const users = await ctx.db.query("users").take(200)
 
     return users
@@ -98,16 +117,16 @@ export const searchForInvoiceRecipients = query({
       .filter((user) => {
         if (!search) return true
         return (
-          user.name.toLowerCase().includes(search) ||
-          user.email?.toLowerCase().includes(search) ||
+          publicDisplayName(user).toLowerCase().includes(search) ||
+          user.email?.trim().toLowerCase() === search ||
           user.externalId.toLowerCase().includes(search)
         )
       })
       .slice(0, limit)
       .map((user) => ({
         externalId: user.externalId,
-        name: user.name,
-        email: user.email,
+        name: publicDisplayName(user),
+        email: search && user.email?.trim().toLowerCase() === search ? user.email : undefined,
         profileImage: user.profileImage,
         profileImageR2Key: user.profileImageR2Key,
       }))
@@ -117,30 +136,7 @@ export const searchForInvoiceRecipients = query({
 // Get user by Convex document ID (for public profile pages)
 export const getById = query({
   args: { userId: v.id("users") },
-  handler: async (ctx, args) => {
-    const user = await ctx.db.get(args.userId)
-    if (!user) {
-      return null
-    }
-    // Return public profile data (exclude sensitive fields)
-    return {
-      _id: user._id,
-      name: user.name,
-      profileImage: user.profileImage,
-      profileImageR2Key: user.profileImageR2Key,
-      location: user.location,
-      bio: user.bio,
-      memberSince: user.memberSince,
-      totalRentals: user.totalRentals,
-      rating: user.rating,
-      experience: user.experience,
-      interests: user.interests,
-      externalId: user.externalId, // Needed for fetching vehicles/reviews
-      // Verification status (without exposing actual email/phone)
-      isEmailVerified: !!user.email,
-      isPhoneVerified: !!user.phone,
-    }
-  },
+  handler: async (ctx, { userId }) => publicUserProfile(await ctx.db.get(userId)),
 })
 
 function isPlaceholderUserName(name: string | null | undefined): boolean {
@@ -213,231 +209,143 @@ export const upsertFromClerk = internalMutation({
   },
 })
 
-// Helper function to check Stripe balance
-async function checkStripeBalance(stripeAccountId: string): Promise<string | null> {
+async function stripeDeletionBlocker(ctx: ActionCtx, stripeAccountId: string, clerkUserId: string) {
+  const unverified =
+    "Unable to verify your Stripe account balance. Please try again later or contact support."
   try {
-    const stripe = await import("stripe").then((mod) => {
-      const secretKey = process.env.STRIPE_SECRET_KEY
-      if (!secretKey) {
-        throw new Error("STRIPE_SECRET_KEY environment variable is not set")
-      }
-      return new mod.default(secretKey, {
-        apiVersion: "2025-08-27.basil",
-      })
-    })
+    const secretKey = process.env.STRIPE_SECRET_KEY
+    if (!secretKey) throw new Error("Stripe is not configured")
 
-    const balance = await stripe.balance.retrieve({
-      stripeAccount: stripeAccountId,
-    })
-
-    const hasPendingBalance = balance.pending.some((pendingBalance) => {
-      const totalPending =
-        pendingBalance.amount +
-        (pendingBalance.source_types?.card || 0) +
-        (pendingBalance.source_types?.bank_account || 0)
-      return totalPending > 0
-    })
-
-    const hasAvailableBalance = balance.available.some((availableBalance) => {
-      const totalAvailable =
-        availableBalance.amount +
-        (availableBalance.source_types?.card || 0) +
-        (availableBalance.source_types?.bank_account || 0)
-      return totalAvailable > 0
-    })
-
-    if (hasPendingBalance || hasAvailableBalance) {
-      const balanceDetails: string[] = []
-      if (hasPendingBalance) {
-        const pendingUSD = balance.pending.find((b) => b.currency === "usd")
-        if (pendingUSD && pendingUSD.amount > 0) {
-          balanceDetails.push(`$${(pendingUSD.amount / 100).toFixed(2)} pending`)
-        }
-      }
-      if (hasAvailableBalance) {
-        const availableUSD = balance.available.find((b) => b.currency === "usd")
-        if (availableUSD && availableUSD.amount > 0) {
-          balanceDetails.push(`$${(availableUSD.amount / 100).toFixed(2)} available`)
-        }
-      }
-
-      return `Stripe account has non-zero balance (${balanceDetails.join(", ")}). Please wait for all payouts to complete before deleting your account.`
+    const { default: Stripe } = await import("stripe")
+    const stripe = new Stripe(secretKey, { apiVersion: "2025-08-27.basil" })
+    const account = await retrieveLinkedConnectAccount(ctx, stripe, stripeAccountId, clerkUserId)
+    const balance = await stripe.balance.retrieve({ stripeAccount: stripeAccountId })
+    const balances = [...balance.pending, ...balance.available]
+    if (account.metadata?.renegadeUserId !== clerkUserId) {
+      return [...balances, ...(balance.connect_reserved ?? [])].some((entry) => entry.amount !== 0)
+        ? unverified
+        : null
     }
-
+    if (balances.some((entry) => entry.amount > 0)) {
+      return "Please wait for all Stripe payouts to complete before deleting your account."
+    }
     return null
-  } catch (error) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { logError } = require("./logger")
-    logError(error, "Failed to check Stripe balance for user deletion")
-
-    return "Unable to verify Stripe account balance. Please try again later or contact support."
+  } catch {
+    return unverified
   }
 }
 
-// Internal action to check if user can be safely deleted
-// This includes checking Stripe balance for users with Connect accounts
-export const checkUserDeletionEligibility = action({
-  args: { clerkUserId: v.string() },
-  async handler(
-    ctx,
-    { clerkUserId }
-  ): Promise<{
-    canDelete: boolean
-    reason?: string
-    blockingFactors: string[]
-  }> {
-    const user = await ctx.runQuery(api.users.getByExternalId, {
-      externalId: clerkUserId,
-    })
-
-    if (!user) {
-      return {
-        canDelete: true,
-        blockingFactors: [],
-      }
-    }
-
-    const blockingFactors: string[] = []
-    const today = new Date().toISOString().split("T")[0] as string
-
-    // Check for active reservations as a renter
-    const renterReservations = await ctx.runQuery(internal.users.getActiveReservationsAsRenter, {
-      clerkUserId,
-      today,
-    })
-
-    if (renterReservations.length > 0) {
-      blockingFactors.push(
-        `${renterReservations.length} active booking(s) as a renter. Please cancel them first.`
-      )
-    }
-
-    // Check for active reservations on owned vehicles
-    const activeHostReservations = await ctx.runQuery(internal.users.getActiveReservationsAsHost, {
-      clerkUserId,
-      today,
-    })
-
-    if (activeHostReservations.count > 0) {
-      blockingFactors.push(
-        `${activeHostReservations.count} active reservation(s) on your vehicles.`
-      )
-    }
-
-    // Check Stripe balance if user has a Connect account
-    if (user.stripeAccountId) {
-      const balanceError = await checkStripeBalance(user.stripeAccountId)
-      if (balanceError) {
-        blockingFactors.push(balanceError)
-      }
-    }
-
-    return {
-      canDelete: blockingFactors.length === 0,
-      reason:
-        blockingFactors.length > 0
-          ? `Cannot delete account: ${blockingFactors.join(" ")}`
-          : undefined,
-      blockingFactors,
-    }
-  },
-})
-
-// Internal query to get active reservations as renter
-export const getActiveReservationsAsRenter = internalQuery({
-  args: {
-    clerkUserId: v.string(),
-    today: v.string(),
-  },
-  handler: async (ctx, args) =>
-    await ctx.db
-      .query("reservations")
-      .withIndex("by_renter", (q) => q.eq("renterId", args.clerkUserId))
-      .filter((q) =>
-        q.and(
-          q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "confirmed")),
-          q.gte(q.field("endDate"), args.today)
-        )
-      )
-      .collect(),
-})
-
-// Internal query to get active reservations on owned vehicles
-export const getActiveReservationsAsHost = internalQuery({
-  args: {
-    clerkUserId: v.string(),
-    today: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const ownedVehicles = await ctx.db
-      .query("vehicles")
-      .withIndex("by_owner", (q) => q.eq("ownerId", args.clerkUserId))
-      .collect()
-
-    let reservationsCount = 0
-    for (const vehicle of ownedVehicles) {
-      const activeReservations = await ctx.db
-        .query("reservations")
-        .withIndex("by_vehicle", (q) => q.eq("vehicleId", vehicle._id))
+async function rentalDeletionBlockers(ctx: QueryCtx, clerkUserId: string): Promise<string[]> {
+  const today = new Date().toISOString().slice(0, 10)
+  const bookings = ctx.db.query("reservations")
+  const byRenter = bookings.withIndex("by_renter", (q) => q.eq("renterId", clerkUserId))
+  const byHost = ctx.db
+    .query("reservations")
+    .withIndex("by_owner", (q) => q.eq("ownerId", clerkUserId))
+  const [renterCount, hostCount] = await Promise.all(
+    [byRenter, byHost].map(async (indexed) => {
+      const active = await indexed
         .filter((q) =>
           q.and(
-            q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "confirmed")),
-            q.gte(q.field("endDate"), args.today)
+            q.gte(q.field("endDate"), today),
+            q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "confirmed"))
           )
         )
         .collect()
-
-      reservationsCount += activeReservations.length
-    }
-
-    return { count: reservationsCount }
-  },
-})
-
-export const deleteFromClerk = internalMutation({
-  args: { clerkUserId: v.string() },
-  async handler(ctx, { clerkUserId }) {
-    const user = await userByExternalId(ctx, clerkUserId)
-
-    if (user !== null) {
-      // Schedule eligibility check action first
-      // This will perform all validation including Stripe balance check
-      await ctx.scheduler.runAfter(0, api.users.performUserDeletionWithChecks, {
-        clerkUserId,
-      })
-    }
-  },
-})
-
-// Action that performs the full deletion with eligibility checks
-export const performUserDeletionWithChecks = action({
-  args: { clerkUserId: v.string() },
-  async handler(ctx, { clerkUserId }) {
-    // Check eligibility (includes Stripe balance check)
-    const eligibility = await ctx.runAction(api.users.checkUserDeletionEligibility, {
-      clerkUserId,
+      return active.length
     })
+  )
+  const blockers: string[] = []
+  if (renterCount)
+    blockers.push(`${renterCount} active booking(s) as a renter. Please cancel them first.`)
+  if (hostCount) blockers.push(`${hostCount} active reservation(s) on your vehicles.`)
+  return blockers
+}
 
-    if (!eligibility.canDelete) {
-      throw new Error(eligibility.reason || "Cannot delete user account")
+export const getRentalDeletionBlockers = internalQuery({
+  args: { clerkUserId: v.string() },
+  handler: (ctx, { clerkUserId }) => rentalDeletionBlockers(ctx, clerkUserId),
+})
+
+type DeletionEligibility = { canDelete: boolean; reason?: string; blockingFactors: string[] }
+
+async function deletionEligibility(
+  ctx: ActionCtx,
+  clerkUserId: string,
+  stripeAccountId?: string
+): Promise<DeletionEligibility> {
+  const blockingFactors = await ctx.runQuery(internal.users.getRentalDeletionBlockers, {
+    clerkUserId,
+  })
+  if (stripeAccountId) {
+    const blocker = await stripeDeletionBlocker(ctx, stripeAccountId, clerkUserId)
+    if (blocker) blockingFactors.push(blocker)
+  }
+  return blockingFactors.length
+    ? {
+        canDelete: false,
+        reason: `Cannot delete account: ${blockingFactors.join(" ")}`,
+        blockingFactors,
+      }
+    : { canDelete: true, blockingFactors }
+}
+
+// Existing clients can pass their own Clerk ID. The authenticated subject is authoritative.
+export const checkUserDeletionEligibility = action({
+  args: { clerkUserId: v.optional(v.string()) },
+  handler: async (ctx, args): Promise<DeletionEligibility> => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) throw new Error("Not authenticated")
+    if (args.clerkUserId !== undefined && args.clerkUserId !== identity.subject) {
+      throw new Error("Not authorized to check another user's deletion eligibility")
     }
+    const user = await ctx.runQuery(internal.users.getByExternalIdInternal, {
+      externalId: identity.subject,
+    })
+    if (!user) return { canDelete: true, blockingFactors: [] }
+    return await deletionEligibility(ctx, identity.subject, user.stripeAccountId)
+  },
+})
 
-    // If eligible, perform the actual deletion
+// The signed Clerk user.deleted event is the authority to remove a local identity.
+export const performUserDeletionWithChecks = internalAction({
+  args: { clerkUserId: v.string() },
+  handler: async (ctx, { clerkUserId }): Promise<void> => {
+    const user = await ctx.runQuery(internal.users.getByExternalIdInternal, {
+      externalId: clerkUserId,
+    })
+    if (!user) return
+    const eligibility = await deletionEligibility(ctx, clerkUserId, user.stripeAccountId)
+    if (!eligibility.canDelete) throw new Error(eligibility.reason)
     await ctx.runMutation(internal.users.performUserDeletion, {
+      userId: user._id,
       clerkUserId,
+      checkedStripeAccountId: user.stripeAccountId,
     })
   },
 })
 
-// Internal mutation to actually delete the user (only called after checks pass)
 export const performUserDeletion = internalMutation({
-  args: { clerkUserId: v.string() },
-  async handler(ctx, { clerkUserId }) {
-    const user = await userByExternalId(ctx, clerkUserId)
-
-    if (user !== null) {
-      await ctx.db.delete(user._id)
+  args: {
+    userId: v.id("users"),
+    clerkUserId: v.string(),
+    checkedStripeAccountId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId)
+    if (!user) return
+    if (
+      user.externalId !== args.clerkUserId ||
+      user.stripeAccountId !== args.checkedStripeAccountId
+    ) {
+      throw new Error(
+        "Account changed while verifying deletion eligibility. Retry the deletion check."
+      )
     }
+    // Recheck local obligations inside the deletion transaction after external Stripe I/O.
+    const blockers = await rentalDeletionBlockers(ctx, args.clerkUserId)
+    if (blockers.length) throw new Error(`Cannot delete account: ${blockers.join(" ")}`)
+    await ctx.db.delete(user._id)
   },
 })
 
@@ -607,41 +515,93 @@ export const getNotificationPreferences = query({
   },
 })
 
-export const setStripeAccountId = mutation({
+// Replacing an unclaimed legacy account is safe only before any checkout was opened.
+async function hasPayoutHistory(ctx: QueryCtx, userId: string): Promise<boolean> {
+  const records = await Promise.all([
+    ctx.db
+      .query("payments")
+      .withIndex("by_owner", (q) => q.eq("ownerId", userId))
+      .first(),
+    ctx.db
+      .query("coachingBookings")
+      .withIndex("by_coach_user", (q) => q.eq("coachUserId", userId))
+      .filter((q) =>
+        q.or(
+          q.neq(q.field("stripeCheckoutSessionId"), undefined),
+          q.neq(q.field("stripePaymentIntentId"), undefined)
+        )
+      )
+      .first(),
+    ctx.db
+      .query("damageInvoices")
+      .withIndex("by_owner", (q) => q.eq("ownerId", userId))
+      .filter((q) =>
+        q.or(
+          q.neq(q.field("stripeCheckoutSessionId"), undefined),
+          q.neq(q.field("stripePaymentIntentId"), undefined)
+        )
+      )
+      .first(),
+    ctx.db
+      .query("invoices")
+      .withIndex("by_sender", (q) => q.eq("senderId", userId))
+      .filter((q) =>
+        q.or(
+          q.neq(q.field("stripeInvoiceId"), undefined),
+          q.neq(q.field("stripeCheckoutSessionId"), undefined),
+          q.neq(q.field("stripeCheckoutUrl"), undefined),
+          q.neq(q.field("stripePaymentIntentId"), undefined),
+          q.neq(q.field("stripeChargeId"), undefined),
+          q.neq(q.field("stripeDepositRefundId"), undefined)
+        )
+      )
+      .first(),
+  ])
+  return records.some(Boolean)
+}
+
+export const hasPayoutHistoryForOnboarding = internalQuery({
+  args: { userId: v.string() },
+  handler: (ctx, { userId }) => hasPayoutHistory(ctx, userId),
+})
+
+// These IDs are established by server-side Stripe creation, never by a client.
+export const setStripeAccountId = internalMutation({
   args: {
     userId: v.string(),
     stripeAccountId: v.string(),
+    replaceUnusedAccount: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
-    const user = await ctx.db
+  handler: async (ctx, { userId, stripeAccountId, replaceUnusedAccount }) => {
+    const user = await userByExternalId(ctx, userId)
+    if (!user) throw new Error("User not found")
+    const existing = await ctx.db
       .query("users")
-      .withIndex("by_external_id", (q) => q.eq("externalId", args.userId))
-      .first()
-
-    if (!user) {
-      throw new Error("User not found")
+      .withIndex("by_stripe_account", (q) => q.eq("stripeAccountId", stripeAccountId))
+      .unique()
+    if (existing && existing._id !== user._id) throw new Error("Stripe account is already linked")
+    if (user.stripeAccountId === stripeAccountId) return user._id
+    if (user.stripeAccountId !== replaceUnusedAccount) throw new Error("Stripe account has changed")
+    if (
+      replaceUnusedAccount &&
+      (user.stripeAccountStatus !== "pending" || (await hasPayoutHistory(ctx, userId)))
+    ) {
+      throw new Error("Existing payout account requires verification")
     }
-
-    await ctx.db.patch(user._id, {
-      stripeAccountId: args.stripeAccountId,
-      stripeAccountStatus: "pending",
-    })
-
+    await ctx.db.patch(user._id, { stripeAccountId, stripeAccountStatus: "pending" })
     return user._id
   },
 })
 
-// Find user by Stripe account ID
-export const getByStripeAccountId = query({
+export const getByStripeAccountId = internalQuery({
   args: { stripeAccountId: v.string() },
-  handler: async (ctx, args) =>
-    await ctx.db
+  handler: async (ctx, { stripeAccountId }) =>
+    ctx.db
       .query("users")
-      .filter((q) => q.eq(q.field("stripeAccountId"), args.stripeAccountId))
-      .first(),
+      .withIndex("by_stripe_account", (q) => q.eq("stripeAccountId", stripeAccountId))
+      .unique(),
 })
 
-// Update Stripe account status (called from webhook)
 export const updateStripeAccountStatus = internalMutation({
   args: {
     stripeAccountId: v.string(),
@@ -652,39 +612,31 @@ export const updateStripeAccountStatus = internalMutation({
       v.literal("disabled")
     ),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, { stripeAccountId, status }) => {
     const user = await ctx.db
       .query("users")
-      .filter((q) => q.eq(q.field("stripeAccountId"), args.stripeAccountId))
-      .first()
-
-    if (user) {
-      await ctx.db.patch(user._id, {
-        stripeAccountStatus: args.status,
-      })
-    }
+      .withIndex("by_stripe_account", (q) => q.eq("stripeAccountId", stripeAccountId))
+      .unique()
+    if (user) await ctx.db.patch(user._id, { stripeAccountStatus: status })
   },
 })
 
-export const setStripeCustomerId = mutation({
-  args: {
-    userId: v.string(),
-    stripeCustomerId: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const user = await ctx.db
+export const setStripeCustomerId = internalMutation({
+  args: { userId: v.string(), stripeCustomerId: v.string() },
+  handler: async (ctx, { userId, stripeCustomerId }) => {
+    const user = await userByExternalId(ctx, userId)
+    if (!user) throw new Error("User not found")
+    const existing = await ctx.db
       .query("users")
-      .withIndex("by_external_id", (q) => q.eq("externalId", args.userId))
-      .first()
-
-    if (!user) {
-      throw new Error("User not found")
+      .withIndex("by_stripe_customer", (q) => q.eq("stripeCustomerId", stripeCustomerId))
+      .unique()
+    if (
+      (existing && existing._id !== user._id) ||
+      (user.stripeCustomerId && user.stripeCustomerId !== stripeCustomerId)
+    ) {
+      throw new Error("Stripe customer is already linked")
     }
-
-    await ctx.db.patch(user._id, {
-      stripeCustomerId: args.stripeCustomerId,
-    })
-
+    if (!user.stripeCustomerId) await ctx.db.patch(user._id, { stripeCustomerId })
     return user._id
   },
 })
@@ -824,14 +776,16 @@ export const updateHostOnboardingStep = mutation({
   },
 })
 
+const onboardingAddress = v.object({
+  street: v.string(),
+  city: v.string(),
+  state: v.string(),
+  zipCode: v.string(),
+})
+
 export const saveOnboardingVehicleAddress = mutation({
   args: {
-    address: v.object({
-      street: v.string(),
-      city: v.string(),
-      state: v.string(),
-      zipCode: v.string(),
-    }),
+    address: onboardingAddress,
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()
@@ -854,7 +808,7 @@ export const saveOnboardingVehicleAddress = mutation({
     })
 
     // Schedule geocoding action
-    await ctx.scheduler.runAfter(0, api.users.geocodeOnboardingAddress, {
+    await ctx.scheduler.runAfter(0, internal.users.geocodeOnboardingAddress, {
       userId: user._id,
       address: args.address,
     })
@@ -867,18 +821,26 @@ export const saveOnboardingVehicleAddress = mutation({
 export const updateOnboardingAddressCoordinates = internalMutation({
   args: {
     userId: v.id("users"),
+    address: onboardingAddress,
     latitude: v.number(),
     longitude: v.number(),
   },
   handler: async (ctx, args) => {
     const user = await ctx.db.get(args.userId)
-    if (!user?.onboardingVehicleAddress) {
+    const saved = user?.onboardingVehicleAddress
+    if (
+      !saved ||
+      saved.street !== args.address.street ||
+      saved.city !== args.address.city ||
+      saved.state !== args.address.state ||
+      saved.zipCode !== args.address.zipCode
+    ) {
       return
     }
 
     await ctx.db.patch(args.userId, {
       onboardingVehicleAddress: {
-        ...user.onboardingVehicleAddress,
+        ...saved,
         latitude: args.latitude,
         longitude: args.longitude,
       },
@@ -887,15 +849,10 @@ export const updateOnboardingAddressCoordinates = internalMutation({
 })
 
 // Action to geocode onboarding address (can make network calls)
-export const geocodeOnboardingAddress = action({
+export const geocodeOnboardingAddress = internalAction({
   args: {
     userId: v.id("users"),
-    address: v.object({
-      street: v.string(),
-      city: v.string(),
-      state: v.string(),
-      zipCode: v.string(),
-    }),
+    address: onboardingAddress,
   },
   handler: async (ctx, args) => {
     const { geocodeAddress } = await import("./geocoding")
@@ -905,6 +862,7 @@ export const geocodeOnboardingAddress = action({
     if (result) {
       await ctx.runMutation(internal.users.updateOnboardingAddressCoordinates, {
         userId: args.userId,
+        address: args.address,
         latitude: result.latitude,
         longitude: result.longitude,
       })

@@ -1,6 +1,7 @@
 import { v } from "convex/values"
 import { mutation, query } from "./_generated/server"
 import { getCurrentUser, getCurrentUserOrThrow } from "./users"
+import { publicDisplayName } from "./userProfile"
 
 export const followUser = mutation({
   args: { followedUserId: v.string() },
@@ -161,7 +162,7 @@ export const listFollowers = query({
           .withIndex("by_external_id", (q) => q.eq("externalId", f.followerId))
           .first()
         return u
-          ? { userId: u.externalId, name: u.name, profileImage: u.profileImage }
+          ? { userId: u.externalId, name: publicDisplayName(u), profileImage: u.profileImage }
           : null
       })
     ).then((res) => res.filter((u) => u !== null))

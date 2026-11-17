@@ -1,5 +1,6 @@
 import { v } from "convex/values"
 import { mutation, query } from "./_generated/server"
+import { publicUserProfile } from "./userProfile"
 import { getCurrentUser } from "./users"
 
 export const recordView = mutation({
@@ -79,7 +80,7 @@ export const getRecentViewers = query({
             .query("users")
             .withIndex("by_external_id", (q) => q.eq("externalId", view.viewerId!))
             .first()
-          return { ...view, user }
+          return { ...view, user: publicUserProfile(user) }
         })
     )
   },

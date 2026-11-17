@@ -3,6 +3,7 @@ import type { Doc, Id } from "./_generated/dataModel"
 import { mutation, type QueryCtx, query } from "./_generated/server"
 import { logActivityEventInternal } from "./activity"
 import { getCurrentUser, getCurrentUserOrThrow } from "./users"
+import { publicDisplayName } from "./userProfile"
 
 const REACTION_TYPES = [
   v.literal("like"),
@@ -279,7 +280,7 @@ export const listOnlineNow = query({
       if (!user) continue
       result.push({
         userId: user.externalId,
-        name: user.name,
+        name: publicDisplayName(user),
         profileImage: user.profileImage,
         profileImageR2Key: user.profileImageR2Key,
       })
@@ -338,7 +339,7 @@ async function loadActor(ctx: QueryCtx, externalId: string) {
   if (!user) return null
   return {
     userId: user.externalId,
-    name: user.name,
+    name: publicDisplayName(user),
     profileImage: user.profileImage,
     profileImageR2Key: user.profileImageR2Key,
   }
