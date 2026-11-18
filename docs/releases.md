@@ -100,6 +100,43 @@ remains unsettled. Settled financial records are retained; eligibility resumes
 only when the remaining rental and Stripe balance checks also pass. No schema
 migration or payment-state rewrite is required.
 
+## Public media ownership (REN-30)
+
+Team logos, Paddock post attachments, and platform-hosted driver portfolio media
+require the signed-in uploader's recorded general upload. Driver and coach
+avatars require a recorded profile upload; the same profile upload can still be
+used for both the user and driver profile. The validators bind the current bucket,
+owner, purpose, and server-issued namespace. Booking evidence, listing/draft
+uploads, foreign keys, and unissued references cannot be attached as public media.
+
+The current driver form sends a full URL rather than a key. Convex's
+`R2_PUBLIC_URL` must equal the frontend's public bucket origin (HTTPS, no trailing
+slash); it defaults to `https://images.renegaderace.com` for compatibility with the
+production client. Set staging to
+`https://pub-a50e44fe83ed433f81cb9d89aa0e106b.r2.dev` before deploying this backend.
+Platform URLs must match that origin and an authorized key exactly, with no query,
+fragment, or alternate encoding. If a writer supplies both URL and key, they must
+match. This origin configuration does not grant ownership of any object.
+
+Driver portfolios retain their existing external HTTP(S) image/video links.
+Known platform delivery, storage, and app hosts are not treated as external links;
+their URLs cannot bypass upload checks. External links remain externally hosted
+content, not proof of platform upload ownership. New arbitrary external URLs are
+not accepted as team logos or driver/coach avatars; those clients use uploads.
+
+Unrelated edits and exact unchanged media values on the same authorized record
+preserve legacy display. Changing a media field validates the resulting URL/key
+pair; clear a legacy counterpart or replace it with the matching verified value.
+This does not authorize copying an unverified legacy reference onto another record.
+Existing media is neither rewritten nor deleted. New coaching reviews reject
+nonempty photo arrays because no ownership-bound coaching upload flow exists;
+text-only reviews and historical photo display remain supported.
+
+No schema migration is required. Verify both legacy/current clients and the
+configured origin on staging before a separately approved production rollout.
+Production source verification and any historical media remediation remain
+separate from these write-boundary checks.
+
 ## Profile image ownership (REN-23)
 
 New profile photos must use `r2.generateProfileImageUploadUrl`, then pass its key
