@@ -15,6 +15,7 @@ import { cn } from "@workspace/ui/lib/utils"
 import { ChevronRight, Grid3x3, List, Loader2, Search, X } from "lucide-react"
 import { Suspense } from "react"
 import { VehicleCard } from "@/components/vehicle-card"
+import { priceFilterLabel } from "./price-filter"
 import type { FilterActions, FilterState, SortOption, VehicleItem, ViewMode } from "./types"
 
 type VehicleResultsGridProps = {
@@ -194,7 +195,8 @@ export function VehicleResultsGrid({
                     }}
                     variant="secondary"
                   >
-                    Price: {filterState.selectedPriceRange} <X className="size-3" />
+                    Price: {priceFilterLabel(filterState.selectedPriceRange)}{" "}
+                    <X className="size-3" />
                   </Badge>
                 )}
                 {filterState.selectedExperienceLevel !== "all" && (
