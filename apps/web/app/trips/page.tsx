@@ -28,8 +28,12 @@ import { TripCard } from "@/components/trip-card"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { r2Url } from "@/lib/r2-url"
+import { formatRentalUsd } from "@/lib/rental-checkout"
 
 type Trip = {
+  paymentId?: string
+  renterId: string
+  cancellationPolicy?: "flexible" | "moderate" | "strict"
   reservationId: Id<"reservations">
   vehicleId: Id<"vehicles">
   vehicleName: string
@@ -57,6 +61,9 @@ function mapReservation(res: any): Trip | null {
   const primaryImage = vehicle.images?.find((img: any) => img.isPrimary) || vehicle.images?.[0]
   return {
     reservationId: res._id,
+    paymentId: res.paymentId,
+    renterId: res.renterId,
+    cancellationPolicy: vehicle.cancellationPolicy,
     vehicleId: vehicle._id,
     vehicleName: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
     vehicleImage: primaryImage?.r2Key ? r2Url(primaryImage.r2Key) : "",
@@ -246,7 +253,7 @@ function CoachingBookingRow({ booking }: { booking: any }) {
           )}
         </div>
         <div className="flex items-center gap-3">
-          <span className="font-semibold">${(booking.totalAmount / 100).toFixed(0)}</span>
+          <span className="font-semibold">{formatRentalUsd(booking.totalAmount)}</span>
           {booking.status === "approved" && (
             <Button asChild size="sm">
               <Link href={`/checkout/pay-coaching?bookingId=${booking._id}`}>

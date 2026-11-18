@@ -13,6 +13,7 @@ import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { formatDateForDisplay } from "@/lib/date-utils"
 import { r2Url } from "@/lib/r2-url"
+import { formatRentalUsd } from "@/lib/rental-checkout"
 
 function RequestSentContent() {
   const searchParams = useSearchParams()
@@ -144,9 +145,9 @@ function RequestSentContent() {
                 <Separator />
 
                 <div className="flex items-center justify-between">
-                  <span className="font-medium">Estimated Total</span>
+                  <span className="font-medium">Rental subtotal</span>
                   <span className="font-bold text-2xl">
-                    ${(reservation.totalAmount || 0).toLocaleString()}
+                    {formatRentalUsd(reservation.totalAmount || 0)}
                   </span>
                 </div>
               </div>

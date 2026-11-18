@@ -48,6 +48,7 @@ import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 import { r2Url } from "@/lib/r2-url"
+import { formatRentalUsd } from "@/lib/rental-checkout"
 
 // ─── Types ──────────────────────────────────────────────────────────────
 
@@ -683,7 +684,7 @@ function VehicleDetailsPageContent() {
                           )}
                         </div>
                         <div className="shrink-0 text-right">
-                          <p className="font-semibold text-sm">${addOn.price}</p>
+                          <p className="font-semibold text-sm">{formatRentalUsd(addOn.price)}</p>
                           <p className="text-[10px] text-muted-foreground">
                             {addOn.priceType === "daily" ? "per day" : "one-time"}
                           </p>
@@ -1024,7 +1025,7 @@ function VehicleDetailsPageContent() {
                         "bg-clip-text font-bold text-3xl text-transparent"
                       )}
                     >
-                      ${vehicle.dailyRate.toLocaleString()}
+                      {formatRentalUsd(vehicle.dailyRate)}
                     </span>
                     <span className="text-muted-foreground text-sm">/day</span>
                   </div>
@@ -1137,7 +1138,7 @@ function VehicleDetailsPageContent() {
         >
           <div className="flex items-center justify-between gap-4">
             <div>
-              <span className="font-bold text-lg">${vehicle.dailyRate.toLocaleString()}</span>
+              <span className="font-bold text-lg">{formatRentalUsd(vehicle.dailyRate)}</span>
               <span className="text-muted-foreground text-sm"> /day</span>
             </div>
             <Button

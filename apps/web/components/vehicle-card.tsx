@@ -18,6 +18,7 @@ import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 import { r2Url } from "@/lib/r2-url"
+import { formatRentalUsd } from "@/lib/rental-checkout"
 
 interface VehicleCardProps extends ComponentProps<"div"> {
   id: string
@@ -27,6 +28,7 @@ interface VehicleCardProps extends ComponentProps<"div"> {
   year: number
   make: string
   model: string
+  /** Daily rental rate in integer cents. */
   pricePerDay: number
   location?: string
   track?: string
@@ -251,10 +253,14 @@ export function VehicleCard({
             <div className="flex flex-wrap items-center gap-3">{specItems}</div>
             <div className="shrink-0 text-right">
               <div className="flex items-baseline justify-end gap-1">
-                <span className="font-bold text-xl tracking-tight">${pricePerDay}</span>
+                <span className="font-bold text-xl tracking-tight">
+                  {formatRentalUsd(pricePerDay)}
+                </span>
                 <span className="text-muted-foreground text-sm">/day</span>
               </div>
-              <p className="text-muted-foreground text-xs">${weekendPrice} / weekend</p>
+              <p className="text-muted-foreground text-xs">
+                Est. weekend {formatRentalUsd(weekendPrice)}
+              </p>
             </div>
           </div>
         </CardContent>
@@ -275,9 +281,13 @@ export function VehicleCard({
           {/* Price Tag */}
           <div className="absolute right-3 bottom-3 left-3 z-20 flex items-end justify-between">
             <div className="flex items-baseline gap-1.5 rounded-lg border border-white/10 bg-black/55 px-3 py-2 backdrop-blur-md">
-              <span className="font-bold text-lg text-white tracking-tight">${pricePerDay}</span>
+              <span className="font-bold text-lg text-white tracking-tight">
+                {formatRentalUsd(pricePerDay)}
+              </span>
               <span className="text-white/70 text-xs">/day</span>
-              <span className="text-white/40 text-xs">· ${weekendPrice} wknd</span>
+              <span className="text-white/40 text-xs">
+                · Est. weekend {formatRentalUsd(weekendPrice)}
+              </span>
             </div>
           </div>
         </div>

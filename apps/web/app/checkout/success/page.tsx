@@ -9,10 +9,12 @@ import Image from "next/image"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { Suspense } from "react"
+import { RentalPaymentSummary } from "@/components/rental-payment-summary"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { formatDateForDisplay } from "@/lib/date-utils"
 import { r2Url } from "@/lib/r2-url"
+import { formatRentalUsd } from "@/lib/rental-checkout"
 
 function CoachingSuccessCard({ bookingId }: { bookingId: Id<"coachingBookings"> }) {
   const booking = useQuery(api.coachingBookings.getById, { id: bookingId })
@@ -73,7 +75,7 @@ function CoachingSuccessCard({ bookingId }: { bookingId: Id<"coachingBookings"> 
               <Separator className="my-4" />
               <div className="flex justify-between font-semibold">
                 <span>Total paid</span>
-                <span>${(booking.totalAmount / 100).toFixed(2)}</span>
+                <span>{formatRentalUsd(booking.totalAmount)}</span>
               </div>
             </div>
 
@@ -193,6 +195,15 @@ function CheckoutSuccessContent() {
           <CardContent aria-live="polite" className="py-12 text-center">
             <h1 className="mb-2 font-bold text-2xl">{title}</h1>
             <p className="mb-6 text-muted-foreground">{message}</p>
+            {reservation && (
+              <div className="mx-auto mb-6 max-w-md text-left">
+                <RentalPaymentSummary
+                  paymentId={reservation.paymentId}
+                  renterId={reservation.renterId}
+                  reservationId={reservation._id}
+                />
+              </div>
+            )}
             <div className="flex flex-col gap-4 sm:flex-row sm:justify-center">
               {canRetry && (
                 <Button asChild>
@@ -303,11 +314,16 @@ function CheckoutSuccessContent() {
                 <Separator />
 
                 <div className="flex items-center justify-between">
-                  <span className="font-medium">Total Amount</span>
+                  <span className="font-medium">Rental subtotal</span>
                   <span className="font-bold text-2xl">
-                    ${((reservation.totalAmount || 0) / 100).toLocaleString()}
+                    {formatRentalUsd(reservation.totalAmount || 0)}
                   </span>
                 </div>
+                <RentalPaymentSummary
+                  paymentId={reservation.paymentId}
+                  renterId={reservation.renterId}
+                  reservationId={reservation._id}
+                />
               </div>
             </div>
 

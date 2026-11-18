@@ -16,15 +16,9 @@ import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { formatDateForDisplay } from "@/lib/date-utils"
 import { r2Url } from "@/lib/r2-url"
+import { formatRentalUsd } from "@/lib/rental-checkout"
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "")
-
-function formatUsdFromCents(cents: number) {
-  return (cents / 100).toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
-}
 
 function PaymentForm({
   reservationId,
@@ -97,19 +91,19 @@ function PaymentForm({
 
       <div className="space-y-4">
         <div className="flex items-center justify-between text-sm">
-          <span className="text-muted-foreground">Rental total</span>
-          <span className="font-medium">${formatUsdFromCents(listingAmountCents)}</span>
+          <span className="text-muted-foreground">Rental subtotal</span>
+          <span className="font-medium">{formatRentalUsd(listingAmountCents)}</span>
         </div>
         {processingFeeCents > 0 && (
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">Card processing fee</span>
-            <span className="font-medium">${formatUsdFromCents(processingFeeCents)}</span>
+            <span className="font-medium">{formatRentalUsd(processingFeeCents)}</span>
           </div>
         )}
         <Separator />
         <div className="flex items-center justify-between">
           <span className="font-semibold text-lg">Total due</span>
-          <span className="font-bold text-2xl">${formatUsdFromCents(chargeAmountCents)}</span>
+          <span className="font-bold text-2xl">{formatRentalUsd(chargeAmountCents)}</span>
         </div>
       </div>
 
@@ -120,7 +114,7 @@ function PaymentForm({
             Processing...
           </>
         ) : (
-          `Pay $${formatUsdFromCents(chargeAmountCents)}`
+          `Pay ${formatRentalUsd(chargeAmountCents)}`
         )}
       </Button>
     </form>
@@ -408,7 +402,7 @@ function PayPageContent() {
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Daily Rate</span>
-                  <span>${formatUsdFromCents(reservation.dailyRate || 0)}/day</span>
+                  <span>{formatRentalUsd(reservation.dailyRate || 0)}/day</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Duration</span>
@@ -418,27 +412,38 @@ function PayPageContent() {
                 </div>
                 {reservation.addOns &&
                   reservation.addOns.length > 0 &&
-                  reservation.addOns.map((addOn: { name: string; price: number }) => (
-                    <div className="flex justify-between text-sm" key={addOn.name}>
-                      <span className="text-muted-foreground">{addOn.name}</span>
-                      <span>+${formatUsdFromCents(addOn.price)}</span>
-                    </div>
-                  ))}
+                  reservation.addOns.map(
+                    (addOn: { name: string; price: number; priceType?: "daily" | "one-time" }) => (
+                      <div className="flex justify-between text-sm" key={addOn.name}>
+                        <span className="text-muted-foreground">{addOn.name}</span>
+                        <span>
+                          +
+                          {formatRentalUsd(
+                            addOn.price * (addOn.priceType === "daily" ? reservation.totalDays : 1)
+                          )}
+                        </span>
+                      </div>
+                    )
+                  )}
                 <Separator />
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Rental total</span>
-                  <span>${formatUsdFromCents(reservation.totalAmount || 0)}</span>
+                  <span className="text-muted-foreground">Rental subtotal</span>
+                  <span>{formatRentalUsd(reservation.totalAmount || 0)}</span>
                 </div>
                 {processingFeeCents > 0 && (
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Card processing fee</span>
-                    <span>${formatUsdFromCents(processingFeeCents)}</span>
+                    <span>{formatRentalUsd(processingFeeCents)}</span>
                   </div>
                 )}
                 <div className="flex justify-between">
                   <span className="font-semibold">Total due</span>
                   <span className="font-bold text-lg">
-                    ${formatUsdFromCents(chargeAmountCents || reservation.totalAmount || 0)}
+                    {clientSecret
+                      ? formatRentalUsd(chargeAmountCents)
+                      : error
+                        ? "Unavailable"
+                        : "Calculating…"}
                   </span>
                 </div>
                 <p className="text-muted-foreground text-xs">

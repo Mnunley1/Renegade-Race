@@ -50,6 +50,7 @@ import { VehicleGallery } from "@/components/vehicle-gallery"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
+import { formatRentalUsd } from "@/lib/rental-checkout"
 
 export default function HostVehicleDetailPage() {
   const params = useParams()
@@ -132,7 +133,7 @@ export default function HostVehicleDetailPage() {
 
     return {
       totalBookings,
-      totalEarnings: Math.round(totalEarnings / 100), // Convert cents to dollars
+      totalEarnings, // Keep the aggregate in cents until display.
       completedTrips,
       pendingCount,
       upcomingCount,
@@ -263,7 +264,7 @@ export default function HostVehicleDetailPage() {
               {getStatusBadge()}
             </div>
             <p className="text-muted-foreground">
-              {vehicle.track?.name || "Track TBD"} • ${vehicle.dailyRate.toLocaleString()}/day
+              {vehicle.track?.name || "Track TBD"} • {formatRentalUsd(vehicle.dailyRate)}/day
             </p>
           </div>
           <div className="flex gap-2">
@@ -287,13 +288,13 @@ export default function HostVehicleDetailPage() {
           <Card>
             <CardContent className="p-5">
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground text-sm">Earnings</span>
+                <span className="text-muted-foreground text-sm">Rental subtotals</span>
                 <DollarSign className="size-4 text-muted-foreground" />
               </div>
               <div className="mt-2 font-bold text-2xl tracking-tight">
-                ${stats.totalEarnings.toLocaleString()}
+                {formatRentalUsd(stats.totalEarnings)}
               </div>
-              <p className="mt-1 text-muted-foreground text-xs">All-time revenue</p>
+              <p className="mt-1 text-muted-foreground text-xs">All booking statuses</p>
             </CardContent>
           </Card>
 
@@ -370,7 +371,7 @@ export default function HostVehicleDetailPage() {
                           </div>
                           <div className="text-right">
                             <p className="font-semibold text-sm">
-                              ${Math.round((reservation.totalAmount || 0) / 100).toLocaleString()}
+                              {formatRentalUsd(reservation.totalAmount || 0)}
                             </p>
                             <span className="text-muted-foreground text-xs">Review →</span>
                           </div>
@@ -411,7 +412,7 @@ export default function HostVehicleDetailPage() {
                             </p>
                           </div>
                           <p className="font-semibold text-sm">
-                            ${Math.round((reservation.totalAmount || 0) / 100).toLocaleString()}
+                            {formatRentalUsd(reservation.totalAmount || 0)}
                           </p>
                         </div>
                       </Link>
@@ -532,7 +533,7 @@ export default function HostVehicleDetailPage() {
                             )}
                           </div>
                           <p className="font-semibold text-primary">
-                            ${addOn.price}
+                            {formatRentalUsd(addOn.price)}
                             {addOn.priceType === "one-time" ? " one-time" : "/day"}
                           </p>
                         </div>

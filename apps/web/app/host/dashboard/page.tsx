@@ -37,6 +37,7 @@ import { HostOnboardingChecklist } from "@/components/host-onboarding-checklist"
 import { api } from "@/lib/convex"
 import { handleError } from "@/lib/error-handler"
 import { r2Url } from "@/lib/r2-url"
+import { formatRentalUsd } from "@/lib/rental-checkout"
 
 function HostDashboardContent() {
   const { user } = useUser()
@@ -151,7 +152,7 @@ function HostDashboardContent() {
     const pendingBookings = pendingReservations?.length || 0
     const upcomingBookings = confirmedReservations?.length || 0
 
-    // Calculate total earnings from confirmed reservations (in cents, convert to dollars)
+    // Calculate total earnings from confirmed reservations (in cents)
     const totalEarnings =
       confirmedReservations?.reduce(
         (sum: number, res: { totalAmount?: number }) => sum + (res.totalAmount || 0),
@@ -180,7 +181,7 @@ function HostDashboardContent() {
       totalVehicles,
       pendingBookings,
       upcomingBookings,
-      totalEarnings: Math.round(totalEarnings / 100), // Convert cents to dollars
+      totalEarnings, // Keep rental subtotals in cents until display
       averageRating,
       totalViews,
       totalShares,
@@ -216,10 +217,7 @@ function HostDashboardContent() {
           ].filter((res) => res.vehicleId === vehicle._id)
 
           const bookings = vehicleReservations.length
-          const earnings = vehicleReservations.reduce(
-            (sum, res) => sum + Math.round((res.totalAmount || 0) / 100),
-            0
-          )
+          const earnings = vehicleReservations.reduce((sum, res) => sum + (res.totalAmount || 0), 0)
 
           const status = vehicle.isApproved ? "active" : vehicle.isActive ? "pending" : "inactive"
 
@@ -437,13 +435,13 @@ function HostDashboardContent() {
           <Card>
             <CardContent className="p-5">
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground text-sm">Earnings</span>
+                <span className="text-muted-foreground text-sm">Rental subtotals</span>
                 <DollarSign className="size-4 text-muted-foreground" />
               </div>
               <div className="mt-2 font-bold text-3xl tracking-tight">
-                ${stats.totalEarnings.toLocaleString()}
+                {formatRentalUsd(stats.totalEarnings)}
               </div>
-              <p className="mt-1 text-muted-foreground text-xs">All-time revenue</p>
+              <p className="mt-1 text-muted-foreground text-xs">Confirmed bookings, before fees</p>
             </CardContent>
           </Card>
 
@@ -540,7 +538,7 @@ function HostDashboardContent() {
                             </div>
                             <div className="text-right">
                               <p className="font-semibold text-sm">
-                                ${Math.round((reservation.totalAmount || 0) / 100).toLocaleString()}
+                                {formatRentalUsd(reservation.totalAmount || 0)}
                               </p>
                               <span className="text-muted-foreground text-xs">Review →</span>
                             </div>
@@ -618,15 +616,17 @@ function HostDashboardContent() {
                                 {getStatusBadge(vehicle.status || "")}
                               </div>
                               <p className="mt-0.5 text-muted-foreground text-xs">
-                                ${vehicle.dailyRate?.toLocaleString() ?? "0"}/day •{" "}
-                                {vehicle.bookings} booking{vehicle.bookings === 1 ? "" : "s"}
+                                {formatRentalUsd(vehicle.dailyRate ?? 0)}/day • {vehicle.bookings}{" "}
+                                booking{vehicle.bookings === 1 ? "" : "s"}
                               </p>
                             </div>
                             <div className="text-right">
                               <p className="font-semibold text-primary text-sm">
-                                ${vehicle.earnings.toLocaleString()}
+                                {formatRentalUsd(vehicle.earnings)}
                               </p>
-                              <span className="text-muted-foreground text-xs">earned</span>
+                              <span className="text-muted-foreground text-xs">
+                                pending + confirmed
+                              </span>
                             </div>
                           </div>
                         </Link>

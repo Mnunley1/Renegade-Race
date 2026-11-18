@@ -21,6 +21,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { api } from "@/lib/convex"
 import { r2Url } from "@/lib/r2-url"
+import { formatRentalUsd } from "@/lib/rental-checkout"
 
 export default function HostVehiclesListPage() {
   const { user } = useUser()
@@ -176,7 +177,9 @@ export default function HostVehiclesListPage() {
                           <Car className="size-3.5" />
                           {vehicle.track?.name || "Track TBD"}
                         </span>
-                        <span className="font-semibold text-primary">${vehicle.dailyRate}/day</span>
+                        <span className="font-semibold text-primary">
+                          {formatRentalUsd(vehicle.dailyRate)}/day
+                        </span>
                       </div>
                     </div>
                   </div>
