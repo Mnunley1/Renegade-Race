@@ -26,6 +26,7 @@ import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
+import { centsToDollarInput, dollarsToCents } from "@/lib/rental-money"
 
 export default function VehiclePage() {
   const router = useRouter()
@@ -59,9 +60,10 @@ export default function VehiclePage() {
         make: draft.vehicleData?.make || prev.make,
         model: draft.vehicleData?.model || prev.model,
         year: draft.vehicleData?.year || prev.year,
-        dailyRate: draft.vehicleData?.dailyRate
-          ? String(draft.vehicleData.dailyRate)
-          : prev.dailyRate,
+        dailyRate:
+          draft.vehicleData?.dailyRate !== undefined
+            ? centsToDollarInput(draft.vehicleData.dailyRate)
+            : prev.dailyRate,
         description: draft.vehicleData?.description || prev.description,
       }))
     }
@@ -82,7 +84,7 @@ export default function VehiclePage() {
     const { name, value } = e.target
     setFormData({
       ...formData,
-      [name]: name === "year" || name === "dailyRate" ? (value === "" ? "" : Number(value)) : value,
+      [name]: name === "year" ? (value === "" ? "" : Number(value)) : value,
     })
   }
 
@@ -98,7 +100,10 @@ export default function VehiclePage() {
       formData.make &&
       formData.model &&
       formData.year &&
-      formData.dailyRate &&
+      (draft?.vehicleData?.dailyRate !== undefined &&
+      formData.dailyRate === centsToDollarInput(draft.vehicleData.dailyRate)
+        ? draft.vehicleData.dailyRate > 0
+        : (dollarsToCents(formData.dailyRate) ?? 0) > 0) &&
       formData.description &&
       formData.street &&
       formData.city &&
@@ -109,6 +114,16 @@ export default function VehiclePage() {
   const handleContinue = async () => {
     if (!isFormValid()) {
       toast.error("Please fill in all required fields")
+      return
+    }
+
+    const originalRate = draft?.vehicleData?.dailyRate
+    const dailyRate =
+      originalRate !== undefined && formData.dailyRate === centsToDollarInput(originalRate)
+        ? originalRate
+        : dollarsToCents(formData.dailyRate)
+    if (dailyRate === null || dailyRate <= 0) {
+      toast.error("Enter a valid daily rate of at least $0.01")
       return
     }
 
@@ -127,10 +142,10 @@ export default function VehiclePage() {
           make: formData.make,
           model: formData.model,
           year: Number(formData.year),
-          dailyRate: Number(formData.dailyRate),
+          dailyRate,
           description: formData.description,
-          amenities: [],
-          addOns: [],
+          amenities: draft?.vehicleData?.amenities ?? [],
+          addOns: draft?.vehicleData?.addOns ?? [],
         },
         currentStep: 2, // Save next step (photos)
       })
@@ -246,10 +261,12 @@ export default function VehiclePage() {
               <Label htmlFor="dailyRate">Daily Rate ($) *</Label>
               <Input
                 id="dailyRate"
+                min="0"
                 name="dailyRate"
                 onChange={handleChange}
                 placeholder="899"
                 required
+                step="any"
                 type="number"
                 value={formData.dailyRate}
               />

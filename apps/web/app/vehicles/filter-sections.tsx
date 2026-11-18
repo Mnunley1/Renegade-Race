@@ -21,6 +21,8 @@ import { Slider } from "@workspace/ui/components/slider"
 import { cn } from "@workspace/ui/lib/utils"
 import { Flame, Grid2x2, HardHat, Lock, MapPin, Shield, Star, X } from "lucide-react"
 import * as React from "react"
+import { centsToDollarInput, dollarsToCents } from "@/lib/rental-money"
+import { parsePriceRange, priceRangeState } from "./price-filter"
 import type { FilterActions, FilterState, TrackItem, VehicleItem } from "./types"
 
 const DRIVE_TYPES = ["All", "FWD", "RWD", "AWD"]
@@ -46,15 +48,31 @@ type FilterSectionsProps = {
 const isDefault = (value: string, ...defaults: string[]) => defaults.includes(value)
 
 export function FilterSections({ filters, actions, tracks, vehicles }: FilterSectionsProps) {
-  const prices = vehicles.map((v) => v.pricePerDay).filter(Boolean)
+  const prices = vehicles
+    .map((v) => v.pricePerDay)
+    .filter((price) => Number.isSafeInteger(price) && price >= 0)
   const minPrice = prices.length > 0 ? Math.min(...prices) : 0
-  const rawMaxPrice = prices.length > 0 ? Math.max(...prices) : 2000
-  // Keep the domain non-degenerate so the slider stays usable even when the current
-  // filters leave a single distinct price.
+  const rawMaxPrice = prices.length > 0 ? Math.max(...prices) : 200000
+  // Keep the slider usable for a single price; explicit bounds may extend beyond
+  // today's inventory and must not change when results or other filters change.
   const maxPrice = rawMaxPrice > minPrice ? rawMaxPrice : minPrice + 100
-  const priceStep = maxPrice > 1000 ? 100 : 25
-  const currentPriceMin = filters.customPriceRange?.[0] ?? minPrice
-  const currentPriceMax = filters.customPriceRange?.[1] ?? maxPrice
+  const bounds = parsePriceRange(filters.selectedPriceRange)
+  const currentPriceMin = bounds.min ?? minPrice
+  const currentPriceMax = bounds.max ?? maxPrice
+  const sliderMin = Math.min(minPrice, currentPriceMin)
+  const sliderMax = Math.max(maxPrice, currentPriceMin + 1, currentPriceMax)
+  const [priceMinInput, setPriceMinInput] = React.useState(centsToDollarInput(currentPriceMin))
+  const openMaximum = bounds.min !== undefined && bounds.max === undefined
+  const [priceMaxInput, setPriceMaxInput] = React.useState(
+    openMaximum ? "" : centsToDollarInput(currentPriceMax)
+  )
+  const [priceError, setPriceError] = React.useState<string | null>(null)
+
+  React.useEffect(() => {
+    setPriceMinInput(centsToDollarInput(currentPriceMin))
+    setPriceMaxInput(openMaximum ? "" : centsToDollarInput(currentPriceMax))
+    setPriceError(null)
+  }, [currentPriceMin, currentPriceMax, openMaximum, filters.selectedPriceRange])
 
   const histogram = React.useMemo(() => {
     const bucketCount = 16
@@ -87,17 +105,34 @@ export function FilterSections({ filters, actions, tracks, vehicles }: FilterSec
     filters.deliveryOnly
   const hasTrackFilter = filters.selectedTrack !== "all"
 
+  const applyPriceBounds = (min: number, max: number | undefined) => {
+    actions.setCustomPriceRange(null)
+    actions.setSelectedPriceRange(priceRangeState({ min, max }))
+    setPriceError(null)
+  }
+
   const handlePriceChange = (value: number[]) => {
-    const min = value[0] ?? minPrice
-    const max = value[1] ?? maxPrice
-    actions.setCustomPriceRange([min, max])
-    if (min === minPrice && max === maxPrice) {
-      actions.setSelectedPriceRange("any")
-    } else if (max === maxPrice) {
-      actions.setSelectedPriceRange(`${min}+`)
-    } else {
-      actions.setSelectedPriceRange(`${min}-${max}`)
+    const min = dollarsToCents(value[0] ?? sliderMin / 100)
+    const max = dollarsToCents(value[1] ?? sliderMax / 100)
+    if (min !== null && max !== null) applyPriceBounds(min, max)
+  }
+
+  const commitPriceInputs = () => {
+    const min = priceMinInput.trim() === "" ? 0 : dollarsToCents(priceMinInput)
+    const max = priceMaxInput.trim() === "" ? undefined : dollarsToCents(priceMaxInput)
+    if (min === null || max === null || (max !== undefined && min > max)) {
+      setPriceError("Enter valid dollar amounts with the minimum no greater than the maximum.")
+      return
     }
+    if (priceMinInput.trim() === "" && priceMaxInput.trim() === "") {
+      actions.setCustomPriceRange(null)
+      actions.setSelectedPriceRange("any")
+      setPriceError(null)
+      return
+    }
+    applyPriceBounds(min, max)
+    setPriceMinInput(centsToDollarInput(min))
+    setPriceMaxInput(max === undefined ? "" : centsToDollarInput(max))
   }
 
   const hasLocation = Boolean(filters.userLocation || filters.locationLabel)
@@ -146,7 +181,7 @@ export function FilterSections({ filters, actions, tracks, vehicles }: FilterSec
 
       {/* Price — always visible */}
       <div className="space-y-3">
-        <Label>Price per Day</Label>
+        <Label>Price per Day (USD)</Label>
         <div className="flex h-12 items-end gap-0.5">
           {histogram.map((bucket, i) => (
             <div
@@ -160,34 +195,49 @@ export function FilterSections({ filters, actions, tracks, vehicles }: FilterSec
           ))}
         </div>
         <Slider
-          aria-label="Price range slider"
-          max={maxPrice}
-          min={minPrice}
+          aria-label="Price range in dollars"
+          max={sliderMax / 100}
+          min={sliderMin / 100}
           onValueChange={handlePriceChange}
-          step={priceStep}
-          value={[currentPriceMin, currentPriceMax]}
+          step={0.01}
+          value={[currentPriceMin / 100, Math.max(currentPriceMin, currentPriceMax) / 100]}
         />
         <div className="flex items-center gap-2">
           <Input
-            aria-label="Minimum price"
-            onChange={(e) =>
-              handlePriceChange([Number.parseInt(e.target.value, 10) || minPrice, currentPriceMax])
-            }
+            aria-invalid={Boolean(priceError)}
+            aria-label="Minimum price (USD)"
+            min="0"
+            onBlur={commitPriceInputs}
+            onChange={(e) => setPriceMinInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commitPriceInputs()
+            }}
             placeholder="Min"
+            step="0.01"
             type="number"
-            value={currentPriceMin}
+            value={priceMinInput}
           />
           <span className="text-muted-foreground">–</span>
           <Input
-            aria-label="Maximum price"
-            onChange={(e) =>
-              handlePriceChange([currentPriceMin, Number.parseInt(e.target.value, 10) || maxPrice])
-            }
+            aria-invalid={Boolean(priceError)}
+            aria-label="Maximum price (USD)"
+            min="0"
+            onBlur={commitPriceInputs}
+            onChange={(e) => setPriceMaxInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commitPriceInputs()
+            }}
             placeholder="Max"
+            step="0.01"
             type="number"
-            value={currentPriceMax}
+            value={priceMaxInput}
           />
         </div>
+        {priceError && (
+          <p className="text-destructive text-sm" role="alert">
+            {priceError}
+          </p>
+        )}
       </div>
 
       <Accordion className="w-full" defaultValue={["track"]} type="multiple">

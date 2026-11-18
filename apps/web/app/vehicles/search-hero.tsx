@@ -57,10 +57,10 @@ const QUICK_CHIPS: QuickChip[] = [
     apply: (a, active) => a.setMinHorsepower(active ? "" : "500"),
   },
   {
-    label: "Under $500/day",
-    isActive: (f) => f.selectedPriceRange === "0-500",
+    label: "$500/day or less",
+    isActive: (f) => f.selectedPriceRange === "0-50000",
     apply: (a, active) => {
-      a.setSelectedPriceRange(active ? "any" : "0-500")
+      a.setSelectedPriceRange(active ? "any" : "0-50000")
       a.setCustomPriceRange(null)
     },
   },

@@ -36,7 +36,9 @@ export type FilterState = {
   selectedMake: string
   selectedModel: string
   selectedDriveType: string
+  /** Canonical integer-cent range, e.g. "1023-2000", "1023+", or "any". */
   selectedPriceRange: string
+  /** Integer-cent bounds; editable input fields themselves use dollars. */
   customPriceRange: [number, number] | null
   minHorsepower: string
   maxHorsepower: string

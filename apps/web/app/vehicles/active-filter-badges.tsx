@@ -5,6 +5,7 @@ import { cn } from "@workspace/ui/lib/utils"
 import { format } from "date-fns"
 import { X } from "lucide-react"
 import { parseLocalDate } from "@/lib/date-utils"
+import { priceFilterLabel } from "./price-filter"
 import type { FilterActions, FilterState } from "./types"
 
 type ActiveFilterBadgesProps = {
@@ -171,7 +172,7 @@ export function ActiveFilterBadges({
           }}
         >
           <span className="max-w-[100px] truncate sm:max-w-none">
-            Price: {filters.selectedPriceRange}
+            Price: {priceFilterLabel(filters.selectedPriceRange)}
           </span>
         </FilterBadge>
       )}

@@ -49,6 +49,8 @@ import {
   isAllowedImageFile,
 } from "@/lib/image-validation"
 import { r2Url } from "@/lib/r2-url"
+import { formatRentalUsd } from "@/lib/rental-checkout"
+import { centsToDollarInput, dollarsToCents } from "@/lib/rental-money"
 import { listingImageUploadApi } from "@/lib/vehicle-upload-api"
 
 const TRANSMISSION_OPTIONS = ["Manual", "Automatic", "PDK", "DCT", "CVT"]
@@ -107,7 +109,7 @@ export default function EditVehiclePage() {
     make: "",
     model: "",
     year: 0,
-    dailyRate: 0,
+    dailyRate: "",
     damageDepositAmount: 0,
     description: "",
     horsepower: 0,
@@ -134,7 +136,7 @@ export default function EditVehiclePage() {
         make: vehicle.make || "",
         model: vehicle.model || "",
         year: vehicle.year || 0,
-        dailyRate: vehicle.dailyRate || 0,
+        dailyRate: centsToDollarInput(vehicle.dailyRate ?? 0),
         damageDepositAmount: vehicle.damageDepositAmount
           ? Math.round(vehicle.damageDepositAmount / 100)
           : 0,
@@ -203,7 +205,6 @@ export default function EditVehiclePage() {
       ...formData,
       [name]:
         name === "year" ||
-        name === "dailyRate" ||
         name === "damageDepositAmount" ||
         name === "horsepower" ||
         name === "mileage"
@@ -223,14 +224,15 @@ export default function EditVehiclePage() {
 
   // Add-on management functions
   const addAddOn = () => {
-    if (newAddOn.name && newAddOn.price) {
+    const price = dollarsToCents(newAddOn.price)
+    if (newAddOn.name && price !== null) {
       setFormData({
         ...formData,
         addOns: [
           ...formData.addOns,
           {
             name: newAddOn.name,
-            price: Number(newAddOn.price),
+            price,
             description: newAddOn.description || undefined,
             isRequired: newAddOn.isRequired,
             priceType: newAddOn.priceType,
@@ -262,10 +264,10 @@ export default function EditVehiclePage() {
     if (!addOn) return
     setNewAddOn({
       name: addOn.name,
-      price: addOn.price.toString(),
+      price: centsToDollarInput(addOn.price),
       description: addOn.description || "",
       isRequired: addOn.isRequired ?? false,
-      priceType: addOn.priceType ?? "daily",
+      priceType: addOn.priceType ?? "one-time",
     })
     setEditingAddOnIndex(index)
   }
@@ -276,13 +278,30 @@ export default function EditVehiclePage() {
       return
     }
 
+    const original = formData.addOns[editingAddOnIndex]
+    const price =
+      original && newAddOn.price === centsToDollarInput(original.price)
+        ? original.price
+        : dollarsToCents(newAddOn.price)
+    if (price === null) {
+      toast.error("Enter a valid nonnegative dollar price")
+      return
+    }
+
     const updatedAddOns = [...formData.addOns]
     updatedAddOns[editingAddOnIndex] = {
+      ...original,
       name: newAddOn.name,
-      price: Number(newAddOn.price),
+      price,
       description: newAddOn.description || undefined,
-      isRequired: newAddOn.isRequired,
-      priceType: newAddOn.priceType,
+      isRequired:
+        original && newAddOn.isRequired === (original.isRequired ?? false)
+          ? original.isRequired
+          : newAddOn.isRequired,
+      priceType:
+        original && newAddOn.priceType === (original.priceType ?? "one-time")
+          ? original.priceType
+          : newAddOn.priceType,
     }
 
     setFormData({
@@ -497,6 +516,13 @@ export default function EditVehiclePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    // Preserve legacy stored values when this field was not changed.
+    const rateUnchanged = formData.dailyRate === centsToDollarInput(vehicle.dailyRate)
+    const dailyRate = rateUnchanged ? vehicle.dailyRate : dollarsToCents(formData.dailyRate)
+    if (dailyRate === null || dailyRate < 0 || (!rateUnchanged && dailyRate === 0)) {
+      toast.error("Enter a valid daily rate of at least $0.01")
+      return
+    }
     setIsSubmitting(true)
 
     try {
@@ -509,7 +535,7 @@ export default function EditVehiclePage() {
         make: formData.make || undefined,
         model: formData.model || undefined,
         year: formData.year || undefined,
-        dailyRate: formData.dailyRate || undefined,
+        dailyRate,
         damageDepositAmount: formData.damageDepositAmount
           ? formData.damageDepositAmount * 100
           : undefined,
@@ -828,10 +854,12 @@ export default function EditVehiclePage() {
                 <Label htmlFor="dailyRate">Daily Rate ($) *</Label>
                 <Input
                   id="dailyRate"
+                  min="0"
                   name="dailyRate"
                   onChange={handleChange}
                   placeholder="899"
                   required
+                  step="any"
                   type="number"
                   value={formData.dailyRate}
                 />
@@ -1014,12 +1042,13 @@ export default function EditVehiclePage() {
                           <p className="text-muted-foreground text-sm">{addOn.description}</p>
                         )}
                         <p className="font-semibold text-primary">
-                          ${addOn.price}
-                          {addOn.priceType === "one-time" ? " one-time" : "/day"}
+                          {formatRentalUsd(addOn.price)}
+                          {addOn.priceType === "daily" ? "/day" : " one-time"}
                         </p>
                       </div>
                       <div className="flex gap-2">
                         <Button
+                          aria-label={`Edit ${addOn.name}`}
                           onClick={() => startEditingAddOn(index)}
                           size="sm"
                           type="button"
@@ -1059,8 +1088,10 @@ export default function EditVehiclePage() {
                     <Label htmlFor="addOnPrice">Price ($) *</Label>
                     <Input
                       id="addOnPrice"
+                      min="0"
                       onChange={(e) => setNewAddOn({ ...newAddOn, price: e.target.value })}
                       placeholder="150"
+                      step="any"
                       type="number"
                       value={newAddOn.price}
                     />

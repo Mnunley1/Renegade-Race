@@ -21,11 +21,13 @@ import { Separator } from "@workspace/ui/components/separator"
 import { useMutation, useQuery } from "convex/react"
 import { ArrowRight, CheckCircle2, Loader2, Plus, X } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { COMMON_AMENITIES } from "@/lib/constants"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
+import { formatRentalUsd } from "@/lib/rental-checkout"
+import { dollarsToCents } from "@/lib/rental-money"
 
 export default function AmenitiesPage() {
   const router = useRouter()
@@ -39,19 +41,28 @@ export default function AmenitiesPage() {
     Array<{
       name: string
       price: number
-      description: string
-      isRequired: boolean
-      priceType: "daily" | "one-time"
+      description?: string
+      isRequired?: boolean
+      priceType?: "daily" | "one-time"
     }>
   >(
     (draft?.vehicleData?.addOns as Array<{
       name: string
       price: number
-      description: string
-      isRequired: boolean
-      priceType: "daily" | "one-time"
+      description?: string
+      isRequired?: boolean
+      priceType?: "daily" | "one-time"
     }>) || []
   )
+
+  const hydrated = useRef(false)
+  useEffect(() => {
+    if (draft !== undefined && !hydrated.current) {
+      hydrated.current = true
+      setAmenities(draft?.vehicleData?.amenities ?? [])
+      setAddOns(draft?.vehicleData?.addOns ?? [])
+    }
+  }, [draft])
 
   const [newAddOn, setNewAddOn] = useState({
     name: "",
@@ -68,12 +79,17 @@ export default function AmenitiesPage() {
   }
 
   const addAddOn = () => {
-    if (newAddOn.name && newAddOn.price) {
+    const price = dollarsToCents(newAddOn.price)
+    if (!newAddOn.name || price === null) {
+      toast.error("Enter an add-on name and a valid nonnegative dollar price")
+      return
+    }
+    if (newAddOn.name) {
       setAddOns((prev) => [
         ...prev,
         {
           name: newAddOn.name,
-          price: Number(newAddOn.price),
+          price,
           description: newAddOn.description,
           isRequired: newAddOn.isRequired,
           priceType: newAddOn.priceType,
@@ -176,8 +192,8 @@ export default function AmenitiesPage() {
                         <p className="text-muted-foreground text-sm">{addOn.description}</p>
                       )}
                       <p className="font-semibold text-primary">
-                        ${addOn.price}
-                        {addOn.priceType === "one-time" ? " one-time" : "/day"}
+                        {formatRentalUsd(addOn.price)}
+                        {addOn.priceType === "daily" ? "/day" : " one-time"}
                       </p>
                     </div>
                     <Button
@@ -208,8 +224,10 @@ export default function AmenitiesPage() {
                   <Label htmlFor="addOnPrice">Price ($)</Label>
                   <Input
                     id="addOnPrice"
+                    min="0"
                     onChange={(e) => setNewAddOn({ ...newAddOn, price: e.target.value })}
                     placeholder="150"
+                    step="any"
                     type="number"
                     value={newAddOn.price}
                   />
