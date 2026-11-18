@@ -76,6 +76,21 @@ Seat-specific frontend parity and seat checkout hardening require separate revie
 the rental smoke test does not establish seat-flow readiness. Passing CI alone
 does not establish production compatibility.
 
+## Account deletion preflight (REN-18)
+
+Settings calls the authenticated `users.checkUserDeletionEligibility` action before
+requesting deletion of the Clerk identity. A blocking rental obligation, balance,
+or failed eligibility check leaves sign-in intact and displays a reason. Retrying
+always performs a fresh check; concurrent submissions and dialog dismissal are
+blocked while the request is running. A Clerk failure leaves the dialog open for
+retry and does not navigate away.
+
+This preflight is not an atomic guarantee across Clerk, Stripe, and Convex. The
+signed Clerk deletion webhook and final Convex transaction continue to recheck
+eligibility; they remain authoritative if obligations change after preflight.
+The flow does not cancel bookings or erase historical payment records. Validate
+the frontend ordering tests and backend deletion ownership suite before release.
+
 ## Profile image ownership (REN-23)
 
 New profile photos must use `r2.generateProfileImageUploadUrl`, then pass its key
