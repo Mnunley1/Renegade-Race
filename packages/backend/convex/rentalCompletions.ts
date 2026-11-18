@@ -4,6 +4,7 @@ import type { Doc } from "./_generated/dataModel"
 import { mutation, type QueryCtx, query } from "./_generated/server"
 import { getNewReviewEmailTemplate, sendTransactionalEmail } from "./emails"
 import { getWebUrl, isReservationParticipant, participantCompletion } from "./helpers"
+import { requireReservationPhotoUploads } from "./r2"
 import { validateReturnPhotos, visibleReturnPhotos } from "./returnEvidence"
 import { publicUserProfile } from "./userProfile"
 
@@ -342,6 +343,13 @@ export const submitReview = mutation({
     if (existingReview) {
       throw new Error("Review already submitted for this rental")
     }
+
+    await requireReservationPhotoUploads(ctx, {
+      reservationId: completion.reservationId,
+      uploader: identity.subject,
+      purpose: "reviews",
+      photos: args.photos ?? [],
+    })
 
     const reviewId = await ctx.db.insert("rentalReviews", {
       rentalCompletionId: args.completionId,

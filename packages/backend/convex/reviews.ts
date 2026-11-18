@@ -4,6 +4,7 @@ import type { Id } from "./_generated/dataModel"
 import { mutation, query } from "./_generated/server"
 import { getReviewResponseEmailTemplate, sendTransactionalEmail } from "./emails"
 import { getWebUrl } from "./helpers"
+import { requireReservationPhotoUploads } from "./r2"
 import { calculateUserReviewStats, calculateVehicleReviewStats } from "./reviewStats"
 import { sanitizeReview, sanitizeShortText } from "./sanitize"
 import { publicUserProfile } from "./userProfile"
@@ -462,6 +463,18 @@ export const updateReview = mutation({
       throw new Error("Not authorized to update this review")
     }
 
+    // Keep historical attachments on this same review, but never use an old
+    // reference as proof for a new attachment or another review. Current clients
+    // resubmit retained photos and omit the field when removing the last photo.
+    const photos = args.photos
+    const retained = new Set(existingReview.photos ?? [])
+    await requireReservationPhotoUploads(ctx, {
+      reservationId: existingReview.reservationId,
+      uploader: identity.subject,
+      purpose: "reviews",
+      photos: (photos ?? []).filter((key) => !retained.has(key)),
+    })
+
     await ctx.db.patch(args.reviewId, {
       rating: args.rating,
       communication: args.communication,
@@ -470,7 +483,7 @@ export const updateReview = mutation({
       overallExperience: args.overallExperience,
       title: sanitizeShortText(args.title),
       review: sanitizeReview(args.review),
-      photos: args.photos,
+      photos,
       updatedAt: Date.now(),
     })
 

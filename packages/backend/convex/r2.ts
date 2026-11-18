@@ -15,6 +15,44 @@ function findUpload(ctx: QueryCtx, key: string) {
     .unique()
 }
 
+export async function requireReservationPhotoUploads(
+  ctx: QueryCtx,
+  { reservationId, uploader, purpose, photos }: {
+    reservationId: Id<"reservations">
+    uploader: string
+    purpose: "disputes" | "reviews" | "damage"
+    photos: string[]
+  }
+) {
+  if (photos.length === 0) return
+  const user = await getCurrentUser(ctx)
+  const reservation = await ctx.db.get(reservationId)
+  if (
+    !user ||
+    user.externalId !== uploader ||
+    !reservation ||
+    (reservation.ownerId !== uploader &&
+      (purpose === "damage" || reservation.renterId !== uploader))
+  ) {
+    throw new Error("Not authorized to attach photos to this reservation")
+  }
+  // These server-issued keys record the booking and intended use. Prefix checks
+  // alone are insufficient: an upload record must also establish its owner.
+  const prefix = `images/${purpose}/${reservationId}/${user._id}-`
+  for (const key of new Set(photos)) {
+    const upload = await findUpload(ctx, key)
+    if (
+      !upload ||
+      upload.ownerId !== uploader ||
+      upload.purpose !== "other" ||
+      !upload.key.startsWith(prefix) ||
+      upload.imageId
+    ) {
+      throw new Error(`Upload this ${purpose} photo for this reservation`)
+    }
+  }
+}
+
 async function issueUpload(
   ctx: MutationCtx,
   ownerId: string,
