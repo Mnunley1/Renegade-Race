@@ -1,5 +1,6 @@
 import { v } from "convex/values"
 import { mutation, query } from "./_generated/server"
+import { requirePublicMediaFields } from "./r2"
 import { getCurrentUserOrThrow } from "./users"
 
 export const add = mutation({
@@ -17,6 +18,14 @@ export const add = mutation({
     if (!profile || profile.userId !== user.externalId) {
       throw new Error("Not authorized to add media to this profile")
     }
+
+    if (!args.url) throw new Error("A media URL is required")
+    await requirePublicMediaFields(ctx, user, {
+      kind: "general",
+      key: args.r2Key,
+      url: args.url,
+      allowExternal: true,
+    })
 
     // Get current max order
     const existing = await ctx.db

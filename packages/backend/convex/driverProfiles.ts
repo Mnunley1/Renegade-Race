@@ -1,5 +1,6 @@
 import { v } from "convex/values"
 import { mutation, query } from "./_generated/server"
+import { requirePublicMediaFields } from "./r2"
 import { getCurrentUser, getCurrentUserOrThrow } from "./users"
 import { publicDisplayName } from "./userProfile"
 
@@ -30,6 +31,7 @@ export const create = mutation({
   },
   handler: async (ctx, args) => {
     const user = await getCurrentUserOrThrow(ctx)
+    await requirePublicMediaFields(ctx, user, { kind: "profile", url: args.avatarUrl })
 
     // Check if user already has a driver profile
     const existingProfile = await ctx.db
@@ -107,6 +109,12 @@ export const update = mutation({
     if (!profile || profile.userId !== user.externalId) {
       throw new Error("Not authorized to update this profile")
     }
+
+    await requirePublicMediaFields(ctx, user, {
+      kind: "profile",
+      url: args.avatarUrl,
+      previous: { url: profile.avatarUrl },
+    })
 
     await ctx.db.patch(profileId, {
       ...updates,

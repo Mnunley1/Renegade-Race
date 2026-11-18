@@ -2,6 +2,7 @@ import { v } from "convex/values"
 import type { Doc, Id } from "./_generated/dataModel"
 import { mutation, type QueryCtx, query } from "./_generated/server"
 import { logActivityEventInternal } from "./activity"
+import { requirePublicMediaUpload } from "./r2"
 import { getCurrentUser, getCurrentUserOrThrow } from "./users"
 import { publicDisplayName } from "./userProfile"
 
@@ -53,6 +54,10 @@ export const createPost = mutation({
       if (!(isOwner || membership)) {
         throw new Error("Not authorized to post on behalf of this team")
       }
+    }
+
+    for (const key of new Set(args.mediaR2Keys ?? [])) {
+      await requirePublicMediaUpload(ctx, user, key, "general")
     }
 
     const now = Date.now()

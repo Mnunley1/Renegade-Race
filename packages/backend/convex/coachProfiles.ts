@@ -6,6 +6,7 @@ import { checkAdmin } from "./admin"
 import { ErrorCode, throwError } from "./errors"
 import { rateLimiter } from "./rateLimiter"
 import { sanitizeMessage, sanitizeShortText } from "./sanitize"
+import { requirePublicMediaFields } from "./r2"
 import { getCurrentUser, getCurrentUserOrThrow } from "./users"
 import { publicDisplayName } from "./userProfile"
 
@@ -24,16 +25,15 @@ const socialLinksValidator = v.object({
 const MAX_RATE_CENTS = 5_000_000 // $50,000
 const MIN_RATE_CENTS = 100 // $1
 
-function validateRates(rates: {
-  hourlyRate?: number
-  halfDayRate?: number
-  fullDayRate?: number
-}) {
+function validateRates(rates: { hourlyRate?: number; halfDayRate?: number; fullDayRate?: number }) {
   const set = [rates.hourlyRate, rates.halfDayRate, rates.fullDayRate].filter(
     (r) => r !== undefined
   ) as number[]
   if (set.length === 0) {
-    throwError(ErrorCode.INVALID_AMOUNT, "At least one rate (hourly, half-day, or full-day) is required")
+    throwError(
+      ErrorCode.INVALID_AMOUNT,
+      "At least one rate (hourly, half-day, or full-day) is required"
+    )
   }
   for (const rate of set) {
     if (rate < MIN_RATE_CENTS || rate > MAX_RATE_CENTS) {
@@ -64,6 +64,11 @@ export const create = mutation({
   },
   handler: async (ctx, args) => {
     const user = await getCurrentUserOrThrow(ctx)
+    await requirePublicMediaFields(ctx, user, {
+      kind: "profile",
+      key: args.avatarR2Key,
+      url: args.avatarUrl,
+    })
 
     await rateLimiter.limit(ctx, "updateProfile", { key: user.externalId, throws: true })
 
@@ -146,6 +151,13 @@ export const update = mutation({
     if (profile.userId !== user.externalId) {
       throwError(ErrorCode.FORBIDDEN, "Not authorized to update this profile")
     }
+
+    await requirePublicMediaFields(ctx, user, {
+      kind: "profile",
+      key: args.avatarR2Key,
+      url: args.avatarUrl,
+      previous: { key: profile.avatarR2Key, url: profile.avatarUrl },
+    })
 
     await rateLimiter.limit(ctx, "updateProfile", { key: user.externalId, throws: true })
 
@@ -354,9 +366,7 @@ export const getCoachesForAdmin = query({
       const verificationStatus = args.verificationStatus
       profiles = await ctx.db
         .query("coachProfiles")
-        .withIndex("by_verification_status", (q) =>
-          q.eq("verificationStatus", verificationStatus)
-        )
+        .withIndex("by_verification_status", (q) => q.eq("verificationStatus", verificationStatus))
         .order("desc")
         .take(limit)
     } else {
