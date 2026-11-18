@@ -91,6 +91,15 @@ eligibility; they remain authoritative if obligations change after preflight.
 The flow does not cancel bookings or erase historical payment records. Validate
 the frontend ordering tests and backend deletion ownership suite before release.
 
+REN-32 extends the shared backend check to include approved bookings, even after
+their rental dates, because they remain payable until resolved. Pending and
+processing rental payments block both the renter and host regardless of booking
+date or status. All payment attempts are checked, not just the booking's current
+payment pointer. Cancellation alone does not unblock deletion while a payment
+remains unsettled. Settled financial records are retained; eligibility resumes
+only when the remaining rental and Stripe balance checks also pass. No schema
+migration or payment-state rewrite is required.
+
 ## Profile image ownership (REN-23)
 
 New profile photos must use `r2.generateProfileImageUploadUrl`, then pass its key
