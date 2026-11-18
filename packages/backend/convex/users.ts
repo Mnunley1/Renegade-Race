@@ -246,9 +246,13 @@ async function rentalDeletionBlockers(ctx: QueryCtx, clerkUserId: string): Promi
     [byRenter, byHost].map(async (indexed) => {
       const active = await indexed
         .filter((q) =>
-          q.and(
-            q.gte(q.field("endDate"), today),
-            q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "confirmed"))
+          q.or(
+            // Approval remains payable until explicitly resolved, even after the rental date.
+            q.eq(q.field("status"), "approved"),
+            q.and(
+              q.gte(q.field("endDate"), today),
+              q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "confirmed"))
+            )
           )
         )
         .collect()
@@ -259,6 +263,25 @@ async function rentalDeletionBlockers(ctx: QueryCtx, clerkUserId: string): Promi
   if (renterCount)
     blockers.push(`${renterCount} active booking(s) as a renter. Please cancel them first.`)
   if (hostCount) blockers.push(`${hostCount} active reservation(s) on your vehicles.`)
+  // Payment settlement can outlive the booking date or cancellation. Inspect the
+  // financial records directly, including attempts not linked by reservation.paymentId.
+  const unsettledPayments = await Promise.all(
+    [
+      ctx.db.query("payments").withIndex("by_renter", (q) => q.eq("renterId", clerkUserId)),
+      ctx.db.query("payments").withIndex("by_owner", (q) => q.eq("ownerId", clerkUserId)),
+    ].map((indexed) =>
+      indexed
+        .filter((q) =>
+          q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "processing"))
+        )
+        .first()
+    )
+  )
+  if (unsettledPayments.some((payment) => payment !== null)) {
+    blockers.push(
+      "Rental payments are still pending or processing. Please wait for them to resolve before deleting your account."
+    )
+  }
   return blockers
 }
 
