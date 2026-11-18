@@ -51,7 +51,7 @@ import {
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useTheme } from "next-themes"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
@@ -217,6 +217,9 @@ export default function SettingsPage() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteConfirmText, setDeleteConfirmText] = useState("")
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const deletionInFlight = useRef(false)
+  const checkDeletionEligibility = useAction(api.users.checkUserDeletionEligibility)
 
   // Account editing
   const [isEditingAccount, setIsEditingAccount] = useState(false)
@@ -422,6 +425,8 @@ export default function SettingsPage() {
   }
 
   const handleDeleteAccount = async () => {
+    if (deletionInFlight.current) return
+
     if (deleteConfirmText !== "DELETE") {
       toast.error('Please type "DELETE" to confirm account deletion')
       return
@@ -432,18 +437,42 @@ export default function SettingsPage() {
       return
     }
 
+    deletionInFlight.current = true
     setIsDeleting(true)
+    setDeleteError(null)
+    let eligibilityVerified = false
     try {
+      // The authenticated subject is authoritative; do not pass a client-selected user ID.
+      const eligibility = await checkDeletionEligibility({})
+      if (eligibility.canDelete !== true) {
+        setDeleteError(
+          eligibility.reason ||
+            eligibility.blockingFactors.join(" ") ||
+            "Your account cannot be deleted yet. Please contact support."
+        )
+        deletionInFlight.current = false
+        setIsDeleting(false)
+        return
+      }
+      eligibilityVerified = true
       await clerkUser.delete()
-      toast.success("Account deleted successfully")
+      // Keep the submission locked while navigation completes. The signed webhook
+      // still performs its own eligibility and transactional checks.
+      toast.success("Account deletion requested")
       router.push("/")
     } catch (error) {
+      setDeleteError(
+        eligibilityVerified
+          ? "Account deletion could not be completed. Please try again or contact support."
+          : "Unable to verify account deletion eligibility. Your account has not been deleted. Please try again."
+      )
       handleErrorWithContext(error, {
         action: "delete account",
         customMessages: {
           generic: "Failed to delete account. Please contact support if the issue persists.",
         },
       })
+      deletionInFlight.current = false
       setIsDeleting(false)
     }
   }
@@ -599,8 +628,8 @@ export default function SettingsPage() {
                   <div>
                     <Label>Delete Account</Label>
                     <p className="text-muted-foreground text-sm">
-                      Once you delete your account, there is no going back. This will permanently
-                      delete your account, profile, and all associated data. Please be certain.
+                      Permanently remove your sign-in access and request deletion of your account
+                      profile. Active rental obligations or outstanding balances can block deletion.
                     </p>
                     <Button
                       className="mt-2"
@@ -1195,9 +1224,11 @@ export default function SettingsPage() {
       {/* Delete Account Dialog */}
       <Dialog
         onOpenChange={(open) => {
+          if (deletionInFlight.current) return
           setShowDeleteDialog(open)
           if (!open) {
             setDeleteConfirmText("")
+            setDeleteError(null)
           }
         }}
         open={showDeleteDialog}
@@ -1206,8 +1237,8 @@ export default function SettingsPage() {
           <DialogHeader>
             <DialogTitle className="text-destructive">Delete Account</DialogTitle>
             <DialogDescription>
-              This action cannot be undone. This will permanently delete your account, profile,
-              vehicles, reservations, and all associated data.
+              This action cannot be undone. This removes your sign-in access and requests deletion
+              of your account profile. Existing booking and payment records are retained.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -1217,18 +1248,22 @@ export default function SettingsPage() {
               </p>
               <ul className="mt-2 ml-4 list-disc space-y-1 text-destructive/80 text-sm">
                 <li>Your account will be permanently deleted</li>
-                <li>All your vehicle listings will be removed</li>
-                <li>All your reservations will be cancelled</li>
-                <li>All your messages and conversations will be deleted</li>
+                <li>Active rental obligations or outstanding balances can block deletion</li>
                 <li>You will lose access to all platform features</li>
               </ul>
             </div>
+            {deleteError && (
+              <Alert variant="destructive">
+                <AlertDescription>{deleteError}</AlertDescription>
+              </Alert>
+            )}
             <div>
               <Label htmlFor="delete-confirm">
                 Type <strong>DELETE</strong> to confirm:
               </Label>
               <Input
                 className="mt-2"
+                disabled={isDeleting}
                 id="delete-confirm"
                 onChange={(e) => setDeleteConfirmText(e.target.value)}
                 placeholder="DELETE"
@@ -1242,6 +1277,7 @@ export default function SettingsPage() {
               onClick={() => {
                 setShowDeleteDialog(false)
                 setDeleteConfirmText("")
+                setDeleteError(null)
               }}
               variant="outline"
             >
@@ -1255,7 +1291,7 @@ export default function SettingsPage() {
               {isDeleting ? (
                 <>
                   <Loader2 className="mr-2 size-4 animate-spin" />
-                  Deleting...
+                  Checking and deleting...
                 </>
               ) : (
                 "Delete Account"
