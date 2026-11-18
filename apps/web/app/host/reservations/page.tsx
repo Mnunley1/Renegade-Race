@@ -23,6 +23,7 @@ import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 import { r2Url } from "@/lib/r2-url"
+import { formatRentalUsd } from "@/lib/rental-checkout"
 
 const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=400"
 
@@ -131,7 +132,7 @@ function ReservationRow({
     vehicle?.images?.find((img: { isPrimary: boolean }) => img.isPrimary)?.r2Key ||
     vehicle?.images?.[0]?.r2Key
   const renterName = reservation.renter?.name || "Unknown renter"
-  const amount = Math.round((reservation.totalAmount || 0) / 100).toLocaleString()
+  const amount = formatRentalUsd(reservation.totalAmount || 0)
   const status = reservation.status
 
   return (
@@ -160,12 +161,13 @@ function ReservationRow({
             )}
           </div>
           <div className="hidden text-right sm:block">
-            <p className="font-semibold text-primary">${amount}</p>
+            <p className="font-semibold text-primary">{amount}</p>
+            <p className="text-muted-foreground text-xs">Rental subtotal</p>
           </div>
         </div>
 
         <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
-          <p className="mr-auto font-semibold text-primary text-sm sm:hidden">${amount}</p>
+          <p className="mr-auto font-semibold text-primary text-sm sm:hidden">{amount}</p>
           {status === "pending" && (
             <>
               <Button onClick={() => onApprove(reservation._id)} size="sm">

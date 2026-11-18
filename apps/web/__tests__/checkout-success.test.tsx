@@ -1,4 +1,5 @@
 import { cleanup, render, screen } from "@testing-library/react"
+import { getFunctionName } from "convex/server"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import CheckoutSuccessPage from "@/app/checkout/success/page"
 
@@ -9,7 +10,11 @@ const mock = vi.hoisted(() => ({
 vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams("reservationId=booking"),
 }))
-vi.mock("convex/react", () => ({ useQuery: () => mock.reservation }))
+vi.mock("@clerk/nextjs", () => ({ useUser: () => ({ user: { id: "renter" } }) }))
+vi.mock("convex/react", () => ({
+  useQuery: (fn: Parameters<typeof getFunctionName>[0]) =>
+    getFunctionName(fn) === "stripe:getUserPayments" ? [] : mock.reservation,
+}))
 
 const reservation = {
   _id: "booking",

@@ -1,6 +1,7 @@
 "use client"
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@workspace/ui/components/dialog"
+import { formatRentalUsd } from "@/lib/rental-checkout"
 import type { VehicleItem } from "./types"
 
 type CompareModalProps = {
@@ -15,8 +16,11 @@ export function CompareModal({ open, onOpenChange, vehicles }: CompareModalProps
   }
 
   const specs = [
-    { label: "Price", render: (v: VehicleItem) => `$${v.pricePerDay}/day` },
-    { label: "Weekend", render: (v: VehicleItem) => `$${Math.round(v.pricePerDay * 2.5)}/wknd` },
+    { label: "Price", render: (v: VehicleItem) => `${formatRentalUsd(v.pricePerDay)}/day` },
+    {
+      label: "Estimated weekend",
+      render: (v: VehicleItem) => formatRentalUsd(Math.round(v.pricePerDay * 2.5)),
+    },
     { label: "Year", render: (v: VehicleItem) => String(v.year) },
     { label: "Make", render: (v: VehicleItem) => v.make },
     { label: "Model", render: (v: VehicleItem) => v.model },

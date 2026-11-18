@@ -6,6 +6,7 @@ export type VehicleItem = {
   year: number
   make: string
   model: string
+  /** Daily rental rate in integer cents. */
   pricePerDay: number
   location: string
   track: string

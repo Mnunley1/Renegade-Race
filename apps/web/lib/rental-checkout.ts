@@ -15,6 +15,7 @@ export function calculateRentalEstimate(
   return { days, total: days * dailyRate + addOnsTotal, addOnsTotal }
 }
 
+/** Persisted rental money is integer USD cents; convert only at display boundaries. */
 export function formatRentalUsd(cents: number) {
   return (cents / 100).toLocaleString("en-US", {
     style: "currency",

@@ -76,6 +76,33 @@ Seat-specific frontend parity and seat checkout hardening require separate revie
 the rental smoke test does not establish seat-flow readiness. Passing CI alone
 does not establish production compatibility.
 
+## Rental currency displays (REN-31)
+
+Rental rates, add-on prices, reservation totals, payment amounts, card fees, and
+refunds remain integer USD cents. Web rental views use `formatRentalUsd` from
+`apps/web/lib/rental-checkout.ts` at the display boundary, preserving two decimal
+places. Keep aggregation in cents; do not round each booking to whole dollars.
+This release does not rescale stored values or change historical Stripe charges.
+
+A reservation total is the rental subtotal, before the renter's card-processing
+fee. Payment checkout shows the server-returned processing fee and total due.
+Trips and rental confirmation use the existing authenticated self-scoped payment
+query for the reservation's current payment: only captured payment states display
+paid subtotal, fee, total charged, and succeeded refunds. A pending/failed payment
+or missing ledger record never implies a charge. Captured totals use the recorded
+capture when available, otherwise the verified subtotal plus processing fee.
+Host reservation aggregates are labeled rental subtotals, not net earnings.
+
+Cancellation amounts are estimates against the paid rental subtotal under the
+vehicle's current cancellation policy, excluding card-processing fees and reduced
+by recorded succeeded refunds. The server still determines the final amount at
+cancellation, including pending refunds and settlement. Missing payment data
+shows an unavailable estimate instead of a promised refund.
+
+REN-31 is frontend-only: no Convex deployment or data migration is required.
+Listing price-entry/filter unit boundaries and required add-on validation remain
+separate follow-ups; no rental-date or host-approval rules change here.
+
 ## Account deletion preflight (REN-18)
 
 Settings calls the authenticated `users.checkUserDeletionEligibility` action before

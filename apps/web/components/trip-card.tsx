@@ -33,10 +33,15 @@ import Link from "next/link"
 import type { ComponentProps } from "react"
 import { useState } from "react"
 import { toast } from "sonner"
+import { RentalPaymentSummary, useRentalPayment } from "@/components/rental-payment-summary"
 import { StatusBadge } from "@/components/status-badge"
 import { formatDateForDisplay } from "@/lib/date-utils"
+import { formatRentalUsd } from "@/lib/rental-checkout"
 
 interface TripCardProps extends ComponentProps<"div"> {
+  paymentId?: string
+  renterId?: string
+  cancellationPolicy?: "flexible" | "moderate" | "strict"
   reservationId: string
   vehicleId: string
   vehicleName: string
@@ -69,47 +74,24 @@ function formatTime(timeString?: string): string {
   return `${displayHour}:${minutes} ${period}`
 }
 
-/**
- * Calculate refund tier based on cancellation timing
- * Returns the refund percentage and policy name
- */
-function calculateRefundTier(startDate: string): {
-  percentage: number
-  policy: "full" | "partial" | "none"
-  refundAmount: (totalAmount: number) => number
-} {
+// Presentation estimate only. Settlement and pending/prior refunds are checked
+// authoritatively by the server when cancellation is processed.
+function refundPercentage(startDate: string, policy: "flexible" | "moderate" | "strict") {
   const now = new Date()
   const start = new Date(`${startDate}T00:00:00`)
-
-  // Set both to start of day for comparison
+  if (Number.isNaN(start.getTime())) return 0
   now.setHours(0, 0, 0, 0)
   start.setHours(0, 0, 0, 0)
-
-  const diffTime = start.getTime() - now.getTime()
-  const daysUntilStart = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-
-  if (daysUntilStart >= 7) {
-    return {
-      percentage: 100,
-      policy: "full",
-      refundAmount: (total) => total,
-    }
-  }
-  if (daysUntilStart >= 2) {
-    return {
-      percentage: 50,
-      policy: "partial",
-      refundAmount: (total) => Math.round(total * 0.5),
-    }
-  }
-  return {
-    percentage: 0,
-    policy: "none",
-    refundAmount: () => 0,
-  }
+  const days = Math.ceil((start.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+  if (policy === "flexible") return days >= 1 ? 100 : 50
+  if (policy === "strict") return days >= 14 ? 100 : days >= 7 ? 50 : 0
+  return days >= 7 ? 100 : days >= 2 ? 50 : 0
 }
 
 export function TripCard({
+  paymentId,
+  renterId,
+  cancellationPolicy = "moderate",
   reservationId,
   vehicleId,
   vehicleName,
@@ -147,7 +129,20 @@ export function TripCard({
   )
 
   const canCancel = status === "pending" || status === "approved" || status === "confirmed"
-  const refundTier = canCancel ? calculateRefundTier(startDate) : null
+  const payment = useRentalPayment({ reservationId, paymentId, renterId })
+  const refundablePayment =
+    payment?.currency === "usd" &&
+    ["succeeded", "partially_refunded", "refunded"].includes(payment.status)
+      ? payment
+      : null
+  const refundEstimate = refundablePayment
+    ? Math.max(
+        0,
+        Math.round(
+          (refundablePayment.amount * refundPercentage(startDate, cancellationPolicy)) / 100
+        ) - (refundablePayment.refundAmount ?? 0)
+      )
+    : null
 
   const handleCancel = async () => {
     if (!canCancel) return
@@ -216,11 +211,12 @@ export function TripCard({
               </div>
             </div>
             <div className="shrink-0 text-right">
+              <div className="text-muted-foreground text-xs">Rental subtotal</div>
               <div className="font-bold text-foreground text-lg tracking-tight">
-                ${totalAmount.toLocaleString()}
+                {formatRentalUsd(totalAmount)}
               </div>
               <div className="text-muted-foreground text-xs">
-                ${dailyRate.toLocaleString()}/day · {totalDays}d
+                {formatRentalUsd(dailyRate)}/day · {totalDays}d
               </div>
             </div>
           </div>
@@ -272,7 +268,7 @@ export function TripCard({
                   <AlertTriangle className="size-4 shrink-0" />
                   <span className="font-medium">Damage claim filed</span>
                   <span className="ml-auto text-muted-foreground">
-                    ${(activeDamageInvoice.amount / 100).toFixed(2)}
+                    {formatRentalUsd(activeDamageInvoice.amount)}
                   </span>
                 </div>
               )}
@@ -282,7 +278,7 @@ export function TripCard({
                     <AlertTriangle className="size-4 shrink-0" />
                     <span className="font-medium">Damage payment required</span>
                     <span className="ml-auto font-bold">
-                      ${(activeDamageInvoice.amount / 100).toFixed(2)}
+                      {formatRentalUsd(activeDamageInvoice.amount)}
                     </span>
                   </div>
                   {activeDamageInvoice.stripeCheckoutUrl && (
@@ -300,12 +296,18 @@ export function TripCard({
                   <AlertTriangle className="size-4 shrink-0" />
                   <span className="font-medium">Damage charge paid</span>
                   <span className="ml-auto text-muted-foreground">
-                    ${(activeDamageInvoice.amount / 100).toFixed(2)}
+                    {formatRentalUsd(activeDamageInvoice.amount)}
                   </span>
                 </div>
               )}
             </div>
           )}
+
+          <RentalPaymentSummary
+            paymentId={paymentId}
+            renterId={renterId}
+            reservationId={reservationId}
+          />
 
           {/* Actions */}
           <div className="mt-auto flex flex-wrap items-center gap-2 border-t pt-4">
@@ -365,46 +367,22 @@ export function TripCard({
                           ?
                         </p>
 
-                        {/* Refund Information - only show for confirmed (paid) reservations */}
-                        {refundTier && status === "confirmed" && (
+                        {status === "confirmed" && (
                           <div className="rounded-lg border bg-muted/50 p-4">
-                            <div className="font-medium text-foreground text-sm">Refund Policy</div>
-                            <div className="mt-2 space-y-1 text-sm">
-                              {refundTier.policy === "full" && (
-                                <>
-                                  <p className="text-green-600 dark:text-green-400">
-                                    You will receive a{" "}
-                                    <span className="font-semibold">full refund</span> of $
-                                    {refundTier.refundAmount(totalAmount).toLocaleString()}.
-                                  </p>
-                                  <p className="text-muted-foreground text-xs">
-                                    7+ days before your trip start date.
-                                  </p>
-                                </>
-                              )}
-                              {refundTier.policy === "partial" && (
-                                <>
-                                  <p className="text-yellow-600 dark:text-yellow-400">
-                                    You will receive a{" "}
-                                    <span className="font-semibold">50% refund</span> of $
-                                    {refundTier.refundAmount(totalAmount).toLocaleString()}.
-                                  </p>
-                                  <p className="text-muted-foreground text-xs">
-                                    2-7 days before your trip start date.
-                                  </p>
-                                </>
-                              )}
-                              {refundTier.policy === "none" && (
-                                <>
-                                  <p className="text-red-600 dark:text-red-400">
-                                    <span className="font-semibold">No refund available.</span>
-                                  </p>
-                                  <p className="text-muted-foreground text-xs">
-                                    Less than 48 hours before your trip start date.
-                                  </p>
-                                </>
-                              )}
+                            <div className="font-medium text-foreground text-sm">
+                              Estimated rental refund
                             </div>
+                            <p className="mt-2 text-sm">
+                              {refundEstimate === null
+                                ? "Refund estimate unavailable."
+                                : formatRentalUsd(refundEstimate)}
+                            </p>
+                            <p className="mt-1 text-muted-foreground text-xs">
+                              Based on the {cancellationPolicy} cancellation policy and paid rental
+                              subtotal. Card processing fees are excluded. Prior refunds reduce this
+                              estimate; the final refund is confirmed after cancellation and
+                              settlement.
+                            </p>
                           </div>
                         )}
 

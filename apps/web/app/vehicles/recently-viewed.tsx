@@ -5,6 +5,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { useRecentlyViewed } from "@/hooks/use-recently-viewed"
 import { r2Url } from "@/lib/r2-url"
+import { formatRentalUsd } from "@/lib/rental-checkout"
 
 export function RecentlyViewed() {
   const { items } = useRecentlyViewed()
@@ -36,7 +37,9 @@ export function RecentlyViewed() {
                 </div>
                 <CardContent className="p-2">
                   <p className="truncate font-medium text-xs">{item.name}</p>
-                  <p className="text-muted-foreground text-xs">${item.pricePerDay}/day</p>
+                  <p className="text-muted-foreground text-xs">
+                    {formatRentalUsd(item.pricePerDay)}/day
+                  </p>
                 </CardContent>
               </Card>
             </Link>
