@@ -15,6 +15,7 @@ import {
 import { ErrorCode, throwError } from "./errors"
 import { getWebUrl } from "./helpers"
 import { buildDestinationChargeAmounts } from "./pricing"
+import { requireReservationPhotoUploads } from "./r2"
 
 // ============================================================================
 // Queries
@@ -178,6 +179,13 @@ export const create = mutation({
     if (args.photos.length === 0) {
       throwError(ErrorCode.INVALID_INPUT, "At least one photo is required for a damage claim")
     }
+
+    await requireReservationPhotoUploads(ctx, {
+      reservationId: args.reservationId,
+      uploader: identity.subject,
+      purpose: "damage",
+      photos: args.photos,
+    })
 
     // Check for existing open invoice on this reservation
     const existingInvoice = await ctx.db
