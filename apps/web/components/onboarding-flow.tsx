@@ -34,6 +34,8 @@ import {
   isAllowedImageFile,
   needsVehiclePhotoReupload,
 } from "@/lib/image-validation"
+import { formatRentalUsd } from "@/lib/rental-checkout"
+import { centsToDollarInput, dollarsToCents } from "@/lib/rental-money"
 import { onboardingImageUploadApi } from "@/lib/vehicle-upload-api"
 
 const ADVANCE_NOTICE_OPTIONS = [
@@ -98,9 +100,9 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
     Array<{
       name: string
       price: number
-      description: string
-      isRequired: boolean
-      priceType: "daily" | "one-time"
+      description?: string
+      isRequired?: boolean
+      priceType?: "daily" | "one-time"
     }>
   >([])
   const [newAddOn, setNewAddOn] = useState({
@@ -133,9 +135,10 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
         make: draft.vehicleData?.make || prev.make,
         model: draft.vehicleData?.model || prev.model,
         year: draft.vehicleData?.year || prev.year,
-        dailyRate: draft.vehicleData?.dailyRate
-          ? String(draft.vehicleData.dailyRate)
-          : prev.dailyRate,
+        dailyRate:
+          draft.vehicleData?.dailyRate !== undefined
+            ? centsToDollarInput(draft.vehicleData.dailyRate)
+            : prev.dailyRate,
         description: draft.vehicleData?.description || prev.description,
         horsepower: draft.vehicleData?.horsepower
           ? String(draft.vehicleData.horsepower)
@@ -143,15 +146,7 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
         transmission: draft.vehicleData?.transmission || prev.transmission,
         drivetrain: draft.vehicleData?.drivetrain || prev.drivetrain,
       }))
-      setAddOns(
-        (draft.vehicleData?.addOns as Array<{
-          name: string
-          price: number
-          description: string
-          isRequired: boolean
-          priceType: "daily" | "one-time"
-        }>) || []
-      )
+      setAddOns(draft.vehicleData?.addOns ?? [])
       if (draft.vehicleData?.advanceNotice) setAdvanceNotice(draft.vehicleData.advanceNotice)
       if (draft.vehicleData.minTripDuration) setMinTripDuration(draft.vehicleData.minTripDuration)
       if (draft.vehicleData.maxTripDuration) setMaxTripDuration(draft.vehicleData.maxTripDuration)
@@ -185,11 +180,7 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
     setVehicleFormData({
       ...vehicleFormData,
       [name]:
-        name === "year" || name === "dailyRate" || name === "horsepower"
-          ? value === ""
-            ? ""
-            : Number(value)
-          : value,
+        name === "year" || name === "horsepower" ? (value === "" ? "" : Number(value)) : value,
     })
   }
 
@@ -205,7 +196,10 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
       vehicleFormData.make &&
       vehicleFormData.model &&
       vehicleFormData.year &&
-      vehicleFormData.dailyRate &&
+      (draft?.vehicleData?.dailyRate !== undefined &&
+      vehicleFormData.dailyRate === centsToDollarInput(draft.vehicleData.dailyRate)
+        ? draft.vehicleData.dailyRate > 0
+        : (dollarsToCents(vehicleFormData.dailyRate) ?? 0) > 0) &&
       vehicleFormData.description &&
       vehicleFormData.horsepower &&
       vehicleFormData.transmission &&
@@ -219,6 +213,16 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
   const handleVehicleContinue = async () => {
     if (!isVehicleFormValid()) {
       toast.error("Please fill in all required fields")
+      return
+    }
+
+    const originalRate = draft?.vehicleData?.dailyRate
+    const dailyRate =
+      originalRate !== undefined && vehicleFormData.dailyRate === centsToDollarInput(originalRate)
+        ? originalRate
+        : dollarsToCents(vehicleFormData.dailyRate)
+    if (dailyRate === null || dailyRate <= 0) {
+      toast.error("Enter a valid daily rate of at least $0.01")
       return
     }
 
@@ -236,13 +240,13 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
           make: vehicleFormData.make,
           model: vehicleFormData.model,
           year: Number(vehicleFormData.year),
-          dailyRate: Number(vehicleFormData.dailyRate),
+          dailyRate,
           description: vehicleFormData.description,
           horsepower: Number(vehicleFormData.horsepower),
           transmission: vehicleFormData.transmission,
           drivetrain: vehicleFormData.drivetrain,
-          amenities: [],
-          addOns: [],
+          amenities: draft?.vehicleData?.amenities ?? [],
+          addOns: draft?.vehicleData?.addOns ?? [],
         },
         currentStep: 2,
       })
@@ -347,12 +351,17 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
 
   // Step 3 Handlers
   const addAddOn = () => {
-    if (newAddOn.name && newAddOn.price) {
+    const price = dollarsToCents(newAddOn.price)
+    if (!newAddOn.name || price === null) {
+      toast.error("Enter an add-on name and a valid nonnegative dollar price")
+      return
+    }
+    if (newAddOn.name) {
       setAddOns((prev) => [
         ...prev,
         {
           name: newAddOn.name,
-          price: Number(newAddOn.price),
+          price,
           description: newAddOn.description,
           isRequired: newAddOn.isRequired,
           priceType: newAddOn.priceType,
@@ -598,10 +607,12 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
                   <Label htmlFor="dailyRate">Daily Rate ($) *</Label>
                   <Input
                     id="dailyRate"
+                    min="0"
                     name="dailyRate"
                     onChange={handleVehicleChange}
                     placeholder="899"
                     required
+                    step="any"
                     type="number"
                     value={vehicleFormData.dailyRate}
                   />
@@ -890,7 +901,7 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
                             <p className="text-muted-foreground text-sm">{addOn.description}</p>
                           )}
                           <p className="font-semibold text-primary">
-                            ${addOn.price}
+                            {formatRentalUsd(addOn.price)}
                             {addOn.priceType === "daily" ? "/day" : " one-time"}
                           </p>
                         </div>
@@ -922,10 +933,12 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
                       <Label htmlFor="addOnPrice">Price ($)</Label>
                       <Input
                         id="addOnPrice"
+                        min="0"
                         onChange={(e) =>
                           setNewAddOn((prev) => ({ ...prev, price: e.target.value }))
                         }
                         placeholder="150"
+                        step="any"
                         type="number"
                         value={newAddOn.price}
                       />

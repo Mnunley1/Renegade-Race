@@ -32,6 +32,8 @@ import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 import { areVehiclePhotosRequired } from "@/lib/feature-flags"
 import { IMAGE_ACCEPT_ATTR, isAllowedImageFile } from "@/lib/image-validation"
+import { formatRentalUsd } from "@/lib/rental-checkout"
+import { dollarsToCents } from "@/lib/rental-money"
 import { listingImageUploadApi } from "@/lib/vehicle-upload-api"
 
 const ADVANCE_NOTICE_OPTIONS = [
@@ -135,11 +137,7 @@ export default function CreateVehiclePage() {
     setVehicleFormData({
       ...vehicleFormData,
       [name]:
-        name === "year" || name === "dailyRate" || name === "horsepower"
-          ? value === ""
-            ? ""
-            : Number(value)
-          : value,
+        name === "year" || name === "horsepower" ? (value === "" ? "" : Number(value)) : value,
     })
   }
 
@@ -155,7 +153,7 @@ export default function CreateVehiclePage() {
       vehicleFormData.make &&
       vehicleFormData.model &&
       vehicleFormData.year &&
-      vehicleFormData.dailyRate &&
+      (dollarsToCents(vehicleFormData.dailyRate) ?? 0) > 0 &&
       vehicleFormData.description &&
       vehicleFormData.horsepower &&
       vehicleFormData.transmission &&
@@ -246,12 +244,17 @@ export default function CreateVehiclePage() {
 
   // Step 3 Handlers
   const addAddOn = () => {
-    if (newAddOn.name && newAddOn.price) {
+    const price = dollarsToCents(newAddOn.price)
+    if (!newAddOn.name || price === null) {
+      toast.error("Enter an add-on name and a valid nonnegative dollar price")
+      return
+    }
+    if (newAddOn.name) {
       setAddOns((prev) => [
         ...prev,
         {
           name: newAddOn.name,
-          price: Number(newAddOn.price),
+          price,
           description: newAddOn.description,
           isRequired: newAddOn.isRequired,
           priceType: newAddOn.priceType,
@@ -287,6 +290,13 @@ export default function CreateVehiclePage() {
       return
     }
 
+    const dailyRate = dollarsToCents(vehicleFormData.dailyRate)
+    if (dailyRate === null || dailyRate <= 0) {
+      toast.error("Enter a valid daily rate of at least $0.01")
+      setCurrentStep(1)
+      return
+    }
+
     setIsSubmitting(true)
     try {
       await createVehicleWithImages({
@@ -294,7 +304,7 @@ export default function CreateVehiclePage() {
         make: vehicleFormData.make,
         model: vehicleFormData.model,
         year: Number(vehicleFormData.year),
-        dailyRate: Number(vehicleFormData.dailyRate),
+        dailyRate,
         damageDepositAmount: vehicleFormData.damageDepositAmount
           ? Number(vehicleFormData.damageDepositAmount) * 100
           : undefined,
@@ -499,10 +509,12 @@ export default function CreateVehiclePage() {
                 <Label htmlFor="dailyRate">Daily Rate ($) *</Label>
                 <Input
                   id="dailyRate"
+                  min="0.01"
                   name="dailyRate"
                   onChange={handleVehicleChange}
                   placeholder="899"
                   required
+                  step="any"
                   type="number"
                   value={vehicleFormData.dailyRate}
                 />
@@ -732,7 +744,7 @@ export default function CreateVehiclePage() {
                           <p className="text-muted-foreground text-sm">{addOn.description}</p>
                         )}
                         <p className="font-semibold text-primary">
-                          ${addOn.price}
+                          {formatRentalUsd(addOn.price)}
                           {addOn.priceType === "daily" ? "/day" : " one-time"}
                         </p>
                       </div>
@@ -764,8 +776,10 @@ export default function CreateVehiclePage() {
                     <Label htmlFor="addOnPrice">Price ($)</Label>
                     <Input
                       id="addOnPrice"
+                      min="0"
                       onChange={(e) => setNewAddOn((prev) => ({ ...prev, price: e.target.value }))}
                       placeholder="150"
+                      step="any"
                       type="number"
                       value={newAddOn.price}
                     />

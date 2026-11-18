@@ -103,6 +103,31 @@ REN-31 is frontend-only: no Convex deployment or data migration is required.
 Listing price-entry/filter unit boundaries and required add-on validation remain
 separate follow-ups; no rental-date or host-approval rules change here.
 
+## Rental dollar inputs and filters (REN-33)
+
+Editable rental rate and add-on fields contain USD dollar text. Convert with
+`dollarsToCents` in `apps/web/lib/rental-money.ts` when accepting an edit or
+submitting a new value. The helper parses decimal text, rounds half-up to the
+nearest cent, and rejects negative, malformed, or unsafe amounts. New or changed
+daily rates must be positive; free add-ons are allowed. Pending add-on records, onboarding
+drafts, API payloads, and persisted prices remain cents. Render existing values
+with `centsToDollarInput` when opening an editor; never multiply stored records.
+Untouched legacy values are preserved, including fractional-cent records that
+require separate historical review. A formatting change is not a data migration.
+
+Catalog inputs and slider values are dollars, with inclusive cent-valued bounds
+used for comparison. New links use explicit dollar parameters such as
+`priceUsd=10.23-20.00`. Existing `price=1023-2000` links and saved cent-valued
+filter state keep their original meaning. When both URL parameters exist,
+`priceUsd` takes precedence. Clearing price filters removes both parameters.
+Invalid or reversed user input does not replace the current valid filter.
+
+This is a frontend boundary fix with no Convex deployment or stored-data
+correction. Historical listing/draft values need independent evidence before
+remediation; magnitude alone cannot establish whether a host intended dollars
+or cents. Historical reservations and Stripe amounts remain unchanged. Required
+add-on enforcement remains REN-16.
+
 ## Account deletion preflight (REN-18)
 
 Settings calls the authenticated `users.checkUserDeletionEligibility` action before

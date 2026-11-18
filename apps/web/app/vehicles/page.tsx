@@ -14,6 +14,12 @@ import { CompareBar } from "./compare-bar"
 import { CompareModal } from "./compare-modal"
 import { FilterPanel } from "./filter-panel"
 import { MobileFilters } from "./mobile-filters"
+import {
+  matchesPriceBounds,
+  parsePriceRange,
+  priceFilterDollars,
+  readPriceFilter,
+} from "./price-filter"
 import { RecentlyViewed } from "./recently-viewed"
 import { SearchHero } from "./search-hero"
 import type { FilterActions, FilterState, SortOption, VehicleItem, ViewMode } from "./types"
@@ -72,7 +78,7 @@ function VehiclesPageContent() {
       selectedMake: searchParams.get("make") || storedFilters?.selectedMake || "all",
       selectedModel: searchParams.get("model") || storedFilters?.selectedModel || "all",
       selectedDriveType: searchParams.get("drive") || storedFilters?.selectedDriveType || "all",
-      selectedPriceRange: searchParams.get("price") || storedFilters?.selectedPriceRange || "any",
+      selectedPriceRange: readPriceFilter(searchParams, storedFilters?.selectedPriceRange),
       minHorsepower: searchParams.get("minHp") || storedFilters?.minHorsepower || "",
       maxHorsepower: searchParams.get("maxHp") || storedFilters?.maxHorsepower || "",
       selectedTransmission:
@@ -382,8 +388,9 @@ function VehiclesPageContent() {
     if (selectedDriveType !== "all") {
       params.set("drive", selectedDriveType)
     }
-    if (selectedPriceRange !== "any") {
-      params.set("price", selectedPriceRange)
+    const dollarPriceRange = priceFilterDollars(selectedPriceRange)
+    if (dollarPriceRange) {
+      params.set("priceUsd", dollarPriceRange)
     }
     if (minHorsepower) {
       params.set("minHp", minHorsepower)
@@ -499,30 +506,8 @@ function VehiclesPageContent() {
   // Data queries
   const tracksData = useQuery(api.tracks.getAll, {})
 
-  // Translate the price range chip ("$100-$200", "$500+", or "any") into bounds
-  const priceBounds = useMemo<{ min?: number; max?: number }>(() => {
-    if (customPriceRange) {
-      return { min: customPriceRange[0], max: customPriceRange[1] }
-    }
-    if (selectedPriceRange === "any") {
-      return {}
-    }
-    if (selectedPriceRange.endsWith("+")) {
-      const min = Number.parseInt(selectedPriceRange.replace(/\D/g, ""), 10)
-      return Number.isFinite(min) ? { min } : {}
-    }
-    const [rawMin, rawMax] = selectedPriceRange
-      .split("-")
-      .map((p: string) => Number.parseInt(p.replace(/\D/g, ""), 10))
-    const bounds: { min?: number; max?: number } = {}
-    if (Number.isFinite(rawMin)) {
-      bounds.min = rawMin
-    }
-    if (Number.isFinite(rawMax)) {
-      bounds.max = rawMax
-    }
-    return bounds
-  }, [customPriceRange, selectedPriceRange])
+  // Comparisons stay in integer cents; only editable fields and new URLs use dollars.
+  const priceBounds = useMemo(() => parsePriceRange(selectedPriceRange), [selectedPriceRange])
 
   const parsedInt = (s: string) => {
     const n = Number.parseInt(s, 10)
@@ -693,10 +678,7 @@ function VehiclesPageContent() {
       ) {
         return false
       }
-      if (priceBounds.min !== undefined && vehicle.pricePerDay < priceBounds.min) {
-        return false
-      }
-      if (priceBounds.max !== undefined && vehicle.pricePerDay > priceBounds.max) {
+      if (!matchesPriceBounds(vehicle.pricePerDay, priceBounds)) {
         return false
       }
       if (minRating && minRating !== "any" && vehicle.rating < Number.parseFloat(minRating)) {
