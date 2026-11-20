@@ -3,7 +3,7 @@ import { convexTest } from "convex-test"
 import Stripe from "stripe"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import stripeSchema from "../node_modules/@convex-dev/stripe/dist/component/schema.js"
-import { internal } from "./_generated/api"
+import { api, internal } from "./_generated/api"
 import schema from "./schema"
 
 // Use Stripe's real signature verification and SDK, with a test-only HTTP
@@ -145,6 +145,259 @@ async function setup(hosted = false) {
 }
 
 describe("signed rental Stripe webhooks", () => {
+  const expiredSession = (metadata: Record<string, string>) => ({
+    object: "checkout.session",
+    id: "cs_rental",
+    mode: "payment",
+    status: "expired",
+    payment_status: "unpaid",
+    amount_total: 10330,
+    currency: "usd",
+    payment_intent: null,
+    metadata,
+  })
+
+  it.each([
+    "intent",
+    "checkout",
+  ] as const)("reconciles every verified duplicate of a terminal %s and preserves settled or different objects", async (kind) => {
+    const { t, ids, post, intent, metadata } = await setup(kind === "checkout")
+    const copies = await t.run(async ({ db }) => {
+      const payment = await db.get(ids.paymentId)
+      if (!payment) throw new Error("Expected payment")
+      const { _id, _creationTime, ...fields } = payment
+      const pendingId = await db.insert("payments", { ...fields, status: "processing" })
+      const failedId = await db.insert("payments", { ...fields, status: "failed" })
+      const settledId = await db.insert("payments", {
+        ...fields,
+        status: "succeeded",
+        stripeChargeId: "ch_settled",
+      })
+      const unrelatedId = await db.insert("payments", {
+        ...fields,
+        ...(kind === "intent"
+          ? { stripePaymentIntentId: "pi_other" }
+          : { stripeCheckoutSessionId: "cs_other" }),
+      })
+      return {
+        pendingId,
+        failedId,
+        settled: await db.get(settledId),
+        unrelated: await db.get(unrelatedId),
+      }
+    })
+    const type = kind === "intent" ? "payment_intent.canceled" : "checkout.session.expired"
+    expect(
+      (await post(type, "evt_duplicates", kind === "intent" ? intent : expiredSession(metadata)))
+        .status
+    ).toBe(200)
+    expect(
+      (await post(type, "evt_duplicates", kind === "intent" ? intent : expiredSession(metadata)))
+        .status
+    ).toBe(200)
+    for (const id of [ids.paymentId, copies.pendingId, copies.failedId]) {
+      expect(await t.run(({ db }) => db.get(id))).toMatchObject({ status: "cancelled" })
+    }
+    if (!(copies.settled && copies.unrelated)) throw new Error("Expected copies")
+    const { settled, unrelated } = copies
+    expect(await t.run(({ db }) => db.get(settled._id))).toEqual(settled)
+    expect(await t.run(({ db }) => db.get(unrelated._id))).toEqual(unrelated)
+  })
+
+  it.each(
+    (["intent", "checkout"] as const).flatMap((kind) =>
+      ["renterId", "ownerId", "amount", "currency"].map((field) => ({ kind, field }))
+    )
+  )("rejects all terminal $kind writes if a duplicate has mismatched $field", async ({
+    kind,
+    field,
+  }) => {
+    const { t, ids, post, intent, metadata, state } = await setup(kind === "checkout")
+    await t.run(async ({ db }) => {
+      const payment = await db.get(ids.paymentId)
+      if (!payment) throw new Error("Expected payment")
+      const { _id, _creationTime, ...fields } = payment
+      await db.insert("payments", { ...fields, [field]: field === "amount" ? 1 : "wrong" })
+    })
+    const before = await state()
+    const rows = await t.run(({ db }) => db.query("payments").collect())
+    const type = kind === "intent" ? "payment_intent.canceled" : "checkout.session.expired"
+    expect(
+      (await post(type, "evt_bad_duplicate", kind === "intent" ? intent : expiredSession(metadata)))
+        .status
+    ).toBe(500)
+    expect(await state()).toEqual(before)
+    expect(await t.run(({ db }) => db.query("payments").collect())).toEqual(rows)
+  })
+
+  it.each([
+    "intent",
+    "checkout",
+  ] as const)("records signed terminal %s delivery once and requires cancellation before a fresh request", async (kind) => {
+    const { t, ids, post, intent, metadata, state } = await setup(kind === "checkout")
+    const type = kind === "intent" ? "payment_intent.canceled" : "checkout.session.expired"
+    const object = kind === "intent" ? { ...intent, status: "canceled" } : expiredSession(metadata)
+    expect((await post(type, "evt_terminal", object, { secret: "whsec_wrong" })).status).toBe(400)
+    expect((await post(type, "evt_connected", object, { account: "acct_other" })).status).toBe(200)
+    expect((await state()).payment?.status).toBe("pending")
+    expect((await post(type, "evt_terminal", object)).status).toBe(200)
+    expect((await post(type, "evt_terminal", object)).status).toBe(200)
+    const result = await state()
+    expect(result.payment?.status).toBe("cancelled")
+    expect(result.reservation).toMatchObject({ status: "approved", paymentStatus: "failed" })
+    expect(result.receipts.filter((r) => r.eventId === "evt_terminal")).toHaveLength(1)
+    expect(result.notifications).toEqual([])
+    await expect(
+      t.query(internal.stripe.assertRentalPaymentAvailable, {
+        reservationId: ids.reservationId,
+        renterId: ids.renterId,
+      })
+    ).rejects.toThrow("PAYMENT_ATTEMPT_TERMINAL")
+    await t
+      .withIdentity({ subject: ids.renterId })
+      .mutation(api.reservations.cancel, { reservationId: ids.reservationId })
+    expect((await state()).reservation?.status).toBe("cancelled")
+    await t.finishAllScheduledFunctions(vi.runAllTimers)
+  })
+
+  it.each([
+    "pending",
+    "processing",
+    "failed",
+  ] as const)("expires an unpaid checkout from %s", async (status) => {
+    const { t, ids, post, metadata, state } = await setup(true)
+    await t.run(({ db }) => db.patch(ids.paymentId, { status }))
+    expect(
+      (await post("checkout.session.expired", "evt_expired", expiredSession(metadata))).status
+    ).toBe(200)
+    expect((await state()).payment?.status).toBe("cancelled")
+  })
+
+  it("uses terminal evidence for an unambiguous legacy attempt without a pointer", async () => {
+    const { t, ids, post, metadata, state } = await setup(true)
+    await t.run(({ db }) => db.patch(ids.reservationId, { paymentId: undefined }))
+    expect(
+      (await post("checkout.session.expired", "evt_legacy", expiredSession(metadata))).status
+    ).toBe(200)
+    expect((await state()).reservation).toMatchObject({
+      status: "approved",
+      paymentStatus: "failed",
+    })
+  })
+
+  it("preserves a later signed capture after an out-of-order expiry", async () => {
+    const { t, post, metadata, intent, state } = await setup(true)
+    const session = expiredSession(metadata)
+    expect((await post("checkout.session.expired", "evt_expired", session)).status).toBe(200)
+    expect(
+      (
+        await post("checkout.session.completed", "evt_completed", {
+          ...session,
+          status: "complete",
+          payment_status: "paid",
+          payment_intent: intent.id,
+        })
+      ).status
+    ).toBe(200)
+    expect((await post("payment_intent.succeeded", "evt_captured", intent)).status).toBe(200)
+    expect((await post("checkout.session.expired", "evt_late_expiry", session)).status).toBe(200)
+    expect((await state()).payment).toMatchObject({
+      status: "succeeded",
+      stripeChargeId: "ch_rental",
+    })
+    expect((await state()).reservation).toMatchObject({
+      status: "confirmed",
+      paymentStatus: "paid",
+    })
+    await t.finishAllScheduledFunctions(vi.runAllTimers)
+  })
+
+  it.each([
+    "renterId",
+    "ownerId",
+    "currency",
+    "amount",
+  ])("rejects cancellation evidence with mismatched %s", async (field) => {
+    const { post, intent, state } = await setup()
+    const object =
+      field === "renterId" || field === "ownerId"
+        ? { ...intent, metadata: { ...intent.metadata, [field]: "wrong" } }
+        : { ...intent, [field]: field === "amount" ? 1 : "eur" }
+    expect((await post("payment_intent.canceled", "evt_bad_cancel", object)).status).toBe(500)
+    expect((await state()).payment?.status).toBe("pending")
+    expect((await state()).receipts).toEqual([])
+  })
+
+  it.each([
+    "succeeded",
+    "partially_refunded",
+    "refunded",
+  ] as const)("does not downgrade a %s checkout after late expiry or cancellation", async (status) => {
+    const { t, ids, post, metadata, intent, state } = await setup(true)
+    await t.run(async ({ db }) => {
+      await db.patch(ids.paymentId, {
+        status,
+        stripePaymentIntentId: intent.id,
+        stripeChargeId: "ch_rental",
+      })
+      await db.patch(ids.reservationId, {
+        status: "confirmed",
+        paymentStatus: status === "succeeded" ? "paid" : status,
+      })
+    })
+    const before = await state()
+    expect(
+      (await post("checkout.session.expired", "evt_expired", expiredSession(metadata))).status
+    ).toBe(200)
+    expect((await post("payment_intent.canceled", "evt_cancel", intent)).status).toBe(200)
+    const after = await state()
+    expect(after.payment).toEqual(before.payment)
+    expect(after.reservation).toEqual(before.reservation)
+  })
+
+  it.each([
+    "id",
+    "renterId",
+    "ownerId",
+    "reservationId",
+    "currency",
+    "amount_total",
+    "mode",
+    "status",
+    "payment_status",
+  ])("rejects expired checkout with mismatched %s without recording it", async (field) => {
+    const { post, metadata, state } = await setup(true)
+    const session = expiredSession(metadata)
+    const object = ["renterId", "ownerId", "reservationId"].includes(field)
+      ? { ...session, metadata: { ...metadata, [field]: "wrong" } }
+      : { ...session, [field]: field === "amount_total" ? 1 : "wrong" }
+    expect((await post("checkout.session.expired", "evt_bad", object)).status).toBe(500)
+    const result = await state()
+    expect(result.payment?.status).toBe("pending")
+    expect(result.reservation?.paymentStatus).toBe("pending")
+    expect(result.receipts).toEqual([])
+  })
+
+  it.each([
+    true,
+    false,
+  ])("does not overwrite a newer attempt when old checkout expires (pointer=%s)", async (hasPointer) => {
+    const { t, ids, post, metadata, state } = await setup(true)
+    await t.run(async ({ db }) => {
+      const old = await db.get(ids.paymentId)
+      if (!old) throw new Error("Missing payment")
+      const { _id, _creationTime, ...fields } = old
+      const newId = await db.insert("payments", { ...fields, stripeCheckoutSessionId: "cs_new" })
+      await db.patch(ids.reservationId, { paymentId: hasPointer ? newId : undefined })
+    })
+    const before = (await state()).reservation
+    expect(
+      (await post("checkout.session.expired", "evt_expired", expiredSession(metadata))).status
+    ).toBe(200)
+    expect((await state()).payment?.status).toBe("cancelled")
+    expect((await state()).reservation).toEqual(before)
+  })
+
   it("rejects an invalid signature and confirms a matching capture exactly once", async () => {
     const { t, post, intent, state } = await setup()
     expect(

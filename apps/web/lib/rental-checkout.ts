@@ -35,3 +35,10 @@ export function getRentalQuoteError(error: unknown): string | null {
   }
   return null
 }
+
+export function isTerminalRentalPaymentError(error: unknown): boolean {
+  return (
+    (error instanceof ConvexError && error.data?.code === "PAYMENT_ATTEMPT_TERMINAL") ||
+    (error instanceof Error && error.message.includes("PAYMENT_ATTEMPT_TERMINAL"))
+  )
+}

@@ -379,6 +379,88 @@ describe("account deletion ownership", () => {
     expect(await t.run(({ db }) => db.get(reservationId))).toMatchObject({ status: "cancelled" })
   })
 
+  it.each(
+    (["renter", "owner"] as const).flatMap((role) =>
+      (["intent", "checkout"] as const).flatMap((kind) =>
+        [true, false].map((terminalFirst) => ({ role, kind, terminalFirst }))
+      )
+    )
+  )("resolves $role deletion only after booking cancellation and terminal $kind evidence (terminal first=$terminalFirst)", async ({
+    role,
+    kind,
+    terminalFirst,
+  }) => {
+    vi.useFakeTimers()
+    const { t, self } = await setup()
+    try {
+      const { reservationId, paymentId } = await rentalFixture(t, role, {
+        paymentStatus: "pending",
+      })
+      if (!paymentId) throw new Error("Expected payment")
+      const payment = await t.run(async ({ db }) => {
+        await db.patch(reservationId, { paymentId, paymentStatus: "pending" })
+        await db.patch(
+          paymentId,
+          kind === "intent"
+            ? { stripePaymentIntentId: "pi_terminal" }
+            : { stripeCheckoutSessionId: "cs_terminal" }
+        )
+        return await db.get(paymentId)
+      })
+      if (!payment) throw new Error("Expected payment")
+      const duplicateId = await t.run(({ db }) => {
+        const { _id, _creationTime, ...fields } = payment
+        return db.insert("payments", fields)
+      })
+      const terminal = () =>
+        kind === "intent"
+          ? t.mutation(internal.stripe.ingestRentalPaymentEvent, {
+              reservationId,
+              renterId: payment.renterId,
+              ownerId: payment.ownerId,
+              currency: "usd",
+              amount: 1000,
+              stripePaymentIntentId: "pi_terminal",
+              eventId: "evt_terminal",
+              eventType: "payment_intent.canceled",
+            })
+          : t.mutation(internal.stripe.ingestRentalCheckoutExpired, {
+              reservationId,
+              renterId: payment.renterId,
+              ownerId: payment.ownerId,
+              currency: "usd",
+              amount: 1000,
+              stripeCheckoutSessionId: "cs_terminal",
+              eventId: "evt_terminal",
+              mode: "payment",
+              status: "expired",
+              paymentStatus: "unpaid",
+            })
+      expect((await self.action(api.users.checkUserDeletionEligibility, {})).canDelete).toBe(false)
+      if (terminalFirst) {
+        await terminal()
+        expect((await self.action(api.users.checkUserDeletionEligibility, {})).canDelete).toBe(
+          false
+        )
+      }
+      await self.mutation(api.reservations.cancel, { reservationId })
+      if (!terminalFirst) {
+        expect((await self.action(api.users.checkUserDeletionEligibility, {})).canDelete).toBe(
+          false
+        )
+        await terminal()
+      }
+      expect((await self.action(api.users.checkUserDeletionEligibility, {})).canDelete).toBe(true)
+      expect(await t.run(({ db }) => db.get(paymentId))).toMatchObject({ status: "cancelled" })
+      expect(await t.run(({ db }) => db.get(duplicateId))).toMatchObject({ status: "cancelled" })
+      const jobs = await t.run(({ db }) => db.system.query("_scheduled_functions").collect())
+      expect(jobs.some((job) => job.name.includes("processRefundOnCancellation"))).toBe(false)
+    } finally {
+      await t.finishAllScheduledFunctions(vi.runAllTimers)
+      vi.useRealTimers()
+    }
+  })
+
   const unsettledCases = (["renter", "owner"] as const).flatMap((role) =>
     (["pending", "processing"] as const).flatMap((paymentStatus) =>
       (

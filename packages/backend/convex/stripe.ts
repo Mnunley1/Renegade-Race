@@ -663,6 +663,40 @@ function assertRentalAwaitingPayment(
   }
 }
 
+function assertPaymentAttemptRetryable(payment: Doc<"payments">) {
+  if (payment.status === "cancelled") {
+    throwError(
+      ErrorCode.PAYMENT_ATTEMPT_TERMINAL,
+      "This payment attempt has ended. Cancel this unpaid booking and submit a fresh rental request for host approval."
+    )
+  }
+}
+
+async function assertCurrentRentalAttempt(ctx: QueryCtx, reservation: Doc<"reservations">) {
+  const payments = reservation.paymentId
+    ? [await ctx.db.get(reservation.paymentId)]
+    : await ctx.db
+        .query("payments")
+        .withIndex("by_reservation", (q) => q.eq("reservationId", reservation._id))
+        .collect()
+  for (const payment of payments) {
+    if (
+      !payment ||
+      payment.reservationId !== reservation._id ||
+      payment.renterId !== reservation.renterId ||
+      payment.ownerId !== reservation.ownerId ||
+      payment.amount !== reservation.totalAmount ||
+      payment.currency !== "usd"
+    ) {
+      throwError(
+        ErrorCode.CONFLICT,
+        "Current payment does not match this booking. Contact support."
+      )
+    }
+    assertPaymentAttemptRetryable(payment)
+  }
+}
+
 export const assertRentalPaymentAvailable = internalQuery({
   args: { reservationId: v.id("reservations"), renterId: v.string() },
   handler: async (ctx, args) => {
@@ -671,6 +705,7 @@ export const assertRentalPaymentAvailable = internalQuery({
       throwError(ErrorCode.FORBIDDEN, "Payment reservation does not match the renter")
     }
     assertRentalAwaitingPayment(reservation)
+    await assertCurrentRentalAttempt(ctx, reservation)
     await assertRentalDatesAvailable(ctx, {
       vehicleId: reservation.vehicleId,
       startDate: reservation.startDate,
@@ -1141,12 +1176,15 @@ export const createPaymentRecord = internalMutation({
       ) {
         throwError(ErrorCode.CONFLICT, "Stripe payment is linked to a different booking or amount")
       }
+      await assertCurrentRentalAttempt(ctx, reservation)
+      assertPaymentAttemptRetryable(existing)
       return existing._id
     }
     if (!(args.stripePaymentIntentId || args.stripeCheckoutSessionId)) {
       throwError(ErrorCode.INVALID_INPUT, "A Stripe payment intent or checkout session is required")
     }
     assertRentalAwaitingPayment(reservation)
+    await assertCurrentRentalAttempt(ctx, reservation)
 
     const paymentId = await ctx.db.insert("payments", {
       reservationId: args.reservationId,
@@ -1268,6 +1306,110 @@ async function getRentalReservation(ctx: MutationCtx, reservationId: string) {
   return reservation
 }
 
+async function isCurrentRentalPayment(
+  ctx: QueryCtx,
+  reservation: Doc<"reservations">,
+  payment: Doc<"payments">
+) {
+  if (reservation.paymentId) return reservation.paymentId === payment._id
+  // Legacy rows without a pointer are safe only when the attempt is unambiguous.
+  const attempts = await ctx.db
+    .query("payments")
+    .withIndex("by_reservation", (q) => q.eq("reservationId", reservation._id))
+    .take(2)
+  return attempts.length === 1 && attempts[0]?._id === payment._id
+}
+
+async function reconcileTerminalRentalAttempt(
+  ctx: MutationCtx,
+  reservation: Doc<"reservations">,
+  payments: Doc<"payments">[],
+  evidence: RentalEventFields & {
+    eventId: string
+    eventType: "payment_intent.canceled" | "checkout.session.expired"
+    failureReason?: string
+  }
+) {
+  // Every row is selected by the exact signed Stripe object. Validate all of
+  // them before changing any: a conflicting legacy binding needs manual review.
+  if (evidence.currency !== "usd" || !payments.length) {
+    throw new Error("Stripe event does not match the rental payment")
+  }
+  for (const payment of payments) verifyRentalPayment(payment, reservation, evidence)
+  await ctx.runMutation(internal.webhookIdempotency.recordWebhookEvent, {
+    eventId: evidence.eventId,
+    source: "stripe",
+    eventType: evidence.eventType,
+  })
+  const unsettled = payments.filter((payment) =>
+    ["pending", "processing", "failed"].includes(payment.status)
+  )
+  const now = Date.now()
+  for (const payment of unsettled) {
+    await ctx.db.patch(payment._id, {
+      status: "cancelled",
+      failureReason: evidence.failureReason,
+      updatedAt: now,
+    })
+  }
+  let isCurrent = unsettled.some((payment) => payment._id === reservation.paymentId)
+  if (!reservation.paymentId && unsettled.length) {
+    const attempts = await ctx.db
+      .query("payments")
+      .withIndex("by_reservation", (q) => q.eq("reservationId", reservation._id))
+      .collect()
+    // No pointer is safe only when all ledger rows describe this unpaid object.
+    isCurrent = attempts.every((attempt) =>
+      unsettled.some((payment) => payment._id === attempt._id)
+    )
+  }
+  if (
+    isCurrent &&
+    reservation.status === "approved" &&
+    (!reservation.paymentStatus || ["pending", "failed"].includes(reservation.paymentStatus))
+  )
+    await ctx.db.patch(reservation._id, { paymentStatus: "failed", updatedAt: now })
+}
+
+export const ingestRentalCheckoutExpired = internalMutation({
+  args: {
+    ...rentalEventFields,
+    stripeCheckoutSessionId: v.string(),
+    mode: v.string(),
+    status: v.string(),
+    paymentStatus: v.string(),
+    eventId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    if (
+      await ctx.runQuery(internal.webhookIdempotency.checkWebhookEvent, {
+        eventId: args.eventId,
+        source: "stripe",
+      })
+    )
+      return
+    if (
+      args.mode !== "payment" ||
+      args.status !== "expired" ||
+      args.paymentStatus !== "unpaid" ||
+      args.currency !== "usd"
+    )
+      throw new Error("Invalid expired rental checkout evidence")
+    const reservation = await getRentalReservation(ctx, args.reservationId)
+    const payments = await ctx.db
+      .query("payments")
+      .withIndex("by_stripe_checkout_session", (q) =>
+        q.eq("stripeCheckoutSessionId", args.stripeCheckoutSessionId)
+      )
+      .collect()
+    await reconcileTerminalRentalAttempt(ctx, reservation, payments, {
+      ...args,
+      eventType: "checkout.session.expired",
+      failureReason: "Checkout session expired",
+    })
+  },
+})
+
 export const bindRentalCheckoutIntent = internalMutation({
   args: {
     ...rentalEventFields,
@@ -1361,6 +1503,19 @@ export const ingestRentalPaymentEvent = internalMutation({
     )
       return
     const reservation = await getRentalReservation(ctx, args.reservationId)
+    if (args.eventType === "payment_intent.canceled") {
+      const payments = await ctx.db
+        .query("payments")
+        .withIndex("by_stripe_payment_intent", (q) =>
+          q.eq("stripePaymentIntentId", args.stripePaymentIntentId)
+        )
+        .collect()
+      await reconcileTerminalRentalAttempt(ctx, reservation, payments, {
+        ...args,
+        eventType: "payment_intent.canceled",
+      })
+      return
+    }
     const payment = await paymentForIntent(ctx, args.stripePaymentIntentId, reservation._id)
     verifyRentalPayment(payment, reservation, args)
     await ctx.runMutation(internal.webhookIdempotency.recordWebhookEvent, {
@@ -1483,31 +1638,24 @@ export const ingestRentalPaymentEvent = internalMutation({
       return
     }
 
-    if (
-      payment.status !== "pending" &&
-      payment.status !== "processing" &&
-      !(payment.status === "failed" && args.eventType === "payment_intent.canceled")
-    )
-      return
-    const canceled = args.eventType === "payment_intent.canceled"
+    if (payment.status !== "pending" && payment.status !== "processing") return
     await ctx.db.patch(payment._id, {
-      status: canceled ? "cancelled" : "failed",
+      status: "failed",
       failureReason: args.failureReason,
       updatedAt: now,
     })
     if (
-      (reservation.paymentId == null || reservation.paymentId === payment._id) &&
+      (await isCurrentRentalPayment(ctx, reservation, payment)) &&
       reservation.status === "approved" &&
       (reservation.paymentStatus === "pending" ||
         reservation.paymentStatus === "failed" ||
         !reservation.paymentStatus)
     ) {
       await ctx.db.patch(reservation._id, { paymentStatus: "failed", updatedAt: now })
-      if (!canceled)
-        await notifyRentalPayment(ctx, payment, reservation, {
-          succeeded: false,
-          failureReason: args.failureReason,
-        })
+      await notifyRentalPayment(ctx, payment, reservation, {
+        succeeded: false,
+        failureReason: args.failureReason,
+      })
     }
   },
 })
