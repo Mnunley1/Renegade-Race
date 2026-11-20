@@ -728,6 +728,10 @@ function VehiclesPageContent() {
   )
   const hasMore = visibleCount < filteredVehicles.length
   const isLoadingMore = false
+  const isLoading =
+    vehiclesData === undefined ||
+    tracksData === undefined ||
+    (!!minRating && minRating !== "any" && vehiclesData.length > 0 && vehicleStats === undefined)
 
   // Reset to the first page whenever the filtered set changes due to a filter or
   // sort change (not when more data merely streams in from Convex).
@@ -943,7 +947,7 @@ function VehiclesPageContent() {
               filteredVehicles={filteredVehicles}
               filterState={filterState}
               hasMore={hasMore}
-              isLoading={vehiclesData === undefined || tracksData === undefined}
+              isLoading={isLoading}
               isLoadingMore={isLoadingMore}
               itemsPerPage={itemsPerPage}
               loadMore={loadMore}
@@ -953,6 +957,7 @@ function VehiclesPageContent() {
                   activeFiltersCount={activeFiltersCount}
                   filteredCount={filteredVehicles.length}
                   filters={filterState}
+                  isLoading={isLoading}
                   tracks={tracks}
                   vehicles={vehicles}
                 />
@@ -962,7 +967,6 @@ function VehiclesPageContent() {
               setSortBy={(s) => setSortBy(s as SortOption)}
               setViewMode={setViewMode}
               sortBy={sortBy}
-              vehicles={vehicles}
               viewMode={viewMode}
             />
           </div>

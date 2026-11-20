@@ -21,6 +21,7 @@ type MobileFiltersProps = {
   vehicles: VehicleItem[]
   activeFiltersCount: number
   filteredCount?: number
+  isLoading?: boolean
 }
 
 export function MobileFilters({
@@ -30,6 +31,7 @@ export function MobileFilters({
   vehicles,
   activeFiltersCount,
   filteredCount = 0,
+  isLoading = false,
 }: MobileFiltersProps) {
   const [open, setOpen] = useState(false)
 
@@ -72,8 +74,10 @@ export function MobileFilters({
 
         {/* Sticky footer with result count */}
         <div className="shrink-0 border-t bg-background px-5 py-3">
-          <Button className="w-full" onClick={() => setOpen(false)} size="lg">
-            Show {filteredCount} vehicle{filteredCount === 1 ? "" : "s"}
+          <Button className="w-full" disabled={isLoading} onClick={() => setOpen(false)} size="lg">
+            {isLoading
+              ? "Loading listings…"
+              : `Show ${filteredCount} matching ${filteredCount === 1 ? "listing" : "listings"}`}
           </Button>
         </div>
       </SheetContent>

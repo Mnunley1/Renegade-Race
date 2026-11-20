@@ -233,3 +233,33 @@ Validate the profile ownership, return evidence and onboarding ownership suites
 against the reconciled backend and the production-compatible patch before a
 separately approved backend release. Other public media writers are tracked in
 REN-30; reservation attachment validation remains REN-25.
+
+## Catalog request states (REN-10)
+
+The catalog count means matching listings in the returned search set, after
+client filters and before local pagination. It includes coming-soon listings;
+it is not a count of guaranteed bookings or available rental dates. The existing
+backend search cap of 500 remains unchanged. Catalog and mobile-filter counts
+show loading until their required queries resolve, including review statistics
+when a rating filter is active. Empty searches show recovery controls instead of
+claiming the platform has no available inventory.
+
+Grid and list cards use the same server readiness flag as vehicle details:
+`true` means **Ready to request**, `false` means **Coming soon**, and an absent
+flag makes no readiness claim and disables the detail request action. Cards
+remain links to **View details**. Ready detail pages offer **Request rental** and
+explain that host approval precedes payment. Selecting dates alone never adds an
+**Available** badge. Existing date filtering, overlapping request rules, and
+payment ownership checks are unchanged; request readiness is not a guarantee
+that a payment will pass the later Stripe checks.
+
+PR #33 already shipped PR #32's visibility change and the coming-soon gate.
+The remaining unmerged PR #32 work is an interest table, cooldown/rate limit,
+host notification/email, and Notify me UI. Its copy promises renter emails when
+readiness changes, but that follow-up delivery was not implemented. REN-10 does
+not import this separate feature or reintroduce Stripe account fields into
+public owner profiles. Preserve PR #32 for a separately scoped decision.
+
+Before a production release, verify slow initial loading, a zero-result search,
+coming-soon and ready listings in grid/list and desktop/mobile details, plus
+unchanged date propagation into checkout. No schema migration is required.

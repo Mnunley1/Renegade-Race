@@ -116,7 +116,7 @@ describe("catalog dollar input and cent filtering", () => {
   it("formats the empty-results price badge in dollars and clears it", () => {
     navigation.params = new URLSearchParams("q=no-matching-vehicle&priceUsd=10.23-10.23")
     render(<VehiclesPage />)
-    expect(screen.getByRole("heading", { name: "No vehicles found" })).toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "No matching listings" })).toBeInTheDocument()
     const priceBadges = screen.getAllByText("Price: $10.23–$10.23/day")
     expect(priceBadges).toHaveLength(2)
     expect(screen.queryByText("Price: 1023-1023")).not.toBeInTheDocument()
