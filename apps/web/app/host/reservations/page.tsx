@@ -22,6 +22,7 @@ import { useMemo, useState } from "react"
 import { RentalQuoteSummary } from "@/components/rental-quote-summary"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
+import { formatDateForDisplay } from "@/lib/date-utils"
 import { handleErrorWithContext } from "@/lib/error-handler"
 import { r2Url } from "@/lib/r2-url"
 import { formatRentalUsd, getRentalQuoteError } from "@/lib/rental-checkout"
@@ -70,14 +71,7 @@ function getStatusBadge(status: string) {
   }
 }
 
-function formatDate(dateString: string | number) {
-  const date = new Date(dateString)
-  return date.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  })
-}
+const formatDate = formatDateForDisplay
 
 // Shared thumbnail + name + meta header used by every reservation row.
 function VehicleThumb({ imageKey, alt }: { imageKey?: string | null; alt: string }) {

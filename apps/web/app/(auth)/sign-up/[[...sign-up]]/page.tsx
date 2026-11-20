@@ -9,15 +9,16 @@ import { Label } from "@workspace/ui/components/label"
 import { Separator } from "@workspace/ui/components/separator"
 import { ArrowRight, Eye, EyeOff, Lock, Mail, User } from "lucide-react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { Suspense, useState } from "react"
+import { authReturnLink, safeReturnPath } from "@/lib/auth-return"
 import { handleError } from "@/lib/error-handler"
 
 type ClerkError = {
   errors?: Array<{ message: string }>
 }
 
-export default function SignUpPage() {
+function SignUpPageContent() {
   const { signUp, isLoaded, setActive } = useSignUp()
   const [firstName, setFirstName] = useState("")
   const [lastName, setLastName] = useState("")
@@ -28,6 +29,8 @@ export default function SignUpPage() {
   const [error, setError] = useState("")
   const [termsAccepted, setTermsAccepted] = useState(false)
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const redirectUrl = safeReturnPath(searchParams.get("redirect_url"))
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -66,7 +69,7 @@ export default function SignUpPage() {
               strategy: "email_code",
             })
             // Redirect to verification page
-            router.push("/verify-email")
+            router.push(authReturnLink("/verify-email", redirectUrl))
           } catch (verifyErr: unknown) {
             const verifyError = verifyErr as ClerkError
             handleError(verifyError, { showToast: false })
@@ -76,21 +79,21 @@ export default function SignUpPage() {
             )
             setIsLoading(false)
             // Still redirect to verification page so user can resend
-            setTimeout(() => router.push("/verify-email"), 2000)
+            setTimeout(() => router.push(authReturnLink("/verify-email", redirectUrl)), 2000)
           }
         } else {
           // If sign-up is complete, redirect to home
-          router.push("/")
+          router.push(redirectUrl)
         }
       } else if (result.status === "complete") {
         // Sign-up is complete, set active session
         if (result.createdSessionId && setActive) {
           await setActive({ session: result.createdSessionId })
         }
-        router.push("/")
+        router.push(redirectUrl)
       } else {
         // Unknown status, redirect to verification page as fallback
-        router.push("/verify-email")
+        router.push(authReturnLink("/verify-email", redirectUrl))
       }
     } catch (err: unknown) {
       const clerkError = err as ClerkError
@@ -266,8 +269,8 @@ export default function SignUpPage() {
                 if (signUp) {
                   signUp.authenticateWithRedirect({
                     strategy: "oauth_google",
-                    redirectUrl: "/",
-                    redirectUrlComplete: "/",
+                    redirectUrl: authReturnLink("/sso-callback", redirectUrl),
+                    redirectUrlComplete: redirectUrl,
                   })
                 }
               }}
@@ -303,7 +306,7 @@ export default function SignUpPage() {
               <span className="text-muted-foreground">Already have an account? </span>
               <Link
                 className="font-medium text-primary transition-colors hover:text-primary/80"
-                href="/sign-in"
+                href={authReturnLink("/sign-in", redirectUrl)}
               >
                 Sign in
               </Link>
@@ -332,5 +335,13 @@ export default function SignUpPage() {
         </CardFooter>
       </Card>
     </div>
+  )
+}
+
+export default function SignUpPage() {
+  return (
+    <Suspense fallback={<p>Loading...</p>}>
+      <SignUpPageContent />
+    </Suspense>
   )
 }

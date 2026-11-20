@@ -10,35 +10,10 @@ import { ArrowRight, Eye, EyeOff, Lock, Mail } from "lucide-react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { Suspense, useEffect, useMemo, useState } from "react"
+import { authReturnLink, safeReturnPath } from "@/lib/auth-return"
 
 type ClerkError = {
   errors?: Array<{ message: string }>
-}
-
-// Helper function to safely get redirect URL
-function getRedirectUrl(searchParams: URLSearchParams): string {
-  const redirectUrl = searchParams.get("redirect_url")
-  if (!redirectUrl) return "/"
-
-  // Decode the URL
-  const decoded = decodeURIComponent(redirectUrl)
-
-  // Ensure it's a relative path (starts with /) and doesn't contain protocol
-  if (decoded.startsWith("/") && !decoded.includes("://")) {
-    // Block protocol-relative URLs and backslash bypasses
-    if (
-      decoded.startsWith("//") ||
-      decoded.includes("\\") ||
-      decoded.includes("\n") ||
-      decoded.includes("\r")
-    ) {
-      return "/"
-    }
-    return decoded
-  }
-
-  // Fallback to home if invalid
-  return "/"
 }
 
 function SignInPageContent() {
@@ -52,7 +27,10 @@ function SignInPageContent() {
   const searchParams = useSearchParams()
 
   // Memoize redirect URL to avoid recalculating
-  const redirectUrl = useMemo(() => getRedirectUrl(searchParams), [searchParams])
+  const redirectUrl = useMemo(
+    () => safeReturnPath(searchParams.get("redirect_url")),
+    [searchParams]
+  )
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -186,7 +164,7 @@ function SignInPageContent() {
                 if (signIn) {
                   signIn.authenticateWithRedirect({
                     strategy: "oauth_google",
-                    redirectUrl: "/",
+                    redirectUrl: authReturnLink("/sso-callback", redirectUrl),
                     redirectUrlComplete: redirectUrl,
                   })
                 }
@@ -222,7 +200,7 @@ function SignInPageContent() {
             <span className="text-muted-foreground">Don't have an account? </span>
             <Link
               className="font-medium text-primary transition-colors hover:text-primary/80"
-              href="/sign-up"
+              href={authReturnLink("/sign-up", redirectUrl)}
             >
               Sign up
             </Link>
