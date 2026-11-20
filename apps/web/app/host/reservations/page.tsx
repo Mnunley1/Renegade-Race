@@ -19,11 +19,12 @@ import {
 import Image from "next/image"
 import Link from "next/link"
 import { useMemo, useState } from "react"
+import { RentalQuoteSummary } from "@/components/rental-quote-summary"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 import { r2Url } from "@/lib/r2-url"
-import { formatRentalUsd } from "@/lib/rental-checkout"
+import { formatRentalUsd, getRentalQuoteError } from "@/lib/rental-checkout"
 
 const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=400"
 
@@ -166,6 +167,12 @@ function ReservationRow({
           </div>
         </div>
 
+        {(status === "pending" || status === "approved") && (
+          <div className="mt-4 rounded-lg border p-3">
+            <RentalQuoteSummary quote={reservation} />
+          </div>
+        )}
+
         <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
           <p className="mr-auto font-semibold text-primary text-sm sm:hidden">{amount}</p>
           {status === "pending" && (
@@ -219,6 +226,7 @@ function ReservationRow({
 
 export default function HostReservationsPage() {
   const { user } = useUser()
+  const [approvalError, setApprovalError] = useState<string | null>(null)
   const [selectedStatus, setSelectedStatus] = useState<string>("all")
 
   // Fetch reservations from Convex
@@ -304,11 +312,19 @@ export default function HostReservationsPage() {
       : allReservations.filter((res: any) => res.status === selectedStatus)
 
   const handleApprove = async (reservationId: string) => {
+    setApprovalError(null)
     try {
       await approveReservation({
         reservationId: reservationId as Id<"reservations">,
       })
     } catch (error) {
+      const quoteError = getRentalQuoteError(error)
+      if (quoteError) {
+        setApprovalError(
+          "This booking's quote cannot be verified. Ask the renter to submit a new request for approval; this booking has not been repriced."
+        )
+        return
+      }
       handleErrorWithContext(error, {
         action: "approve reservation",
         customMessages: {
@@ -361,6 +377,15 @@ export default function HostReservationsPage() {
           Manage booking requests and confirmed reservations
         </p>
       </div>
+
+      {approvalError && (
+        <div
+          className="mb-6 rounded-lg border border-destructive p-4 text-destructive text-sm"
+          role="alert"
+        >
+          {approvalError}
+        </div>
+      )}
 
       {pendingReturnsCount > 0 && (
         <div className="mb-6 flex flex-col gap-3 rounded-xl border border-orange-200 bg-orange-50/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-orange-900/50 dark:bg-orange-950/20">

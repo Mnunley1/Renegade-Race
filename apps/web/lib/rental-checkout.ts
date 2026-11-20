@@ -1,3 +1,4 @@
+import { ConvexError } from "convex/values"
 import { inclusiveRentalDays } from "@/lib/date-utils"
 
 export function calculateRentalEstimate(
@@ -21,4 +22,16 @@ export function formatRentalUsd(cents: number) {
     style: "currency",
     currency: "USD",
   })
+}
+
+export function getRentalQuoteError(error: unknown): string | null {
+  if (error instanceof ConvexError && error.data?.code === "PRICE_CHANGED") {
+    return typeof error.data.message === "string"
+      ? error.data.message
+      : "This booking's quote cannot be verified. Please submit a new rental request for host approval."
+  }
+  if (error instanceof Error && error.message.includes("PRICE_CHANGED")) {
+    return "This booking's quote cannot be verified. Please submit a new rental request for host approval."
+  }
+  return null
 }
