@@ -546,7 +546,7 @@ describe("signed rental Stripe webhooks", () => {
     )
   })
 
-  it("routes a custom invoice through the invoice handlers even if a rental references its intent", async () => {
+  it("routes a verified current invoice payment even if a rental references its intent", async () => {
     const { t, post, intent, state } = await setup()
     const invoiceId = await t.run((ctx) =>
       ctx.db.insert("invoices", {
@@ -565,26 +565,111 @@ describe("signed rental Stripe webhooks", () => {
         updatedAt: Date.now(),
       })
     )
-    const invoiceIntent = { ...intent, metadata: { type: "custom_invoice", invoiceId } }
+    const invoiceIntent = {
+      ...intent,
+      customer: "cus_invoice",
+      transfer_data: { destination: "acct_invoice" },
+      metadata: { type: "custom_invoice", invoiceId },
+    }
+    let providerIntent = { ...invoiceIntent }
+    let providerStatus = "open"
+    stripeFetch.mockImplementation((input) => {
+      const url = new URL(String(input))
+      let object: unknown
+      if (url.pathname === "/v1/invoice_payments")
+        object = {
+          object: "list",
+          has_more: false,
+          data:
+            url.searchParams.get("payment[payment_intent]") === "pi_unrelated"
+              ? []
+              : [
+                  {
+                    id: "inpay_invoice",
+                    invoice: "in_custom",
+                    is_default: true,
+                    status: providerStatus === "paid" ? "paid" : "open",
+                    currency: "usd",
+                    amount_requested: 10330,
+                    amount_paid: providerStatus === "paid" ? 10330 : null,
+                    payment: { type: "payment_intent", payment_intent: intent.id },
+                  },
+                ],
+        }
+      else if (url.pathname === "/v1/invoices/in_custom")
+        object = {
+          id: "in_custom",
+          status: providerStatus,
+          customer: "cus_invoice",
+          total: 10330,
+          currency: "usd",
+          amount_due: 10330,
+          amount_paid: providerStatus === "paid" ? 10330 : 0,
+          metadata: { type: "custom_invoice", invoiceId, senderId: "host", recipientId: "renter" },
+        }
+      else if (url.pathname === `/v1/payment_intents/${intent.id}`) object = providerIntent
+      else if (url.pathname === "/v1/customers/cus_invoice")
+        object = { id: "cus_invoice", metadata: { userId: "renter" } }
+      else if (url.pathname === "/v1/accounts/acct_invoice")
+        object = { id: "acct_invoice", type: "express", metadata: { renegadeUserId: "host" } }
+      else if (url.pathname === "/v1/charges/ch_rental")
+        object = {
+          id: "ch_rental",
+          paid: true,
+          captured: true,
+          amount: 10330,
+          amount_captured: 10330,
+          currency: "usd",
+          customer: "cus_invoice",
+          payment_intent: intent.id,
+          transfer_data: { destination: "acct_invoice" },
+        }
+      else throw new Error("Unexpected invoice provider request")
+      return Promise.resolve(
+        new Response(JSON.stringify(object), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        })
+      )
+    })
     const invoice = () => t.run((ctx) => ctx.db.get(invoiceId))
-
-    for (const [event, candidate, options] of [
-      ["wrong_intent", { ...invoiceIntent, id: "pi_unrelated" }, {}],
-      ["connected", invoiceIntent, { account: "acct_other" }],
-      ["wrong_amount", { ...invoiceIntent, amount_received: 1 }, {}],
-      ["wrong_currency", { ...invoiceIntent, currency: "eur" }, {}],
+    expect(
+      (
+        await post("payment_intent.succeeded", "wrong_intent", {
+          ...invoiceIntent,
+          id: "pi_unrelated",
+        })
+      ).status
+    ).toBe(500)
+    expect(
+      (
+        await post("payment_intent.succeeded", "connected", invoiceIntent, {
+          account: "acct_other",
+        })
+      ).status
+    ).toBe(200)
+    for (const [id, evidence] of [
+      ["wrong_amount", { ...invoiceIntent, amount_received: 1 }],
+      ["wrong_currency", { ...invoiceIntent, currency: "eur" }],
     ] as const) {
-      expect((await post("payment_intent.succeeded", event, candidate, options)).status).toBe(200)
+      providerIntent = evidence
+      providerStatus = "paid"
+      expect((await post("payment_intent.succeeded", id, evidence)).status).toBe(500)
       expect((await invoice())?.status).toBe("sent")
     }
+    providerIntent = { ...invoiceIntent, status: "processing" }
+    providerStatus = "open"
     expect(
       (await post("payment_intent.processing", "evt_invoice_processing", invoiceIntent)).status
     ).toBe(200)
     expect((await invoice())?.status).toBe("processing")
+    providerIntent = { ...invoiceIntent, status: "requires_payment_method" }
     expect(
       (await post("payment_intent.payment_failed", "evt_invoice_failed", invoiceIntent)).status
     ).toBe(200)
     expect((await invoice())?.status).toBe("payment_pending")
+    providerIntent = invoiceIntent
+    providerStatus = "paid"
     expect((await post("payment_intent.succeeded", "evt_invoice_paid", invoiceIntent)).status).toBe(
       200
     )
