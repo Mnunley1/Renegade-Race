@@ -14,11 +14,11 @@ import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import { Separator } from "@workspace/ui/components/separator"
 import { useAction, useMutation, useQuery } from "convex/react"
-import { ArrowLeft, Banknote, CreditCard, ExternalLink, Loader2, RotateCcw } from "lucide-react"
-import Link from "next/link"
+import { Banknote, CreditCard, ExternalLink, Loader2, RotateCcw } from "lucide-react"
 import { useParams } from "next/navigation"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
+import { PageHeader, PageShell } from "@/components/page-layout"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
@@ -50,21 +50,29 @@ export default function InvoiceDetailPage() {
 
   if (invoice === undefined) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <Loader2 className="size-8 animate-spin text-muted-foreground" />
-      </div>
+      <PageShell>
+        <PageHeader backLink={{ href: "/deals/invoices", label: "Invoices" }} title="Invoice" />
+        <div
+          aria-label="Loading invoice"
+          className="flex items-center justify-center gap-2 py-12"
+          role="status"
+        >
+          <Loader2 className="size-6 animate-spin text-muted-foreground" />
+          <span>Loading invoice…</span>
+        </div>
+      </PageShell>
     )
   }
 
   if (!invoice) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-8">
-        <Card>
-          <CardContent className="py-12 text-center">
-            <p className="font-semibold text-xl">Invoice not found</p>
-          </CardContent>
-        </Card>
-      </div>
+      <PageShell>
+        <PageHeader
+          backLink={{ href: "/deals/invoices", label: "Invoices" }}
+          description="This invoice is unavailable or you do not have access to it."
+          title="Invoice not found"
+        />
+      </PageShell>
     )
   }
 
@@ -139,40 +147,36 @@ export default function InvoiceDetailPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6">
-      <div className="mb-6 flex items-center gap-4">
-        <Link href="/deals/invoices">
-          <Button size="sm" variant="ghost">
-            <ArrowLeft className="mr-2 size-4" />
-            Invoices
-          </Button>
-        </Link>
-        <div className="flex-1">
-          <h1 className="font-bold text-2xl tracking-tight md:text-3xl">{invoice.title}</h1>
-          <p className="text-muted-foreground text-sm">
-            {invoice.sender?.name || "Provider"} to {invoice.recipient?.name || "Recipient"}
-          </p>
-        </div>
-        <Badge variant="outline">{statusLabel(invoice.status)}</Badge>
-      </div>
+    <PageShell>
+      <PageHeader
+        actions={<Badge variant="outline">{statusLabel(invoice.status)}</Badge>}
+        backLink={{ href: "/deals/invoices", label: "Invoices" }}
+        description={`${invoice.sender?.name || "Provider"} to ${invoice.recipient?.name || "Recipient"}`}
+        title={invoice.title}
+      />
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
-        <Card>
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <Card className="min-w-0">
           <CardHeader>
             <CardTitle>Invoice details</CardTitle>
-            {invoice.description && <CardDescription>{invoice.description}</CardDescription>}
+            {invoice.description && (
+              <CardDescription className="break-words">{invoice.description}</CardDescription>
+            )}
           </CardHeader>
           <CardContent className="space-y-5">
             <div className="space-y-3">
               {invoice.lineItems.map((item, index) => (
-                <div className="flex items-start justify-between gap-4" key={index}>
-                  <div>
-                    <p className="font-medium">{item.description}</p>
+                <div
+                  className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4"
+                  key={index}
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="break-words font-medium">{item.description}</p>
                     <p className="text-muted-foreground text-sm">
                       {item.quantity} × {formatCurrency(item.unitAmount)}
                     </p>
                   </div>
-                  <p className="font-semibold">{formatCurrency(item.amount)}</p>
+                  <p className="shrink-0 font-semibold">{formatCurrency(item.amount)}</p>
                 </div>
               ))}
             </div>
@@ -207,7 +211,7 @@ export default function InvoiceDetailPage() {
                   <span>{formatCurrency(invoice.processingFee || 0)}</span>
                 </div>
               ) : null}
-              {invoice.amountDue ? (
+              {invoice.amountDue !== undefined && invoice.amountDue !== null ? (
                 <div className="flex justify-between font-semibold">
                   <span>Amount due</span>
                   <span>{formatCurrency(invoice.amountDue)}</span>
@@ -237,7 +241,7 @@ export default function InvoiceDetailPage() {
               <CardContent className="space-y-3">
                 {invoice.paymentMethods.includes("stripe_card") && (
                   <Button
-                    className="h-auto w-full justify-start p-4"
+                    className="h-auto w-full justify-start whitespace-normal p-4"
                     disabled={isChoosing !== null || invoice.selectedPaymentMethod === "stripe_ach"}
                     onClick={() => handleChoosePayment("stripe_card")}
                     variant="outline"
@@ -247,7 +251,7 @@ export default function InvoiceDetailPage() {
                     ) : (
                       <CreditCard className="mr-3 size-5" />
                     )}
-                    <span className="text-left">
+                    <span className="min-w-0 break-words text-left">
                       <span className="block font-semibold">Pay by card</span>
                       <span className="text-muted-foreground text-sm">
                         {formatCurrency(cardTotal)}
@@ -261,7 +265,7 @@ export default function InvoiceDetailPage() {
 
                 {invoice.paymentMethods.includes("stripe_ach") && (
                   <Button
-                    className="h-auto w-full justify-start p-4"
+                    className="h-auto w-full justify-start whitespace-normal p-4"
                     disabled={
                       isChoosing !== null || invoice.selectedPaymentMethod === "stripe_card"
                     }
@@ -273,7 +277,7 @@ export default function InvoiceDetailPage() {
                     ) : (
                       <Banknote className="mr-3 size-5" />
                     )}
-                    <span className="text-left">
+                    <span className="min-w-0 break-words text-left">
                       <span className="block font-semibold">Pay by ACH Direct Debit</span>
                       <span className="text-muted-foreground text-sm">
                         {formatCurrency(achTotal)}
@@ -350,6 +354,6 @@ export default function InvoiceDetailPage() {
           )}
         </div>
       </div>
-    </div>
+    </PageShell>
   )
 }
