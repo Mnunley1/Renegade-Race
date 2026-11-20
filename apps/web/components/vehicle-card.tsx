@@ -160,7 +160,7 @@ export function VehicleCard({
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/75 via-black/20 to-transparent" />
 
       {/* Top Badges */}
-      <div className="absolute top-3 left-3 z-10 flex flex-wrap gap-2">
+      <div className="absolute top-3 right-14 left-3 z-10 flex flex-wrap gap-2">
         {track && (
           <Badge className="border border-white/15 bg-black/55 text-white text-xs backdrop-blur-md hover:bg-black/55">
             {track}
