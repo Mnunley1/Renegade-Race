@@ -51,6 +51,7 @@ import { use, useEffect, useState } from "react"
 import { toast } from "sonner"
 import { DriverCard } from "@/components/driver-card"
 import { DriverEndorsements } from "@/components/driver-endorsements"
+import { DriverFollowControl } from "@/components/driver-follow-control"
 import { DriverPortfolio } from "@/components/driver-portfolio"
 import { ProfileAnalytics } from "@/components/profile-analytics"
 import { useAccountActivity, useAccountAuth } from "@/hooks/useAccountAuth"
@@ -412,6 +413,7 @@ function DriverDetailContent({
                   )}
                 </div>
               </div>
+              <DriverFollowControl followedUserId={driverProfile.userId} profileId={profileId} />
             </CardHeader>
             <CardContent className="space-y-6">
               <div>
