@@ -22,9 +22,11 @@ import Image from "next/image"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Suspense, useEffect, useState } from "react"
+import { authReturnLink } from "@/lib/auth-return"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import {
+  endDateFromDuration,
   formatDateToISO,
   inclusiveRentalDays,
   isValidRentalDuration,
@@ -32,6 +34,13 @@ import {
 } from "@/lib/date-utils"
 import { r2Url } from "@/lib/r2-url"
 import { calculateRentalEstimate, formatRentalUsd } from "@/lib/rental-checkout"
+import {
+  clearRentalDraft,
+  isDateOnly,
+  loadRentalDraft,
+  type RentalDraft,
+  saveRentalDraft,
+} from "@/lib/rental-draft"
 
 interface AddOn {
   name: string
@@ -44,7 +53,7 @@ interface AddOn {
 function CheckoutPageContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
-  const { isSignedIn, user } = useUser()
+  const { isSignedIn, user, isLoaded } = useUser()
   const vehicleId = searchParams.get("vehicleId")
   const startDateParam = searchParams.get("startDate")
   const endDateParam = searchParams.get("endDate")
@@ -68,15 +77,22 @@ function CheckoutPageContent() {
 
   const [pickupDate, setPickupDate] = useState<Date | undefined>(undefined)
   const [pickupTime, setPickupTime] = useState("")
-  const [dropoffDate, setDropoffDate] = useState<Date | undefined>(undefined)
+  const [duration, setDuration] = useState<number | null>(1)
+  const endDateValue =
+    pickupDate && duration ? endDateFromDuration(formatDateToISO(pickupDate), duration) : null
+  const dropoffDate = endDateValue ? (parseLocalDate(endDateValue) ?? undefined) : undefined
   const [dropoffTime, setDropoffTime] = useState("")
   const [openPickupDate, setOpenPickupDate] = useState(false)
-  const [openDropoffDate, setOpenDropoffDate] = useState(false)
   const [renterMessage, setRenterMessage] = useState("")
-  const [selectedAddOns, setSelectedAddOns] = useState<AddOn[]>(() => {
-    // Auto-select required add-ons if vehicle is loaded
-    return vehicle?.addOns?.filter((addOn: AddOn) => addOn.isRequired) || []
-  })
+  const [selectedAddOnNames, setSelectedAddOnNames] = useState<string[]>([])
+  const selectedAddOns: AddOn[] = (vehicle?.addOns ?? []).filter(
+    (addOn: AddOn) => addOn.isRequired || selectedAddOnNames.includes(addOn.name)
+  )
+  const [initializedVehicle, setInitializedVehicle] = useState<string | null>(null)
+  const [initializedOwner, setInitializedOwner] = useState<string | null | undefined>(undefined)
+  const currentOwner = user?.id ?? null
+  const [draftNotice, setDraftNotice] = useState<string | null>(null)
+  const [storageUnavailable, setStorageUnavailable] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const startDate = pickupDate ? formatDateToISO(pickupDate) : null
@@ -98,38 +114,116 @@ function CheckoutPageContent() {
   else if (rangeAvailability?.isAvailable === false)
     availabilityMessage = "These dates are unavailable. Choose another rental period."
 
-  // Update selected add-ons when vehicle loads
+  const resumeDraft = searchParams.get("resume") === "1"
   useEffect(() => {
-    if (vehicle?.addOns) {
-      const requiredAddOns = vehicle.addOns.filter((addOn: AddOn) => addOn.isRequired)
-      if (requiredAddOns.length > 0) {
-        setSelectedAddOns(requiredAddOns)
-      }
+    if (
+      !(vehicleId && isLoaded) ||
+      (initializedVehicle === vehicleId && initializedOwner === currentOwner)
+    )
+      return
+    const draft = loadRentalDraft(vehicleId, user?.id ?? null)
+    let initialDate = draft?.startDate ? (parseLocalDate(draft.startDate) ?? undefined) : undefined
+    let initialDuration: number | null = draft ? draft.duration : 1
+    let dateError: string | null = null
+    if (!(resumeDraft && draft) && (startDateParam || endDateParam)) {
+      const days =
+        startDateParam && endDateParam ? inclusiveRentalDays(startDateParam, endDateParam) : 0
+      const validStart = isDateOnly(startDateParam) && startDateParam >= formatDateToISO(new Date())
+      initialDate = validStart ? (parseLocalDate(startDateParam) ?? undefined) : undefined
+      initialDuration =
+        validStart && isDateOnly(endDateParam) && isValidRentalDuration(days) ? days : null
+      if (initialDuration === null)
+        dateError =
+          "Those dates are not supported. Choose a future pickup date and a rental of 1, 2, or 3 calendar days."
     }
-  }, [vehicle?.addOns])
+    setPickupDate(initialDate)
+    setDuration(initialDuration)
+    setPickupTime(draft?.pickupTime ?? "")
+    setDropoffTime(draft?.dropoffTime ?? "")
+    setSelectedAddOnNames(draft?.selectedAddOnNames ?? [])
+    setRenterMessage(draft?.renterMessage ?? "")
+    setError(dateError)
+    setDraftNotice(
+      draft
+        ? "Your saved choices are restored. Review the current prices, required add-ons, and date availability before submitting."
+        : null
+    )
+    setInitializedVehicle(vehicleId)
+    setInitializedOwner(currentOwner)
+  }, [
+    vehicleId,
+    isLoaded,
+    user?.id,
+    initializedVehicle,
+    initializedOwner,
+    currentOwner,
+    resumeDraft,
+    startDateParam,
+    endDateParam,
+  ])
 
-  // Initialize dates from URL params if provided
   useEffect(() => {
-    if (startDateParam && endDateParam && !pickupDate && !dropoffDate) {
-      const startDate = parseLocalDate(startDateParam)
-      const endDate = parseLocalDate(endDateParam)
+    if (initializedVehicle !== vehicleId) return
+    const requiredNames = (vehicle?.addOns ?? [])
+      .filter((addOn: AddOn) => addOn.isRequired)
+      .map((addOn: AddOn) => addOn.name)
+    setSelectedAddOnNames((names) =>
+      requiredNames.every((name: string) => names.includes(name))
+        ? names
+        : [...new Set([...names, ...requiredNames])]
+    )
+  }, [vehicle?.addOns, vehicleId, initializedVehicle])
 
-      if (startDate && endDate) {
-        // Set to midnight local time
-        startDate.setHours(0, 0, 0, 0)
-        endDate.setHours(0, 0, 0, 0)
-
-        // Only set if dates are valid and in the future
-        const today = new Date()
-        today.setHours(0, 0, 0, 0)
-
-        if (startDate >= today && endDate >= startDate) {
-          setPickupDate(startDate)
-          setDropoffDate(endDate)
-        }
+  const draft: RentalDraft | null = vehicleId
+    ? {
+        version: 1,
+        vehicleId,
+        ownerId: user?.id ?? null,
+        savedAt: Date.now(),
+        startDate,
+        duration,
+        pickupTime,
+        dropoffTime,
+        selectedAddOnNames,
+        renterMessage,
       }
-    }
-  }, [startDateParam, endDateParam, pickupDate, dropoffDate])
+    : null
+  useEffect(() => {
+    if (
+      !vehicleId ||
+      initializedVehicle !== vehicleId ||
+      initializedOwner !== currentOwner ||
+      isSubmitting
+    )
+      return
+    setStorageUnavailable(
+      !saveRentalDraft({
+        version: 1,
+        vehicleId,
+        ownerId: user?.id ?? null,
+        savedAt: Date.now(),
+        startDate,
+        duration,
+        pickupTime,
+        dropoffTime,
+        selectedAddOnNames,
+        renterMessage,
+      })
+    )
+  }, [
+    vehicleId,
+    initializedVehicle,
+    initializedOwner,
+    currentOwner,
+    user?.id,
+    startDate,
+    duration,
+    pickupTime,
+    dropoffTime,
+    selectedAddOnNames,
+    renterMessage,
+    isSubmitting,
+  ])
 
   // Generate time options (every 30 minutes from 6 AM to 10 PM)
   const generateTimeOptions = () => {
@@ -158,7 +252,6 @@ function CheckoutPageContent() {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   const minPickupDate = today
-  const minDropoffDate = pickupDate || today
 
   // Get blocked dates from availability (where isAvailable is false)
   const blockedDates =
@@ -188,13 +281,9 @@ function CheckoutPageContent() {
   const toggleAddOn = (addOn: AddOn) => {
     if (addOn.isRequired) return // Can't deselect required add-ons
 
-    setSelectedAddOns((prev) => {
-      const isSelected = prev.some((selected) => selected.name === addOn.name)
-      if (isSelected) {
-        return prev.filter((selected) => selected.name !== addOn.name)
-      }
-      return [...prev, addOn]
-    })
+    setSelectedAddOnNames((prev) =>
+      prev.includes(addOn.name) ? prev.filter((name) => name !== addOn.name) : [...prev, addOn.name]
+    )
   }
 
   // Calculate total days and price
@@ -215,7 +304,14 @@ function CheckoutPageContent() {
 
   const handleSubmitRequest = async () => {
     if (!(isSignedIn && user?.id)) {
-      router.push(`/sign-in?redirect_url=${encodeURIComponent(window.location.href)}`)
+      if (!(draft && saveRentalDraft(draft))) {
+        setError(
+          "Your browser could not save this rental draft. Enable session storage before signing in so your choices can be restored."
+        )
+        return
+      }
+      const returnPath = `/checkout?${new URLSearchParams({ vehicleId: vehicleId ?? "", resume: "1" })}`
+      router.push(authReturnLink("/sign-in", returnPath))
       return
     }
 
@@ -264,6 +360,7 @@ function CheckoutPageContent() {
         addOns: reservationAddOns,
       })
 
+      if (vehicleId) clearRentalDraft(vehicleId)
       // Redirect to request confirmation page
       router.push(`/checkout/request-sent?reservationId=${newReservationId}`)
     } catch (err) {
@@ -273,7 +370,7 @@ function CheckoutPageContent() {
   }
 
   // Show loading state
-  if (!vehicle && vehicleId) {
+  if (vehicle === undefined && vehicleId) {
     return (
       <div className="container mx-auto max-w-4xl px-4 py-8">
         <div className="flex min-h-[60vh] items-center justify-center">
@@ -289,7 +386,7 @@ function CheckoutPageContent() {
   }
 
   // Show error if no vehicle
-  if (!(vehicle || vehicleId)) {
+  if (!vehicle) {
     return (
       <div className="container mx-auto max-w-4xl px-4 py-8">
         <Card>
@@ -314,7 +411,11 @@ function CheckoutPageContent() {
   const primaryImage =
     (primaryImageData?.r2Key ? r2Url(primaryImageData.r2Key) : primaryImageData?.imageUrl) || ""
   const isValid =
+    isLoaded &&
+    initializedVehicle === vehicleId &&
+    initializedOwner === currentOwner &&
     pickupDate &&
+    formatDateToISO(pickupDate) >= formatDateToISO(today) &&
     dropoffDate &&
     pickupTime &&
     dropoffTime &&
@@ -407,17 +508,6 @@ function CheckoutPageContent() {
                           if (date) {
                             setPickupDate(date)
                             setError(null)
-                            if (
-                              dropoffDate &&
-                              !isValidRentalDuration(
-                                inclusiveRentalDays(
-                                  formatDateToISO(date),
-                                  formatDateToISO(dropoffDate)
-                                )
-                              )
-                            ) {
-                              setDropoffDate(undefined)
-                            }
                             setOpenPickupDate(false)
                           }
                         }}
@@ -456,75 +546,50 @@ function CheckoutPageContent() {
 
               {/* Dropoff Date and Time */}
               <div className="space-y-4">
-                <div>
-                  <Label className="mb-2 flex items-center gap-2" htmlFor="dropoff-date">
-                    <CalendarIcon className="size-4" />
-                    Dropoff Date
-                  </Label>
-                  <Popover onOpenChange={setOpenDropoffDate} open={openDropoffDate}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        className="h-11 w-full justify-between px-3 py-2 font-normal"
-                        id="dropoff-date"
-                        variant="outline"
-                      >
-                        {dropoffDate
-                          ? dropoffDate.toLocaleDateString("en-US", {
-                              day: "2-digit",
-                              month: "short",
-                              year: "numeric",
-                            })
-                          : "Select date"}
-                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent align="start" className="w-auto p-0">
-                      <Calendar
-                        disabled={(date: Date) => {
-                          const dateStart = new Date(date)
-                          dateStart.setHours(0, 0, 0, 0)
-                          const minDate = new Date(minDropoffDate)
-                          minDate.setHours(0, 0, 0, 0)
-                          return (
-                            availability === undefined ||
-                            activeReservations === undefined ||
-                            dateStart < minDate ||
-                            isRangeUnavailable(minDate, dateStart) ||
-                            (pickupDate !== undefined &&
-                              !isValidRentalDuration(
-                                inclusiveRentalDays(
-                                  formatDateToISO(pickupDate),
-                                  formatDateToISO(dateStart)
-                                )
-                              ))
-                          )
-                        }}
-                        initialFocus
-                        mode="single"
-                        modifiers={{
-                          blocked: blockedDates,
-                        }}
-                        modifiersClassNames={{
-                          blocked: "bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400",
-                        }}
-                        onSelect={(date) => {
-                          if (date) {
-                            setDropoffDate(date)
+                <fieldset className="space-y-2">
+                  <legend className="font-medium text-sm">Rental duration</legend>
+                  <div className="flex gap-2">
+                    {[1, 2, 3].map((days) => {
+                      const end = pickupDate
+                        ? endDateFromDuration(formatDateToISO(pickupDate), days)
+                        : null
+                      const lastDay = end ? parseLocalDate(end) : null
+                      const unavailable =
+                        !(pickupDate && lastDay) ||
+                        availability === undefined ||
+                        activeReservations === undefined ||
+                        isRangeUnavailable(pickupDate, lastDay)
+                      return (
+                        <Button
+                          aria-pressed={duration === days}
+                          disabled={unavailable}
+                          key={days}
+                          onClick={() => {
+                            setDuration(days)
                             setError(null)
-                            setOpenDropoffDate(false)
-                          }
-                        }}
-                        selected={dropoffDate}
-                      />
-                    </PopoverContent>
-                  </Popover>
-                  {blockedDates.length > 0 && (
-                    <div className="mt-2 flex items-center gap-2 text-muted-foreground text-xs">
-                      <div className="size-3 rounded bg-red-100 dark:bg-red-900/20" />
-                      <span>Host-blocked dates cannot be requested.</span>
-                    </div>
-                  )}
-                </div>
+                          }}
+                          type="button"
+                          variant={duration === days ? "default" : "outline"}
+                        >
+                          {days} {days === 1 ? "day" : "days"}
+                        </Button>
+                      )
+                    })}
+                  </div>
+                  <p className="text-muted-foreground text-sm">
+                    Pickup and dropoff days both count. Friday through Sunday is 3 days.
+                  </p>
+                  <p className="text-sm">
+                    Dropoff date:{" "}
+                    {dropoffDate
+                      ? dropoffDate.toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })
+                      : "Choose a pickup date and duration"}
+                  </p>
+                </fieldset>
                 <div>
                   <Label className="mb-2 flex items-center gap-2" htmlFor="dropoff-time">
                     <Clock className="size-4" />
@@ -683,8 +748,25 @@ function CheckoutPageContent() {
                 </output>
               )}
 
+              {draftNotice && <p className="text-sm">{draftNotice}</p>}
+              {selectedAddOnNames.some(
+                (name) => !(vehicle.addOns ?? []).some((addOn: AddOn) => addOn.name === name)
+              ) && (
+                <p className="text-sm">
+                  An add-on you selected is no longer available and has been removed from the quote.
+                </p>
+              )}
+              {storageUnavailable && (
+                <p className="text-sm">
+                  Your browser cannot save these choices for later. Keep this page open until your
+                  request is submitted.
+                </p>
+              )}
               {error && (
-                <div className="rounded-lg border border-destructive bg-destructive/10 p-3 text-destructive text-sm">
+                <div
+                  className="rounded-lg border border-destructive bg-destructive/10 p-3 text-destructive text-sm"
+                  role="alert"
+                >
                   {error}
                 </div>
               )}
@@ -700,8 +782,10 @@ function CheckoutPageContent() {
                     <Loader2 className="mr-2 size-4 animate-spin" />
                     Submitting...
                   </>
-                ) : (
+                ) : isSignedIn ? (
                   "Submit Request"
+                ) : (
+                  "Sign in to continue"
                 )}
               </Button>
             </CardContent>

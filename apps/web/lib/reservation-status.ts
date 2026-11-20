@@ -1,3 +1,5 @@
+import { parseLocalDate } from "@/lib/date-utils"
+
 export type ReservationStatus =
   | "pending"
   | "approved"
@@ -50,9 +52,9 @@ export function formatBookingDateRange(
   endDate: string | null | undefined
 ): string | null {
   if (!(startDate && endDate)) return null
-  const start = new Date(startDate)
-  const end = new Date(endDate)
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null
+  const start = parseLocalDate(startDate)
+  const end = parseLocalDate(endDate)
+  if (!(start && end)) return null
 
   const sameMonth = start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear()
   const startLabel = start.toLocaleDateString(undefined, { month: "short", day: "numeric" })

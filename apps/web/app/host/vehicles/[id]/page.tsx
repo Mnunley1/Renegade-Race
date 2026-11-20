@@ -49,6 +49,7 @@ import { toast } from "sonner"
 import { VehicleGallery } from "@/components/vehicle-gallery"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
+import { formatDateForDisplay, formatDateToISO } from "@/lib/date-utils"
 import { handleErrorWithContext } from "@/lib/error-handler"
 import { formatRentalUsd } from "@/lib/rental-checkout"
 
@@ -104,7 +105,7 @@ export default function HostVehicleDetailPage() {
   )
 
   const upcomingReservations = useMemo(() => {
-    const today = new Date().toISOString().split("T")[0]
+    const today = formatDateToISO(new Date())
     return confirmedReservations.filter((res: any) => res.startDate >= (today ?? "")).slice(0, 3)
   }, [confirmedReservations])
 
@@ -217,14 +218,7 @@ export default function HostVehicleDetailPage() {
     )
   }
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    return date.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    })
-  }
+  const formatDate = formatDateForDisplay
 
   const handleDeleteVehicle = async () => {
     setIsDeleting(true)

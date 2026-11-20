@@ -1088,6 +1088,10 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
 
                   <div className="space-y-2">
                     <Label htmlFor="maxTripDuration">Maximum trip duration</Label>
+                    <p className="text-muted-foreground text-sm">
+                      Rental checkout allows 1–3 calendar days, including pickup and dropoff. This
+                      legacy preference does not override that rule.
+                    </p>
                     <Select onValueChange={setMaxTripDuration} value={maxTripDuration}>
                       <SelectTrigger id="maxTripDuration">
                         <SelectValue />
