@@ -39,6 +39,7 @@ vi.mock("@workspace/ui/components/dialog", () => ({
   Dialog: ({ children, open }: { children: ReactNode; open: boolean }) =>
     open ? <div role="dialog">{children}</div> : null,
   DialogContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  DialogTitle: ({ children }: { children: ReactNode }) => <h2>{children}</h2>,
 }))
 
 const origin = "https://public.example.test"
