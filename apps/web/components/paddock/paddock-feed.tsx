@@ -11,6 +11,7 @@ import { useMutation, useQuery } from "convex/react"
 import { Flame, Heart, MessageCircle, Send, Trophy, UserPlus } from "lucide-react"
 import Link from "next/link"
 import { useMemo, useState } from "react"
+import { PublicAuthorLink } from "@/components/paddock/public-author-link"
 import { api } from "@/lib/convex"
 import { r2Url } from "@/lib/r2-url"
 
@@ -235,12 +236,7 @@ function FeedItem({ item }: { item: any }) {
             <AvatarFallback>{item.author?.name?.[0] ?? "?"}</AvatarFallback>
           </Avatar>
           <div className="min-w-0 flex-1 break-words">
-            <Link
-              className="font-semibold text-sm hover:underline"
-              href={`/profile/${item.author?.userId}`}
-            >
-              {item.author?.name ?? "Driver"}
-            </Link>
+            <PublicAuthorLink author={item.author} />
             <p className="text-muted-foreground text-xs">{relative}</p>
           </div>
           {item.featuredUntil && item.featuredUntil > Date.now() && (
@@ -259,6 +255,7 @@ function FeedItem({ item }: { item: any }) {
             <span>{item.reactionCount ?? 0}</span>
           </button>
           <Link
+            aria-label={`View discussion (${item.commentCount ?? 0} comments)`}
             className="flex items-center gap-1 transition-colors hover:text-foreground"
             href={`/paddock/${item._id}`}
           >

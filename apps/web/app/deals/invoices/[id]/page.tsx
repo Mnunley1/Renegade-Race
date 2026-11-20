@@ -1,6 +1,5 @@
 "use client"
 
-import { useUser } from "@clerk/nextjs"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import {
@@ -18,7 +17,9 @@ import { Banknote, CreditCard, ExternalLink, Loader2, RotateCcw } from "lucide-r
 import { useParams } from "next/navigation"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
+import { AccountAuthBoundary } from "@/components/account-auth-boundary"
 import { PageHeader, PageShell } from "@/components/page-layout"
+import { useAccountActivity } from "@/hooks/useAccountAuth"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
@@ -28,10 +29,14 @@ const formatCurrency = (cents: number) =>
 
 const statusLabel = (status: string) => status.replace(/_/g, " ")
 
-export default function InvoiceDetailPage() {
-  const params = useParams()
-  const invoiceId = params.id as Id<"invoices">
-  const { user } = useUser()
+function InvoiceDetailContent({
+  invoiceId,
+  user,
+}: {
+  invoiceId: Id<"invoices">
+  user: { id: string }
+}) {
+  const isCurrentAccount = useAccountActivity()
   const invoice = useQuery(api.invoices.getById, { invoiceId })
   const markViewed = useMutation(api.invoices.markViewed)
   const choosePaymentMethod = useAction(api.invoices.choosePaymentMethod)
@@ -99,15 +104,17 @@ export default function InvoiceDetailPage() {
     setIsChoosing(paymentMethod)
     try {
       const result = await choosePaymentMethod({ invoiceId, paymentMethod })
+      if (!isCurrentAccount()) return
       if (result.url) {
         window.location.href = result.url
       } else {
         toast.success("Payment link created")
       }
     } catch (error) {
+      if (!isCurrentAccount()) return
       handleErrorWithContext(error, { action: "create invoice payment link" })
     } finally {
-      setIsChoosing(null)
+      if (isCurrentAccount()) setIsChoosing(null)
     }
   }
 
@@ -115,12 +122,14 @@ export default function InvoiceDetailPage() {
     setIsOpening(true)
     try {
       const url = await openHostedInvoice({ invoiceId })
+      if (!isCurrentAccount()) return
       if (url) window.location.href = url
       else toast.error("Stripe has not provided an invoice link yet.")
     } catch (error) {
+      if (!isCurrentAccount()) return
       handleErrorWithContext(error, { action: "open Stripe invoice" })
     } finally {
-      setIsOpening(false)
+      if (isCurrentAccount()) setIsOpening(false)
     }
   }
 
@@ -132,6 +141,7 @@ export default function InvoiceDetailPage() {
       const requestId = sessionStorage.getItem(key) || crypto.randomUUID()
       sessionStorage.setItem(key, requestId)
       const result = await refundDeposit({ invoiceId, amount, requestId })
+      if (!isCurrentAccount()) return
       sessionStorage.removeItem(key)
       if (result.status === "failed" || result.status === "canceled") {
         toast.error("Stripe declined this refund. You can try again.")
@@ -140,9 +150,10 @@ export default function InvoiceDetailPage() {
       toast.success(result.status === "succeeded" ? "Deposit refunded" : "Deposit refund pending")
       setRefundAmount("")
     } catch (error) {
+      if (!isCurrentAccount()) return
       handleErrorWithContext(error, { action: "refund deposit" })
     } finally {
-      setIsRefunding(false)
+      if (isCurrentAccount()) setIsRefunding(false)
     }
   }
 
@@ -213,10 +224,16 @@ export default function InvoiceDetailPage() {
               ) : null}
               {invoice.amountDue !== undefined && invoice.amountDue !== null ? (
                 <div className="flex justify-between font-semibold">
-                  <span>Amount due</span>
+                  <span>{invoice.status === "paid" ? "Amount paid" : "Amount due"}</span>
                   <span>{formatCurrency(invoice.amountDue)}</span>
                 </div>
               ) : null}
+              {invoice.status === "paid" && (
+                <div className="flex justify-between font-semibold">
+                  <span>Remaining balance</span>
+                  <span>{formatCurrency(0)}</span>
+                </div>
+              )}
             </div>
 
             {invoice.hasHostedInvoice && (
@@ -355,5 +372,18 @@ export default function InvoiceDetailPage() {
         </div>
       </div>
     </PageShell>
+  )
+}
+
+export default function InvoiceDetailPage() {
+  const params = useParams()
+  const invoiceId = params.id as Id<"invoices">
+  return (
+    <AccountAuthBoundary
+      loadingLabel="Connecting to your invoice..."
+      signedOutDescription="You need to be signed in to view this invoice."
+    >
+      {(user) => <InvoiceDetailContent invoiceId={invoiceId} key={invoiceId} user={user} />}
+    </AccountAuthBoundary>
   )
 }
