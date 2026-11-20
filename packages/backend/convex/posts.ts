@@ -3,8 +3,8 @@ import type { Doc, Id } from "./_generated/dataModel"
 import { mutation, type QueryCtx, query } from "./_generated/server"
 import { logActivityEventInternal } from "./activity"
 import { requirePublicMediaUpload } from "./r2"
-import { getCurrentUser, getCurrentUserOrThrow } from "./users"
 import { publicDisplayName } from "./userProfile"
+import { getCurrentUser, getCurrentUserOrThrow } from "./users"
 
 const REACTION_TYPES = [
   v.literal("like"),
@@ -51,7 +51,7 @@ export const createPost = mutation({
           q.eq("teamId", args.teamId as Id<"teams">).eq("userId", user.externalId)
         )
         .first()
-      if (!(isOwner || membership)) {
+      if (!(isOwner || membership?.status === "active")) {
         throw new Error("Not authorized to post on behalf of this team")
       }
     }
@@ -208,24 +208,15 @@ export const listFeed = query({
     const limit = Math.min(args.limit ?? FEED_PAGE_SIZE, 100)
     const me = await getCurrentUser(ctx)
 
-    let posts: Doc<"posts">[]
-    if (args.scope === "following" && me) {
-      const followedIds = await getFollowedUserIds(ctx, me.externalId)
-      followedIds.add(me.externalId)
-      const all = await ctx.db
-        .query("posts")
-        .withIndex("by_created")
-        .order("desc")
-        .take(limit * 4)
-      posts = all.filter((p) => !p.isDeleted && followedIds.has(p.authorId)).slice(0, limit)
-    } else {
-      posts = await ctx.db
-        .query("posts")
-        .withIndex("by_created")
-        .order("desc")
-        .filter((q) => q.neq(q.field("isDeleted"), true))
-        .take(limit)
+    if (args.scope === "following") {
+      return me ? await followingFeed(ctx, me.externalId, limit) : []
     }
+    const posts = await ctx.db
+      .query("posts")
+      .withIndex("by_created")
+      .order("desc")
+      .filter((q) => q.neq(q.field("isDeleted"), true))
+      .take(limit)
 
     const enrichedPosts = await Promise.all(posts.map((p) => enrichPost(ctx, p)))
 
@@ -233,7 +224,7 @@ export const listFeed = query({
       return enrichedPosts
     }
 
-    // Mix in recent activity events for variety on for_you / following.
+    // Preserve the public activity mix for For You.
     const activitiesRaw = await ctx.db
       .query("activityEvents")
       .withIndex("by_visibility_created", (q) => q.eq("visibility", "public"))
@@ -243,16 +234,7 @@ export const listFeed = query({
       activitiesRaw
         .filter((a) => a.type !== "post_created")
         .slice(0, 10)
-        .map(async (a) => ({
-          _kind: "activity" as const,
-          _id: a._id,
-          createdAt: a.createdAt,
-          type: a.type,
-          targetType: a.targetType,
-          targetId: a.targetId,
-          metadata: a.metadata,
-          actor: await loadActor(ctx, a.actorId),
-        }))
+        .map((a) => enrichActivity(ctx, a))
     )
 
     return [...enrichedPosts, ...activities]
@@ -350,14 +332,84 @@ async function loadActor(ctx: QueryCtx, externalId: string) {
   }
 }
 
-async function getFollowedUserIds(ctx: QueryCtx, followerId: string): Promise<Set<string>> {
+async function enrichActivity(ctx: QueryCtx, activity: Doc<"activityEvents">) {
+  return {
+    _kind: "activity" as const,
+    _id: activity._id,
+    createdAt: activity.createdAt,
+    type: activity.type,
+    targetType: activity.targetType,
+    targetId: activity.targetId,
+    metadata: activity.metadata,
+    actor: await loadActor(ctx, activity.actorId),
+  }
+}
+
+function newestUnique<T extends { _id: string; createdAt: number }>(rows: T[], limit: number) {
+  return [...new Map(rows.map((row) => [row._id, row])).values()]
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .slice(0, limit)
+}
+
+async function followingFeed(ctx: QueryCtx, followerId: string, limit: number) {
   const follows = await ctx.db
     .query("follows")
     .withIndex("by_follower", (q) => q.eq("followerId", followerId))
     .collect()
-  const ids = new Set<string>()
+  const userIds = new Set<string>([followerId])
+  const teamIds = new Set<Id<"teams">>()
   for (const f of follows) {
-    if (f.followedUserId) ids.add(f.followedUserId)
+    if (f.followedUserId) userIds.add(f.followedUserId)
+    if (f.followedTeamId) teamIds.add(f.followedTeamId)
   }
-  return ids
+  // Each source contributes at most one page. Unrelated global traffic cannot
+  // hide older followed content; duplicate user/team matches are merged below.
+  const postGroups = await Promise.all([
+    ...[...userIds].map((authorId) =>
+      ctx.db
+        .query("posts")
+        .withIndex("by_author_created", (q) => q.eq("authorId", authorId))
+        .order("desc")
+        .filter((q) => q.neq(q.field("isDeleted"), true))
+        .take(limit)
+    ),
+    ...[...teamIds].map((teamId) =>
+      ctx.db
+        .query("posts")
+        .withIndex("by_team_created", (q) => q.eq("teamId", teamId))
+        .order("desc")
+        .filter((q) => q.neq(q.field("isDeleted"), true))
+        .take(limit)
+    ),
+  ])
+  const activityGroups = await Promise.all([
+    ...[...userIds].map((actorId) =>
+      ctx.db
+        .query("activityEvents")
+        .withIndex("by_actor_created", (q) => q.eq("actorId", actorId))
+        .order("desc")
+        .filter((q) =>
+          q.and(q.eq(q.field("visibility"), "public"), q.neq(q.field("type"), "post_created"))
+        )
+        .take(10)
+    ),
+    ...[...teamIds].map((teamId) =>
+      ctx.db
+        .query("activityEvents")
+        .withIndex("by_target_created", (q) => q.eq("targetType", "team").eq("targetId", teamId))
+        .order("desc")
+        .filter((q) =>
+          q.and(q.eq(q.field("visibility"), "public"), q.neq(q.field("type"), "post_created"))
+        )
+        .take(10)
+    ),
+  ])
+  const posts = newestUnique(postGroups.flat(), limit)
+  const activities = newestUnique(activityGroups.flat(), 10)
+  return [
+    ...(await Promise.all(posts.map((post) => enrichPost(ctx, post)))),
+    ...(await Promise.all(activities.map((activity) => enrichActivity(ctx, activity)))),
+  ]
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .slice(0, limit)
 }
