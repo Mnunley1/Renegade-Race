@@ -303,6 +303,8 @@ it("keeps the driver public but skips owned teams and view mutation while auth i
   expect(screen.getAllByText("Public Driver").length).toBeGreaterThan(0)
   expect(screen.getByText("Loading your teams...")).toBeInTheDocument()
   expect(mock.queries).toHaveBeenCalledWith("teams:getByOwner", "skip")
+  expect(mock.queries).toHaveBeenCalledWith("follows:getFollowerCounts", { userId: "driver-user" })
+  expect(mock.queries).toHaveBeenCalledWith("follows:isFollowingUser", "skip")
   expect(mock.mutation).not.toHaveBeenCalled()
   mock.convexLoading = false
   mock.convexAuthenticated = true
