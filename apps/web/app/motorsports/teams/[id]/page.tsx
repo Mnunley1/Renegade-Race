@@ -31,12 +31,12 @@ import {
   Twitter,
   Users,
 } from "lucide-react"
-import Image from "next/image"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { use, useEffect, useState } from "react"
 import { toast } from "sonner"
 import { ProfileAnalytics } from "@/components/profile-analytics"
+import Image from "@/components/public-image"
 import { TeamApplicationForm } from "@/components/team-application-form"
 import { TeamCalendar } from "@/components/team-calendar"
 import { TeamCard } from "@/components/team-card"

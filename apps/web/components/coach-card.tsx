@@ -3,9 +3,9 @@ import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent } from "@workspace/ui/components/card"
 import { cn } from "@workspace/ui/lib/utils"
 import { Check, Gauge, MapPin, Monitor, Star, User, Zap } from "lucide-react"
-import Image from "next/image"
 import Link from "next/link"
 import type { ComponentProps } from "react"
+import Image from "@/components/public-image"
 
 type RacingType = "real-world" | "sim-racing" | "both"
 

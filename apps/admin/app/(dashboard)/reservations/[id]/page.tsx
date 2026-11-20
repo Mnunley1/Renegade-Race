@@ -26,6 +26,7 @@ import { toast } from "sonner"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { DetailPageLayout } from "@/components/detail-page-layout"
 import { LoadingState } from "@/components/loading-state"
+import PublicImage from "@/components/public-image"
 import { StatusBadge } from "@/components/status-badge"
 import { UserAvatar } from "@/components/user-avatar"
 import type { Id } from "@/lib/convex"
@@ -319,10 +320,10 @@ function VehicleCard({ reservation }: { reservation: ReservationData }) {
       </CardHeader>
       <CardContent className="space-y-4">
         {primaryImage && (
-          <img
+          <PublicImage
             alt={`${reservation.vehicle?.make} ${reservation.vehicle?.model}`}
             className="h-40 w-full rounded-lg object-cover"
-            src={primaryImage.r2Key ? r2Url(primaryImage.r2Key) : primaryImage.imageUrl}
+            src={r2Url(primaryImage.r2Key) ?? primaryImage.imageUrl}
           />
         )}
         <div>

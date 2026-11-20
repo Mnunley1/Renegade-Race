@@ -13,7 +13,6 @@ import {
   CheckCircle,
   DollarSign,
   ExternalLink,
-  Eye,
   Gauge,
   MapPin,
   Settings,
@@ -30,10 +29,10 @@ import { DetailPageLayout } from "@/components/detail-page-layout"
 import { LoadingState } from "@/components/loading-state"
 import { StatusBadge } from "@/components/status-badge"
 import { UserAvatar } from "@/components/user-avatar"
+import { VehicleImageGallery } from "@/components/vehicle-image-gallery"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
-import { r2Url } from "@/lib/r2-url"
 
 const formatCurrency = (amount: number) =>
   new Intl.NumberFormat("en-US", {
@@ -165,74 +164,6 @@ function SummaryCards({
         </CardContent>
       </Card>
     </div>
-  )
-}
-
-function ImageGallery({ vehicle }: { vehicle: VehicleData }) {
-  const [selectedIndex, setSelectedIndex] = useState(0)
-
-  if (!vehicle.images || vehicle.images.length === 0) {
-    return (
-      <Card>
-        <CardContent className="flex flex-col items-center justify-center p-12 text-center">
-          <Car className="mb-4 h-12 w-12 text-muted-foreground opacity-50" />
-          <p className="text-muted-foreground">No images uploaded</p>
-        </CardContent>
-      </Card>
-    )
-  }
-
-  const images = vehicle.images as Array<{
-    _id: string
-    isPrimary: boolean
-    imageUrl?: string
-    r2Key?: string
-  }>
-  const selectedImage = images[selectedIndex]
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Eye className="h-4 w-4" />
-          Photos ({images.length})
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="relative overflow-hidden rounded-lg">
-          <img
-            alt={`${vehicle.make} ${vehicle.model}`}
-            className="h-64 w-full object-cover"
-            src={selectedImage?.r2Key ? r2Url(selectedImage.r2Key) : selectedImage?.imageUrl}
-          />
-          {selectedImage?.isPrimary && (
-            <Badge className="absolute top-3 left-3 bg-black/60 text-white">Primary</Badge>
-          )}
-        </div>
-        {images.length > 1 && (
-          <div className="grid grid-cols-5 gap-2">
-            {images.map((image, idx) => (
-              <button
-                className={`relative overflow-hidden rounded-md border-2 transition-all ${
-                  idx === selectedIndex
-                    ? "border-primary ring-1 ring-primary/30"
-                    : "border-transparent opacity-70 hover:opacity-100"
-                }`}
-                key={image._id}
-                onClick={() => setSelectedIndex(idx)}
-                type="button"
-              >
-                <img
-                  alt={`${vehicle.make} ${vehicle.model} - ${idx + 1}`}
-                  className="h-16 w-full object-cover"
-                  src={image.r2Key ? r2Url(image.r2Key) : image.imageUrl}
-                />
-              </button>
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
   )
 }
 
@@ -815,7 +746,10 @@ export default function VehicleDetailPage() {
 
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
-          <ImageGallery vehicle={vehicle} />
+          <VehicleImageGallery
+            images={vehicle.images ?? []}
+            name={`${vehicle.make} ${vehicle.model}`}
+          />
           <VehicleDetailsCard vehicle={vehicle} />
           <SpecificationsCard vehicle={vehicle} />
           <BookingSettingsCard vehicle={vehicle} />

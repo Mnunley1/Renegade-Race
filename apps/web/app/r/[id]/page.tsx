@@ -199,7 +199,7 @@ function ProfileHero({
               <Avatar className="size-36 shadow-2xl ring-4 ring-background md:size-44">
                 <AvatarImage
                   alt={user.name || "User"}
-                  src={user.profileImageR2Key ? r2Url(user.profileImageR2Key) : user.profileImage}
+                  src={r2Url(user.profileImageR2Key) ?? user.profileImage}
                 />
                 <AvatarFallback className="bg-gradient-to-br from-primary to-primary/80 text-4xl text-white">
                   {userInitials}
@@ -500,11 +500,7 @@ function ReviewCard({ review, firstName }: { review: ReviewData; firstName: stri
           <Avatar className="size-12">
             <AvatarImage
               alt={review.reviewer?.name || "Reviewer"}
-              src={
-                review.reviewer?.profileImageR2Key
-                  ? r2Url(review.reviewer.profileImageR2Key)
-                  : review.reviewer?.profileImage
-              }
+              src={r2Url(review.reviewer?.profileImageR2Key) ?? review.reviewer?.profileImage}
             />
             <AvatarFallback>{review.reviewer?.name?.[0]?.toUpperCase() || "R"}</AvatarFallback>
           </Avatar>

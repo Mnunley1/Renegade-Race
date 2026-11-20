@@ -18,10 +18,10 @@ import { Textarea } from "@workspace/ui/components/textarea"
 import { cn } from "@workspace/ui/lib/utils"
 import { useMutation, useQuery } from "convex/react"
 import { Calendar as CalendarIcon, Check, ChevronDown, Clock, Loader2 } from "lucide-react"
-import Image from "next/image"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Suspense, useEffect, useState } from "react"
+import Image from "@/components/public-image"
 import { authReturnLink } from "@/lib/auth-return"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
@@ -408,8 +408,7 @@ function CheckoutPageContent() {
     | Array<{ isPrimary: boolean; imageUrl?: string; r2Key?: string }>
     | undefined
   const primaryImageData = vehicleImages?.find((img) => img.isPrimary) || vehicleImages?.[0]
-  const primaryImage =
-    (primaryImageData?.r2Key ? r2Url(primaryImageData.r2Key) : primaryImageData?.imageUrl) || ""
+  const primaryImage = (r2Url(primaryImageData?.r2Key) ?? primaryImageData?.imageUrl) || ""
   const isValid =
     isLoaded &&
     initializedVehicle === vehicleId &&

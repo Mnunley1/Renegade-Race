@@ -28,12 +28,12 @@ import {
   Star,
   XCircle,
 } from "lucide-react"
-import Image from "next/image"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Suspense, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 import { HostOnboardingChecklist } from "@/components/host-onboarding-checklist"
+import Image from "@/components/public-image"
 import { api } from "@/lib/convex"
 import { handleError } from "@/lib/error-handler"
 import { r2Url } from "@/lib/r2-url"

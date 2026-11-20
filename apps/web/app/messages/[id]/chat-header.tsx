@@ -9,8 +9,8 @@ import {
 } from "@workspace/ui/components/dropdown-menu"
 import { cn } from "@workspace/ui/lib/utils"
 import { Archive, Calendar, Car, MoreVertical, Trash2 } from "lucide-react"
-import Image from "next/image"
 import Link from "next/link"
+import Image from "@/components/public-image"
 import { UserAvatar } from "@/components/user-avatar"
 import { r2Url } from "@/lib/r2-url"
 import { formatBookingDateRange, getReservationStatusMeta } from "@/lib/reservation-status"
@@ -63,9 +63,7 @@ export function ChatHeader({
   onDelete,
 }: ChatHeaderProps) {
   const name = participant?.name || "Unknown User"
-  const avatarUrl = participant?.profileImageR2Key
-    ? r2Url(participant.profileImageR2Key)
-    : participant?.profileImage
+  const avatarUrl = r2Url(participant?.profileImageR2Key) ?? participant?.profileImage
   const statusMeta = getReservationStatusMeta(reservation?.status)
   const dateRange = formatBookingDateRange(reservation?.startDate, reservation?.endDate)
 

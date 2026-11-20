@@ -23,11 +23,11 @@ import { Separator } from "@workspace/ui/components/separator"
 import { Textarea } from "@workspace/ui/components/textarea"
 import { useMutation } from "convex/react"
 import { ArrowLeft, Check, Loader2, Plus, Upload, X } from "lucide-react"
-import Image from "next/image"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
+import Image from "@/components/public-image"
 import {
   MAX_FILE_SIZE_BYTES,
   RACING_TYPES,
