@@ -19,6 +19,8 @@ const isPublicRoute = createRouteMatcher([
   "/contact(.*)",
   "/motorsports(.*)",
   "/coaches(.*)",
+  "/paddock(.*)",
+  "/profile/:id",
   "/api/webhooks(.*)",
 ])
 

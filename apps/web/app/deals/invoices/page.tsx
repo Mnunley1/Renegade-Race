@@ -1,6 +1,5 @@
 "use client"
 
-import { useUser } from "@clerk/nextjs"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardDescription, CardHeader } from "@workspace/ui/components/card"
@@ -20,7 +19,9 @@ import { Loader2, Plus, Send, Trash2 } from "lucide-react"
 import Link from "next/link"
 import { useState } from "react"
 import { toast } from "sonner"
+import { AccountAuthBoundary } from "@/components/account-auth-boundary"
 import { PageHeader, PageShell } from "@/components/page-layout"
+import { useAccountActivity } from "@/hooks/useAccountAuth"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
@@ -36,8 +37,8 @@ const formatCurrency = (cents: number) =>
 
 const statusLabel = (status: string) => status.replace(/_/g, " ")
 
-export default function InvoicesPage() {
-  const { user } = useUser()
+function InvoicesContent({ user }: { user: { id: string } }) {
+  const isCurrentAccount = useAccountActivity()
   const [isCreating, setIsCreating] = useState(false)
   const invoices = useQuery(api.invoices.getMine, {})
   const vehicles = useQuery(
@@ -122,14 +123,17 @@ export default function InvoicesPage() {
         depositVehicleId:
           depositVehicleId === "none" ? undefined : (depositVehicleId as Id<"vehicles">),
       })
+      if (!isCurrentAccount()) return
       await sendInvoice({ invoiceId })
+      if (!isCurrentAccount()) return
       toast.success("Invoice sent")
       resetForm()
       setIsCreating(false)
     } catch (error) {
+      if (!isCurrentAccount()) return
       handleErrorWithContext(error, { action: "send invoice" })
     } finally {
-      setIsSubmitting(false)
+      if (isCurrentAccount()) setIsSubmitting(false)
     }
   }
 
@@ -407,5 +411,16 @@ export default function InvoicesPage() {
         </Card>
       </div>
     </PageShell>
+  )
+}
+
+export default function InvoicesPage() {
+  return (
+    <AccountAuthBoundary
+      loadingLabel="Connecting to your invoices..."
+      signedOutDescription="You need to be signed in to view invoices."
+    >
+      {(user) => <InvoicesContent user={user} />}
+    </AccountAuthBoundary>
   )
 }

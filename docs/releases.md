@@ -377,3 +377,29 @@ public owner profiles. Preserve PR #32 for a separately scoped decision.
 Before a production release, verify slow initial loading, a zero-result search,
 coming-soon and ready listings in grid/list and desktop/mobile details, plus
 unchanged date propagation into checkout. No schema migration is required.
+
+## Paddock and invoice acceptance fixes (REN-47–50)
+
+Invoice workspace and detail queries mount only after Clerk and Convex agree on
+an authenticated account/session. Switching accounts or sessions discards drafts
+and ignores completions from the prior session. Backend participant checks remain
+required. Paid invoice details show the historical amount paid and zero remaining
+balance; the stored `amountDue` remains the expected original charge used by
+payment reconciliation.
+
+Paddock author links resolve an active driver's actual `driverProfiles` document
+ID. Other members have a public `/profile/[externalId]` page using the same public
+field allowlist for guests and signed-in callers; own `/profile` editing stays
+protected. Missing or banned authors display without a profile link. People is
+not added to primary navigation.
+
+Paddock feed/discussion routes are public reads. Comment writes require a ready
+signed-in session and backend authentication. Deleting one's comment is idempotent
+and decrements the post count once. A deleted post's comments are unavailable;
+new comments and replies to deleted or mismatched parents are rejected. Discussion
+loading, unavailable and retry states retain a route back to the Paddock.
+
+Deploy the additive backend before staging frontends. No schema or financial-data
+migration is required. Verify guest reading, two-user commenting, follow/profile
+navigation and post/comment counts, plus invoice sign-in and paid balance, on the
+same staging revision. Production remains unchanged until a separate release.

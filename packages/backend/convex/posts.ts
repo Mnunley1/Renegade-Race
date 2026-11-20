@@ -3,7 +3,7 @@ import type { Doc, Id } from "./_generated/dataModel"
 import { mutation, type QueryCtx, query } from "./_generated/server"
 import { logActivityEventInternal } from "./activity"
 import { requirePublicMediaUpload } from "./r2"
-import { publicDisplayName } from "./userProfile"
+import { loadPublicActor, publicDisplayName } from "./userProfile"
 import { getCurrentUser, getCurrentUserOrThrow } from "./users"
 
 const REACTION_TYPES = [
@@ -159,6 +159,13 @@ export const addComment = mutation({
     const post = await ctx.db.get(args.postId)
     if (!post || post.isDeleted) throw new Error("Post not found")
 
+    if (args.parentCommentId) {
+      const parent = await ctx.db.get(args.parentCommentId)
+      if (!parent || parent.isDeleted || parent.postId !== args.postId) {
+        throw new Error("Parent comment not found")
+      }
+    }
+
     const commentId = await ctx.db.insert("postComments", {
       postId: args.postId,
       authorId: user.externalId,
@@ -182,7 +189,12 @@ export const deleteComment = mutation({
     if (comment.authorId !== user.externalId) {
       throw new Error("Not authorized to delete this comment")
     }
+    if (comment.isDeleted) return
     await ctx.db.patch(args.commentId, { isDeleted: true })
+    const post = await ctx.db.get(comment.postId)
+    if (post) {
+      await ctx.db.patch(post._id, { commentCount: Math.max(0, (post.commentCount ?? 0) - 1) })
+    }
   },
 })
 
@@ -191,9 +203,11 @@ export const deleteComment = mutation({
 // ============================================================
 
 export const getPost = query({
-  args: { postId: v.id("posts") },
+  args: { postId: v.string() },
   handler: async (ctx, args) => {
-    const post = await ctx.db.get(args.postId)
+    const postId = ctx.db.normalizeId("posts", args.postId)
+    if (!postId) return null
+    const post = await ctx.db.get(postId)
     if (!post || post.isDeleted) return null
     return await enrichPost(ctx, post)
   },
@@ -280,6 +294,8 @@ export const listOnlineNow = query({
 export const listComments = query({
   args: { postId: v.id("posts") },
   handler: async (ctx, args) => {
+    const post = await ctx.db.get(args.postId)
+    if (!post || post.isDeleted) return []
     const comments = await ctx.db
       .query("postComments")
       .withIndex("by_post_created", (q) => q.eq("postId", args.postId))
@@ -319,17 +335,7 @@ async function enrichPost(ctx: QueryCtx, post: Doc<"posts">) {
 }
 
 async function loadActor(ctx: QueryCtx, externalId: string) {
-  const user = await ctx.db
-    .query("users")
-    .withIndex("by_external_id", (q) => q.eq("externalId", externalId))
-    .first()
-  if (!user) return null
-  return {
-    userId: user.externalId,
-    name: publicDisplayName(user),
-    profileImage: user.profileImage,
-    profileImageR2Key: user.profileImageR2Key,
-  }
+  return await loadPublicActor(ctx, externalId)
 }
 
 async function enrichActivity(ctx: QueryCtx, activity: Doc<"activityEvents">) {

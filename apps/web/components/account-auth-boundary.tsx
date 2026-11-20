@@ -8,9 +8,11 @@ import { useAccountAuth } from "@/hooks/useAccountAuth"
 export function AccountAuthBoundary({
   children,
   loadingLabel,
+  signedOutDescription = "You need to be signed in to view conversations.",
 }: {
   children: (user: { id: string }) => ReactNode
   loadingLabel: string
+  signedOutDescription?: string
 }) {
   const auth = useAccountAuth()
   if (auth.isReady && auth.user) {
@@ -31,7 +33,7 @@ export function AccountAuthBoundary({
       <>
         <MessageSquare className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
         <h2 className="mb-2 font-semibold text-foreground text-xl">Please sign in</h2>
-        <p className="text-muted-foreground">You need to be signed in to view conversations.</p>
+        <p className="text-muted-foreground">{signedOutDescription}</p>
       </>
     )
   }

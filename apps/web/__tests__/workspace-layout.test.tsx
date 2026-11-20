@@ -25,13 +25,21 @@ const mock = vi.hoisted(() => ({
 vi.mock("@clerk/nextjs", () => ({
   useUser: () => ({
     isSignedIn: mock.signedIn,
+    isLoaded: true,
     user: mock.signedIn ? { id: mock.userId, firstName: "Renter" } : null,
+  }),
+  useAuth: () => ({
+    userId: mock.signedIn ? mock.userId : null,
+    sessionId: mock.signedIn ? `session-${mock.userId}` : null,
+    isSignedIn: mock.signedIn,
+    isLoaded: true,
   }),
 }))
 vi.mock("next/navigation", () => ({ useParams: () => ({ id: "invoice" }) }))
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: mock.toastError } }))
 vi.mock("@/lib/error-handler", () => ({ handleErrorWithContext: mock.handleError }))
 vi.mock("convex/react", () => ({
+  useConvexAuth: () => ({ isLoading: false, isAuthenticated: mock.signedIn }),
   useQuery: (fn: Parameters<typeof getFunctionName>[0], args: unknown) => {
     const name = getFunctionName(fn)
     mock.queries(name, args)
@@ -240,7 +248,9 @@ it("keeps invoice detail loading, unavailable, and zero-due states distinct with
   expect(screen.getByRole("heading", { name: "Invoice not found" })).toBeInTheDocument()
   mock.invoice = { ...invoice, amountDue: 0, status: "paid" }
   page.rerender(<InvoiceDetailPage />)
-  expect(screen.getByText("Amount due").parentElement).toHaveTextContent("$0.00")
+  expect(screen.getByText("Amount paid").parentElement).toHaveTextContent("$0.00")
+  expect(screen.getByText("Remaining balance").parentElement).toHaveTextContent("$0.00")
+  expect(screen.queryByText("Amount due")).not.toBeInTheDocument()
   expect(mock.choosePayment).not.toHaveBeenCalled()
 })
 

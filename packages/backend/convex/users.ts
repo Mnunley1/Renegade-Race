@@ -2,8 +2,8 @@ import type { UserJSON } from "@clerk/backend"
 import { type Validator, v } from "convex/values"
 import { internal } from "./_generated/api"
 import {
-  action,
   type ActionCtx,
+  action,
   internalAction,
   internalMutation,
   internalQuery,
@@ -16,7 +16,7 @@ import { getWelcomeEmailTemplate, sendTransactionalEmail } from "./emails"
 import { isEarlyAdopterPromoActive, resolvePlatformFeePercentage } from "./pricing"
 import { clearDraftUploads, requireDraftUpload, requireProfileUpload } from "./r2"
 import { retrieveLinkedConnectAccount } from "./stripeOwnership"
-import { publicDisplayName, publicUserProfile } from "./userProfile"
+import { publicAuthorProfile, publicDisplayName, publicUserProfile } from "./userProfile"
 
 /** Matches Clerk/Convex placeholder names like "null null" from `${null} ${null}`. */
 const NULLISH_NAME_RE = /^(null|undefined)(\s+(null|undefined))+$/i
@@ -90,6 +90,12 @@ export const getByExternalId = query({
       ...(identity?.subject === externalId ? { stripeCustomerId: user?.stripeCustomerId } : {}),
     }
   },
+})
+
+// Public author pages never include self-only billing or private account fields.
+export const getPublicProfile = query({
+  args: { externalId: v.string() },
+  handler: (ctx, { externalId }) => publicAuthorProfile(ctx, externalId),
 })
 
 export const getByExternalIdInternal = internalQuery({
