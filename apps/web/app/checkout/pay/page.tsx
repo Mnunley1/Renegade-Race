@@ -17,7 +17,11 @@ import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { formatDateForDisplay } from "@/lib/date-utils"
 import { r2Url } from "@/lib/r2-url"
-import { formatRentalUsd, getRentalQuoteError } from "@/lib/rental-checkout"
+import {
+  formatRentalUsd,
+  getRentalQuoteError,
+  isTerminalRentalPaymentError,
+} from "@/lib/rental-checkout"
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "")
 
@@ -167,6 +171,7 @@ function PayPageContent() {
     key: string
     result?: Awaited<ReturnType<typeof createPaymentIntent>>
     error?: string
+    terminalAttempt?: boolean
   } | null>(null)
   const current = initialization?.key === paymentKey ? initialization : null
   const clientSecret = current?.result?.clientSecret ?? null
@@ -214,6 +219,7 @@ function PayPageContent() {
         if (active) {
           setInitialization({
             key: paymentKey,
+            terminalAttempt: isTerminalRentalPaymentError(err),
             error:
               getRentalQuoteError(err) ??
               (err instanceof Error ? err.message : "Failed to initialize payment"),
@@ -298,6 +304,26 @@ function PayPageContent() {
             </p>
             <Button asChild>
               <Link href="/trips">View My Trips</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (current?.terminalAttempt) {
+    return (
+      <div className="container mx-auto max-w-4xl px-4 py-8">
+        <Card>
+          <CardContent className="space-y-4 py-12 text-center">
+            <h2 className="font-bold text-2xl">A new rental request is needed</h2>
+            <p role="alert">
+              This payment attempt was canceled or its checkout expired and cannot be reused. Open
+              My Trips to cancel this unpaid booking, then return to the vehicle and send a fresh
+              request for host approval. Your payment history will be kept.
+            </p>
+            <Button asChild>
+              <Link href="/trips">Manage unpaid booking in My Trips</Link>
             </Button>
           </CardContent>
         </Card>

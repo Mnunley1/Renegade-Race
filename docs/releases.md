@@ -182,6 +182,31 @@ of historical dates/prices. A frontend rollback cannot remove the backend holds.
 Guest draft restoration and consistent date-entry presentation are REN-35;
 terminal unpaid Stripe attempt reconciliation is REN-36.
 
+
+## Terminal unpaid rental attempts (REN-36)
+
+A canceled Stripe PaymentIntent or expired unpaid Checkout Session is terminal.
+Authenticated platform webhooks reconcile only the matching rental attempt,
+checking its Stripe object, participants, currency and total. Duplicate or stale
+events must never downgrade a captured/refunded payment or replace a newer
+booking payment state. Financial records are retained.
+
+An unpaid booking remains approved until a participant explicitly cancels it.
+After a terminal attempt, the renter cancels that booking in My Trips and submits
+a fresh request for host approval. The old reservation's fixed Stripe idempotency
+keys are not reused to start another attempt. Ordinary failed card attempts may
+still retry their existing PaymentIntent. An approved booking continues to block
+account deletion; a terminal unpaid ledger alone must not block deletion after
+that booking is canceled, while active attempts still do.
+
+Deploy the compatible backend before the frontend. The staging platform webhook
+must include `payment_intent.canceled`, `checkout.session.expired` and
+`checkout.session.completed` in addition to its existing subscriptions. Review
+production subscriptions separately before an authorized production rollout.
+Reconcile old rows only from independently retrieved Stripe objects/events with
+matching ownership and amounts; do not infer terminal status from age, rewrite
+settled states, delete evidence, or automatically cancel approved bookings.
+
 ## Account deletion preflight (REN-18)
 
 Settings calls the authenticated `users.checkUserDeletionEligibility` action before

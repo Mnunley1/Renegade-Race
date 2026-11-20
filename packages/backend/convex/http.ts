@@ -8,8 +8,8 @@ import { type ActionCtx, httpAction } from "./_generated/server"
 import { resendComponent } from "./emails"
 import { logError } from "./logger"
 import { rateLimiter } from "./rateLimiter"
+import { readReturnPhoto, returnPhotoOptions, uploadReturnPhoto } from "./returnEvidence"
 import { isSeatPaymentMetadata } from "./seatPayments"
-import { readReturnPhoto, uploadReturnPhoto, returnPhotoOptions } from "./returnEvidence"
 
 function stripeObjectId(value: string | { id: string } | null): string | undefined {
   return typeof value === "string" ? value : value?.id
@@ -446,6 +446,25 @@ registerRoutes(http, components.stripe, {
         eventId: event.id,
         source: "stripe",
         eventType: event.type,
+      })
+    },
+
+    "checkout.session.expired": async (ctx, event: Stripe.CheckoutSessionExpiredEvent) => {
+      const session = event.data.object
+      const rental = rentalMetadata(session.metadata, event.account)
+      if (!rental) return
+      if (session.amount_total == null || !session.currency) {
+        throw new Error("Missing rental checkout total")
+      }
+      await ctx.runMutation(internal.stripe.ingestRentalCheckoutExpired, {
+        ...rental,
+        eventId: event.id,
+        stripeCheckoutSessionId: session.id,
+        amount: session.amount_total,
+        currency: session.currency,
+        mode: session.mode,
+        status: session.status ?? "",
+        paymentStatus: session.payment_status,
       })
     },
 

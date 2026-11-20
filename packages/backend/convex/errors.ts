@@ -61,6 +61,7 @@ export const ErrorCode = {
   // Payment & Stripe Errors
   // ============================================================================
   PAYMENT_FAILED: "PAYMENT_FAILED",
+  PAYMENT_ATTEMPT_TERMINAL: "PAYMENT_ATTEMPT_TERMINAL",
   PAYMENT_REQUIRED: "PAYMENT_REQUIRED",
   STRIPE_ERROR: "STRIPE_ERROR",
   STRIPE_ACCOUNT_INCOMPLETE: "STRIPE_ACCOUNT_INCOMPLETE",

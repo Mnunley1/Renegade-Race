@@ -593,3 +593,43 @@ it("preserves payment and cancellation controls for an unpaid approved trip", ()
   ).toBeInTheDocument()
   expect(screen.queryByRole("link", { name: "Contact Support" })).toBeNull()
 })
+
+it.each([
+  new ConvexError({ code: "PAYMENT_ATTEMPT_TERMINAL", message: "Payment attempt ended" }),
+  new Error("[CONVEX A] PAYMENT_ATTEMPT_TERMINAL"),
+])("routes terminal payment attempts to explicit cancellation without retry or automatic submission", async (error) => {
+  mock.reservation = {
+    ...reservation,
+    status: "approved",
+    paymentStatus: "failed",
+    vehicleId: "vehicle",
+  }
+  mock.createPaymentIntent.mockRejectedValue(error)
+  const result = render(
+    <StrictMode>
+      <PayPage />
+    </StrictMode>
+  )
+  expect(await screen.findByRole("alert")).toHaveTextContent("cancel this unpaid booking")
+  expect(screen.getByRole("link", { name: "Manage unpaid booking in My Trips" })).toHaveAttribute(
+    "href",
+    "/trips"
+  )
+  expect(screen.queryByRole("button", { name: "Retry payment" })).toBeNull()
+  expect(screen.queryByText("Secure card form")).toBeNull()
+  mock.reservation = {
+    ...mock.reservation,
+    vehicle: { ...reservation.vehicle, model: "Refreshed" },
+  }
+  result.rerender(
+    <StrictMode>
+      <PayPage />
+    </StrictMode>
+  )
+  await act(async () => {
+    // Flush query refresh effects before checking that terminal attempts cannot retry.
+  })
+  expect(mock.createPaymentIntent).toHaveBeenCalledTimes(1)
+  expect(mock.mutate).not.toHaveBeenCalled()
+  expect(mock.push).not.toHaveBeenCalled()
+})
