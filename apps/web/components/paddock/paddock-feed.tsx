@@ -32,6 +32,7 @@ export function PaddockFeed() {
   const [scope, setScope] = useState<FeedScope>(isSignedIn ? "for_you" : "global")
   const [composerText, setComposerText] = useState("")
   const [isPosting, setIsPosting] = useState(false)
+  const [postError, setPostError] = useState<string | null>(null)
 
   const feed = useQuery(api.posts.listFeed, { scope, limit: 50 })
   const onlineUsers = useQuery(api.posts.listOnlineNow, { limit: 8 })
@@ -41,20 +42,28 @@ export function PaddockFeed() {
     const trimmed = composerText.trim()
     if (!(trimmed && isSignedIn)) return
     setIsPosting(true)
+    setPostError(null)
     try {
       await createPost({ content: trimmed })
       setComposerText("")
+    } catch {
+      setPostError("Your post could not be shared. Your text is saved here; please try again.")
     } finally {
       setIsPosting(false)
     }
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_240px]">
-      <div className="space-y-4">
-        <div className="flex gap-1 border-border border-b">
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_260px]">
+      <div className="min-w-0 space-y-4">
+        <div
+          aria-label="Feed scope"
+          className="flex flex-wrap gap-1 border-border border-b"
+          role="group"
+        >
           {SCOPE_TABS.map((tab) => (
             <button
+              aria-pressed={scope === tab.id}
               className={`relative px-4 py-2 font-medium text-sm transition-colors ${
                 scope === tab.id ? "text-foreground" : "text-muted-foreground hover:text-foreground"
               }`}
@@ -80,13 +89,20 @@ export function PaddockFeed() {
                     {user?.firstName?.[0] ?? user?.username?.[0] ?? "?"}
                   </AvatarFallback>
                 </Avatar>
-                <div className="flex-1 space-y-2">
+                <div className="min-w-0 flex-1 space-y-2">
                   <Textarea
+                    aria-label="Write a paddock post"
                     className="min-h-[80px] resize-none"
+                    disabled={isPosting}
                     onChange={(e) => setComposerText(e.target.value)}
                     placeholder="Share a lap time, a sale, an event, a question..."
                     value={composerText}
                   />
+                  {postError && (
+                    <p className="text-destructive text-sm" role="alert">
+                      {postError}
+                    </p>
+                  )}
                   <div className="flex items-center justify-end">
                     <Button
                       disabled={!composerText.trim() || isPosting}
@@ -94,7 +110,7 @@ export function PaddockFeed() {
                       size="sm"
                     >
                       <Send className="mr-2 size-4" />
-                      Post
+                      {isPosting ? "Posting…" : "Post"}
                     </Button>
                   </div>
                 </div>
@@ -163,7 +179,7 @@ export function PaddockFeed() {
 
 function FeedSkeleton() {
   return (
-    <div className="space-y-3">
+    <div aria-label="Loading paddock posts" className="space-y-3" role="status">
       {[0, 1, 2].map((i) => (
         <Card key={i}>
           <CardContent className="space-y-3 p-4">
@@ -202,7 +218,7 @@ function FeedItem({ item }: { item: any }) {
       <Card>
         <CardContent className="flex items-center gap-3 p-4">
           <ActivityIcon type={item.type} />
-          <div className="flex-1 text-sm">
+          <div className="min-w-0 flex-1 break-words text-sm">
             <ActivityLine event={item} />
             <p className="text-muted-foreground text-xs">{relative}</p>
           </div>
@@ -219,7 +235,7 @@ function FeedItem({ item }: { item: any }) {
             <AvatarImage src={avatarSrc(item.author)} />
             <AvatarFallback>{item.author?.name?.[0] ?? "?"}</AvatarFallback>
           </Avatar>
-          <div className="flex-1">
+          <div className="min-w-0 flex-1 break-words">
             <Link
               className="font-semibold text-sm hover:underline"
               href={`/profile/${item.author?.userId}`}
@@ -232,7 +248,7 @@ function FeedItem({ item }: { item: any }) {
             <Badge variant="secondary">Featured</Badge>
           )}
         </div>
-        <p className="whitespace-pre-wrap text-sm leading-relaxed">{item.content}</p>
+        <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{item.content}</p>
         <div className="flex items-center gap-4 text-muted-foreground text-xs">
           <button
             className="flex items-center gap-1 transition-colors hover:text-foreground"
