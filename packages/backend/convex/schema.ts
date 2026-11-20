@@ -1294,6 +1294,9 @@ export default defineSchema({
       v.union(v.literal("stripe_card"), v.literal("stripe_ach"), v.literal("external"))
     ),
     amountDue: v.optional(v.number()),
+    /** Compare-and-retry version for Stripe reads applied outside a transaction. */
+    paymentSyncVersion: v.optional(v.number()),
+    paymentFailureReason: v.optional(v.string()),
     /** Snapshot of Renegade platform fee in cents (not the card processing pass-through). */
     platformFee: v.optional(v.number()),
     /** Estimated Stripe card fee paid by the payer, in cents. ACH payments store 0. */

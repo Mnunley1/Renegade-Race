@@ -61,6 +61,22 @@ async function syncRefundEvent(
   }
 }
 
+async function reconcileInvoiceWebhook(
+  ctx: Pick<ActionCtx, "runAction">,
+  event:
+    | Stripe.InvoicePaidEvent
+    | Stripe.InvoicePaymentFailedEvent
+    | Stripe.InvoiceVoidedEvent
+    | Stripe.InvoiceMarkedUncollectibleEvent
+) {
+  if (event.account) return
+  await ctx.runAction(internal.invoices.reconcilePaymentEvent, {
+    eventId: event.id,
+    eventType: event.type,
+    stripeInvoiceId: event.data.object.id as string,
+  })
+}
+
 const http = httpRouter()
 http.route({ path: "/return-photo", method: "GET", handler: readReturnPhoto })
 http.route({ path: "/return-photo", method: "POST", handler: uploadReturnPhoto })
@@ -120,22 +136,22 @@ registerRoutes(http, components.stripe, {
             stripePaymentIntentId: paymentIntent.id,
           })
         }
-      } else if (!event.account && paymentIntent.metadata?.type === "custom_invoice") {
-        const invoiceId = paymentIntent.metadata.invoiceId
-        if (invoiceId) {
-          const invoice = await ctx.runQuery(internal.invoices.findByStripePaymentIntent, {
+      } else if (
+        !event.account &&
+        (paymentIntent.metadata?.type === "custom_invoice" || !paymentIntent.metadata?.type)
+      ) {
+        if (
+          await ctx.runAction(internal.invoices.reconcilePaymentEvent, {
+            eventId: event.id,
+            eventType: event.type,
             stripePaymentIntentId: paymentIntent.id,
+            localInvoiceId:
+              paymentIntent.metadata?.type === "custom_invoice"
+                ? paymentIntent.metadata.invoiceId
+                : undefined,
           })
-          if (invoice?.stripeInvoiceId && invoice._id === invoiceId) {
-            await ctx.runMutation(internal.invoices.handleStripeInvoicePaid, {
-              stripeInvoiceId: invoice.stripeInvoiceId,
-              stripePaymentIntentId: paymentIntent.id,
-              stripeChargeId: stripeObjectId(paymentIntent.latest_charge),
-              capturedAmount: paymentIntent.amount_received,
-              currency: paymentIntent.currency,
-            })
-          }
-        }
+        )
+          return
       } else if (!event.account && paymentIntent.metadata?.type === "coaching_booking") {
         // Handle coaching booking payment
         const bookingId = paymentIntent.metadata.coachingBookingId
@@ -203,12 +219,19 @@ registerRoutes(http, components.stripe, {
             failureReason: paymentIntent.last_payment_error?.message,
           })
         }
-      } else if (!event.account) {
-        await ctx.runMutation(internal.invoices.handlePaymentFailed, {
+      } else if (
+        !event.account &&
+        (await ctx.runAction(internal.invoices.reconcilePaymentEvent, {
           eventId: event.id,
+          eventType: event.type,
           stripePaymentIntentId: paymentIntent.id,
-          failureReason: paymentIntent.last_payment_error?.message,
-        })
+          localInvoiceId:
+            paymentIntent.metadata?.type === "custom_invoice"
+              ? paymentIntent.metadata.invoiceId
+              : undefined,
+        }))
+      ) {
+        return
       }
 
       // Record successful processing
@@ -232,9 +255,18 @@ registerRoutes(http, components.stripe, {
       }
 
       const paymentIntent = event.data.object
-      await ctx.runMutation(internal.invoices.handlePaymentProcessing, {
-        stripePaymentIntentId: paymentIntent.id,
-      })
+      if (
+        await ctx.runAction(internal.invoices.reconcilePaymentEvent, {
+          eventId: event.id,
+          eventType: event.type,
+          stripePaymentIntentId: paymentIntent.id,
+          localInvoiceId:
+            paymentIntent.metadata?.type === "custom_invoice"
+              ? paymentIntent.metadata.invoiceId
+              : undefined,
+        })
+      )
+        return
 
       await ctx.runMutation(internal.webhookIdempotency.recordWebhookEvent, {
         eventId: event.id,
@@ -588,112 +620,10 @@ registerRoutes(http, components.stripe, {
       })
     },
 
-    "invoice.paid": async (ctx, event: Stripe.InvoicePaidEvent) => {
-      if (event.account) return
-      const alreadyProcessed = await ctx.runQuery(internal.webhookIdempotency.checkWebhookEvent, {
-        eventId: event.id,
-        source: "stripe",
-      })
-
-      if (alreadyProcessed) {
-        return
-      }
-
-      const invoice = event.data.object as Stripe.Invoice & {
-        payment_intent?: string | { id?: string } | null
-        charge?: string | { id?: string } | null
-      }
-      await ctx.runMutation(internal.invoices.handleStripeInvoicePaid, {
-        stripeInvoiceId: invoice.id as string,
-        capturedAmount: invoice.amount_paid,
-        currency: invoice.currency,
-        localInvoiceId:
-          invoice.metadata?.type === "custom_invoice" ? invoice.metadata.invoiceId : undefined,
-        stripePaymentIntentId:
-          typeof invoice.payment_intent === "string"
-            ? invoice.payment_intent
-            : invoice.payment_intent?.id,
-        stripeChargeId:
-          typeof invoice.charge === "string" ? invoice.charge : invoice.charge?.id || undefined,
-      })
-
-      await ctx.runMutation(internal.webhookIdempotency.recordWebhookEvent, {
-        eventId: event.id,
-        source: "stripe",
-        eventType: event.type,
-      })
-    },
-
-    "invoice.payment_failed": async (ctx, event: Stripe.InvoicePaymentFailedEvent) => {
-      if (event.account) return
-      const alreadyProcessed = await ctx.runQuery(internal.webhookIdempotency.checkWebhookEvent, {
-        eventId: event.id,
-        source: "stripe",
-      })
-
-      if (alreadyProcessed) {
-        return
-      }
-
-      const invoice = event.data.object
-      if (invoice.id)
-        await ctx.runMutation(internal.invoices.handlePaymentFailed, {
-          eventId: event.id,
-          stripeInvoiceId: invoice.id,
-        })
-
-      await ctx.runMutation(internal.webhookIdempotency.recordWebhookEvent, {
-        eventId: event.id,
-        source: "stripe",
-        eventType: event.type,
-      })
-    },
-
-    "invoice.voided": async (ctx, event: Stripe.InvoiceVoidedEvent) => {
-      if (event.account) return
-      const alreadyProcessed = await ctx.runQuery(internal.webhookIdempotency.checkWebhookEvent, {
-        eventId: event.id,
-        source: "stripe",
-      })
-
-      if (alreadyProcessed) {
-        return
-      }
-
-      await ctx.runMutation(internal.invoices.handleInvoiceTerminalStatus, {
-        stripeInvoiceId: event.data.object.id as string,
-        status: "cancelled",
-      })
-
-      await ctx.runMutation(internal.webhookIdempotency.recordWebhookEvent, {
-        eventId: event.id,
-        source: "stripe",
-        eventType: event.type,
-      })
-    },
-
-    "invoice.marked_uncollectible": async (ctx, event: Stripe.InvoiceMarkedUncollectibleEvent) => {
-      if (event.account) return
-      const alreadyProcessed = await ctx.runQuery(internal.webhookIdempotency.checkWebhookEvent, {
-        eventId: event.id,
-        source: "stripe",
-      })
-
-      if (alreadyProcessed) {
-        return
-      }
-
-      await ctx.runMutation(internal.invoices.handleInvoiceTerminalStatus, {
-        stripeInvoiceId: event.data.object.id as string,
-        status: "overdue",
-      })
-
-      await ctx.runMutation(internal.webhookIdempotency.recordWebhookEvent, {
-        eventId: event.id,
-        source: "stripe",
-        eventType: event.type,
-      })
-    },
+    "invoice.paid": reconcileInvoiceWebhook,
+    "invoice.payment_failed": reconcileInvoiceWebhook,
+    "invoice.voided": reconcileInvoiceWebhook,
+    "invoice.marked_uncollectible": reconcileInvoiceWebhook,
   },
 })
 
