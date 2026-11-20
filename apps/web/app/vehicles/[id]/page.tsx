@@ -49,6 +49,7 @@ import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 import { r2Url } from "@/lib/r2-url"
 import { formatRentalUsd } from "@/lib/rental-checkout"
+import { vehicleRequestState } from "@/lib/vehicle-request-state"
 
 // ─── Types ──────────────────────────────────────────────────────────────
 
@@ -415,6 +416,8 @@ function VehicleDetailsPageContent() {
       </div>
     )
   }
+
+  const requestState = vehicleRequestState(vehicle.hostStripeReady)
 
   // ── Derived data ──────────────────────────────────────────────────
   const images =
@@ -1056,7 +1059,7 @@ function VehicleDetailsPageContent() {
 
                   <Button
                     className="mb-3 w-full text-base"
-                    disabled={vehicle.hostStripeReady === false}
+                    disabled={!requestState.ready}
                     onClick={() => {
                       const checkoutUrl =
                         startDate && endDate
@@ -1066,12 +1069,10 @@ function VehicleDetailsPageContent() {
                     }}
                     size="lg"
                   >
-                    {vehicle.hostStripeReady === false ? "Booking Unavailable" : "Reserve Now"}
+                    {requestState.action}
                   </Button>
                   <p className="text-center text-muted-foreground text-xs">
-                    {vehicle.hostStripeReady === false
-                      ? "Vehicle coming soon"
-                      : "You won't be charged until checkout"}
+                    {requestState.explanation}
                   </p>
                 </CardContent>
               </Card>
@@ -1142,7 +1143,7 @@ function VehicleDetailsPageContent() {
               <span className="text-muted-foreground text-sm"> /day</span>
             </div>
             <Button
-              disabled={vehicle.hostStripeReady === false}
+              disabled={!requestState.ready}
               onClick={() => {
                 const checkoutUrl =
                   startDate && endDate
@@ -1152,7 +1153,7 @@ function VehicleDetailsPageContent() {
               }}
               size="lg"
             >
-              {vehicle.hostStripeReady === false ? "Booking Unavailable" : "Reserve Now"}
+              {requestState.action}
             </Button>
           </div>
         </div>

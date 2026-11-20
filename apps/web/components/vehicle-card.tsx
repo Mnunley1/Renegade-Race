@@ -19,6 +19,7 @@ import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 import { r2Url } from "@/lib/r2-url"
 import { formatRentalUsd } from "@/lib/rental-checkout"
+import { vehicleRequestState } from "@/lib/vehicle-request-state"
 
 interface VehicleCardProps extends ComponentProps<"div"> {
   id: string
@@ -59,7 +60,7 @@ export function VehicleCard({
   horsepower,
   transmission,
   drivetrain,
-  datesSelected,
+  datesSelected: _datesSelected,
   bookingCount,
   hostStripeReady,
   layout = "grid",
@@ -126,6 +127,8 @@ export function VehicleCard({
     router.push(`/sign-in?redirect_url=${encodeURIComponent(window.location.pathname)}`)
   }
 
+  const requestState = vehicleRequestState(hostStripeReady)
+
   const weekendPrice = Math.round(pricePerDay * 2.5)
 
   // Performance spec strip (Turo-style icon + value units)
@@ -163,19 +166,14 @@ export function VehicleCard({
             {track}
           </Badge>
         )}
-        {datesSelected && (
-          <Badge className="border border-white/15 bg-green-600/90 text-white text-xs backdrop-blur-md hover:bg-green-600/90">
-            Available
+        {hostStripeReady !== undefined && (
+          <Badge className="border border-white/15 bg-black/55 text-white text-xs backdrop-blur-md hover:bg-black/55">
+            {requestState.label}
           </Badge>
         )}
         {bookingCount !== undefined && bookingCount > 0 && (
           <Badge className="border border-white/15 bg-amber-600/90 text-white text-xs backdrop-blur-md hover:bg-amber-600/90">
             Booked {bookingCount}x
-          </Badge>
-        )}
-        {hostStripeReady === false && (
-          <Badge className="border border-white/15 bg-blue-600/90 text-white text-xs backdrop-blur-md hover:bg-blue-600/90">
-            Coming Soon
           </Badge>
         )}
       </div>
@@ -261,6 +259,7 @@ export function VehicleCard({
               <p className="text-muted-foreground text-xs">
                 Est. weekend {formatRentalUsd(weekendPrice)}
               </p>
+              <p className="mt-2 font-medium text-primary text-sm">View details</p>
             </div>
           </div>
         </CardContent>
@@ -311,6 +310,7 @@ export function VehicleCard({
           {specs.length > 0 && (
             <div className="mt-auto flex items-center gap-3 border-t pt-3.5">{specItems}</div>
           )}
+          <p className="mt-3 font-medium text-primary text-sm">View details</p>
         </CardContent>
       </Card>
     )
