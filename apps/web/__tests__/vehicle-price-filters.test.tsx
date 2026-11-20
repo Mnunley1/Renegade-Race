@@ -8,7 +8,6 @@ import {
   priceFilterDollars,
   readPriceFilter,
 } from "@/app/vehicles/price-filter"
-import type { VehicleItem } from "@/app/vehicles/types"
 
 const navigation = vi.hoisted(() => ({ params: new URLSearchParams(), replace: vi.fn() }))
 const inventory = [1022, 1023, 1024, 49999, 50000, 50001].map((dailyRate) => ({
@@ -42,10 +41,8 @@ vi.mock("convex/react", () => ({
 vi.mock("@/app/vehicles/recently-viewed", () => ({ RecentlyViewed: () => null }))
 vi.mock("@/app/vehicles/compare-bar", () => ({ CompareBar: () => null }))
 vi.mock("@/app/vehicles/compare-modal", () => ({ CompareModal: () => null }))
-vi.mock("@/app/vehicles/vehicle-results-grid", () => ({
-  VehicleResultsGrid: ({ filteredVehicles }: { filteredVehicles: VehicleItem[] }) => (
-    <div data-testid="matching-vehicles">{filteredVehicles.map((v) => v.id).join(",")}</div>
-  ),
+vi.mock("@/components/vehicle-card", () => ({
+  VehicleCard: ({ id }: { id: string }) => <div data-testid="matching-vehicle">{id}</div>,
 }))
 
 beforeEach(() => {
@@ -57,9 +54,8 @@ afterEach(cleanup)
 
 function matchingPrices() {
   return screen
-    .getByTestId("matching-vehicles")
-    .textContent?.split(",")
-    .map((id) => Number(id.replace("vehicle-", "")))
+    .queryAllByTestId("matching-vehicle")
+    .map((card) => Number(card.textContent?.replace("vehicle-", "")))
 }
 
 function changePrice(label: string, value: string) {
@@ -115,6 +111,18 @@ describe("catalog dollar input and cent filtering", () => {
     navigation.params = new URLSearchParams("priceUsd=invalid")
     render(<VehiclesPage />)
     expect(matchingPrices()).toEqual([1022, 1023, 1024, 49999, 50000, 50001])
+  })
+
+  it("formats the empty-results price badge in dollars and clears it", () => {
+    navigation.params = new URLSearchParams("q=no-matching-vehicle&priceUsd=10.23-10.23")
+    render(<VehiclesPage />)
+    expect(screen.getByRole("heading", { name: "No vehicles found" })).toBeInTheDocument()
+    const priceBadges = screen.getAllByText("Price: $10.23–$10.23/day")
+    expect(priceBadges).toHaveLength(2)
+    expect(screen.queryByText("Price: 1023-1023")).not.toBeInTheDocument()
+    fireEvent.click(priceBadges[1] as HTMLElement)
+    expect(screen.queryByText("Price: $10.23–$10.23/day")).not.toBeInTheDocument()
+    expect(navigation.replace.mock.lastCall?.[0]).not.toContain("price")
   })
 
   it("retains session-stored cent ranges without multiplying them", () => {
