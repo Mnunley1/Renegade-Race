@@ -48,6 +48,9 @@ the `dev` Preview deployment. Production tracks `main` in both projects, with
 
 Convex deployment is currently separate from Vercel Git builds. Neither frontend
 build deploys the shared backend, and GitHub CI has no deployment credentials.
+`packages/backend` owns the shared Convex project for both apps. Use the
+[shared backend workflow](backend-workflow.md) for canonical local/staging
+commands, explicit target selection and matching the reviewed runtime.
 Before accepting staging, verify that both apps use the intended nonproduction
 Convex revision. Exercise authentication, authorization, uploads and sandbox
 payments. Set `NEXT_PUBLIC_SKIP_REQUIRED_PHOTOS=false` for production-parity tests.

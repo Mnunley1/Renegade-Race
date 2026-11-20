@@ -19,7 +19,7 @@ The customer-facing web app for **Renegade Race Rentals**, a digital paddock whe
 - Convex (database + serverless backend)
 - Clerk (authentication)
 - Stripe Connect (marketplace payouts) + Stripe Billing (subscriptions) + Stripe ACH (high-value invoices)
-- Cloudflare R2 + ImageKit (images)
+- Cloudflare R2 + Vercel image optimization (public images); private Convex storage (return evidence)
 - Resend (email) + Documenso (e-signatures, scaffolded)
 - Tailwind CSS v4 + shadcn/ui
 - Biome (lint + format)
@@ -29,16 +29,17 @@ The customer-facing web app for **Renegade Race Rentals**, a digital paddock whe
 1. Install dependencies (from repo root):
 
    ```bash
-   pnpm install
+   pnpm install --frozen-lockfile
    ```
 
-2. Set up `.env.local` (see `.env.example` for the full list):
+2. Set up `apps/web/.env.local` (see `.env.example` for the full list), using the
+   verified nonproduction backend shared with admin:
 
    ```env
    NEXT_PUBLIC_CONVEX_URL=...
    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=...
    CLERK_SECRET_KEY=...
-   NEXT_PUBLIC_IMAGEKIT_URL_ENDPOINT=...
+   NEXT_PUBLIC_R2_PUBLIC_URL=...
    NEXT_PUBLIC_SENTRY_DSN=...
    ```
 
@@ -47,6 +48,13 @@ The customer-facing web app for **Renegade Race Rentals**, a digital paddock whe
    ```bash
    pnpm dev:web
    ```
+
+The web app imports its generated Convex API from `packages/backend`; it does not
+own a Convex project or functions directory. Run backend commands through that
+workspace from the repository root, not from `apps/web`. See the
+[shared backend workflow](../../docs/backend-workflow.md) for personal development,
+explicit staging targets, runtime matching and production release boundaries.
+Starting the web dev server does not deploy Convex.
 
 ## Roadmap
 
