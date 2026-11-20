@@ -1141,7 +1141,8 @@ export default defineSchema({
     .index("by_track", ["trackId"])
     .index("by_created", ["createdAt"])
     .index("by_featured", ["featuredUntil"])
-    .index("by_author_created", ["authorId", "createdAt"]),
+    .index("by_author_created", ["authorId", "createdAt"])
+    .index("by_team_created", ["teamId", "createdAt"]),
 
   postReactions: defineTable({
     postId: v.id("posts"),
@@ -1220,6 +1221,7 @@ export default defineSchema({
     .index("by_actor", ["actorId"])
     .index("by_created", ["createdAt"])
     .index("by_actor_created", ["actorId", "createdAt"])
+    .index("by_target_created", ["targetType", "targetId", "createdAt"])
     .index("by_visibility_created", ["visibility", "createdAt"]),
 
   // ============================================================
