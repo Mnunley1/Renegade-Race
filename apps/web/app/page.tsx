@@ -318,7 +318,7 @@ export default function HomePage() {
       </section>
 
       {/* About Section */}
-      <section className="container mx-auto px-4 py-28 sm:px-6">
+      <section className="container mx-auto overflow-x-clip px-4 py-28 sm:px-6">
         <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
           {/* Text Content */}
           <Reveal className="space-y-6" from="left">
