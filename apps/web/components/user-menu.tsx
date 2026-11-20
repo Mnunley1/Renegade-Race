@@ -17,6 +17,7 @@ import {
   Calendar,
   Car,
   ChevronDown,
+  FileText,
   GraduationCap,
   Heart,
   LogOut,
@@ -36,22 +37,17 @@ function HostMenuItem({
   status: string | undefined
   pathname: string | null
 }) {
-  if (status === "completed") {
-    return (
-      <DropdownMenuItem asChild className={pathname?.startsWith("/host") ? "bg-accent" : ""}>
-        <Link className="flex items-center text-sm" href="/host/dashboard">
-          <Car className="mr-3 size-4" />
-          Host Dashboard
-        </Link>
-      </DropdownMenuItem>
-    )
-  }
-
+  const href = status === "completed" ? "/host/dashboard" : "/host/onboarding"
+  const active = pathname === "/host" || pathname?.startsWith("/host/")
   return (
-    <DropdownMenuItem asChild>
-      <Link className="flex items-center text-sm" href="/host/onboarding">
+    <DropdownMenuItem asChild className={active ? "bg-accent" : ""}>
+      <Link
+        aria-current={active ? "page" : undefined}
+        className="flex items-center text-sm"
+        href={href}
+      >
         <Car className="mr-3 size-4" />
-        {status === "in_progress" ? "Continue Host Setup" : "Become a Host"}
+        Hosting
         {status === "in_progress" && <span className="ml-auto size-2 rounded-full bg-amber-500" />}
       </Link>
     </DropdownMenuItem>
@@ -59,10 +55,15 @@ function HostMenuItem({
 }
 
 function CoachMenuItem({ hasProfile, pathname }: { hasProfile: boolean; pathname: string | null }) {
+  const active = pathname === "/coach" || pathname?.startsWith("/coach/")
   if (hasProfile) {
     return (
-      <DropdownMenuItem asChild className={pathname?.startsWith("/coach") ? "bg-accent" : ""}>
-        <Link className="flex items-center text-sm" href="/coach/dashboard">
+      <DropdownMenuItem asChild className={active ? "bg-accent" : ""}>
+        <Link
+          aria-current={active ? "page" : undefined}
+          className="flex items-center text-sm"
+          href="/coach/dashboard"
+        >
           <GraduationCap className="mr-3 size-4" />
           Coach Dashboard
         </Link>
@@ -72,7 +73,11 @@ function CoachMenuItem({ hasProfile, pathname }: { hasProfile: boolean; pathname
 
   return (
     <DropdownMenuItem asChild>
-      <Link className="flex items-center text-sm" href="/coach/onboarding">
+      <Link
+        aria-current={active ? "page" : undefined}
+        className="flex items-center text-sm"
+        href="/coach/onboarding"
+      >
         <GraduationCap className="mr-3 size-4" />
         Become a Coach
       </Link>
@@ -131,12 +136,16 @@ export function UserMenu() {
     "U"
   ).toUpperCase()
 
-  const isActive = (href: string) => pathname === href
+  const isActive = (href: string) => pathname === href || pathname?.startsWith(`${href}/`)
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button className="flex items-center gap-1.5 rounded-full pr-2 pl-1.5" variant="ghost">
+        <Button
+          aria-label="Open user menu"
+          className="flex items-center gap-1.5 rounded-full pr-2 pl-1.5"
+          variant="ghost"
+        >
           <Avatar className="size-8 ring-1 ring-border">
             <AvatarImage alt={user?.firstName || "User"} src={user?.imageUrl} />
             <AvatarFallback>{initial}</AvatarFallback>
@@ -144,7 +153,10 @@ export function UserMenu() {
           <ChevronDown className="size-4 text-muted-foreground" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-64">
+      <DropdownMenuContent
+        align="end"
+        className="max-h-[var(--radix-dropdown-menu-content-available-height)] w-64 overflow-y-auto"
+      >
         {/* Account header */}
         <DropdownMenuLabel className="flex items-center gap-3 py-2.5">
           <Avatar className="size-9">
@@ -162,19 +174,21 @@ export function UserMenu() {
         {/* Activity */}
         <DropdownMenuGroup>
           <DropdownMenuItem asChild className={isActive("/trips") ? "bg-accent" : ""}>
-            <Link className="flex items-center text-sm" href="/trips">
+            <Link
+              aria-current={isActive("/trips") ? "page" : undefined}
+              className="flex items-center text-sm"
+              href="/trips"
+            >
               <Calendar className="mr-3 size-4" />
-              Trips
-            </Link>
-          </DropdownMenuItem>
-          <DropdownMenuItem asChild className={isActive("/favorites") ? "bg-accent" : ""}>
-            <Link className="flex items-center text-sm" href="/favorites">
-              <Heart className="mr-3 size-4" />
-              Favorites
+              My Trips
             </Link>
           </DropdownMenuItem>
           <DropdownMenuItem asChild className={isActive("/messages") ? "bg-accent" : ""}>
-            <Link className="flex items-center text-sm" href="/messages">
+            <Link
+              aria-current={isActive("/messages") ? "page" : undefined}
+              className="flex items-center text-sm"
+              href="/messages"
+            >
               <MessageSquare className="mr-3 size-4" />
               Messages
               {unreadCount !== undefined && unreadCount > 0 && (
@@ -182,6 +196,16 @@ export function UserMenu() {
                   {unreadCount > 99 ? "99+" : unreadCount}
                 </span>
               )}
+            </Link>
+          </DropdownMenuItem>
+          <DropdownMenuItem asChild className={isActive("/favorites") ? "bg-accent" : ""}>
+            <Link
+              aria-current={isActive("/favorites") ? "page" : undefined}
+              className="flex items-center text-sm"
+              href="/favorites"
+            >
+              <Heart className="mr-3 size-4" />
+              Favorites
             </Link>
           </DropdownMenuItem>
         </DropdownMenuGroup>
@@ -192,6 +216,16 @@ export function UserMenu() {
         <DropdownMenuGroup>
           <HostMenuItem pathname={pathname} status={onboardingStatus?.status} />
           <CoachMenuItem hasProfile={!!coachProfile} pathname={pathname} />
+          <DropdownMenuItem asChild className={isActive("/deals/invoices") ? "bg-accent" : ""}>
+            <Link
+              aria-current={isActive("/deals/invoices") ? "page" : undefined}
+              className="flex items-center text-sm"
+              href="/deals/invoices"
+            >
+              <FileText className="mr-3 size-4" />
+              Invoices
+            </Link>
+          </DropdownMenuItem>
         </DropdownMenuGroup>
 
         <DropdownMenuSeparator />
@@ -199,15 +233,23 @@ export function UserMenu() {
         {/* Account */}
         <DropdownMenuGroup>
           <DropdownMenuItem asChild className={isActive("/profile") ? "bg-accent" : ""}>
-            <Link className="flex items-center text-sm" href="/profile">
+            <Link
+              aria-current={isActive("/profile") ? "page" : undefined}
+              className="flex items-center text-sm"
+              href="/profile"
+            >
               <User className="mr-3 size-4" />
-              Profile
+              My Profile
             </Link>
           </DropdownMenuItem>
           <DropdownMenuItem asChild className={isActive("/settings") ? "bg-accent" : ""}>
-            <Link className="flex items-center text-sm" href="/settings">
+            <Link
+              aria-current={isActive("/settings") ? "page" : undefined}
+              className="flex items-center text-sm"
+              href="/settings"
+            >
               <Settings className="mr-3 size-4" />
-              Account
+              Account Settings
             </Link>
           </DropdownMenuItem>
         </DropdownMenuGroup>
@@ -219,7 +261,7 @@ export function UserMenu() {
           onClick={handleSignOut}
         >
           <LogOut className="mr-3 size-4" />
-          Log out
+          Sign Out
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
