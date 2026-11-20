@@ -20,6 +20,7 @@ const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL)
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const { hasConsented, isLoading } = useCookieConsent()
+  const { userId, sessionId } = useAuth()
 
   // Load Sentry conditionally based on consent
   useEffect(() => {
@@ -30,7 +31,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <ErrorBoundary>
-      <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
+      <ConvexProviderWithClerk
+        client={convex}
+        key={JSON.stringify([userId, sessionId])}
+        useAuth={useAuth}
+      >
         <NextThemesProvider
           attribute="class"
           defaultTheme="light"
