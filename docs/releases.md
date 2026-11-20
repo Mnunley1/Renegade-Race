@@ -35,6 +35,11 @@ their own passing PR; a second-account approval is not required. CI uses Node 22
 pnpm 10.4.1 and frozen installs on PRs and pushes to both branches. The build uses
 placeholder service configuration; it is not a staging integration test.
 
+CI cancels superseded runs within the same pull request or pushed branch. Pull
+request runs and push runs have separate concurrency groups, so editing a merged
+PR cannot cancel the branch's post-merge checks. PR edits still rerun checks to
+validate changes to the target branch.
+
 ## Environments and backend compatibility
 
 Web's Vercel `staging` environment tracks `dev`. Admin's staging domain tracks
