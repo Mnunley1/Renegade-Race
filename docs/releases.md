@@ -187,6 +187,39 @@ of historical dates/prices. A frontend rollback cannot remove the backend holds.
 Guest draft restoration and consistent date-entry presentation are REN-35;
 terminal unpaid Stripe attempt reconciliation is REN-36.
 
+## Invoice lifecycle reconciliation (REN-40)
+
+Invoice webhooks are signals to fetch current Stripe state, not ordered commands
+to change local status. The backend verifies the Stripe invoice, Basil
+InvoicePayment relationship, current intent, customer, participant metadata,
+USD amounts, original payout owner and application fee. Paid settlement also
+requires captured charge proof. Missing registration or inconsistent evidence
+retries delivery without recording a successful receipt. State and receipt commit
+atomically; an optional payment-sync version detects concurrent changes during
+provider reads. Old failed/processing events cannot undo newer provider state.
+
+Terminal invoices can reconcile without a payment intent. Settled local states
+remain settled; a later verified event may fill a missing paid charge reference
+without notifying twice. No historical rows are bulk rewritten. Existing public
+payment-method and deposit-refund actions retain their ownership safeguards.
+
+Deploy the compatible backend before accepting staging. Keep existing Stripe
+platform subscriptions and include `payment_intent.processing`, `invoice.paid`,
+`invoice.payment_failed`, `invoice.voided`, and `invoice.marked_uncollectible`.
+Verify card and ACH processing/success/failure with synthetic Stripe test methods,
+including destination transfer/application-fee proof and unrelated-user denial.
+Do not infer readiness from unit tests or manually mark an invoice paid.
+
+## Paddock Following and team posting (REN-41)
+
+Following contains the current user, followed users, and followed teams, including
+public activities from those actors or explicit followed-team targets. Indexed
+per-source reads avoid a fixed recent-global window hiding older matching posts.
+Results are deduplicated, sorted, and limited; anonymous Following is empty.
+Global and For You retain their existing public behavior. Posting as a team
+requires its owner or an active team membership. Two additive indexes support
+team posts and team-target activities; no content/privacy migration is performed.
+
 ## Guest rental selections (REN-35)
 
 Guests may choose a vehicle, start date, 1–3 inclusive days and add-ons before
