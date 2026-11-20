@@ -493,18 +493,14 @@ export default function HostVehicleAvailabilityPage() {
             {vehicle.minTripDuration && (
               <div className="rounded-lg border p-3">
                 <div className="text-muted-foreground text-xs">Minimum Trip</div>
-                <div className="mt-1 font-semibold text-sm capitalize">
-                  {vehicle.minTripDuration.replace("-", " ")}
-                </div>
+                <div className="mt-1 font-semibold text-sm capitalize">1 calendar day</div>
               </div>
             )}
             {vehicle.maxTripDuration && (
               <div className="rounded-lg border p-3">
                 <div className="text-muted-foreground text-xs">Maximum Trip</div>
                 <div className="mt-1 font-semibold text-sm capitalize">
-                  {vehicle.maxTripDuration === "unlimited"
-                    ? "Unlimited"
-                    : vehicle.maxTripDuration.replace("-", " ")}
+                  3 calendar days (inclusive)
                 </div>
               </div>
             )}
@@ -856,6 +852,10 @@ export default function HostVehicleAvailabilityPage() {
 
                 <div className="space-y-2">
                   <Label htmlFor="editMaxTripDuration">Maximum Trip Duration</Label>
+                  <p className="text-muted-foreground text-sm">
+                    Rental checkout allows 1–3 calendar days, including pickup and dropoff. This
+                    legacy preference does not override that rule.
+                  </p>
                   <Select onValueChange={setMaxTripDuration} value={maxTripDuration}>
                     <SelectTrigger id="editMaxTripDuration">
                       <SelectValue />

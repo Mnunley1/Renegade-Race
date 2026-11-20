@@ -743,7 +743,7 @@ function VehicleDetailsPageContent() {
                           <p className="font-medium text-muted-foreground text-xs uppercase tracking-wider">
                             Minimum Duration
                           </p>
-                          <p className="font-semibold">{vehicle.minTripDuration}</p>
+                          <p className="font-semibold">1 calendar day</p>
                         </div>
                       </div>
                     )}
@@ -761,7 +761,9 @@ function VehicleDetailsPageContent() {
                           <p className="font-medium text-muted-foreground text-xs uppercase tracking-wider">
                             Maximum Duration
                           </p>
-                          <p className="font-semibold">{vehicle.maxTripDuration}</p>
+                          <p className="font-semibold">
+                            3 calendar days (pickup and dropoff included)
+                          </p>
                         </div>
                       </div>
                     )}

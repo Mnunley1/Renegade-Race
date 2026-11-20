@@ -9,6 +9,7 @@ const TERMS_REQUIRED_ERROR = /You must accept the Terms of Service and Privacy P
 const mockPush = vi.fn()
 
 vi.mock("next/navigation", () => ({
+  useSearchParams: () => new URLSearchParams(),
   useRouter: () => ({
     push: mockPush,
     replace: vi.fn(),

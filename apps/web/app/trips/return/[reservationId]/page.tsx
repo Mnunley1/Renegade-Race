@@ -23,6 +23,7 @@ import { ReturnEvidence, ReturnPhoto } from "@/components/return-photo"
 import { useReturnPhotoUpload } from "@/hooks/useReturnPhoto"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
+import { formatDateForDisplay } from "@/lib/date-utils"
 import { handleErrorWithContext } from "@/lib/error-handler"
 import { IMAGE_ACCEPT_ATTR } from "@/lib/image-validation"
 
@@ -211,8 +212,8 @@ function ReturnForm({ reservationId, userId }: { reservationId: string; userId: 
                 <div>
                   <Label>Rental Period</Label>
                   <p className="text-muted-foreground text-sm">
-                    {new Date(reservation.startDate).toLocaleDateString()} -{" "}
-                    {new Date(reservation.endDate).toLocaleDateString()}
+                    {formatDateForDisplay(reservation.startDate)} -{" "}
+                    {formatDateForDisplay(reservation.endDate)}
                   </p>
                 </div>
                 <div>

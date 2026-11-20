@@ -26,6 +26,7 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { AuthLink } from "@/components/auth-link"
 import { api } from "@/lib/convex"
 
 function HostMenuItem({
@@ -102,10 +103,17 @@ export function UserMenu() {
     return (
       <div className="flex items-center gap-2">
         <Button asChild className="hidden sm:inline-flex" variant="ghost">
-          <Link href={`/sign-in?redirect_url=${encodeURIComponent(pathname || "/")}`}>Log in</Link>
+          <AuthLink
+            fallbackHref={`/sign-in?redirect_url=${encodeURIComponent(pathname || "/")}`}
+            path="/sign-in"
+          >
+            Log in
+          </AuthLink>
         </Button>
         <Button asChild>
-          <Link href="/sign-up">Sign up</Link>
+          <AuthLink fallbackHref="/sign-up" path="/sign-up">
+            Sign up
+          </AuthLink>
         </Button>
       </div>
     )

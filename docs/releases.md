@@ -182,6 +182,28 @@ of historical dates/prices. A frontend rollback cannot remove the backend holds.
 Guest draft restoration and consistent date-entry presentation are REN-35;
 terminal unpaid Stripe attempt reconciliation is REN-36.
 
+
+## Guest rental selections (REN-35)
+
+Guests may choose a vehicle, start date, 1–3 inclusive days and add-ons before
+signing in. Only the request form at `/checkout` is public; payment, request
+confirmation and other account routes remain protected. Authentication returns
+to a validated same-origin relative destination across sign-in and sign-up.
+
+A bounded, expiring draft in the current tab preserves choices, not an approved
+price. Restore add-on identities against the current listing, retain current
+mandatory add-ons, and use current prices/cadence and availability for review.
+Restoration never submits a booking automatically. The server still validates
+and freezes the quote when the renter explicitly sends the request. Existing
+reservation quotes and dates are unchanged.
+
+New rental requests use a start date plus 1, 2 or 3 occupied days. Unsupported
+incoming ranges require correction instead of silently shortening them. Display
+date-only rental values as local calendar dates to avoid timezone shifts. Legacy
+listing duration preferences do not override the 1–3-day request policy and are
+not migrated by this release. This is a frontend-only staging change on top of
+REN-34; it requires no new backend deployment or data migration.
+
 ## Account deletion preflight (REN-18)
 
 Settings calls the authenticated `users.checkUserDeletionEligibility` action before

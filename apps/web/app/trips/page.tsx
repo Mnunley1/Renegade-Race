@@ -27,6 +27,7 @@ import { CoachReviewDialog } from "@/components/coach-review-dialog"
 import { TripCard } from "@/components/trip-card"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
+import { formatDateToISO } from "@/lib/date-utils"
 import { r2Url } from "@/lib/r2-url"
 import { formatRentalUsd } from "@/lib/rental-checkout"
 
@@ -363,7 +364,7 @@ export default function TripsPage() {
           cancelled: [],
         }
       }
-      const today = new Date().toISOString().split("T")[0]
+      const today = formatDateToISO(new Date())
       const all = reservationsData.map(mapReservation).filter(Boolean) as Trip[]
 
       return {

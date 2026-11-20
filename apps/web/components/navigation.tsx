@@ -29,6 +29,7 @@ import {
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { AuthLink } from "@/components/auth-link"
 import { HostNavLink } from "@/components/host-nav-link"
 import { InboxButton } from "@/components/inbox-button"
 import { NotificationBell } from "@/components/notification-bell"
@@ -375,17 +376,22 @@ function MobileSidebar() {
                 <Separator className="my-4" />
                 <div className="space-y-1">
                   <SheetClose asChild>
-                    <Link
+                    <AuthLink
                       className={cn(sidebarLinkClass, "text-muted-foreground")}
-                      href={`/sign-in?redirect_url=${encodeURIComponent(pathname || "/")}`}
+                      fallbackHref={`/sign-in?redirect_url=${encodeURIComponent(pathname || "/")}`}
+                      path="/sign-in"
                     >
                       Sign In
-                    </Link>
+                    </AuthLink>
                   </SheetClose>
                   <SheetClose asChild>
-                    <Link className={cn(sidebarLinkClass, "text-muted-foreground")} href="/sign-up">
+                    <AuthLink
+                      className={cn(sidebarLinkClass, "text-muted-foreground")}
+                      fallbackHref="/sign-up"
+                      path="/sign-up"
+                    >
                       Sign Up
-                    </Link>
+                    </AuthLink>
                   </SheetClose>
                 </div>
               </>
