@@ -57,7 +57,7 @@ it("shows a failed payment with a retry link without claiming confirmation", () 
 
 it.each([
   ["pending", "pending", "Awaiting host approval"],
-  ["approved", "paid", "Awaiting payment confirmation"],
+  ["approved", "paid", "Payment received; booking needs review"],
   ["confirmed", "pending", "Awaiting payment confirmation"],
   ["cancelled", "paid", "Reservation not confirmed"],
   ["declined", "failed", "Reservation not confirmed"],
@@ -69,6 +69,22 @@ it.each([
   expect(screen.getByRole("heading", { name: heading })).toBeInTheDocument()
   expect(screen.queryByText("Reservation Confirmed!")).toBeNull()
   expect(screen.queryByRole("link", { name: "Try Payment Again" })).toBeNull()
+})
+
+it.each([
+  "paid",
+  "partially_refunded",
+])("directs an approved booking with %s payment to support without offering another payment", (paymentStatus) => {
+  mock.reservation = { ...reservation, paymentStatus }
+  render(<CheckoutSuccessPage />)
+  expect(
+    screen.getByRole("heading", { name: "Payment received; booking needs review" })
+  ).toBeInTheDocument()
+  expect(screen.getByText("Do not submit another payment.", { exact: false })).toBeInTheDocument()
+  expect(screen.getByRole("link", { name: "Contact Support" })).toHaveAttribute("href", "/contact")
+  expect(screen.getByRole("link", { name: "View My Trips" })).toHaveAttribute("href", "/trips")
+  expect(screen.queryByRole("link", { name: "Try Payment Again" })).toBeNull()
+  expect(screen.queryByText("Reservation Confirmed!")).toBeNull()
 })
 
 it("keeps an active partially refunded reservation confirmed", () => {

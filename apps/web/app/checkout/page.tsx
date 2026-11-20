@@ -59,6 +59,10 @@ function CheckoutPageContent() {
     api.availability.getByVehicle,
     vehicleId ? { vehicleId: vehicleId as Id<"vehicles"> } : "skip"
   )
+  const activeReservations = useQuery(
+    api.reservations.listActiveForVehicle,
+    vehicleId ? { vehicleId: vehicleId as Id<"vehicles"> } : "skip"
+  )
 
   const createReservation = useMutation(api.reservations.create)
 
@@ -75,6 +79,24 @@ function CheckoutPageContent() {
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const startDate = pickupDate ? formatDateToISO(pickupDate) : null
+  const endDate = dropoffDate ? formatDateToISO(dropoffDate) : null
+  const hasValidDateRange =
+    startDate && endDate && isValidRentalDuration(inclusiveRentalDays(startDate, endDate))
+  const rangeAvailability = useQuery(
+    api.availability.checkAvailability,
+    vehicleId && startDate && endDate && hasValidDateRange
+      ? { vehicleId: vehicleId as Id<"vehicles">, startDate, endDate }
+      : "skip"
+  )
+  const isCheckingAvailability =
+    availability === undefined ||
+    activeReservations === undefined ||
+    (hasValidDateRange && rangeAvailability === undefined)
+  let availabilityMessage = "These dates are open for a request. Host approval is still required."
+  if (isCheckingAvailability) availabilityMessage = "Checking date availability…"
+  else if (rangeAvailability?.isAvailable === false)
+    availabilityMessage = "These dates are unavailable. Choose another rental period."
 
   // Update selected add-ons when vehicle loads
   useEffect(() => {
@@ -144,6 +166,23 @@ function CheckoutPageContent() {
       ?.filter((item: { isAvailable: boolean; date: string }) => !item.isAvailable)
       .map((item: { date: string }) => parseLocalDate(item.date))
       .filter((d: Date | null): d is Date => d !== null) || []
+  const reservedRanges =
+    activeReservations?.filter(
+      (reservation) => reservation.status === "approved" || reservation.status === "confirmed"
+    ) ?? []
+  const isRangeUnavailable = (start: Date, end = start) => {
+    const firstDay = formatDateToISO(start)
+    const lastDay = formatDateToISO(end)
+    return (
+      blockedDates.some((date) => {
+        const day = formatDateToISO(date)
+        return day >= firstDay && day <= lastDay
+      }) ||
+      reservedRanges.some(
+        (reservation) => reservation.startDate <= lastDay && reservation.endDate >= firstDay
+      )
+    )
+  }
 
   // Toggle add-on selection
   const toggleAddOn = (addOn: AddOn) => {
@@ -187,6 +226,10 @@ function CheckoutPageContent() {
 
     if (!isValidRentalDuration(days)) {
       setError("Choose a rental of 1, 2, or 3 calendar days.")
+      return
+    }
+    if (isCheckingAvailability || rangeAvailability?.isAvailable !== true) {
+      setError("These dates are unavailable or still being checked. Please choose available dates.")
       return
     }
 
@@ -270,9 +313,14 @@ function CheckoutPageContent() {
   const primaryImageData = vehicleImages?.find((img) => img.isPrimary) || vehicleImages?.[0]
   const primaryImage =
     (primaryImageData?.r2Key ? r2Url(primaryImageData.r2Key) : primaryImageData?.imageUrl) || ""
-  // Availability is informational; the host decides whether to approve a request.
   const isValid =
-    pickupDate && dropoffDate && pickupTime && dropoffTime && isValidRentalDuration(days)
+    pickupDate &&
+    dropoffDate &&
+    pickupTime &&
+    dropoffTime &&
+    isValidRentalDuration(days) &&
+    !isCheckingAvailability &&
+    rangeAvailability?.isAvailable === true
 
   return (
     <div className="container mx-auto max-w-6xl px-4 py-8">
@@ -340,7 +388,12 @@ function CheckoutPageContent() {
                         disabled={(date: Date) => {
                           const dateStart = new Date(date)
                           dateStart.setHours(0, 0, 0, 0)
-                          return dateStart < minPickupDate
+                          return (
+                            availability === undefined ||
+                            activeReservations === undefined ||
+                            dateStart < minPickupDate ||
+                            isRangeUnavailable(dateStart)
+                          )
                         }}
                         initialFocus
                         mode="single"
@@ -375,7 +428,7 @@ function CheckoutPageContent() {
                   {blockedDates.length > 0 && (
                     <div className="mt-2 flex items-center gap-2 text-muted-foreground text-xs">
                       <div className="size-3 rounded bg-red-100 dark:bg-red-900/20" />
-                      <span>Host-marked dates; you can still send a request.</span>
+                      <span>Host-blocked dates cannot be requested.</span>
                     </div>
                   )}
                 </div>
@@ -433,7 +486,10 @@ function CheckoutPageContent() {
                           const minDate = new Date(minDropoffDate)
                           minDate.setHours(0, 0, 0, 0)
                           return (
+                            availability === undefined ||
+                            activeReservations === undefined ||
                             dateStart < minDate ||
+                            isRangeUnavailable(minDate, dateStart) ||
                             (pickupDate !== undefined &&
                               !isValidRentalDuration(
                                 inclusiveRentalDays(
@@ -465,7 +521,7 @@ function CheckoutPageContent() {
                   {blockedDates.length > 0 && (
                     <div className="mt-2 flex items-center gap-2 text-muted-foreground text-xs">
                       <div className="size-3 rounded bg-red-100 dark:bg-red-900/20" />
-                      <span>Host-marked dates; you can still send a request.</span>
+                      <span>Host-blocked dates cannot be requested.</span>
                     </div>
                   )}
                 </div>
@@ -616,9 +672,16 @@ function CheckoutPageContent() {
 
               <div className="rounded-lg border bg-muted/50 p-3 text-muted-foreground text-sm">
                 Rentals last 1, 2, or 3 calendar days, including pickup and dropoff dates. No
-                payment is required now. You can request host-marked or booked dates; the host will
+                payment is required now. Host-blocked dates and approved or confirmed bookings
+                cannot be requested. Other pending requests do not reserve dates. The host will
                 review your request and you'll only pay if approved.
               </div>
+
+              {hasValidDateRange && (
+                <output aria-live="polite" className="block text-sm">
+                  {availabilityMessage}
+                </output>
+              )}
 
               {error && (
                 <div className="rounded-lg border border-destructive bg-destructive/10 p-3 text-destructive text-sm">

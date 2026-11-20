@@ -21,6 +21,7 @@ import {
 import { ErrorCode, throwError } from "./errors"
 import { getWebUrl } from "./helpers"
 import { rateLimiter } from "./rateLimiter"
+import { assertRentalDatesAvailable } from "./rentalAvailability"
 import { buildRentalQuote, validateRentalQuote } from "./rentalQuote"
 import { sanitizeMessage, sanitizeShortText } from "./sanitize"
 import { publicUserProfile, userProfileWithAdminContact } from "./userProfile"
@@ -279,9 +280,11 @@ export const create = mutation({
     const quote = buildRentalQuote(vehicle, totalDays, args.addOns)
     const totalAmount = quote.totalAmount
 
-    // Owner-blocked dates stay visible to hosts, but they do not prevent a
-    // renter from submitting a request. Existing bookings/requests also do not
-    // block — owners and admins choose which overlapping request to accept.
+    await assertRentalDatesAvailable(ctx, {
+      vehicleId: args.vehicleId,
+      startDate: args.startDate,
+      endDate,
+    })
 
     // Create the reservation with sanitized content
     const reservationId = await ctx.db.insert("reservations", {
@@ -399,6 +402,13 @@ export const approve = mutation({
         currentStatus: reservation.status,
       })
     }
+
+    await assertRentalDatesAvailable(ctx, {
+      vehicleId: reservation.vehicleId,
+      startDate: reservation.startDate,
+      endDate: reservation.endDate,
+      excludeReservationId: reservation._id,
+    })
 
     const currentListing =
       reservation.quoteVersion === 1 ? null : await ctx.db.get(reservation.vehicleId)
@@ -615,6 +625,18 @@ export const cancel = mutation({
       throwError(ErrorCode.INVALID_STATUS, "Reservation cannot be cancelled", {
         currentStatus: reservation.status,
       })
+    }
+
+    // Captured payments held for review have not confirmed a rental. They need
+    // explicit reconciliation, not the normal cancellation-policy refund.
+    if (
+      reservation.status === "approved" &&
+      (reservation.paymentStatus === "paid" || reservation.paymentStatus === "partially_refunded")
+    ) {
+      throwError(
+        ErrorCode.INVALID_STATUS,
+        "This payment needs review before the reservation can be cancelled. Contact support."
+      )
     }
 
     await ctx.db.patch(args.reservationId, {

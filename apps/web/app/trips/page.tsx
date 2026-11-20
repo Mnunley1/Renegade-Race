@@ -31,6 +31,7 @@ import { r2Url } from "@/lib/r2-url"
 import { formatRentalUsd } from "@/lib/rental-checkout"
 
 type Trip = {
+  paymentStatus?: string
   paymentId?: string
   renterId: string
   cancellationPolicy?: "flexible" | "moderate" | "strict"
@@ -62,6 +63,7 @@ function mapReservation(res: any): Trip | null {
   return {
     reservationId: res._id,
     paymentId: res.paymentId,
+    paymentStatus: res.paymentStatus,
     renterId: res.renterId,
     cancellationPolicy: vehicle.cancellationPolicy,
     vehicleId: vehicle._id,
@@ -349,28 +351,48 @@ export default function TripsPage() {
     user?.id ? { userId: user.id, role: "renter" as const } : "skip"
   )
 
-  const { pendingRequests, awaitingPayment, upcoming, past, cancelled } = useMemo(() => {
-    if (!reservationsData) {
-      return { pendingRequests: [], awaitingPayment: [], upcoming: [], past: [], cancelled: [] }
-    }
-    const today = new Date().toISOString().split("T")[0]
-    const all = reservationsData.map(mapReservation).filter(Boolean) as Trip[]
+  const { pendingRequests, awaitingPayment, needsReview, upcoming, past, cancelled } =
+    useMemo(() => {
+      if (!reservationsData) {
+        return {
+          pendingRequests: [],
+          awaitingPayment: [],
+          needsReview: [],
+          upcoming: [],
+          past: [],
+          cancelled: [],
+        }
+      }
+      const today = new Date().toISOString().split("T")[0]
+      const all = reservationsData.map(mapReservation).filter(Boolean) as Trip[]
 
-    return {
-      pendingRequests: all.filter((t) => t.status === "pending"),
-      awaitingPayment: all.filter((t) => t.status === "approved"),
-      upcoming: all.filter((t) => t.status === "confirmed" && t.endDate >= (today ?? "")),
-      past: all.filter(
-        (t) => t.status === "completed" || (t.endDate < (today ?? "") && t.status === "confirmed")
-      ),
-      cancelled: all.filter((t) => t.status === "cancelled" || t.status === "declined"),
-    }
-  }, [reservationsData])
+      return {
+        pendingRequests: all.filter((t) => t.status === "pending"),
+        awaitingPayment: all.filter(
+          (t) =>
+            t.status === "approved" &&
+            t.paymentStatus !== "paid" &&
+            t.paymentStatus !== "partially_refunded"
+        ),
+        needsReview: all.filter(
+          (t) =>
+            t.status === "approved" &&
+            (t.paymentStatus === "paid" || t.paymentStatus === "partially_refunded")
+        ),
+        upcoming: all.filter((t) => t.status === "confirmed" && t.endDate >= (today ?? "")),
+        past: all.filter(
+          (t) => t.status === "completed" || (t.endDate < (today ?? "") && t.status === "confirmed")
+        ),
+        cancelled: all.filter((t) => t.status === "cancelled" || t.status === "declined"),
+      }
+    }, [reservationsData])
 
+  const requestCount = pendingRequests.length + awaitingPayment.length + needsReview.length
   const isLoading = reservationsData === undefined
   const totalTrips =
     pendingRequests.length +
     awaitingPayment.length +
+    needsReview.length +
     upcoming.length +
     past.length +
     cancelled.length
@@ -385,7 +407,7 @@ export default function TripsPage() {
             ? "Loading your trips..."
             : totalTrips === 0
               ? "Manage your reservations and review past experiences"
-              : `${pendingRequests.length + awaitingPayment.length > 0 ? `${pendingRequests.length + awaitingPayment.length} pending, ` : ""}${upcoming.length} upcoming, ${past.length} past`}
+              : `${requestCount > 0 ? `${requestCount} pending, ` : ""}${upcoming.length} upcoming, ${past.length} past`}
         </p>
       </div>
 
@@ -409,19 +431,13 @@ export default function TripsPage() {
 
       {/* Content */}
       {!isLoading && (
-        <Tabs
-          className="space-y-6"
-          defaultValue={
-            pendingRequests.length + awaitingPayment.length > 0 ? "requests" : "upcoming"
-          }
-        >
+        <Tabs className="space-y-6" defaultValue={requestCount > 0 ? "requests" : "upcoming"}>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <TabsList>
-              {(pendingRequests.length > 0 || awaitingPayment.length > 0) && (
+              {requestCount > 0 && (
                 <TabsTrigger value="requests">
                   Requests
-                  {pendingRequests.length + awaitingPayment.length > 0 &&
-                    ` (${pendingRequests.length + awaitingPayment.length})`}
+                  {requestCount > 0 && ` (${requestCount})`}
                 </TabsTrigger>
               )}
               <TabsTrigger value="upcoming">
@@ -451,6 +467,13 @@ export default function TripsPage() {
 
           {/* Requests (pending + approved) */}
           <TabsContent value="requests">
+            {needsReview.length > 0 && (
+              <p className="mb-6 rounded-lg border p-4">
+                {needsReview.length} paid{" "}
+                {needsReview.length === 1 ? "booking needs" : "bookings need"} review. Contact
+                support using the booking below.
+              </p>
+            )}
             {awaitingPayment.length > 0 && (
               <div className="mb-6 rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-950/50">
                 <div className="flex items-center gap-2">
@@ -465,7 +488,7 @@ export default function TripsPage() {
                 </p>
               </div>
             )}
-            {[...awaitingPayment, ...pendingRequests].length > 0 && (
+            {[...needsReview, ...awaitingPayment, ...pendingRequests].length > 0 && (
               <div className="mb-4 flex justify-end">
                 <Button
                   className="text-muted-foreground text-xs"
@@ -478,7 +501,8 @@ export default function TripsPage() {
                 </Button>
               </div>
             )}
-            {[...awaitingPayment, ...pendingRequests].length === 0 && !searchQuery.trim() ? (
+            {[...needsReview, ...awaitingPayment, ...pendingRequests].length === 0 &&
+            !searchQuery.trim() ? (
               <EmptyState
                 description="When you request a rental, it will appear here until the host responds."
                 icon={Send}
@@ -488,7 +512,7 @@ export default function TripsPage() {
               <TripList
                 searchQuery={searchQuery}
                 sortDirection={requestsSort}
-                trips={[...awaitingPayment, ...pendingRequests]}
+                trips={[...needsReview, ...awaitingPayment, ...pendingRequests]}
               />
             )}
           </TabsContent>

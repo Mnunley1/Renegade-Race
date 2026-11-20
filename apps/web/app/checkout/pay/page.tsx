@@ -137,9 +137,12 @@ function PayPageContent() {
   const [retry, setRetry] = useState(0)
   const bookingId = reservation?._id
   const subtotal = reservation?.totalAmount
+  const needsReview =
+    reservation?.status === "approved" &&
+    (reservation.paymentStatus === "paid" || reservation.paymentStatus === "partially_refunded")
   // A refreshed query object or an initialization failure must not retry a charge.
   const paymentKey =
-    isSignedIn && reservation?.status === "approved"
+    isSignedIn && reservation?.status === "approved" && !needsReview
       ? JSON.stringify([
           user?.id,
           bookingId,
@@ -250,6 +253,30 @@ function PayPageContent() {
             <p className="font-medium text-lg text-muted-foreground">Loading reservation...</p>
           </div>
         </div>
+      </div>
+    )
+  }
+
+  if (needsReview) {
+    return (
+      <div className="container mx-auto max-w-4xl px-4 py-8">
+        <Card>
+          <CardContent className="space-y-4 py-12 text-center">
+            <h2 className="font-bold text-2xl">Payment received; booking needs review</h2>
+            <p>
+              Your payment was received, but your booking could not be confirmed. Contact support to
+              resolve the booking. Do not submit another payment.
+            </p>
+            <div className="flex justify-center gap-4">
+              <Button asChild>
+                <Link href="/contact">Contact Support</Link>
+              </Button>
+              <Button asChild variant="outline">
+                <Link href="/trips">View My Trips</Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     )
   }

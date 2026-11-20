@@ -12,6 +12,7 @@ import {
 import { checkAdmin, isAdminIdentity } from "./admin"
 import { calculateDistance } from "./geocoding"
 import { attachVehicleUpload, removeVehicleUpload } from "./r2"
+import { getRentalConflicts } from "./rentalAvailability"
 import { publicUserProfile, userProfileWithAdminContact } from "./userProfile"
 import { normalizeMake } from "./vehicleMakes"
 
@@ -214,22 +215,14 @@ export const searchWithAvailability = query({
     }
 
     // Date availability filter (only over the current page).
-    // Owner-blocked dates still hide a vehicle from date search. Existing
-    // bookings/requests do not — multiple renters can request the same days.
+    // Use the same inclusive date holds as request creation and approval.
     if (startDate && endDate && pageVehicles.length > 0) {
-      const blockedDatesInRange = await ctx.db
-        .query("availability")
-        .filter((q) =>
-          q.and(
-            q.eq(q.field("isAvailable"), false),
-            q.gte(q.field("date"), startDate),
-            q.lte(q.field("date"), endDate)
-          )
+      const availability = await Promise.all(
+        pageVehicles.map((vehicle) =>
+          getRentalConflicts(ctx, { vehicleId: vehicle._id, startDate, endDate })
         )
-        .collect()
-      const vehiclesWithBlockedDates = new Set(blockedDatesInRange.map((a) => a.vehicleId))
-
-      pageVehicles = pageVehicles.filter((vehicle) => !vehiclesWithBlockedDates.has(vehicle._id))
+      )
+      pageVehicles = pageVehicles.filter((_vehicle, index) => availability[index]?.isAvailable)
     }
 
     // Distance filter (within the page only — cross-page distance sort isn't possible here)

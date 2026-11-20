@@ -10,6 +10,10 @@ const mock = vi.hoisted(() => ({
   params: "",
   createReservation: vi.fn(),
   push: vi.fn(),
+  availability: [] as { date: string; isAvailable: boolean }[] | undefined,
+  reservations: [] as { status: string; startDate: string; endDate: string }[] | undefined,
+  range: { isAvailable: true } as { isAvailable: boolean } | undefined,
+  checkRange: vi.fn(),
 }))
 
 vi.mock("@clerk/nextjs", () => ({
@@ -21,10 +25,33 @@ vi.mock("next/navigation", () => ({
 }))
 vi.mock("convex/react", () => ({
   useMutation: () => mock.createReservation,
-  useQuery: (fn: Parameters<typeof getFunctionName>[0]) =>
-    getFunctionName(fn) === "vehicles:getById"
-      ? vehicle
-      : [{ date: "2099-08-01", isAvailable: false }],
+  useQuery: (fn: Parameters<typeof getFunctionName>[0], args: unknown) => {
+    if (args === "skip") return
+    switch (getFunctionName(fn)) {
+      case "vehicles:getById":
+        return vehicle
+      case "availability:getByVehicle":
+        return mock.availability
+      case "reservations:listActiveForVehicle":
+        return mock.reservations
+      case "availability:checkAvailability":
+        mock.checkRange(args)
+        return mock.range
+      default:
+        return
+    }
+  },
+}))
+vi.mock("@workspace/ui/components/calendar", () => ({
+  Calendar: ({ disabled }: { disabled: (date: Date) => boolean }) => (
+    <div>
+      {["2099-08-01", "2099-08-02", "2099-08-03"].map((day) => (
+        <button disabled={disabled(new Date(`${day}T00:00:00`))} key={day} type="button">
+          Calendar {day}
+        </button>
+      ))}
+    </div>
+  ),
 }))
 vi.mock("@workspace/ui/components/select", () => ({
   Select: ({
@@ -65,6 +92,10 @@ beforeEach(() => {
   mock.params = "vehicleId=vehicle&startDate=2099-08-01&endDate=2099-08-01"
   mock.createReservation.mockReset().mockResolvedValue("booking")
   mock.push.mockReset()
+  mock.availability = []
+  mock.reservations = []
+  mock.range = { isAvailable: true }
+  mock.checkRange.mockReset()
 })
 afterEach(cleanup)
 
@@ -98,7 +129,7 @@ it("limits rental requests to one through three days and prices daily add-ons in
   expect(formatRentalUsd(28500)).toBe("$285.00")
 })
 
-it("allows a same-day request on a host-marked date and submits the displayed add-on pricing", async () => {
+it("allows an available same-day request and submits the displayed add-on pricing", async () => {
   render(<CheckoutPage />)
   expect(await screen.findByText("1 day")).toBeInTheDocument()
   expect(screen.getByText("$160.00")).toBeInTheDocument()
@@ -123,6 +154,80 @@ it("allows a same-day request on a host-marked date and submits the displayed ad
     })
   )
   expect(mock.push).toHaveBeenCalledWith("/checkout/request-sent?reservationId=booking")
+})
+
+function chooseTimes() {
+  const times = screen.getAllByRole("combobox")
+  times.forEach((time, index) => {
+    fireEvent.change(time, { target: { value: index === 0 ? "08:00" : "18:00" } })
+  })
+}
+
+it("checks the entire selected range and blocks a host-blocked middle day", async () => {
+  mock.params = "vehicleId=vehicle&startDate=2099-08-01&endDate=2099-08-03"
+  mock.availability = [{ date: "2099-08-02", isAvailable: false }]
+  mock.range = { isAvailable: false }
+  render(<CheckoutPage />)
+  await screen.findByText("3 days")
+  chooseTimes()
+  expect(mock.checkRange).toHaveBeenCalledWith({
+    vehicleId: "vehicle",
+    startDate: "2099-08-01",
+    endDate: "2099-08-03",
+  })
+  expect(screen.getByRole("status")).toHaveTextContent("These dates are unavailable")
+  expect(screen.getByRole("button", { name: "Submit Request" })).toBeDisabled()
+  fireEvent.click(screen.getByLabelText("Dropoff Date"))
+  expect(screen.getByRole("button", { name: "Calendar 2099-08-03" })).toBeDisabled()
+  expect(mock.createReservation).not.toHaveBeenCalled()
+})
+
+it.each(["approved", "confirmed"])("disables %s occupied dates", async (status) => {
+  mock.reservations = [{ status, startDate: "2099-08-01", endDate: "2099-08-02" }]
+  mock.range = { isAvailable: false }
+  render(<CheckoutPage />)
+  await screen.findByText("1 day")
+  chooseTimes()
+  fireEvent.click(screen.getByLabelText("Pickup Date"))
+  expect(screen.getByRole("button", { name: "Calendar 2099-08-01" })).toBeDisabled()
+  expect(screen.getByRole("button", { name: "Calendar 2099-08-02" })).toBeDisabled()
+  expect(screen.getByRole("button", { name: "Calendar 2099-08-03" })).toBeEnabled()
+  expect(mock.createReservation).not.toHaveBeenCalled()
+})
+
+it("allows a competing pending request without treating its dates as occupied", async () => {
+  mock.reservations = [{ status: "pending", startDate: "2099-08-01", endDate: "2099-08-02" }]
+  render(<CheckoutPage />)
+  await screen.findByText("1 day")
+  chooseTimes()
+  expect(screen.getByRole("button", { name: "Submit Request" })).toBeEnabled()
+  fireEvent.click(screen.getByLabelText("Pickup Date"))
+  expect(screen.getByRole("button", { name: "Calendar 2099-08-01" })).toBeEnabled()
+})
+
+it("waits for availability and blocks submission if the selected range becomes unavailable", async () => {
+  mock.range = undefined
+  const page = render(<CheckoutPage />)
+  await screen.findByText("1 day")
+  chooseTimes()
+  expect(screen.getByRole("status")).toHaveTextContent("Checking date availability")
+  expect(screen.getByRole("button", { name: "Submit Request" })).toBeDisabled()
+  mock.range = { isAvailable: true }
+  page.rerender(<CheckoutPage />)
+  expect(screen.getByRole("button", { name: "Submit Request" })).toBeEnabled()
+  mock.range = { isAvailable: false }
+  page.rerender(<CheckoutPage />)
+  expect(screen.getByRole("button", { name: "Submit Request" })).toBeDisabled()
+  expect(mock.createReservation).not.toHaveBeenCalled()
+})
+
+it("keeps submission disabled until calendar records are loaded", async () => {
+  mock.reservations = undefined
+  render(<CheckoutPage />)
+  await screen.findByText("1 day")
+  chooseTimes()
+  expect(screen.getByRole("status")).toHaveTextContent("Checking date availability")
+  expect(screen.getByRole("button", { name: "Submit Request" })).toBeDisabled()
 })
 
 it("shows the two-day total including daily add-ons", async () => {

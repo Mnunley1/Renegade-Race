@@ -102,7 +102,7 @@ describe("reservations.create — start date + duration", () => {
     expect(second?.endDate).toBe("2030-07-12")
   })
 
-  it("allows a request that overlaps a confirmed booking", async () => {
+  it("rejects a request that overlaps a confirmed booking", async () => {
     const t = convexTest(schema, modules)
     const vehicleId = await seedVehicle(t)
 
@@ -117,17 +117,13 @@ describe("reservations.create — start date + duration", () => {
       await ctx.db.patch(confirmedId, { status: "confirmed" })
     })
 
-    const overlappingId = await t
-      .withIdentity({ subject: RENTER_B })
-      .mutation(api.reservations.create, {
+    await expect(
+      t.withIdentity({ subject: RENTER_B }).mutation(api.reservations.create, {
         vehicleId,
         startDate: "2030-08-01",
         durationDays: 2,
       })
-
-    const overlapping = await t.run((ctx) => ctx.db.get(overlappingId))
-    expect(overlapping?.status).toBe("pending")
-    expect(overlapping?.totalDays).toBe(2)
+    ).rejects.toThrow("DATES_UNAVAILABLE")
   })
 
   it("lists overlapping activity without hiding either request", async () => {

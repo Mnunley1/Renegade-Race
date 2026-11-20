@@ -29,6 +29,7 @@ import {
   resolvePlatformFeePercentage,
 } from "./pricing"
 import { rateLimiter } from "./rateLimiter"
+import { assertRentalDatesAvailable, getRentalConflicts } from "./rentalAvailability"
 import { validateRentalQuote } from "./rentalQuote"
 import { issueRentalRefund, syncRentalRefunds } from "./rentalRefunds"
 import {
@@ -662,6 +663,23 @@ function assertRentalAwaitingPayment(
   }
 }
 
+export const assertRentalPaymentAvailable = internalQuery({
+  args: { reservationId: v.id("reservations"), renterId: v.string() },
+  handler: async (ctx, args) => {
+    const reservation = await ctx.db.get(args.reservationId)
+    if (!reservation || reservation.renterId !== args.renterId) {
+      throwError(ErrorCode.FORBIDDEN, "Payment reservation does not match the renter")
+    }
+    assertRentalAwaitingPayment(reservation)
+    await assertRentalDatesAvailable(ctx, {
+      vehicleId: reservation.vehicleId,
+      startDate: reservation.startDate,
+      endDate: reservation.endDate,
+      excludeReservationId: reservation._id,
+    })
+  },
+})
+
 // Create checkout session for one-time payment (using component + Connect)
 export const createCheckoutSession = action({
   args: {
@@ -692,6 +710,11 @@ export const createCheckoutSession = action({
     }
 
     assertRentalAwaitingPayment(reservation)
+
+    await ctx.runQuery(internal.stripe.assertRentalPaymentAvailable, {
+      reservationId: reservation._id,
+      renterId: identity.subject,
+    })
 
     // Trusted request snapshots keep their approved prices after listing edits.
     // Historical quotes are payable only when every stored amount/cadence matches.
@@ -853,6 +876,13 @@ export const createCheckoutSession = action({
       },
     })
 
+    // Cancellation may race the external Stripe request. Do not expose its URL
+    // after the booking stops being payable; retain the linked financial record.
+    await ctx.runQuery(internal.stripe.assertRentalPaymentAvailable, {
+      reservationId: reservation._id,
+      renterId: identity.subject,
+    })
+
     return {
       paymentId,
       sessionId: checkoutSession.id,
@@ -906,6 +936,11 @@ export const createPaymentIntent = action({
     }
 
     assertRentalAwaitingPayment(reservation)
+
+    await ctx.runQuery(internal.stripe.assertRentalPaymentAvailable, {
+      reservationId: reservation._id,
+      renterId: identity.subject,
+    })
 
     // Trusted request snapshots keep their approved prices after listing edits.
     // Historical quotes are payable only when every stored amount/cadence matches.
@@ -1032,6 +1067,13 @@ export const createPaymentIntent = action({
       },
     })
 
+    // A previously issued secret can outlive a cancellation. Recheck before
+    // returning it; signed success events separately guard final confirmation.
+    await ctx.runQuery(internal.stripe.assertRentalPaymentAvailable, {
+      reservationId: reservation._id,
+      renterId: identity.subject,
+    })
+
     return {
       paymentId,
       clientSecret: paymentIntent.client_secret as string,
@@ -1077,6 +1119,13 @@ export const createPaymentRecord = internalMutation({
     ) {
       throwError(ErrorCode.CONFLICT, "Payment participants do not match the reservation")
     }
+
+    await assertRentalDatesAvailable(ctx, {
+      vehicleId: reservation.vehicleId,
+      startDate: reservation.startDate,
+      endDate: reservation.endDate,
+      excludeReservationId: reservation._id,
+    })
 
     const existing = args.stripePaymentIntentId
       ? await paymentForIntent(ctx, args.stripePaymentIntentId)
@@ -1349,6 +1398,58 @@ export const ingestRentalPaymentEvent = internalMutation({
         reservation.status === "confirmed" &&
         reservation.paymentId === payment._id &&
         reservation.paymentStatus !== "refunded"
+
+      if (canConfirm) {
+        // Stripe confirmation is outside Convex's transaction. A previously
+        // issued checkout can capture after dates become blocked or reserved.
+        const conflicts = await getRentalConflicts(ctx, {
+          vehicleId: reservation.vehicleId,
+          startDate: reservation.startDate,
+          endDate: reservation.endDate,
+          excludeReservationId: reservation._id,
+        })
+        const priorReview = await ctx.db
+          .query("auditLogs")
+          .withIndex("by_entity", (q) => q.eq("entityType", "payment").eq("entityId", payment._id))
+          .filter((q) => q.eq(q.field("action"), "rental_capture_requires_reconciliation"))
+          .first()
+        if (!conflicts.isAvailable || priorReview) {
+          // Preserve capture truth and stop new payment attempts, but do not
+          // confirm a second booking or refund without an explicit resolution.
+          await ctx.db.patch(reservation._id, {
+            paymentId: payment._id,
+            paymentStatus: payment.status === "partially_refunded" ? "partially_refunded" : "paid",
+            updatedAt: now,
+          })
+          if (!priorReview) {
+            await ctx.runMutation(internal.auditLog.create, {
+              entityType: "payment",
+              entityId: payment._id,
+              action: "rental_capture_requires_reconciliation",
+              metadata: {
+                reservationId: reservation._id,
+                reservationStatus: reservation.status,
+                stripePaymentIntentId: args.stripePaymentIntentId,
+                reason: "rental_dates_unavailable",
+                blockedDates: conflicts.blockedDates.map((item) => item.date),
+                conflictingReservationIds: conflicts.reservedReservations.map((item) => item._id),
+              },
+            })
+            for (const userId of new Set([reservation.renterId, reservation.ownerId])) {
+              await ctx.scheduler.runAfter(0, internal.notifications.createNotification, {
+                userId,
+                type: "system",
+                title: "Rental payment needs review",
+                message:
+                  "Payment was received, but the rental dates conflict with another booking or a host block. The rental is not confirmed. Contact support to resolve it; do not submit another payment.",
+                link: userId === reservation.renterId ? "/trips" : "/host/reservations",
+                metadata: { reservationId: reservation._id, paymentId: payment._id },
+              })
+            }
+          }
+          return
+        }
+      }
       if (canConfirm || sameConfirmedRental) {
         const paymentStatus =
           payment.status === "partially_refunded" ? "partially_refunded" : "paid"
