@@ -1,6 +1,5 @@
-const R2_PUBLIC_URL = process.env.NEXT_PUBLIC_R2_PUBLIC_URL
+import { publicMediaUrl } from "@workspace/ui/lib/public-media"
 
-export function r2Url(key: string): string {
-  const normalized = key.startsWith("/") ? key.slice(1) : key
-  return `${R2_PUBLIC_URL}/${normalized}`
+export function r2Url(key: string | null | undefined): string | undefined {
+  return publicMediaUrl(process.env.NEXT_PUBLIC_R2_PUBLIC_URL, key)
 }

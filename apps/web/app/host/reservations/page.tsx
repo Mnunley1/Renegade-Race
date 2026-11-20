@@ -16,9 +16,9 @@ import {
   MessageSquare,
   XCircle,
 } from "lucide-react"
-import Image from "next/image"
 import Link from "next/link"
 import { useMemo, useState } from "react"
+import Image from "@/components/public-image"
 import { RentalQuoteSummary } from "@/components/rental-quote-summary"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"

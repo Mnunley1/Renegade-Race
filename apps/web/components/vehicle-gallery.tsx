@@ -4,8 +4,8 @@ import { Button } from "@workspace/ui/components/button"
 import { Dialog, DialogContent } from "@workspace/ui/components/dialog"
 import { cn } from "@workspace/ui/lib/utils"
 import { Car, ChevronLeft, ChevronRight, Grid, X } from "lucide-react"
-import Image from "next/image"
 import { useCallback, useEffect, useState } from "react"
+import Image from "@/components/public-image"
 import { r2Url } from "@/lib/r2-url"
 
 type VehicleGalleryProps = {
@@ -14,10 +14,18 @@ type VehicleGalleryProps = {
 }
 
 export function VehicleGallery({ images, vehicleName }: VehicleGalleryProps) {
+  const sources = images.map(r2Url).filter((url): url is string => !!url)
+  // A changed source list starts a fresh gallery, including its selected photo.
+  return (
+    <ResolvedGallery images={sources} key={JSON.stringify(sources)} vehicleName={vehicleName} />
+  )
+}
+
+function ResolvedGallery({ images, vehicleName }: VehicleGalleryProps) {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
   const [isOpen, setIsOpen] = useState(false)
 
-  const validImages = images.filter((img) => img && img.trim() !== "")
+  const validImages = images
 
   const openGallery = useCallback((index: number) => {
     setSelectedIndex(index)
@@ -108,7 +116,7 @@ export function VehicleGallery({ images, vehicleName }: VehicleGalleryProps) {
               priority
               quality={85}
               sizes="100vw"
-              src={r2Url(validImages[0] as string)}
+              src={validImages[0]}
             />
           </button>
         </div>
@@ -159,7 +167,7 @@ export function VehicleGallery({ images, vehicleName }: VehicleGalleryProps) {
               priority
               quality={85}
               sizes="(max-width: 768px) 100vw, 60vw"
-              src={r2Url(validImages[0] as string)}
+              src={validImages[0]}
             />
           </button>
 
@@ -186,7 +194,7 @@ export function VehicleGallery({ images, vehicleName }: VehicleGalleryProps) {
                   fill
                   quality={75}
                   sizes="(max-width: 768px) 50vw, 25vw"
-                  src={r2Url(image)}
+                  src={image}
                 />
                 {isLast && (
                   <div
@@ -281,7 +289,7 @@ export function VehicleGallery({ images, vehicleName }: VehicleGalleryProps) {
                     priority
                     quality={90}
                     sizes="100vw"
-                    src={r2Url(validImages[selectedIndex])}
+                    src={validImages[selectedIndex]}
                   />
                 </div>
               )}
@@ -350,7 +358,7 @@ export function VehicleGallery({ images, vehicleName }: VehicleGalleryProps) {
                         fill
                         quality={60}
                         sizes="80px"
-                        src={r2Url(image)}
+                        src={image}
                       />
                     </button>
                   ))}

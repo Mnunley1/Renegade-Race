@@ -7,11 +7,11 @@ import { Input } from "@workspace/ui/components/input"
 import { cn } from "@workspace/ui/lib/utils"
 import { useMutation, useQuery } from "convex/react"
 import { MessageSquare, Search } from "lucide-react"
-import Image from "next/image"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Suspense, useEffect, useState } from "react"
 import { AccountAuthBoundary } from "@/components/account-auth-boundary"
+import Image from "@/components/public-image"
 import { UserAvatar } from "@/components/user-avatar"
 import { useAccountActivity } from "@/hooks/useAccountAuth"
 import type { Id } from "@/lib/convex"
@@ -312,9 +312,7 @@ function MessagesPageContent({ user }: { user: { id: string } }) {
                       ? conversation.unreadCountRenter
                       : conversation.unreadCountOwner
 
-                  const avatarUrl = otherUser?.profileImageR2Key
-                    ? r2Url(otherUser.profileImageR2Key)
-                    : otherUser?.profileImage
+                  const avatarUrl = r2Url(otherUser?.profileImageR2Key) ?? otherUser?.profileImage
                   const statusMeta = getReservationStatusMeta(conversation.reservation?.status)
                   const contextLabel = conversation.vehicle
                     ? `${conversation.vehicle.year} ${conversation.vehicle.make} ${conversation.vehicle.model}`

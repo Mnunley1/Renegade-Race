@@ -13,11 +13,11 @@ import { Label } from "@workspace/ui/components/label"
 import { Textarea } from "@workspace/ui/components/textarea"
 import { useAction, useMutation, useQuery } from "convex/react"
 import { ArrowLeft, CheckCircle, Loader2, XCircle } from "lucide-react"
-import Image from "next/image"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import { useState } from "react"
 import { toast } from "sonner"
+import Image from "@/components/public-image"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
@@ -237,9 +237,7 @@ export default function DamageInvoiceDetailPage() {
                 >
                   <Image
                     alt={`Damage photo ${index + 1}`}
-                    className="object-cover"
-                    fill
-                    sizes="(max-width: 768px) 50vw, 25vw"
+                    className="absolute inset-0 h-full w-full object-cover"
                     src={r2Url(photo)}
                   />
                 </div>

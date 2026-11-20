@@ -343,9 +343,8 @@ export default function ProfilePage() {
   }
 
   const profileImageUrl = useMemo(() => {
-    if (convexUser?.profileImageR2Key) {
-      return r2Url(convexUser.profileImageR2Key)
-    }
+    const uploaded = r2Url(convexUser?.profileImageR2Key)
+    if (uploaded) return uploaded
     if (convexUser?.profileImage) {
       return convexUser.profileImage
     }

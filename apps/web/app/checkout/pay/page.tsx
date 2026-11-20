@@ -8,10 +8,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/componen
 import { Separator } from "@workspace/ui/components/separator"
 import { useAction, useQuery } from "convex/react"
 import { Calendar, Clock, Loader2, MapPin } from "lucide-react"
-import Image from "next/image"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Suspense, useEffect, useRef, useState } from "react"
+import Image from "@/components/public-image"
 import { RentalQuoteSummary } from "@/components/rental-quote-summary"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
@@ -336,8 +336,7 @@ function PayPageContent() {
     | Array<{ isPrimary: boolean; imageUrl?: string; r2Key?: string }>
     | undefined
   const primaryImageData = vehicleImages?.find((img) => img.isPrimary) || vehicleImages?.[0]
-  const primaryImage =
-    (primaryImageData?.r2Key ? r2Url(primaryImageData.r2Key) : primaryImageData?.imageUrl) || ""
+  const primaryImage = (r2Url(primaryImageData?.r2Key) ?? primaryImageData?.imageUrl) || ""
 
   const formatTimeForDisplay = (time24: string) => {
     const [hours, minutes] = time24.split(":")

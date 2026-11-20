@@ -17,8 +17,8 @@ import {
   Plus,
   XCircle,
 } from "lucide-react"
-import Image from "next/image"
 import Link from "next/link"
+import Image from "@/components/public-image"
 import { api } from "@/lib/convex"
 import { r2Url } from "@/lib/r2-url"
 import { formatRentalUsd } from "@/lib/rental-checkout"

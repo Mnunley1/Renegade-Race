@@ -15,8 +15,7 @@ import { api } from "@/lib/convex"
 import { r2Url } from "@/lib/r2-url"
 
 function avatarSrc(person?: { profileImage?: string | null; profileImageR2Key?: string | null }) {
-  if (person?.profileImageR2Key) return r2Url(person.profileImageR2Key)
-  return person?.profileImage || undefined
+  return r2Url(person?.profileImageR2Key) ?? person?.profileImage ?? undefined
 }
 
 type FeedScope = "for_you" | "following" | "global"

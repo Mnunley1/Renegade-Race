@@ -433,9 +433,7 @@ function VehicleDetailsPageContent() {
 
   const host = {
     name: vehicle.owner?.name || "Unknown",
-    avatar: vehicle.owner?.profileImageR2Key
-      ? r2Url(vehicle.owner.profileImageR2Key)
-      : vehicle.owner?.profileImage || "",
+    avatar: r2Url(vehicle.owner?.profileImageR2Key) ?? vehicle.owner?.profileImage ?? "",
     memberSince: formatMemberSince(vehicle.owner?.memberSince),
     tripsCompleted: vehicle.owner?.totalRentals || 0,
   }

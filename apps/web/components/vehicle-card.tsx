@@ -9,11 +9,11 @@ import { cn } from "@workspace/ui/lib/utils"
 import { useMutation, useQuery } from "convex/react"
 import type { LucideIcon } from "lucide-react"
 import { Car, Cog, Gauge, Heart, LogIn, MapPin, Star, UserPlus } from "lucide-react"
-import Image from "next/image"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import type { ComponentProps } from "react"
 import { useState } from "react"
+import Image from "@/components/public-image"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
@@ -147,7 +147,7 @@ export function VehicleCard({
           fill
           quality={80}
           sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-          src={imageKey ? r2Url(imageKey) : image}
+          src={r2Url(imageKey) ?? image}
         />
       ) : (
         <div className="flex h-full items-center justify-center bg-muted">

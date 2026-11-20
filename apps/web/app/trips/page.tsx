@@ -69,7 +69,7 @@ function mapReservation(res: any): Trip | null {
     cancellationPolicy: vehicle.cancellationPolicy,
     vehicleId: vehicle._id,
     vehicleName: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
-    vehicleImage: primaryImage?.r2Key ? r2Url(primaryImage.r2Key) : "",
+    vehicleImage: r2Url(primaryImage?.r2Key) ?? primaryImage?.imageUrl ?? "",
     vehicleYear: vehicle.year,
     vehicleMake: vehicle.make,
     vehicleModel: vehicle.model,

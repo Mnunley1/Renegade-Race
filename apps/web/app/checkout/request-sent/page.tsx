@@ -5,10 +5,10 @@ import { Card, CardContent } from "@workspace/ui/components/card"
 import { Separator } from "@workspace/ui/components/separator"
 import { useQuery } from "convex/react"
 import { Calendar, Clock, MapPin, Send } from "lucide-react"
-import Image from "next/image"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { Suspense } from "react"
+import Image from "@/components/public-image"
 import { RentalQuoteSummary } from "@/components/rental-quote-summary"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
@@ -57,8 +57,7 @@ function RequestSentContent() {
     | Array<{ isPrimary: boolean; imageUrl?: string; r2Key?: string }>
     | undefined
   const primaryImageData = vehicleImages?.find((img) => img.isPrimary) || vehicleImages?.[0]
-  const primaryImage =
-    (primaryImageData?.r2Key ? r2Url(primaryImageData.r2Key) : primaryImageData?.imageUrl) || ""
+  const primaryImage = (r2Url(primaryImageData?.r2Key) ?? primaryImageData?.imageUrl) || ""
 
   return (
     <div className="container mx-auto max-w-4xl px-4 py-8">
