@@ -154,6 +154,34 @@ backend would remove the quote guarantee and is not a safe routine rollback.
 Verify both payment paths in Stripe test mode, including listing edits after the
 request and rejection of unverifiable legacy bookings, before production approval.
 
+## Rental date holds (REN-34)
+
+Rental requests still use 1–3 inclusive occupied days and keep their validated
+quote. Pending requests may compete for otherwise free dates. Host-blocked dates
+and approved/confirmed bookings exclude the vehicle from date search and prevent
+new requests or conflicting approvals. Approval checks and declining competing
+pending requests happen in one transaction. Hosts cannot add a block across an
+approved/confirmed booking; resolve the booking first. No existing booking is
+automatically cancelled, repriced or refunded by this release.
+
+Checkout checks the whole chosen interval, including blocked middle days, and
+waits for availability before enabling submission. Both Stripe entry points
+check the same holds, and payment attachment/confirmation recheck after external
+Stripe calls. An external capture that cannot safely confirm a booking remains
+recorded as a genuine payment, with explicit reconciliation evidence and notices.
+It must not silently confirm a second booking or trigger an automatic refund.
+Duplicate events must not reopen a held booking after a conflict disappears.
+Renter and host views show the review hold instead of another payment request.
+Participant cancellation is blocked until support resolves the captured payment;
+it must not enter ordinary automatic cancellation/refund handling.
+
+Deploy the compatible backend first, then the checkout UI. Inventory historical
+approved/confirmed overlaps and host-block conflicts before production rollout;
+unresolved records need owner review. This is not a migration or a reinterpretation
+of historical dates/prices. A frontend rollback cannot remove the backend holds.
+Guest draft restoration and consistent date-entry presentation are REN-35;
+terminal unpaid Stripe attempt reconciliation is REN-36.
+
 ## Account deletion preflight (REN-18)
 
 Settings calls the authenticated `users.checkUserDeletionEligibility` action before

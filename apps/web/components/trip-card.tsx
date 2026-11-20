@@ -39,6 +39,7 @@ import { formatDateForDisplay } from "@/lib/date-utils"
 import { formatRentalUsd } from "@/lib/rental-checkout"
 
 interface TripCardProps extends ComponentProps<"div"> {
+  paymentStatus?: string
   paymentId?: string
   renterId?: string
   cancellationPolicy?: "flexible" | "moderate" | "strict"
@@ -89,6 +90,7 @@ function refundPercentage(startDate: string, policy: "flexible" | "moderate" | "
 }
 
 export function TripCard({
+  paymentStatus,
   paymentId,
   renterId,
   cancellationPolicy = "moderate",
@@ -128,7 +130,10 @@ export function TripCard({
       inv.status === "pending_review" || inv.status === "payment_pending" || inv.status === "paid"
   )
 
-  const canCancel = status === "pending" || status === "approved" || status === "confirmed"
+  const needsReview =
+    status === "approved" && (paymentStatus === "paid" || paymentStatus === "partially_refunded")
+  const canCancel =
+    !needsReview && (status === "pending" || status === "approved" || status === "confirmed")
   const payment = useRentalPayment({ reservationId, paymentId, renterId })
   const refundablePayment =
     payment?.currency === "usd" &&
@@ -191,10 +196,14 @@ export function TripCard({
           )}
           {/* Status Badge */}
           <div className="absolute top-3 left-3 z-10">
-            <StatusBadge
-              className="border border-white/15 bg-black/55 text-white backdrop-blur-md"
-              status={status}
-            />
+            {needsReview ? (
+              <Badge>Needs review</Badge>
+            ) : (
+              <StatusBadge
+                className="border border-white/15 bg-black/55 text-white backdrop-blur-md"
+                status={status}
+              />
+            )}
           </div>
         </div>
 
@@ -309,9 +318,21 @@ export function TripCard({
             reservationId={reservationId}
           />
 
+          {needsReview && (
+            <p className="text-sm">
+              Payment received; booking needs review. Contact support to resolve the booking. Do not
+              submit another payment.
+            </p>
+          )}
+
           {/* Actions */}
           <div className="mt-auto flex flex-wrap items-center gap-2 border-t pt-4">
-            {status === "approved" && (
+            {needsReview && (
+              <Button asChild size="sm">
+                <Link href="/contact">Contact Support</Link>
+              </Button>
+            )}
+            {status === "approved" && !needsReview && (
               <Button asChild size="sm">
                 <Link href={`/checkout/pay?reservationId=${reservationId}`}>
                   <CreditCard className="mr-2 size-4" />

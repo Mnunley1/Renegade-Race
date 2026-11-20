@@ -7,6 +7,7 @@ import PayPage from "@/app/checkout/pay/page"
 import RequestSentPage from "@/app/checkout/request-sent/page"
 import CheckoutSuccessPage from "@/app/checkout/success/page"
 import HostReservationsPage from "@/app/host/reservations/page"
+import TripsPage from "@/app/trips/page"
 import { RentalPaymentSummary } from "@/components/rental-payment-summary"
 import { TripCard } from "@/components/trip-card"
 
@@ -336,7 +337,11 @@ it("shows the persisted full quote consistently to the renter and approving host
   }
   for (const View of [RequestSentPage, HostReservationsPage, PayPage]) {
     mock.userId = View === HostReservationsPage ? "owner" : "renter"
-    mock.reservation = { ...mock.reservation, status: View === PayPage ? "approved" : "pending" }
+    mock.reservation = {
+      ...mock.reservation,
+      status: View === PayPage ? "approved" : "pending",
+      paymentStatus: "pending",
+    }
     const result = render(<View />)
     const quote = within(screen.getByLabelText("Saved rental quote"))
     expect(quote.getByText("$10.23/day").parentElement).toHaveTextContent("3 days")
@@ -526,4 +531,65 @@ it("does not create a second intent when initialization attaches the pending pay
   })
   expect(mock.createPaymentIntent).toHaveBeenCalledTimes(1)
   expect(screen.getByRole("button", { name: "Pay $31.92" })).toBeInTheDocument()
+})
+
+it.each([
+  "paid",
+  "partially_refunded",
+])("keeps an approved %s booking on review hold across renter and host views", async (paymentStatus) => {
+  mock.reservation = { ...reservation, status: "approved", paymentStatus }
+  for (const View of [TripsPage, HostReservationsPage, PayPage]) {
+    mock.userId = View === HostReservationsPage ? "owner" : "renter"
+    const result = render(<View />)
+    expect(screen.getByRole("link", { name: "Contact Support" })).toHaveAttribute(
+      "href",
+      "/contact"
+    )
+    expect(
+      screen.getByText("Payment received; booking needs review", { exact: false })
+    ).toBeInTheDocument()
+    expect(screen.queryByText("Awaiting payment")).toBeNull()
+    expect(
+      screen.queryByText("Complete payment within 48 hours to confirm your booking.")
+    ).toBeNull()
+    expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull()
+    expect(screen.queryByRole("link", { name: "Pay now" })).toBeNull()
+    expect(screen.queryByRole("button", { name: "Retry payment" })).toBeNull()
+    expect(screen.queryByText("Secure card form")).toBeNull()
+    await act(async () => {
+      // Flush effects to verify that a captured payment never initializes another charge.
+    })
+    expect(mock.createPaymentIntent).not.toHaveBeenCalled()
+    result.unmount()
+  }
+})
+
+it("removes a ready payment form when capture puts the booking on review hold", async () => {
+  mock.reservation = { ...reservation, status: "approved", paymentStatus: "pending" }
+  const result = render(<PayPage />)
+  expect(await screen.findByText("Secure card form")).toBeInTheDocument()
+  mock.reservation = { ...mock.reservation, paymentStatus: "paid" }
+  result.rerender(<PayPage />)
+  expect(
+    screen.getByRole("heading", { name: "Payment received; booking needs review" })
+  ).toBeInTheDocument()
+  expect(screen.queryByText("Secure card form")).toBeNull()
+  await act(async () => {
+    // Flush effects to verify that a captured payment never initializes another charge.
+  })
+  expect(mock.createPaymentIntent).toHaveBeenCalledTimes(1)
+})
+
+it("preserves payment and cancellation controls for an unpaid approved trip", () => {
+  mock.reservation = { ...reservation, status: "approved", paymentStatus: "pending" }
+  render(<TripsPage />)
+  expect(screen.getByRole("link", { name: "Pay now" })).toHaveAttribute(
+    "href",
+    "/checkout/pay?reservationId=booking"
+  )
+  expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument()
+  expect(
+    screen.getByText("Complete payment within 48 hours to confirm your booking.")
+  ).toBeInTheDocument()
+  expect(screen.queryByRole("link", { name: "Contact Support" })).toBeNull()
 })

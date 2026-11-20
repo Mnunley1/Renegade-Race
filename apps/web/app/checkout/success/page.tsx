@@ -98,6 +98,7 @@ function rentalPaymentNotice(reservation: { status: string; paymentStatus?: stri
   title: string
   message: string
   canRetry?: boolean
+  needsReview?: boolean
 } {
   if (!reservation) {
     return {
@@ -110,6 +111,17 @@ function rentalPaymentNotice(reservation: { status: string; paymentStatus?: stri
       title: "Payment refunded",
       message:
         "This payment has been refunded. Check your trips for the reservation's current status.",
+    }
+  }
+  if (
+    reservation.status === "approved" &&
+    (reservation.paymentStatus === "paid" || reservation.paymentStatus === "partially_refunded")
+  ) {
+    return {
+      title: "Payment received; booking needs review",
+      message:
+        "Your payment was received, but your booking could not be confirmed. Contact support to resolve the booking. Do not submit another payment.",
+      needsReview: true,
     }
   }
   if (reservation.status === "pending") {
@@ -187,7 +199,7 @@ function CheckoutSuccessContent() {
     reservation.status !== "confirmed" ||
     (reservation.paymentStatus !== "paid" && reservation.paymentStatus !== "partially_refunded")
   ) {
-    const { title, message, canRetry } = rentalPaymentNotice(reservation)
+    const { title, message, canRetry, needsReview } = rentalPaymentNotice(reservation)
 
     return (
       <div className="container mx-auto max-w-4xl px-4 py-8">
@@ -205,6 +217,11 @@ function CheckoutSuccessContent() {
               </div>
             )}
             <div className="flex flex-col gap-4 sm:flex-row sm:justify-center">
+              {needsReview && (
+                <Button asChild>
+                  <Link href="/contact">Contact Support</Link>
+                </Button>
+              )}
               {canRetry && (
                 <Button asChild>
                   <Link href={`/checkout/pay?reservationId=${reservationId}`}>

@@ -135,6 +135,9 @@ function ReservationRow({
   const renterName = reservation.renter?.name || "Unknown renter"
   const amount = formatRentalUsd(reservation.totalAmount || 0)
   const status = reservation.status
+  const needsReview =
+    status === "approved" &&
+    (reservation.paymentStatus === "paid" || reservation.paymentStatus === "partially_refunded")
 
   return (
     <Card>
@@ -144,7 +147,7 @@ function ReservationRow({
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="truncate font-semibold">{name}</h2>
-              {getStatusBadge(status)}
+              {needsReview ? <Badge>Needs review</Badge> : getStatusBadge(status)}
               {isReturnPending && (
                 <Badge className="gap-1.5 bg-orange-500/10 text-orange-700 dark:text-orange-400">
                   <Clock className="size-3" />
@@ -173,7 +176,18 @@ function ReservationRow({
           </div>
         )}
 
+        {needsReview && (
+          <p className="mt-4 text-sm">
+            Payment received; booking needs review. Contact support to resolve the booking before
+            confirming plans with the renter.
+          </p>
+        )}
         <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+          {needsReview && (
+            <Button asChild size="sm">
+              <Link href="/contact">Contact Support</Link>
+            </Button>
+          )}
           <p className="mr-auto font-semibold text-primary text-sm sm:hidden">{amount}</p>
           {status === "pending" && (
             <>
