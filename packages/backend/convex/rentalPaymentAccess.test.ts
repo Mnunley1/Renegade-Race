@@ -136,7 +136,9 @@ describe("rental payment access", () => {
     // The same date pair can represent a historical one-night rental or a
     // current two-occupied-day rental. Payment must honor its stored count.
     for (const totalDays of [1, 2]) {
-      await t.run(({ db }) => db.patch(record.reservationId, { totalDays }))
+      await t.run(({ db }) =>
+        db.patch(record.reservationId, { totalDays, totalAmount: 50000 * totalDays })
+      )
       await expect(
         renter.action(api.stripe[method], {
           reservationId: record.reservationId,

@@ -11,12 +11,13 @@ import { Calendar, Clock, Loader2, MapPin } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { Suspense, useEffect, useState } from "react"
+import { Suspense, useEffect, useRef, useState } from "react"
+import { RentalQuoteSummary } from "@/components/rental-quote-summary"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { formatDateForDisplay } from "@/lib/date-utils"
 import { r2Url } from "@/lib/r2-url"
-import { formatRentalUsd } from "@/lib/rental-checkout"
+import { formatRentalUsd, getRentalQuoteError } from "@/lib/rental-checkout"
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "")
 
@@ -123,8 +124,7 @@ function PaymentForm({
 
 function PayPageContent() {
   const searchParams = useSearchParams()
-  const _router = useRouter()
-  const { isSignedIn } = useUser()
+  const { isSignedIn, user } = useUser()
   const reservationId = searchParams.get("reservationId")
 
   const reservation = useQuery(
@@ -134,11 +134,43 @@ function PayPageContent() {
 
   const createPaymentIntent = useAction(api.stripe.createPaymentIntent)
 
-  const [clientSecret, setClientSecret] = useState<string | null>(null)
-  const [processingFeeCents, setProcessingFeeCents] = useState(0)
-  const [chargeAmountCents, setChargeAmountCents] = useState(0)
-  const [isCreatingPayment, setIsCreatingPayment] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [retry, setRetry] = useState(0)
+  const bookingId = reservation?._id
+  const subtotal = reservation?.totalAmount
+  // A refreshed query object or an initialization failure must not retry a charge.
+  const paymentKey =
+    isSignedIn && reservation?.status === "approved"
+      ? JSON.stringify([
+          user?.id,
+          bookingId,
+          reservation.status,
+          reservation.paymentStatus ?? "pending",
+          reservation.approvedAt,
+          reservation.startDate,
+          reservation.endDate,
+          reservation.dailyRate,
+          reservation.totalDays,
+          reservation.addOns,
+          subtotal,
+          reservation.quoteVersion,
+          retry,
+        ])
+      : null
+  const attempt = useRef<{
+    key: string
+    promise: ReturnType<typeof createPaymentIntent>
+  } | null>(null)
+  const [initialization, setInitialization] = useState<{
+    key: string
+    result?: Awaited<ReturnType<typeof createPaymentIntent>>
+    error?: string
+  } | null>(null)
+  const current = initialization?.key === paymentKey ? initialization : null
+  const clientSecret = current?.result?.clientSecret ?? null
+  const processingFeeCents = current?.result?.processingFee ?? 0
+  const chargeAmountCents = current?.result?.chargeAmount ?? 0
+  const error = current?.error ?? null
+  const isCreatingPayment = !!paymentKey && !current
 
   // Calculate time remaining for payment deadline
   const getTimeRemaining = () => {
@@ -154,39 +186,42 @@ function PayPageContent() {
 
   const timeRemaining = getTimeRemaining()
 
-  // Create payment intent when page loads and reservation is approved
   useEffect(() => {
-    if (
-      !(
-        reservation &&
-        reservation.status === "approved" &&
-        isSignedIn &&
-        !clientSecret &&
-        !isCreatingPayment
-      )
-    ) {
+    if (!(paymentKey && bookingId) || subtotal === undefined) {
+      attempt.current = null
+      setInitialization(null)
       return
     }
-
-    const initPayment = async () => {
-      setIsCreatingPayment(true)
-      try {
-        const result = await createPaymentIntent({
-          reservationId: reservation._id,
-          amount: reservation.totalAmount,
-        })
-        setClientSecret(result.clientSecret)
-        setProcessingFeeCents(result.processingFee)
-        setChargeAmountCents(result.chargeAmount)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to initialize payment")
-      } finally {
-        setIsCreatingPayment(false)
+    // Reuse the in-flight promise when React StrictMode replays the effect.
+    if (attempt.current?.key !== paymentKey) {
+      setInitialization(null)
+      attempt.current = {
+        key: paymentKey,
+        promise: Promise.resolve().then(() =>
+          createPaymentIntent({ reservationId: bookingId, amount: subtotal })
+        ),
       }
     }
-
-    initPayment()
-  }, [reservation, isSignedIn, clientSecret, isCreatingPayment, createPaymentIntent])
+    let active = true
+    attempt.current.promise.then(
+      (result) => {
+        if (active) setInitialization({ key: paymentKey, result })
+      },
+      (err: unknown) => {
+        if (active) {
+          setInitialization({
+            key: paymentKey,
+            error:
+              getRentalQuoteError(err) ??
+              (err instanceof Error ? err.message : "Failed to initialize payment"),
+          })
+        }
+      }
+    )
+    return () => {
+      active = false
+    }
+  }, [paymentKey, bookingId, subtotal, createPaymentIntent])
 
   if (!reservationId) {
     return (
@@ -367,8 +402,28 @@ function PayPageContent() {
             </CardHeader>
             <CardContent>
               {error && (
-                <div className="mb-4 rounded-lg border border-destructive bg-destructive/10 p-3 text-destructive text-sm">
-                  {error}
+                <div
+                  className="mb-4 space-y-3 rounded-lg border border-destructive bg-destructive/10 p-3 text-sm"
+                  role="alert"
+                >
+                  <p className="text-destructive">{error}</p>
+                  <p>
+                    If this booking's quote cannot be verified, submit a new rental request for host
+                    approval. Your saved quote will not be replaced automatically.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button onClick={() => setRetry((value) => value + 1)} variant="outline">
+                      Retry payment
+                    </Button>
+                    <Button asChild variant="outline">
+                      <Link href="/trips">View My Trips</Link>
+                    </Button>
+                    {reservation.vehicleId && (
+                      <Button asChild variant="outline">
+                        <Link href={`/vehicles/${reservation.vehicleId}`}>Start a new request</Link>
+                      </Button>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -380,7 +435,7 @@ function PayPageContent() {
               )}
 
               {options && (
-                <Elements options={options} stripe={stripePromise}>
+                <Elements key={clientSecret} options={options} stripe={stripePromise}>
                   <PaymentForm
                     chargeAmountCents={chargeAmountCents}
                     listingAmountCents={reservation.totalAmount || 0}
@@ -400,36 +455,7 @@ function PayPageContent() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Daily Rate</span>
-                  <span>{formatRentalUsd(reservation.dailyRate || 0)}/day</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Duration</span>
-                  <span>
-                    {reservation.totalDays} {reservation.totalDays === 1 ? "day" : "days"}
-                  </span>
-                </div>
-                {reservation.addOns &&
-                  reservation.addOns.length > 0 &&
-                  reservation.addOns.map(
-                    (addOn: { name: string; price: number; priceType?: "daily" | "one-time" }) => (
-                      <div className="flex justify-between text-sm" key={addOn.name}>
-                        <span className="text-muted-foreground">{addOn.name}</span>
-                        <span>
-                          +
-                          {formatRentalUsd(
-                            addOn.price * (addOn.priceType === "daily" ? reservation.totalDays : 1)
-                          )}
-                        </span>
-                      </div>
-                    )
-                  )}
-                <Separator />
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Rental subtotal</span>
-                  <span>{formatRentalUsd(reservation.totalAmount || 0)}</span>
-                </div>
+                <RentalQuoteSummary quote={reservation} />
                 {processingFeeCents > 0 && (
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Card processing fee</span>

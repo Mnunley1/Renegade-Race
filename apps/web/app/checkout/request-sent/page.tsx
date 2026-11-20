@@ -9,11 +9,11 @@ import Image from "next/image"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { Suspense } from "react"
+import { RentalQuoteSummary } from "@/components/rental-quote-summary"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { formatDateForDisplay } from "@/lib/date-utils"
 import { r2Url } from "@/lib/r2-url"
-import { formatRentalUsd } from "@/lib/rental-checkout"
 
 function RequestSentContent() {
   const searchParams = useSearchParams()
@@ -144,12 +144,7 @@ function RequestSentContent() {
 
                 <Separator />
 
-                <div className="flex items-center justify-between">
-                  <span className="font-medium">Rental subtotal</span>
-                  <span className="font-bold text-2xl">
-                    {formatRentalUsd(reservation.totalAmount || 0)}
-                  </span>
-                </div>
+                <RentalQuoteSummary quote={reservation} />
               </div>
             </div>
 

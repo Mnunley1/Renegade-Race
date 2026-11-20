@@ -128,6 +128,32 @@ remediation; magnitude alone cannot establish whether a host intended dollars
 or cents. Historical reservations and Stripe amounts remain unchanged. Required
 add-on enforcement remains REN-16.
 
+## Validated rental quotes (REN-16)
+
+New rental requests validate every selected add-on against the listing, reject
+duplicates, altered prices or cadence, and require all mandatory add-ons. The
+server stores the canonical quote with `quoteVersion: 1`. Its daily rate, occupied
+day count, add-ons and rental subtotal stay fixed through host approval and both
+Stripe payment entry points. Later listing edits apply to new requests. Card
+processing fees remain separate and are calculated by the server at payment.
+
+Unversioned unpaid requests must exactly match the current listing's rate,
+required add-ons, prices, cadence and stored total before approval or payment.
+Approval can mark that verified quote; an unverifiable request must be submitted
+again for host approval. There is no bulk migration or historical financial
+rewrite. Existing rental duration and overlapping-date rules remain unchanged.
+
+Request confirmation, host approval and payment display the saved quote. A failed
+payment initialization stops until an explicit retry or a meaningful booking
+change; repeated query updates do not create an automatic retry loop.
+
+Deploy this additive backend/schema change before the frontend. Old clients can
+continue sending their existing add-on shape, but invalid or incomplete selections
+will be rejected. Reverting the frontend preserves validation; reverting the
+backend would remove the quote guarantee and is not a safe routine rollback.
+Verify both payment paths in Stripe test mode, including listing edits after the
+request and rejection of unverifiable legacy bookings, before production approval.
+
 ## Account deletion preflight (REN-18)
 
 Settings calls the authenticated `users.checkUserDeletionEligibility` action before

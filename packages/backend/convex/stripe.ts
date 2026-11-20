@@ -1,8 +1,10 @@
 import { StripeSubscriptions } from "@convex-dev/stripe"
-import { v } from "convex/values"
+import type { UserIdentity } from "convex/server"
+import { ConvexError, v } from "convex/values"
 import Stripe from "stripe"
 import { api, components, internal } from "./_generated/api"
 import type { Doc, Id } from "./_generated/dataModel"
+import type { ActionCtx, MutationCtx, QueryCtx } from "./_generated/server"
 import {
   action,
   internalAction,
@@ -11,7 +13,6 @@ import {
   mutation,
   query,
 } from "./_generated/server"
-import type { MutationCtx, QueryCtx } from "./_generated/server"
 import { checkAdmin } from "./admin"
 import { parseLocalDate } from "./dateUtils"
 import {
@@ -24,14 +25,12 @@ import { getWebUrl } from "./helpers"
 import { verifyPayableInvoice } from "./invoices"
 import {
   buildDestinationChargeAmounts,
-  calculateAddOnsTotal,
   calculatePlatformFeeAmount,
   resolvePlatformFeePercentage,
 } from "./pricing"
 import { rateLimiter } from "./rateLimiter"
+import { validateRentalQuote } from "./rentalQuote"
 import { issueRentalRefund, syncRentalRefunds } from "./rentalRefunds"
-
-import { publicUserProfile } from "./userProfile"
 import {
   billingCustomerId,
   EXPRESS_SIGN_IN_URL,
@@ -39,8 +38,7 @@ import {
   retrieveOwnedCustomer,
   verifiedPaymentDestination,
 } from "./stripeOwnership"
-import type { ActionCtx } from "./_generated/server"
-import type { UserIdentity } from "convex/server"
+import { publicUserProfile } from "./userProfile"
 
 // ============================================================================
 // Cancellation Policy - Tiered Refund Calculation
@@ -695,63 +693,18 @@ export const createCheckoutSession = action({
 
     assertRentalAwaitingPayment(reservation)
 
-    // Monetary validation
-    const MAX_AMOUNT_CENTS = 1_000_000 // $10,000 max
-    const MIN_AMOUNT_CENTS = 100 // $1 min
-
-    if (args.amount <= 0 || args.amount < MIN_AMOUNT_CENTS) {
-      throwError(ErrorCode.INVALID_AMOUNT, "Payment amount must be at least $1.00")
-    }
-
-    if (args.amount > MAX_AMOUNT_CENTS) {
-      throwError(ErrorCode.INVALID_AMOUNT, "Payment amount cannot exceed $10,000.00")
-    }
-
-    // Get current vehicle pricing to validate payment amount
+    // Trusted request snapshots keep their approved prices after listing edits.
+    // Historical quotes are payable only when every stored amount/cadence matches.
     const vehicle = await ctx.runQuery(api.vehicles.getById, {
       id: reservation.vehicleId,
     })
-
-    if (!vehicle) {
-      throwError(ErrorCode.NOT_FOUND, "Vehicle not found")
-    }
-
-    // Recalculate using the persisted occupied-day count, including historical rentals.
-    const totalDays = reservation.totalDays
-    const baseAmount = totalDays * vehicle.dailyRate
-
-    // Validate add-ons against vehicle's current add-ons
-    const validatedAddOns: Array<{ price: number; priceType?: "daily" | "one-time" }> = []
-    if (reservation.addOns && reservation.addOns.length > 0) {
-      for (const reservationAddOn of reservation.addOns) {
-        const vehicleAddOn = vehicle.addOns?.find((va: any) => va.name === reservationAddOn.name)
-        if (!vehicleAddOn) {
-          throwError(
-            ErrorCode.INVALID_INPUT,
-            `Add-on "${reservationAddOn.name}" is no longer available`
-          )
-        }
-        if (vehicleAddOn.price !== reservationAddOn.price) {
-          throwError(
-            ErrorCode.PRICE_CHANGED,
-            `Add-on "${reservationAddOn.name}" price has changed from ${reservationAddOn.price} to ${vehicleAddOn.price} cents`
-          )
-        }
-        const priceType = vehicleAddOn.priceType || "one-time"
-        validatedAddOns.push({ price: reservationAddOn.price, priceType })
-      }
-    }
-
-    const addOnsTotal = calculateAddOnsTotal(validatedAddOns, totalDays)
-    const expectedTotal = baseAmount + addOnsTotal
-
-    // Validate that the payment amount matches the recalculated total
-    if (args.amount !== expectedTotal) {
-      throwError(
-        ErrorCode.PRICE_CHANGED,
-        `Payment amount mismatch: expected ${expectedTotal} cents (based on current pricing), got ${args.amount} cents. ` +
-          "Vehicle daily rate may have changed."
-      )
+    if (!vehicle) throwError(ErrorCode.NOT_FOUND, "Vehicle not found")
+    const quote = validateRentalQuote(reservation, vehicle)
+    if (!Number.isSafeInteger(args.amount) || args.amount !== quote.totalAmount) {
+      throw new ConvexError({
+        code: ErrorCode.PRICE_CHANGED,
+        message: `Payment amount mismatch: expected ${quote.totalAmount} cents from the approved rental quote`,
+      })
     }
 
     // Get owner's Stripe Connect account
@@ -954,63 +907,18 @@ export const createPaymentIntent = action({
 
     assertRentalAwaitingPayment(reservation)
 
-    // Monetary validation
-    const MAX_AMOUNT_CENTS = 1_000_000 // $10,000 max
-    const MIN_AMOUNT_CENTS = 100 // $1 min
-
-    if (args.amount <= 0 || args.amount < MIN_AMOUNT_CENTS) {
-      throwError(ErrorCode.INVALID_AMOUNT, "Payment amount must be at least $1.00")
-    }
-
-    if (args.amount > MAX_AMOUNT_CENTS) {
-      throwError(ErrorCode.INVALID_AMOUNT, "Payment amount cannot exceed $10,000.00")
-    }
-
-    // Get current vehicle pricing to validate payment amount
+    // Trusted request snapshots keep their approved prices after listing edits.
+    // Historical quotes are payable only when every stored amount/cadence matches.
     const vehicle = await ctx.runQuery(api.vehicles.getById, {
       id: reservation.vehicleId,
     })
-
-    if (!vehicle) {
-      throwError(ErrorCode.NOT_FOUND, "Vehicle not found")
-    }
-
-    // Recalculate using the persisted occupied-day count, including historical rentals.
-    const totalDays = reservation.totalDays
-    const baseAmount = totalDays * vehicle.dailyRate
-
-    // Validate add-ons against vehicle's current add-ons
-    const validatedAddOns: Array<{ price: number; priceType?: "daily" | "one-time" }> = []
-    if (reservation.addOns && reservation.addOns.length > 0) {
-      for (const reservationAddOn of reservation.addOns) {
-        const vehicleAddOn = vehicle.addOns?.find((va: any) => va.name === reservationAddOn.name)
-        if (!vehicleAddOn) {
-          throwError(
-            ErrorCode.INVALID_INPUT,
-            `Add-on "${reservationAddOn.name}" is no longer available`
-          )
-        }
-        if (vehicleAddOn.price !== reservationAddOn.price) {
-          throwError(
-            ErrorCode.PRICE_CHANGED,
-            `Add-on "${reservationAddOn.name}" price has changed from ${reservationAddOn.price} to ${vehicleAddOn.price} cents`
-          )
-        }
-        const priceType = vehicleAddOn.priceType || "one-time"
-        validatedAddOns.push({ price: reservationAddOn.price, priceType })
-      }
-    }
-
-    const addOnsTotal = calculateAddOnsTotal(validatedAddOns, totalDays)
-    const expectedTotal = baseAmount + addOnsTotal
-
-    // Validate that the payment amount matches the recalculated total
-    if (args.amount !== expectedTotal) {
-      throwError(
-        ErrorCode.PRICE_CHANGED,
-        `Payment amount mismatch: expected ${expectedTotal} cents (based on current pricing), got ${args.amount} cents. ` +
-          "Vehicle daily rate may have changed."
-      )
+    if (!vehicle) throwError(ErrorCode.NOT_FOUND, "Vehicle not found")
+    const quote = validateRentalQuote(reservation, vehicle)
+    if (!Number.isSafeInteger(args.amount) || args.amount !== quote.totalAmount) {
+      throw new ConvexError({
+        code: ErrorCode.PRICE_CHANGED,
+        message: `Payment amount mismatch: expected ${quote.totalAmount} cents from the approved rental quote`,
+      })
     }
 
     // Get owner's Stripe Connect account

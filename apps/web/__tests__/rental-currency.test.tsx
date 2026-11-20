@@ -1,6 +1,7 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { getFunctionName } from "convex/server"
-import type { ReactNode } from "react"
+import { ConvexError } from "convex/values"
+import { type ReactNode, StrictMode } from "react"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import PayPage from "@/app/checkout/pay/page"
 import RequestSentPage from "@/app/checkout/request-sent/page"
@@ -206,7 +207,7 @@ it("keeps the final amount pending until payment initialization returns the char
       })
   )
   render(<PayPage />)
-  expect(screen.getByText("$30.69")).toBeInTheDocument()
+  expect(screen.getAllByText("$30.69").length).toBeGreaterThan(0)
   expect(screen.getByText("Total due").parentElement).toHaveTextContent("Calculating…")
   expect(screen.getByText("Total due").parentElement).not.toHaveTextContent("$30.69")
   expect(screen.queryByRole("button", { name: "Pay $30.69" })).toBeNull()
@@ -214,18 +215,10 @@ it("keeps the final amount pending until payment initialization returns the char
 
 it("does not substitute the rental subtotal for a charge when initialization fails", async () => {
   mock.reservation = { ...reservation, status: "approved", paymentStatus: "pending" }
-  mock.createPaymentIntent
-    .mockReset()
-    .mockRejectedValueOnce(new Error("Payment service unavailable"))
-    .mockImplementation(
-      () =>
-        new Promise<never>(() => {
-          // Existing retry behavior is outside this display regression's scope.
-        })
-    )
+  mock.createPaymentIntent.mockRejectedValue(new Error("Payment service unavailable"))
   render(<PayPage />)
   expect(await screen.findByText("Unavailable")).toBeInTheDocument()
-  expect(screen.getByText("$30.69")).toBeInTheDocument()
+  expect(screen.getAllByText("$30.69").length).toBeGreaterThan(0)
   expect(screen.getByText("Total due").parentElement).not.toHaveTextContent("$30.69")
   expect(screen.queryByRole("button", { name: "Pay $30.69" })).toBeNull()
 })
@@ -328,4 +321,209 @@ it("uses the listing cancellation policy without changing the rental-day count",
   render(<TripCard {...tripProps} cancellationPolicy="strict" />)
   fireEvent.click(screen.getByRole("button", { name: "Cancel" }))
   expect(screen.getByText(NO_REFUND_AMOUNT)).toBeInTheDocument()
+})
+
+it("shows the persisted full quote consistently to the renter and approving host", async () => {
+  mock.reservation = {
+    ...reservation,
+    status: "pending",
+    totalAmount: 3793,
+    addOns: [
+      { name: "Helmet", price: 125, priceType: "daily" },
+      { name: "Delivery", price: 349, priceType: "one-time" },
+    ],
+    vehicle: { ...reservation.vehicle, dailyRate: 99999, addOns: [] },
+  }
+  for (const View of [RequestSentPage, HostReservationsPage, PayPage]) {
+    mock.userId = View === HostReservationsPage ? "owner" : "renter"
+    mock.reservation = { ...mock.reservation, status: View === PayPage ? "approved" : "pending" }
+    const result = render(<View />)
+    const quote = within(screen.getByLabelText("Saved rental quote"))
+    expect(quote.getByText("$10.23/day").parentElement).toHaveTextContent("3 days")
+    expect(quote.getByText("$30.69")).toBeInTheDocument()
+    expect(quote.getByText("Helmet").parentElement).toHaveTextContent("$3.75")
+    expect(quote.getByText("$1.25/day × 3 days")).toBeInTheDocument()
+    expect(quote.getByText("Delivery").parentElement).toHaveTextContent("$3.49")
+    expect(quote.getByText("$3.49 one-time")).toBeInTheDocument()
+    expect(quote.getByText("Rental subtotal").parentElement).toHaveTextContent("$37.93")
+    expect(quote.queryByText("$999.99/day")).toBeNull()
+    if (View === PayPage) await screen.findByText("Secure card form")
+    result.unmount()
+  }
+})
+
+it("keeps a failed initialization terminal in StrictMode until an explicit retry", async () => {
+  mock.reservation = { ...reservation, status: "approved", paymentStatus: "pending" }
+  mock.createPaymentIntent.mockRejectedValueOnce(new Error("Payment service unavailable"))
+  const result = render(
+    <StrictMode>
+      <PayPage />
+    </StrictMode>
+  )
+  expect(await screen.findByRole("alert")).toHaveTextContent("Payment service unavailable")
+  expect(mock.createPaymentIntent).toHaveBeenCalledTimes(1)
+  mock.reservation = { ...mock.reservation, vehicle: { ...reservation.vehicle, model: "Updated" } }
+  result.rerender(
+    <StrictMode>
+      <PayPage />
+    </StrictMode>
+  )
+  await act(async () => {
+    // Flush query refresh effects before asserting no automatic retry.
+  })
+  expect(mock.createPaymentIntent).toHaveBeenCalledTimes(1)
+  fireEvent.click(screen.getByRole("button", { name: "Retry payment" }))
+  expect(await screen.findByRole("button", { name: "Pay $31.92" })).toBeInTheDocument()
+  expect(mock.createPaymentIntent).toHaveBeenCalledTimes(2)
+  expect(screen.queryByRole("alert")).toBeNull()
+})
+
+it("reinitializes a changed quote and ignores the previous pending result", async () => {
+  type Result = { clientSecret: string; processingFee: number; chargeAmount: number }
+  let finishOld!: (response: Result) => void
+  mock.reservation = { ...reservation, status: "approved", paymentStatus: "pending" }
+  mock.createPaymentIntent.mockImplementationOnce(
+    () =>
+      new Promise<Result>((resolve) => {
+        finishOld = resolve
+      })
+  )
+  const result = render(
+    <StrictMode>
+      <PayPage />
+    </StrictMode>
+  )
+  await waitFor(() => expect(mock.createPaymentIntent).toHaveBeenCalledTimes(1))
+  mock.reservation = { ...mock.reservation, dailyRate: 2000, totalAmount: 6000 }
+  mock.createPaymentIntent.mockResolvedValueOnce({
+    clientSecret: "new_secret",
+    processingFee: 200,
+    chargeAmount: 6200,
+  })
+  result.rerender(
+    <StrictMode>
+      <PayPage />
+    </StrictMode>
+  )
+  expect(await screen.findByRole("button", { name: "Pay $62.00" })).toBeInTheDocument()
+  await act(async () =>
+    finishOld({ clientSecret: "old_secret", processingFee: 123, chargeAmount: 3192 })
+  )
+  expect(screen.getByRole("button", { name: "Pay $62.00" })).toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "Pay $31.92" })).toBeNull()
+  expect(mock.createPaymentIntent).toHaveBeenCalledTimes(2)
+})
+
+it("removes payment details when approval is revoked, even if initialization later succeeds", async () => {
+  let finish!: (response: {
+    clientSecret: string
+    processingFee: number
+    chargeAmount: number
+  }) => void
+  mock.reservation = { ...reservation, status: "approved", paymentStatus: "pending" }
+  mock.createPaymentIntent.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve
+      })
+  )
+  const result = render(<PayPage />)
+  await waitFor(() => expect(mock.createPaymentIntent).toHaveBeenCalledTimes(1))
+  mock.reservation = { ...mock.reservation, status: "cancelled" }
+  result.rerender(<PayPage />)
+  await act(async () =>
+    finish({ clientSecret: "old_secret", processingFee: 123, chargeAmount: 3192 })
+  )
+  expect(screen.getByText("Payment Not Available")).toBeInTheDocument()
+  expect(screen.queryByText("Secure card form")).toBeNull()
+})
+
+it("gives an unverifiable legacy booking an actionable fresh-request path without repricing", async () => {
+  mock.reservation = {
+    ...reservation,
+    status: "approved",
+    paymentStatus: "pending",
+    vehicleId: "vehicle",
+  }
+  mock.createPaymentIntent.mockRejectedValue(
+    new ConvexError({
+      code: "PRICE_CHANGED",
+      message:
+        "This booking's quote cannot be verified. Please submit a new rental request for host approval.",
+    })
+  )
+  render(
+    <StrictMode>
+      <PayPage />
+    </StrictMode>
+  )
+  expect(await screen.findByRole("alert")).toHaveTextContent("quote cannot be verified")
+  expect(screen.getByRole("link", { name: "Start a new request" })).toHaveAttribute(
+    "href",
+    "/vehicles/vehicle"
+  )
+  expect(screen.getByRole("link", { name: "View My Trips" })).toHaveAttribute("href", "/trips")
+  expect(mock.createPaymentIntent).toHaveBeenCalledTimes(1)
+  expect(mock.mutate).not.toHaveBeenCalled()
+  expect(screen.queryByText("Secure card form")).toBeNull()
+})
+
+it("explains that an unverifiable legacy approval needs a fresh request", async () => {
+  mock.userId = "owner"
+  mock.reservation = { ...reservation, status: "pending" }
+  mock.mutate.mockRejectedValue(
+    new ConvexError({ code: "PRICE_CHANGED", message: "Quote cannot be verified" })
+  )
+  render(<HostReservationsPage />)
+  fireEvent.click(screen.getByRole("button", { name: "Approve" }))
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Ask the renter to submit a new request"
+  )
+  expect(mock.mutate).toHaveBeenCalledTimes(1)
+})
+
+it("clears an old ready payment when approval is removed and restored", async () => {
+  mock.reservation = { ...reservation, status: "approved", paymentStatus: "pending" }
+  const result = render(<PayPage />)
+  expect(await screen.findByRole("button", { name: "Pay $31.92" })).toBeInTheDocument()
+  mock.reservation = { ...mock.reservation, status: "pending" }
+  result.rerender(<PayPage />)
+  expect(screen.queryByText("Secure card form")).toBeNull()
+  mock.createPaymentIntent.mockImplementationOnce(
+    () =>
+      new Promise(() => {
+        // Restored approval must wait for a new initialization response.
+      })
+  )
+  mock.reservation = { ...mock.reservation, status: "approved" }
+  result.rerender(<PayPage />)
+  await waitFor(() => expect(mock.createPaymentIntent).toHaveBeenCalledTimes(2))
+  expect(screen.queryByText("Secure card form")).toBeNull()
+  expect(screen.getByText("Total due").parentElement).toHaveTextContent("Calculating…")
+})
+
+it("does not create a second intent when initialization attaches the pending payment record", async () => {
+  mock.reservation = {
+    ...reservation,
+    status: "approved",
+    paymentStatus: undefined,
+    paymentId: undefined,
+  }
+  const result = render(
+    <StrictMode>
+      <PayPage />
+    </StrictMode>
+  )
+  expect(await screen.findByRole("button", { name: "Pay $31.92" })).toBeInTheDocument()
+  mock.reservation = { ...mock.reservation, paymentStatus: "pending", paymentId: "new-payment" }
+  result.rerender(
+    <StrictMode>
+      <PayPage />
+    </StrictMode>
+  )
+  await act(async () => {
+    // Flush the reservation update caused by creating the payment record.
+  })
+  expect(mock.createPaymentIntent).toHaveBeenCalledTimes(1)
+  expect(screen.getByRole("button", { name: "Pay $31.92" })).toBeInTheDocument()
 })

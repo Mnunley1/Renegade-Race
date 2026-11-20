@@ -271,6 +271,8 @@ export default defineSchema({
     totalDays: v.number(),
     dailyRate: v.number(),
     totalAmount: v.number(),
+    // Server-derived immutable rental pricing; absent on historical requests.
+    quoteVersion: v.optional(v.literal(1)),
     status: v.union(
       v.literal("pending"),
       v.literal("approved"),

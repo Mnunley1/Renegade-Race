@@ -2,6 +2,7 @@ import { v } from "convex/values"
 import { internal } from "./_generated/api"
 import type { Id } from "./_generated/dataModel"
 import { mutation, query } from "./_generated/server"
+import { isAdminIdentity } from "./admin"
 import {
   endDateFromDuration,
   inclusiveRentalDays,
@@ -19,10 +20,9 @@ import {
 } from "./emails"
 import { ErrorCode, throwError } from "./errors"
 import { getWebUrl } from "./helpers"
-import { calculateReservationTotal } from "./pricing"
 import { rateLimiter } from "./rateLimiter"
+import { buildRentalQuote, validateRentalQuote } from "./rentalQuote"
 import { sanitizeMessage, sanitizeShortText } from "./sanitize"
-import { isAdminIdentity } from "./admin"
 import { publicUserProfile, userProfileWithAdminContact } from "./userProfile"
 
 // Get reservations for a user (as renter or owner)
@@ -276,54 +276,8 @@ export const create = mutation({
       throwError(ErrorCode.INVALID_DATE_RANGE, "Start date and rental length are required")
     }
 
-    // Monetary validation for daily rate
-    const MAX_DAILY_RATE_CENTS = 5_000_000 // $50,000 per day max
-    const MIN_DAILY_RATE_CENTS = 100 // $1 per day min
-
-    if (vehicle.dailyRate <= 0 || vehicle.dailyRate < MIN_DAILY_RATE_CENTS) {
-      throwError(ErrorCode.INVALID_AMOUNT, "Daily rate must be at least $1.00", {
-        dailyRate: vehicle.dailyRate,
-      })
-    }
-
-    if (vehicle.dailyRate > MAX_DAILY_RATE_CENTS) {
-      throwError(ErrorCode.INVALID_AMOUNT, "Daily rate cannot exceed $50,000.00 per day", {
-        dailyRate: vehicle.dailyRate,
-      })
-    }
-
-    // Validate add-on prices before calculating totals
-    if (args.addOns && args.addOns.length > 0) {
-      for (const addOn of args.addOns) {
-        if (addOn.price < 0) {
-          throwError(ErrorCode.INVALID_AMOUNT, `Add-on price for ${addOn.name} cannot be negative`)
-        }
-        // Validate reasonable max for add-ons
-        if (addOn.price > 100_000) {
-          // $1,000 max per add-on
-          throwError(
-            ErrorCode.INVALID_AMOUNT,
-            `Add-on price for ${addOn.name} cannot exceed $1,000.00`
-          )
-        }
-      }
-    }
-
-    const totalAmount = calculateReservationTotal(vehicle.dailyRate, totalDays, args.addOns)
-
-    // Validate total amount
-    const MAX_TOTAL_AMOUNT_CENTS = 1_000_000 // $10,000 max
-    const MIN_TOTAL_AMOUNT_CENTS = 100 // $1 min
-
-    if (totalAmount < MIN_TOTAL_AMOUNT_CENTS) {
-      throwError(ErrorCode.INVALID_AMOUNT, "Total amount must be at least $1.00", { totalAmount })
-    }
-
-    if (totalAmount > MAX_TOTAL_AMOUNT_CENTS) {
-      throwError(ErrorCode.INVALID_AMOUNT, "Total amount cannot exceed $10,000.00", {
-        totalAmount,
-      })
-    }
+    const quote = buildRentalQuote(vehicle, totalDays, args.addOns)
+    const totalAmount = quote.totalAmount
 
     // Owner-blocked dates stay visible to hosts, but they do not prevent a
     // renter from submitting a request. Existing bookings/requests also do not
@@ -339,11 +293,12 @@ export const create = mutation({
       pickupTime: args.pickupTime,
       dropoffTime: args.dropoffTime,
       totalDays,
-      dailyRate: vehicle.dailyRate,
+      dailyRate: quote.dailyRate,
       totalAmount,
+      quoteVersion: quote.quoteVersion,
       status: "pending",
       renterMessage: args.renterMessage ? sanitizeMessage(args.renterMessage) : undefined,
-      addOns: args.addOns,
+      addOns: quote.addOns,
       createdAt: now,
       updatedAt: now,
     })
@@ -445,9 +400,16 @@ export const approve = mutation({
       })
     }
 
+    const currentListing =
+      reservation.quoteVersion === 1 ? null : await ctx.db.get(reservation.vehicleId)
+    const quote = validateRentalQuote(reservation, currentListing)
+
     const now = Date.now()
 
     await ctx.db.patch(args.reservationId, {
+      // Exact legacy validation may canonicalize descriptive fields, never the price.
+      quoteVersion: quote.quoteVersion,
+      addOns: quote.addOns,
       status: "approved",
       approvedAt: now,
       ownerMessage: args.ownerMessage ? sanitizeMessage(args.ownerMessage) : undefined,
