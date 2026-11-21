@@ -298,22 +298,19 @@ export default function TeamDetailPage({ params }: TeamDetailPageProps) {
         <div className="space-y-6 lg:col-span-2">
           <Card>
             <div className="relative h-64 w-full overflow-hidden rounded-t-lg">
-              {team.logoR2Key ? (
-                <Image
-                  alt={team.name}
-                  className="object-cover"
-                  fill
-                  sizes="(max-width: 1024px) 100vw, 66vw"
-                  src={r2Url(team.logoR2Key)}
-                />
-              ) : team.logoUrl ? (
-                // biome-ignore lint/performance/noImgElement: legacy user-supplied URL not in remotePatterns
-                <img alt={team.name} className="size-full object-cover" src={team.logoUrl} />
-              ) : (
-                <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-primary">
-                  <h3 className="font-bold text-4xl text-white">{team.name}</h3>
-                </div>
-              )}
+              <Image
+                alt={team.name}
+                className="object-cover"
+                fallback={
+                  <span className="relative flex size-full items-center justify-center overflow-hidden bg-primary">
+                    <span className="font-bold text-4xl text-white">{team.name}</span>
+                  </span>
+                }
+                fill
+                sizes="(max-width: 1024px) 100vw, 66vw"
+                src={r2Url(team.logoR2Key) ?? team.logoUrl}
+                unoptimized={!r2Url(team.logoR2Key)}
+              />
             </div>
             <CardHeader>
               <div className="flex flex-wrap items-center gap-2">
