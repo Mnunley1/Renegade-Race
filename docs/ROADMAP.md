@@ -1,8 +1,111 @@
-# Renegade Race Rentals — Long-Term Roadmap
+# Renegade Race Rentals — Current Roadmap
 
-_Last updated: May 3, 2026_
+_Last updated: November 21, 2026_
 
-## Product vision
+## Approved direction
+
+**Stabilize and verify the existing marketplace first. Defer paid endurance-seat
+expansion and validate demand before funding another implementation milestone.**
+This is the REN-14 decision approved on November 21, 2026. Product and release
+owner: **Malcolm**. The named lead for any future pilot's day-to-day operations is
+**TBD**; a pilot is not approved by this decision.
+
+The current navigation remains **Rentals, Coaching, Paddock**, with signed-in tools
+in the user menu and contextual profile access. Retain the red-and-white racing
+identity. The May roadmap preserved below is historical exploration, not a list
+of approved commitments or an accurate statement of what is currently live.
+
+## Next milestone — Existing marketplace release readiness
+
+Complete acceptance and release review for the existing rental, coaching,
+invoice, messaging and Paddock flows before expanding paid-seat work. Use
+[the release workflow](releases.md) and the acceptance evidence in Linear as the
+source of truth for tested revisions and remaining conditions.
+
+- Review the combined staging acceptance recorded in REN-7, including repaired
+  invoice authentication, author links, post discussions and paid-balance display.
+- Resolve or explicitly retain separately owned holds, data-confirmation work and
+  operational limitations; do not infer that a passing suite clears them.
+- Record the proposed release scope, frontend/backend compatibility, required
+  checks and rollback constraints before a production decision.
+- Keep current production builds in place until a separately approved release.
+  This roadmap change authorizes no deployment, migration or customer-data change.
+
+Completion means an evidence-backed release decision for the existing marketplace;
+it does not promise a release date or automatic production approval.
+
+## Following milestone — Paid-seat demand discovery
+
+Paid endurance seats remain **deferred**. Gather evidence of demand without
+collecting money, accepting bookings, promising inventory or committing to a
+pilot. Capture the following with identified prospective participants:
+
+| Evidence | Required discovery record |
+| --- | --- |
+| Supply | Named teams, their decision-makers, intended events and dates, actual seat inventory, and delivery constraints. |
+| Demand | Named interested drivers, their target events, experience/eligibility needs and commitment level. |
+| Pricing | Proposed prices, inclusions, deposit/balance expectations, cancellation/refund terms and evidence of willingness to pay. Interest alone is not a sale. |
+| Operations | Proposed named pilot operations lead, support coverage, team/driver responsibilities and event failure contingencies. Lead remains TBD. |
+| Decision | Malcolm's documented go/no-go assessment against thresholds agreed before evaluating the results. |
+
+Participant and commercial details belong in access-appropriate private records;
+record only a non-sensitive summary and decision in the public repository.
+
+### Demand decision gate
+
+Malcolm owns setting and approving these thresholds. **All numeric thresholds,
+validation dates and any pilot budget are TBD.** Do not substitute the historical
+May targets or invent new targets to justify proceeding.
+
+| Criterion | Go/no-go threshold |
+| --- | --- |
+| Confirmed team/event supply | TBD — owner approval required. |
+| Qualified driver demand and commitment | TBD — owner approval required. |
+| Accepted price/terms and viable economics | TBD — owner approval required. |
+| Named operations lead and support readiness | TBD — owner approval required. |
+| Acceptable delivery, cancellation and financial risk | TBD — owner approval required. |
+
+The outcome may be continued deferral, more discovery or a separately scoped
+pilot proposal. A future pilot requires its own explicit approval, named operating
+owner, scope, success/stop criteria and technical acceptance. It is not the next
+approved engineering build by default.
+
+## Existing seat code and preserved work
+
+REN-6 reconciled endurance-seat backend functionality into `dev` alongside the
+marketplace backend. Existing backend code and tests are not evidence that a
+complete paid-seat product or production rollout has been accepted. Frontend
+parity and full seat-flow acceptance remain separate work.
+
+[PR #51](https://github.com/Mnunley1/Renegade-Race/pull/51) remains preserved and
+unmerged. Do not merge it wholesale or discard it. Reassess any useful UI work
+against the current backend only if a later approved scope calls for it.
+
+Before any paid-seat pilot, separately verify authenticated payment/refund
+ownership, deposit and balance lifecycle reconciliation, failed/late/duplicate
+payment events, cancellation/refund outcomes and concurrent seat-capacity
+behavior. Record the known gaps and settlement evidence for the actual proposed
+flow. Existing rental or invoice payment proof does not certify seat payments.
+This decision does not change existing seat behavior, remove code or authorize
+financial actions.
+
+Mobile applications, e-signature services, race-data integrations, subscriptions
+and other expansion ideas below have no new authorization or delivery commitment
+under REN-14. Revisit them through separate product decisions.
+
+---
+
+<details>
+<summary>Historical May 2026 exploration — superseded planning context</summary>
+
+The text below preserves the May 3, 2026 proposal for context. Its dates, targets,
+fees, provider choices, architecture assumptions and claims about live features
+are historical and unverified here. They do not override the approved priorities
+above, the current code or the release workflow. In particular, the old People
+and Deals primary tabs and scheduled mobile/e-sign/race-integration work are not
+current commitments.
+
+## Historical product vision
 
 A "digital paddock" where motorsports professionals (drivers, teams, coaches, crew, vehicle owners, sponsors) discover each other, talk, agree, and pay — all in one place. Rentals and coaching become _features_ inside the social platform, not the platform itself.
 
@@ -201,3 +304,5 @@ The hybrid path captures ~80% of the savings of going non-Stripe with ~5% of the
 - Telemetry data (MoTeC / AiM) — possible Phase 5+ stretch.
 - DAO / token / blockchain anything.
 - Insurance underwriting (partnership only, not an internal product).
+
+</details>
