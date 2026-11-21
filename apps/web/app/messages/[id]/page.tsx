@@ -13,6 +13,7 @@ import { useAccountActivity } from "@/hooks/useAccountAuth"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleError, handleErrorWithContext } from "@/lib/error-handler"
+import { formatVehicleTitle } from "@/lib/vehicle-year"
 import { ChatHeader } from "./chat-header"
 import { ConfirmationDialogs } from "./confirmation-dialogs"
 import type { MessageData } from "./message-bubble"
@@ -660,11 +661,7 @@ function ChatPageContent({ user }: { user: { id: string } }) {
               onReply={handleReplyToMessage}
               onSaveEdit={handleSaveEdit}
               pendingRecipientName={recipientUser?.name}
-              pendingVehicleLabel={
-                pendingVehicle
-                  ? `${pendingVehicle.year} ${pendingVehicle.make} ${pendingVehicle.model}`
-                  : undefined
-              }
+              pendingVehicleLabel={pendingVehicle ? formatVehicleTitle(pendingVehicle) : undefined}
             />
 
             {/* Optimistic messages */}

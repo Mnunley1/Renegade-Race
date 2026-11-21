@@ -15,6 +15,7 @@ import { attachVehicleUpload, removeVehicleUpload } from "./r2"
 import { getRentalConflicts } from "./rentalAvailability"
 import { publicUserProfile, userProfileWithAdminContact } from "./userProfile"
 import { normalizeMake } from "./vehicleMakes"
+import { requireVehicleYear } from "./vehicleYear"
 
 // Get all active and approved vehicles with optimized images
 export const getAllWithOptimizedImages = query({
@@ -537,6 +538,7 @@ export const createVehicleWithImages = mutation({
 
     const userId = identity.subject
     const now = Date.now()
+    requireVehicleYear(args.year)
 
     // Schema requires trackId; fall back to the first active track when omitted.
     let trackId = args.trackId
@@ -727,6 +729,9 @@ export const update = mutation({
     if (vehicle.ownerId !== identity.subject) {
       throw new Error("Not authorized to update this vehicle")
     }
+
+    if (args.year !== undefined && !Object.is(args.year, vehicle.year))
+      requireVehicleYear(args.year)
 
     // Check if address changed and needs geocoding
     const addressChanged =

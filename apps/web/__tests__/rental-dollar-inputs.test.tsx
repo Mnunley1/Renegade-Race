@@ -101,6 +101,55 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe("rental dollar input boundaries", () => {
+  it.each([
+    "206",
+    "10000",
+    "2026.5",
+    "",
+  ])("rejects invalid changed vehicle year %s without writing", (value) => {
+    const { container } = render(<EditVehiclePage />)
+    change("Year *", value)
+    submitEdit(container)
+    expect(mock.mutate).not.toHaveBeenCalled()
+    expect(mock.error).toHaveBeenCalledWith("Enter a four-digit vehicle year")
+  })
+  it("allows unrelated edits to an unchanged invalid legacy year", async () => {
+    mock.vehicle = { ...vehicle, year: 206 }
+    const { container } = render(<EditVehiclePage />)
+    change("Description (Optional)", "New description")
+    submitEdit(container)
+    await waitFor(() => expect(mock.mutate).toHaveBeenCalled())
+    expect(mock.mutate.mock.calls[0]?.[0].year).toBeUndefined()
+  })
+  it.each([
+    OnboardingVehiclePage,
+    OnboardingFlow,
+  ])("rejects changed invalid years in both draft forms", (Form) => {
+    render(<Form />)
+    change("Year *", "206")
+    expect(screen.getByRole("button", { name: "Continue to Photos" })).toBeDisabled()
+    expect(mock.mutate).not.toHaveBeenCalled()
+  })
+  it("does not publish a new listing from an invalid legacy draft year", () => {
+    mock.draft = { ...draft, vehicleData: { ...draft.vehicleData, year: 206 } }
+    render(<OnboardingFlow initialStep={5} />)
+    for (const checkbox of screen.getAllByRole("checkbox")) fireEvent.click(checkbox)
+    fireEvent.click(screen.getByRole("button", { name: "Submit Listing" }))
+    expect(mock.error).toHaveBeenCalledWith("Enter a four-digit vehicle year")
+    expect(mock.mutate).not.toHaveBeenCalled()
+  })
+  it.each([
+    OnboardingVehiclePage,
+    OnboardingFlow,
+  ])("preserves a zero legacy year when hydrating and saving unrelated draft fields", async (Form) => {
+    mock.draft = { ...draft, vehicleData: { ...draft.vehicleData, year: 0 } }
+    render(<Form />)
+    expect(screen.getByLabelText("Year *")).toHaveValue(0)
+    change("Description *", "Unrelated description")
+    fireEvent.click(screen.getByRole("button", { name: "Continue to Photos" }))
+    await waitFor(() => expect(mock.mutate).toHaveBeenCalled())
+    expect(mock.mutate.mock.calls[0]?.[0].vehicleData.year).toBe(0)
+  })
   it("loads $10.23 and $2.37 from cents and preserves untouched edit values", async () => {
     const { container } = render(<EditVehiclePage />)
     expect(rate()).toHaveValue(10.23)

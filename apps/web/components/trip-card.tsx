@@ -37,6 +37,7 @@ import { RentalPaymentSummary, useRentalPayment } from "@/components/rental-paym
 import { StatusBadge } from "@/components/status-badge"
 import { formatDateForDisplay } from "@/lib/date-utils"
 import { formatRentalUsd } from "@/lib/rental-checkout"
+import { formatVehicleTitle } from "@/lib/vehicle-year"
 
 interface TripCardProps extends ComponentProps<"div"> {
   paymentStatus?: string
@@ -212,7 +213,7 @@ export function TripCard({
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <h3 className="truncate font-semibold text-lg tracking-tight transition-colors group-hover:text-primary">
-                {vehicleYear} {vehicleMake} {vehicleModel}
+                {formatVehicleTitle({ year: vehicleYear, make: vehicleMake, model: vehicleModel })}
               </h3>
               <div className="mt-1 flex items-center gap-1.5 text-muted-foreground text-sm">
                 <MapPin className="size-3.5 shrink-0" />
@@ -383,7 +384,11 @@ export function TripCard({
                         <p>
                           Are you sure you want to cancel your reservation for{" "}
                           <span className="font-medium text-foreground">
-                            {vehicleYear} {vehicleMake} {vehicleModel}
+                            {formatVehicleTitle({
+                              year: vehicleYear,
+                              make: vehicleMake,
+                              model: vehicleModel,
+                            })}
                           </span>
                           ?
                         </p>

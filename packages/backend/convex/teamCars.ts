@@ -1,4 +1,3 @@
-import { isEnduranceRaceEvent } from "./seatHelpers"
 import { v } from "convex/values"
 import { internal } from "./_generated/api"
 import { mutation, query } from "./_generated/server"
@@ -8,11 +7,13 @@ import { sanitizeMessage, sanitizeShortText } from "./sanitize"
 import {
   assertOfferingPrices,
   assertSpotCount,
+  isEnduranceRaceEvent,
   omitHostUserId,
   requireIdentity,
   requireTeamManager,
   toPublicTeamListing,
 } from "./seatHelpers"
+import { requireVehicleYear } from "./vehicleYear"
 
 const experienceLevelValidator = v.union(
   v.literal("beginner"),
@@ -66,6 +67,7 @@ export const create = mutation({
   },
   handler: async (ctx, args) => {
     const identity = await requireIdentity(ctx)
+    if (args.year !== undefined) requireVehicleYear(args.year)
     await rateLimiter.limit(ctx, "createVehicle", {
       key: identity.subject,
       throws: true,
@@ -126,6 +128,7 @@ export const createWithOffering = mutation({
   },
   handler: async (ctx, args) => {
     const identity = await requireIdentity(ctx)
+    if (args.year !== undefined) requireVehicleYear(args.year)
     await rateLimiter.limit(ctx, "createVehicle", {
       key: identity.subject,
       throws: true,
@@ -218,6 +221,8 @@ export const update = mutation({
       throwError(ErrorCode.NOT_FOUND, "Team car not found")
     }
     await requireTeamManager(ctx, teamCar.teamId, identity.subject)
+    if (args.year !== undefined && !Object.is(args.year, teamCar.year))
+      requireVehicleYear(args.year)
 
     await rateLimiter.limit(ctx, "updateVehicle", {
       key: identity.subject,

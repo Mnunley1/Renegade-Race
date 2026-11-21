@@ -29,6 +29,7 @@ import { VehicleCard } from "@/components/vehicle-card"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { r2Url } from "@/lib/r2-url"
+import { formatVehicleTitle } from "@/lib/vehicle-year"
 
 // Time constants
 const MS_PER_SECOND = 1000
@@ -522,7 +523,7 @@ function ReviewCard({ review, firstName }: { review: ReviewData; firstName: stri
                 href={`/vehicles/${review.vehicleId}`}
               >
                 <Car className="size-4" />
-                {review.vehicle.year} {review.vehicle.make} {review.vehicle.model}
+                {formatVehicleTitle(review.vehicle)}
                 <ChevronRight className="size-4" />
               </Link>
             )}
@@ -588,7 +589,7 @@ export default function UserProfilePage() {
         id: vehicle._id,
         image: "",
         imageKey: primaryImage?.r2Key,
-        name: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
+        name: formatVehicleTitle(vehicle),
         year: vehicle.year,
         make: vehicle.make,
         model: vehicle.model,

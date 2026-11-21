@@ -15,6 +15,7 @@ import { toast } from "sonner"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
+import { formatVehicleTitle } from "@/lib/vehicle-year"
 
 export default function DisputeDetailPage() {
   const { user } = useUser()
@@ -104,7 +105,7 @@ export default function DisputeDetailPage() {
     )
   }
 
-  const vehicleName = `${vehicle.year} ${vehicle.make} ${vehicle.model}`
+  const vehicleName = formatVehicleTitle(vehicle)
   const isOpen = dispute.status === "open"
   const isUserInvolved = user?.id === dispute.renterId || user?.id === dispute.ownerId
 

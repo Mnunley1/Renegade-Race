@@ -35,6 +35,7 @@ import { IMAGE_ACCEPT_ATTR, isAllowedImageFile } from "@/lib/image-validation"
 import { formatRentalUsd } from "@/lib/rental-checkout"
 import { dollarsToCents } from "@/lib/rental-money"
 import { listingImageUploadApi } from "@/lib/vehicle-upload-api"
+import { isVehicleYear, VEHICLE_YEAR_ERROR } from "@/lib/vehicle-year"
 
 const ADVANCE_NOTICE_OPTIONS = [
   { value: "same-day", label: "Same day" },
@@ -152,7 +153,7 @@ export default function CreateVehiclePage() {
     !!(
       vehicleFormData.make &&
       vehicleFormData.model &&
-      vehicleFormData.year &&
+      isVehicleYear(Number(vehicleFormData.year)) &&
       (dollarsToCents(vehicleFormData.dailyRate) ?? 0) > 0 &&
       vehicleFormData.description &&
       vehicleFormData.horsepower &&
@@ -162,6 +163,10 @@ export default function CreateVehiclePage() {
     )
 
   const handleVehicleContinue = () => {
+    if (!isVehicleYear(Number(vehicleFormData.year))) {
+      toast.error(VEHICLE_YEAR_ERROR)
+      return
+    }
     if (!isVehicleFormValid()) {
       toast.error("Please fill in all required fields")
       return
@@ -279,6 +284,11 @@ export default function CreateVehiclePage() {
 
   // Step 5 Handlers - Final Submit
   const handleFinalSubmit = async () => {
+    if (!isVehicleYear(Number(vehicleFormData.year))) {
+      toast.error(VEHICLE_YEAR_ERROR)
+      setCurrentStep(1)
+      return
+    }
     if (!(acknowledged && termsAccepted)) {
       toast.error("Please acknowledge all requirements")
       return
@@ -504,6 +514,9 @@ export default function CreateVehiclePage() {
                   type="number"
                   value={vehicleFormData.year}
                 />
+                <p className="text-muted-foreground text-xs">
+                  Use a four-digit year. Unconfirmed legacy years require owner verification.
+                </p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="dailyRate">Daily Rate ($) *</Label>

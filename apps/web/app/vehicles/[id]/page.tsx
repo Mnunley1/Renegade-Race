@@ -50,6 +50,7 @@ import { handleErrorWithContext } from "@/lib/error-handler"
 import { r2Url } from "@/lib/r2-url"
 import { formatRentalUsd } from "@/lib/rental-checkout"
 import { vehicleRequestState } from "@/lib/vehicle-request-state"
+import { formatVehicleTitle } from "@/lib/vehicle-year"
 
 // ─── Types ──────────────────────────────────────────────────────────────
 
@@ -369,7 +370,7 @@ function VehicleDetailsPageContent() {
     }
 
     const url = typeof window !== "undefined" ? window.location.href : ""
-    const title = `${vehicle.year} ${vehicle.make} ${vehicle.model}`
+    const title = formatVehicleTitle(vehicle)
     const text = `Check out this ${title} on Renegade Rentals!`
 
     try {
@@ -438,7 +439,7 @@ function VehicleDetailsPageContent() {
     tripsCompleted: vehicle.owner?.totalRentals || 0,
   }
 
-  const vehicleTitle = `${vehicle.year} ${vehicle.make} ${vehicle.model}`
+  const vehicleTitle = formatVehicleTitle(vehicle)
 
   const hasSpecs =
     vehicle.horsepower ||

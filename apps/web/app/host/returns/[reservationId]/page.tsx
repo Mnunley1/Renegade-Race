@@ -19,6 +19,7 @@ import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 import { IMAGE_ACCEPT_ATTR } from "@/lib/image-validation"
+import { formatVehicleTitle } from "@/lib/vehicle-year"
 
 export default function ReturnReviewPage() {
   const { isLoaded, userId, sessionId } = useAuth()
@@ -120,7 +121,7 @@ function ReturnForm({ reservationId, userId }: { reservationId: string; userId: 
     )
   }
 
-  const vehicleName = `${vehicle.year} ${vehicle.make} ${vehicle.model}`
+  const vehicleName = formatVehicleTitle(vehicle)
   const renterReturnForm = completion.renterReturnForm
   const isAlreadyReviewed = completion.status === "completed" || completion.status === "disputed"
 

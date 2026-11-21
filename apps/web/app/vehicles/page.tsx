@@ -9,6 +9,7 @@ import { useDebounce } from "@/hooks/useDebounce"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { formatDateToISO, parseLocalDate } from "@/lib/date-utils"
+import { formatVehicleTitle } from "@/lib/vehicle-year"
 import { ActiveFilterBadges } from "./active-filter-badges"
 import { CompareBar } from "./compare-bar"
 import { CompareModal } from "./compare-modal"
@@ -595,7 +596,7 @@ function VehiclesPageContent() {
         id: vehicle._id,
         image: "",
         imageKey: primaryImage?.r2Key ?? undefined,
-        name: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
+        name: formatVehicleTitle(vehicle),
         year: vehicle.year,
         make: vehicle.make,
         model: vehicle.model,

@@ -26,6 +26,7 @@ import { formatDateForDisplay } from "@/lib/date-utils"
 import { handleErrorWithContext } from "@/lib/error-handler"
 import { IMAGE_ACCEPT_ATTR } from "@/lib/image-validation"
 import { r2Url } from "@/lib/r2-url"
+import { formatVehicleTitle } from "@/lib/vehicle-year"
 
 export default function DisputeCreationPage() {
   const { user: _user } = useUser()
@@ -125,7 +126,7 @@ export default function DisputeCreationPage() {
     )
   }
 
-  const vehicleName = `${vehicle.year} ${vehicle.make} ${vehicle.model}`
+  const vehicleName = formatVehicleTitle(vehicle)
   const isAlreadyDisputed = !!existingDispute
 
   if (isAlreadyDisputed) {

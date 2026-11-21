@@ -30,6 +30,7 @@ import { api } from "@/lib/convex"
 import { formatDateToISO } from "@/lib/date-utils"
 import { r2Url } from "@/lib/r2-url"
 import { formatRentalUsd } from "@/lib/rental-checkout"
+import { formatVehicleTitle } from "@/lib/vehicle-year"
 
 type Trip = {
   paymentStatus?: string
@@ -68,7 +69,7 @@ function mapReservation(res: any): Trip | null {
     renterId: res.renterId,
     cancellationPolicy: vehicle.cancellationPolicy,
     vehicleId: vehicle._id,
-    vehicleName: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
+    vehicleName: formatVehicleTitle(vehicle),
     vehicleImage: r2Url(primaryImage?.r2Key) ?? primaryImage?.imageUrl ?? "",
     vehicleYear: vehicle.year,
     vehicleMake: vehicle.make,

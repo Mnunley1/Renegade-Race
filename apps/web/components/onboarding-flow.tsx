@@ -37,6 +37,7 @@ import {
 import { formatRentalUsd } from "@/lib/rental-checkout"
 import { centsToDollarInput, dollarsToCents } from "@/lib/rental-money"
 import { onboardingImageUploadApi } from "@/lib/vehicle-upload-api"
+import { isVehicleYear, VEHICLE_YEAR_ERROR } from "@/lib/vehicle-year"
 
 const ADVANCE_NOTICE_OPTIONS = [
   { value: "same-day", label: "Same day" },
@@ -134,7 +135,7 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
         trackId: draft.vehicleData?.trackId || "",
         make: draft.vehicleData?.make || prev.make,
         model: draft.vehicleData?.model || prev.model,
-        year: draft.vehicleData?.year || prev.year,
+        year: draft.vehicleData?.year ?? prev.year,
         dailyRate:
           draft.vehicleData?.dailyRate !== undefined
             ? centsToDollarInput(draft.vehicleData.dailyRate)
@@ -195,7 +196,8 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
     !!(
       vehicleFormData.make &&
       vehicleFormData.model &&
-      vehicleFormData.year &&
+      (isVehicleYear(Number(vehicleFormData.year)) ||
+        Object.is(vehicleFormData.year, draft?.vehicleData?.year)) &&
       (draft?.vehicleData?.dailyRate !== undefined &&
       vehicleFormData.dailyRate === centsToDollarInput(draft.vehicleData.dailyRate)
         ? draft.vehicleData.dailyRate > 0
@@ -211,6 +213,15 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
     )
 
   const handleVehicleContinue = async () => {
+    if (
+      !(
+        Object.is(vehicleFormData.year, draft?.vehicleData?.year) ||
+        isVehicleYear(Number(vehicleFormData.year))
+      )
+    ) {
+      toast.error(VEHICLE_YEAR_ERROR)
+      return
+    }
     if (!isVehicleFormValid()) {
       toast.error("Please fill in all required fields")
       return
@@ -448,6 +459,12 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
       return
     }
 
+    if (!isVehicleYear(draft.vehicleData.year)) {
+      toast.error(VEHICLE_YEAR_ERROR)
+      setCurrentStep(1)
+      return
+    }
+
     let imagesData: Array<{ r2Key: string; isPrimary: boolean; order: number }> = []
     if (draft.images && draft.images.length > 0) {
       imagesData = draft.images
@@ -602,6 +619,9 @@ export function OnboardingFlow({ initialStep = 1 }: { initialStep?: number }) {
                     type="number"
                     value={vehicleFormData.year}
                   />
+                  <p className="text-muted-foreground text-xs">
+                    Use a four-digit year. Unconfirmed legacy years require owner verification.
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="dailyRate">Daily Rate ($) *</Label>

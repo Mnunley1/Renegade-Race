@@ -153,6 +153,37 @@ async function seedOffering(
 }
 
 describe("race series and events", () => {
+  it("guards optional team-car years while preserving unchanged legacy values", async () => {
+    const t = createTest()
+    const teamId = await seedTeam(t)
+    const { eventId } = await seedCatalog(t, teamId)
+    const owner = t.withIdentity({ subject: OWNER })
+    const args = { teamId, raceEventId: eventId, make: "Porsche", model: "911" }
+    await expect(owner.mutation(api.teamCars.create, { ...args, year: 206 })).rejects.toThrow(
+      "four-digit vehicle year"
+    )
+    await expect(
+      owner.mutation(api.teamCars.createWithOffering, {
+        ...args,
+        year: 2026.5,
+        offering: { title: "Synthetic", spotCount: 1, priceCents: 10000, depositCents: 1000 },
+      })
+    ).rejects.toThrow("four-digit vehicle year")
+    const noYear = await owner.mutation(api.teamCars.create, args)
+    expect((await t.run(({ db }) => db.get(noYear)))?.year).toBeUndefined()
+    await t.run(({ db }) => db.patch(noYear, { year: 206 }))
+    await owner.mutation(api.teamCars.update, {
+      teamCarId: noYear,
+      description: "Unrelated edit",
+      year: 206,
+    })
+    expect((await t.run(({ db }) => db.get(noYear)))?.year).toBe(206)
+    await expect(
+      owner.mutation(api.teamCars.update, { teamCarId: noYear, year: 207 })
+    ).rejects.toThrow("four-digit vehicle year")
+    await owner.mutation(api.teamCars.update, { teamCarId: noYear, year: 2026 })
+    expect((await t.run(({ db }) => db.get(noYear)))?.year).toBe(2026)
+  })
   it("preserves imported race events without treating them as seat inventory", async () => {
     const t = createTest()
     const teamId = await seedTeam(t)

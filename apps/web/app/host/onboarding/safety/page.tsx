@@ -20,6 +20,7 @@ import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 import { areVehiclePhotosRequired } from "@/lib/feature-flags"
 import { needsVehiclePhotoReupload } from "@/lib/image-validation"
+import { isVehicleYear, VEHICLE_YEAR_ERROR } from "@/lib/vehicle-year"
 
 const UNCAUGHT_ERROR_RE = /Uncaught Error:\s*(.+?)(?:\n|$)/i
 const NO_ACTIVE_TRACKS_RE = /no active tracks/i
@@ -62,6 +63,12 @@ export default function SafetyPage() {
 
     if (!(draft?.vehicleData && draft?.address)) {
       toast.error("Missing vehicle data. Please go back and complete previous steps.")
+      return
+    }
+
+    if (!isVehicleYear(draft.vehicleData.year)) {
+      toast.error(VEHICLE_YEAR_ERROR)
+      router.push("/host/onboarding/vehicle")
       return
     }
 

@@ -15,6 +15,7 @@ import { api } from "@/lib/convex"
 import { formatDateForDisplay } from "@/lib/date-utils"
 import { r2Url } from "@/lib/r2-url"
 import { formatRentalUsd } from "@/lib/rental-checkout"
+import { formatVehicleTitle } from "@/lib/vehicle-year"
 
 function CoachingSuccessCard({ bookingId }: { bookingId: Id<"coachingBookings"> }) {
   const booking = useQuery(api.coachingBookings.getById, { id: bookingId })
@@ -263,7 +264,7 @@ function CheckoutSuccessContent() {
                   {primaryImage && primaryImage.trim() !== "" ? (
                     <div className="relative h-32 w-48 shrink-0 overflow-hidden rounded-lg">
                       <Image
-                        alt={`${vehicle.year} ${vehicle.make} ${vehicle.model}`}
+                        alt={formatVehicleTitle(vehicle)}
                         className="object-cover"
                         fill
                         sizes="192px"
@@ -272,9 +273,7 @@ function CheckoutSuccessContent() {
                     </div>
                   ) : null}
                   <div className="flex-1">
-                    <h2 className="mb-2 font-bold text-2xl">
-                      {vehicle.year} {vehicle.make} {vehicle.model}
-                    </h2>
+                    <h2 className="mb-2 font-bold text-2xl">{formatVehicleTitle(vehicle)}</h2>
                     {vehicle.address && (
                       <div className="mb-2 flex items-center gap-2 text-muted-foreground">
                         <MapPin className="size-4" />

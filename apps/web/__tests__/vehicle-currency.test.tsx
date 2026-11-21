@@ -9,6 +9,7 @@ import { CompareModal } from "@/app/vehicles/compare-modal"
 import { RecentlyViewed } from "@/app/vehicles/recently-viewed"
 import type { VehicleItem } from "@/app/vehicles/types"
 import { VehicleCard } from "@/components/vehicle-card"
+import { useRecentlyViewed } from "@/hooks/use-recently-viewed"
 
 vi.mock("@clerk/nextjs", () => ({
   useUser: () => ({ isSignedIn: true, user: { id: "host" } }),
@@ -21,7 +22,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("next/head", () => ({ default: () => null }))
 vi.mock("@/components/vehicle-gallery", () => ({ VehicleGallery: () => null }))
 vi.mock("@/hooks/use-recently-viewed", () => ({
-  useRecentlyViewed: () => ({ items: [cardVehicle] }),
+  useRecentlyViewed: vi.fn(() => ({ items: [cardVehicle] })),
 }))
 vi.mock("convex/react", () => ({
   useMutation: () => vi.fn().mockResolvedValue(null),
@@ -106,6 +107,35 @@ const reservations = [
 afterEach(cleanup)
 
 describe("vehicle currency displays", () => {
+  it("preserves opaque legacy recently-viewed labels without guessing missing structured fields", () => {
+    vi.mocked(useRecentlyViewed).mockReturnValueOnce({
+      items: [
+        { id: "legacy", name: "Legacy cached label", image: "", pricePerDay: 1000, viewedAt: 1 },
+      ],
+      addItem: vi.fn(),
+      clearItems: vi.fn(),
+    })
+    render(<RecentlyViewed />)
+    expect(screen.getByText("Legacy cached label")).toBeInTheDocument()
+    expect(screen.queryByText("Year unconfirmed undefined undefined")).not.toBeInTheDocument()
+  })
+  it.each([
+    "grid",
+    "list",
+  ] as const)("renders a neutral legacy year in %s cards and image descriptions", (layout) => {
+    render(
+      <VehicleCard
+        {...cardVehicle}
+        layout={layout}
+        make="Mazda"
+        model="Synthetic"
+        name="206 Mazda Synthetic"
+        year={206}
+      />
+    )
+    expect(screen.getByText("Year unconfirmed Mazda Synthetic")).toBeInTheDocument()
+    expect(screen.queryByText("206 Mazda Synthetic")).not.toBeInTheDocument()
+  })
   it.each(["grid", "list"] as const)("shows cents accurately in the %s card", (layout) => {
     render(<VehicleCard {...cardVehicle} layout={layout} />)
     expect(screen.getByText("$123.45")).toBeInTheDocument()
