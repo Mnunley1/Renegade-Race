@@ -25,6 +25,7 @@ import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 import { IMAGE_ACCEPT_ATTR } from "@/lib/image-validation"
 import { r2Url } from "@/lib/r2-url"
+import { formatVehicleTitle } from "@/lib/vehicle-year"
 
 export default function DamageClaimPage() {
   const params = useParams()
@@ -171,7 +172,7 @@ export default function DamageClaimPage() {
   }
 
   const vehicle = reservation.vehicle
-  const vehicleName = vehicle ? `${vehicle.year} ${vehicle.make} ${vehicle.model}` : "Vehicle"
+  const vehicleName = vehicle ? formatVehicleTitle(vehicle) : "Vehicle"
 
   return (
     <div className="container mx-auto max-w-3xl px-4 py-8">

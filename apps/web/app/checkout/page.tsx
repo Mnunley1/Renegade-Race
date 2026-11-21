@@ -41,6 +41,7 @@ import {
   type RentalDraft,
   saveRentalDraft,
 } from "@/lib/rental-draft"
+import { formatVehicleTitle } from "@/lib/vehicle-year"
 
 interface AddOn {
   name: string
@@ -438,7 +439,7 @@ function CheckoutPageContent() {
                   {primaryImage && primaryImage.trim() !== "" ? (
                     <div className="relative h-24 w-40 shrink-0 overflow-hidden rounded-lg">
                       <Image
-                        alt={`${vehicle.year} ${vehicle.make} ${vehicle.model}`}
+                        alt={formatVehicleTitle(vehicle)}
                         className="object-cover"
                         fill
                         sizes="160px"
@@ -447,9 +448,7 @@ function CheckoutPageContent() {
                     </div>
                   ) : null}
                   <div className="flex-1">
-                    <h3 className="font-semibold text-lg">
-                      {vehicle.year} {vehicle.make} {vehicle.model}
-                    </h3>
+                    <h3 className="font-semibold text-lg">{formatVehicleTitle(vehicle)}</h3>
                     <p className="text-muted-foreground text-sm">
                       {formatRentalUsd(vehicle.dailyRate)}/day
                     </p>

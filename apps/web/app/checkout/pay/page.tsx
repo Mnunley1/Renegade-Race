@@ -22,6 +22,7 @@ import {
   getRentalQuoteError,
   isTerminalRentalPaymentError,
 } from "@/lib/rental-checkout"
+import { formatVehicleTitle } from "@/lib/vehicle-year"
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "")
 
@@ -384,7 +385,7 @@ function PayPageContent() {
                   {primaryImage && primaryImage.trim() !== "" ? (
                     <div className="relative h-24 w-40 shrink-0 overflow-hidden rounded-lg">
                       <Image
-                        alt={`${vehicle.year} ${vehicle.make} ${vehicle.model}`}
+                        alt={formatVehicleTitle(vehicle)}
                         className="object-cover"
                         fill
                         sizes="160px"
@@ -393,9 +394,7 @@ function PayPageContent() {
                     </div>
                   ) : null}
                   <div className="flex-1">
-                    <h3 className="font-semibold text-lg">
-                      {vehicle.year} {vehicle.make} {vehicle.model}
-                    </h3>
+                    <h3 className="font-semibold text-lg">{formatVehicleTitle(vehicle)}</h3>
                     {vehicle.address && (
                       <p className="flex items-center gap-1 text-muted-foreground text-sm">
                         <MapPin className="size-3" />

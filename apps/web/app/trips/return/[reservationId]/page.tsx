@@ -26,6 +26,7 @@ import { api } from "@/lib/convex"
 import { formatDateForDisplay } from "@/lib/date-utils"
 import { handleErrorWithContext } from "@/lib/error-handler"
 import { IMAGE_ACCEPT_ATTR } from "@/lib/image-validation"
+import { formatVehicleTitle } from "@/lib/vehicle-year"
 
 export default function ReturnSubmissionPage() {
   const { isLoaded, userId, sessionId } = useAuth()
@@ -152,7 +153,7 @@ function ReturnForm({ reservationId, userId }: { reservationId: string; userId: 
     )
   }
 
-  const vehicleName = `${vehicle.year} ${vehicle.make} ${vehicle.model}`
+  const vehicleName = formatVehicleTitle(vehicle)
   const isAlreadySubmitted = !!completion?.renterReturnForm
 
   return (

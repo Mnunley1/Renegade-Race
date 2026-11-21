@@ -52,6 +52,7 @@ import { r2Url } from "@/lib/r2-url"
 import { formatRentalUsd } from "@/lib/rental-checkout"
 import { centsToDollarInput, dollarsToCents } from "@/lib/rental-money"
 import { listingImageUploadApi } from "@/lib/vehicle-upload-api"
+import { isVehicleYear, VEHICLE_YEAR_ERROR } from "@/lib/vehicle-year"
 
 const TRANSMISSION_OPTIONS = ["Manual", "Automatic", "PDK", "DCT", "CVT"]
 const DRIVETRAIN_OPTIONS = ["RWD", "AWD", "FWD"]
@@ -135,7 +136,7 @@ export default function EditVehiclePage() {
         trackId: vehicle.trackId || "",
         make: vehicle.make || "",
         model: vehicle.model || "",
-        year: vehicle.year || 0,
+        year: vehicle.year ?? 0,
         dailyRate: centsToDollarInput(vehicle.dailyRate ?? 0),
         damageDepositAmount: vehicle.damageDepositAmount
           ? Math.round(vehicle.damageDepositAmount / 100)
@@ -516,6 +517,10 @@ export default function EditVehiclePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!(Object.is(formData.year, vehicle.year) || isVehicleYear(formData.year))) {
+      toast.error(VEHICLE_YEAR_ERROR)
+      return
+    }
     // Preserve legacy stored values when this field was not changed.
     const rateUnchanged = formData.dailyRate === centsToDollarInput(vehicle.dailyRate)
     const dailyRate = rateUnchanged ? vehicle.dailyRate : dollarsToCents(formData.dailyRate)
@@ -534,7 +539,7 @@ export default function EditVehiclePage() {
         trackId: formData.trackId ? (formData.trackId as Id<"tracks">) : undefined,
         make: formData.make || undefined,
         model: formData.model || undefined,
-        year: formData.year || undefined,
+        year: Object.is(formData.year, vehicle.year) ? undefined : formData.year,
         dailyRate,
         damageDepositAmount: formData.damageDepositAmount
           ? formData.damageDepositAmount * 100
@@ -846,9 +851,13 @@ export default function EditVehiclePage() {
                   onChange={handleChange}
                   placeholder="2023"
                   required
+                  step="any"
                   type="number"
                   value={formData.year}
                 />
+                <p className="text-muted-foreground text-xs">
+                  Use a four-digit year. Unconfirmed legacy years require owner verification.
+                </p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="dailyRate">Daily Rate ($) *</Label>

@@ -16,10 +16,13 @@ import { getWelcomeEmailTemplate, sendTransactionalEmail } from "./emails"
 import { isEarlyAdopterPromoActive, resolvePlatformFeePercentage } from "./pricing"
 import { clearDraftUploads, requireDraftUpload, requireProfileUpload } from "./r2"
 import { retrieveLinkedConnectAccount } from "./stripeOwnership"
-import { publicAuthorProfile, publicDisplayName, publicUserProfile } from "./userProfile"
-
-/** Matches Clerk/Convex placeholder names like "null null" from `${null} ${null}`. */
-const NULLISH_NAME_RE = /^(null|undefined)(\s+(null|undefined))+$/i
+import {
+  NULLISH_NAME_RE,
+  publicAuthorProfile,
+  publicDisplayName,
+  publicUserProfile,
+} from "./userProfile"
+import { requireVehicleYear } from "./vehicleYear"
 
 type EarlyAdopterGrant = {
   isEarlyAdopter: true
@@ -1055,6 +1058,11 @@ export const saveOnboardingDraft = mutation({
       throw new Error("User not found")
     }
 
+    const currentDraft = user.hostOnboardingDraft || {}
+    if (args.vehicleData && !Object.is(args.vehicleData.year, currentDraft.vehicleData?.year)) {
+      requireVehicleYear(args.vehicleData.year)
+    }
+
     if (args.images) {
       const keys = new Set(args.images.map((image) => image.r2Key))
       if (keys.size !== args.images.length) throw new Error("Choose distinct onboarding photos")
@@ -1062,7 +1070,6 @@ export const saveOnboardingDraft = mutation({
       await clearDraftUploads(ctx, user, keys)
     }
 
-    const currentDraft = user.hostOnboardingDraft || {}
     const updatedDraft = {
       ...currentDraft,
       address: args.address ?? currentDraft.address,

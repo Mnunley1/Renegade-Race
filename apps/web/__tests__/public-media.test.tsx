@@ -197,10 +197,10 @@ describe("public media cards and galleries", () => {
   }
   it("falls back for configured-key failures on the vehicle card, then recovers", () => {
     const { rerender } = render(<VehicleCard {...car} />)
-    fireEvent.error(screen.getByAltText("Test Car"))
-    expect(screen.getByRole("img", { name: "Test Car unavailable" })).toBeInTheDocument()
+    fireEvent.error(screen.getByAltText("2026 Test Car"))
+    expect(screen.getByRole("img", { name: "2026 Test Car unavailable" })).toBeInTheDocument()
     rerender(<VehicleCard {...car} imageKey="images/vehicles/car/replacement" />)
-    expect(screen.getByAltText("Test Car")).toHaveAttribute(
+    expect(screen.getByAltText("2026 Test Car")).toHaveAttribute(
       "src",
       `${origin}/images/vehicles/car/replacement`
     )
@@ -209,7 +209,7 @@ describe("public media cards and galleries", () => {
   it("keeps a valid legacy card URL when bucket configuration is missing", () => {
     vi.stubEnv("NEXT_PUBLIC_R2_PUBLIC_URL", "")
     render(<VehicleCard {...car} image="https://images.unsplash.com/car.jpg" />)
-    expect(screen.getByAltText("Test Car")).toHaveAttribute(
+    expect(screen.getByAltText("2026 Test Car")).toHaveAttribute(
       "src",
       "https://images.unsplash.com/car.jpg"
     )

@@ -20,6 +20,7 @@ import { handleErrorWithContext } from "@/lib/error-handler"
 import { formatTime } from "@/lib/format-time"
 import { r2Url } from "@/lib/r2-url"
 import { getReservationStatusMeta } from "@/lib/reservation-status"
+import { formatVehicleTitle } from "@/lib/vehicle-year"
 
 type FilterTab = "all" | "unread" | "archived"
 
@@ -315,7 +316,7 @@ function MessagesPageContent({ user }: { user: { id: string } }) {
                   const avatarUrl = r2Url(otherUser?.profileImageR2Key) ?? otherUser?.profileImage
                   const statusMeta = getReservationStatusMeta(conversation.reservation?.status)
                   const contextLabel = conversation.vehicle
-                    ? `${conversation.vehicle.year} ${conversation.vehicle.make} ${conversation.vehicle.model}`
+                    ? formatVehicleTitle(conversation.vehicle)
                     : conversation.coachProfile
                       ? "Coaching"
                       : conversation.team

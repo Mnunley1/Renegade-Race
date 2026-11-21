@@ -2,6 +2,7 @@
 
 import { Button } from "@workspace/ui/components/button"
 import { X } from "lucide-react"
+import { formatVehicleTitle } from "@/lib/vehicle-year"
 import type { VehicleItem } from "./types"
 
 type CompareBarProps = {
@@ -27,9 +28,9 @@ export function CompareBar({ selectedVehicles, onRemove, onCompare, onClear }: C
                 className="flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs"
                 key={v.id}
               >
-                <span className="max-w-[120px] truncate">{v.name}</span>
+                <span className="max-w-[120px] truncate">{formatVehicleTitle(v)}</span>
                 <button
-                  aria-label={`Remove ${v.name} from comparison`}
+                  aria-label={`Remove ${formatVehicleTitle(v)} from comparison`}
                   className="text-muted-foreground hover:text-foreground"
                   onClick={() => onRemove(v.id)}
                   type="button"

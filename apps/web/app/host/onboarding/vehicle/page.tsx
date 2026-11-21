@@ -27,6 +27,7 @@ import { toast } from "sonner"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 import { centsToDollarInput, dollarsToCents } from "@/lib/rental-money"
+import { isVehicleYear, VEHICLE_YEAR_ERROR } from "@/lib/vehicle-year"
 
 export default function VehiclePage() {
   const router = useRouter()
@@ -59,7 +60,7 @@ export default function VehiclePage() {
         trackId: draft.vehicleData?.trackId || "",
         make: draft.vehicleData?.make || prev.make,
         model: draft.vehicleData?.model || prev.model,
-        year: draft.vehicleData?.year || prev.year,
+        year: draft.vehicleData?.year ?? prev.year,
         dailyRate:
           draft.vehicleData?.dailyRate !== undefined
             ? centsToDollarInput(draft.vehicleData.dailyRate)
@@ -99,7 +100,8 @@ export default function VehiclePage() {
     !!(
       formData.make &&
       formData.model &&
-      formData.year &&
+      (isVehicleYear(Number(formData.year)) ||
+        Object.is(formData.year, draft?.vehicleData?.year)) &&
       (draft?.vehicleData?.dailyRate !== undefined &&
       formData.dailyRate === centsToDollarInput(draft.vehicleData.dailyRate)
         ? draft.vehicleData.dailyRate > 0
@@ -112,6 +114,12 @@ export default function VehiclePage() {
     )
 
   const handleContinue = async () => {
+    if (
+      !(Object.is(formData.year, draft?.vehicleData?.year) || isVehicleYear(Number(formData.year)))
+    ) {
+      toast.error(VEHICLE_YEAR_ERROR)
+      return
+    }
     if (!isFormValid()) {
       toast.error("Please fill in all required fields")
       return
@@ -256,6 +264,9 @@ export default function VehiclePage() {
                 type="number"
                 value={formData.year}
               />
+              <p className="text-muted-foreground text-xs">
+                Use a four-digit year. Unconfirmed legacy years require owner verification.
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="dailyRate">Daily Rate ($) *</Label>

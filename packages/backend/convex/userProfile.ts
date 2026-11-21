@@ -1,6 +1,9 @@
 import type { Doc } from "./_generated/dataModel"
 import type { QueryCtx } from "./_generated/server"
 
+/** Matches legacy names generated from absent first/last name values. */
+export const NULLISH_NAME_RE = /^(null|undefined)(\s+(null|undefined))+$/i
+
 export async function publicAuthorProfile(ctx: QueryCtx, externalId: string) {
   const user = await ctx.db
     .query("users")
@@ -31,9 +34,20 @@ export async function loadPublicActor(ctx: QueryCtx, externalId: string) {
   }
 }
 
-export function publicDisplayName(user: Pick<Doc<"users">, "name" | "email">) {
+export function publicDisplayName(user: { name?: string | null; email?: string | null }) {
   // Clerk historically used the account email as a fallback display name.
-  return user.name.trim().toLowerCase() === user.email?.trim().toLowerCase() ? "User" : user.name
+  const name = user.name?.trim() ?? ""
+  const lowerName = name.toLowerCase()
+  if (
+    !name ||
+    lowerName === "null" ||
+    lowerName === "undefined" ||
+    NULLISH_NAME_RE.test(name) ||
+    lowerName === user.email?.trim().toLowerCase()
+  ) {
+    return "User"
+  }
+  return user.name as string
 }
 
 export function publicUserProfile(user: Doc<"users"> | null) {

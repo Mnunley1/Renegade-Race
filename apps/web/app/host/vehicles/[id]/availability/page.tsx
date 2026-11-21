@@ -45,6 +45,7 @@ import type { DateRange } from "react-day-picker"
 import { toast } from "sonner"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
+import { formatVehicleTitle } from "@/lib/vehicle-year"
 
 const ADVANCE_NOTICE_OPTIONS = [
   { value: "same-day", label: "Same day" },
@@ -458,7 +459,7 @@ export default function HostVehicleAvailabilityPage() {
 
       <div className="mb-6">
         <h1 className="mb-2 font-bold text-3xl">
-          Manage Availability - {vehicle.year} {vehicle.make} {vehicle.model}
+          Manage Availability - {formatVehicleTitle(vehicle)}
         </h1>
         <p className="text-muted-foreground">
           Click dates to block or unblock them. Use range mode to select multiple dates at once.

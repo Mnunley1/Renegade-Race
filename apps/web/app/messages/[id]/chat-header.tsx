@@ -14,6 +14,7 @@ import Image from "@/components/public-image"
 import { UserAvatar } from "@/components/user-avatar"
 import { r2Url } from "@/lib/r2-url"
 import { formatBookingDateRange, getReservationStatusMeta } from "@/lib/reservation-status"
+import { formatVehicleTitle } from "@/lib/vehicle-year"
 
 interface VehicleInfo {
   year?: number
@@ -76,7 +77,8 @@ export function ChatHeader({
       )
     }
     if (vehicle) {
-      return `${vehicle.year} ${vehicle.make} ${vehicle.model}`
+      if (!(vehicle.make && vehicle.model)) return "Vehicle details"
+      return formatVehicleTitle({ year: vehicle.year, make: vehicle.make, model: vehicle.model })
     }
     return "Conversation"
   })()

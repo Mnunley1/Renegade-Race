@@ -52,6 +52,7 @@ import { api } from "@/lib/convex"
 import { formatDateForDisplay, formatDateToISO } from "@/lib/date-utils"
 import { handleErrorWithContext } from "@/lib/error-handler"
 import { formatRentalUsd } from "@/lib/rental-checkout"
+import { formatVehicleTitle } from "@/lib/vehicle-year"
 
 export default function HostVehicleDetailPage() {
   const params = useParams()
@@ -253,7 +254,7 @@ export default function HostVehicleDetailPage() {
           <div className="flex-1">
             <div className="mb-1.5 flex flex-wrap items-center gap-3">
               <h1 className="font-bold text-3xl tracking-tight sm:text-4xl">
-                {vehicle.year} {vehicle.make} {vehicle.model}
+                {formatVehicleTitle(vehicle)}
               </h1>
               {getStatusBadge()}
             </div>
@@ -418,10 +419,7 @@ export default function HostVehicleDetailPage() {
           )}
 
           {/* Vehicle Gallery */}
-          <VehicleGallery
-            images={galleryImages}
-            vehicleName={`${vehicle.year} ${vehicle.make} ${vehicle.model}`}
-          />
+          <VehicleGallery images={galleryImages} vehicleName={formatVehicleTitle(vehicle)} />
 
           {/* Vehicle Details */}
           <Card>
@@ -634,11 +632,9 @@ export default function HostVehicleDetailPage() {
                     <AlertDialogTitle>Delete Vehicle</AlertDialogTitle>
                     <AlertDialogDescription>
                       Are you sure you want to delete{" "}
-                      <span className="font-semibold">
-                        {vehicle.year} {vehicle.make} {vehicle.model}
-                      </span>
-                      ? This will hide the vehicle from search results and prevent new bookings.
-                      Existing completed reservations and reviews will be preserved.
+                      <span className="font-semibold">{formatVehicleTitle(vehicle)}</span>? This
+                      will hide the vehicle from search results and prevent new bookings. Existing
+                      completed reservations and reviews will be preserved.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>

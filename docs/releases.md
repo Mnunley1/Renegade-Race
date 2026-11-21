@@ -84,6 +84,28 @@ Seat-specific frontend parity and seat checkout hardening require separate revie
 the rental smoke test does not establish seat-flow readiness. Passing CI alone
 does not establish production compatibility.
 
+## Listing data guards (REN-9)
+
+New or changed rental-vehicle years, onboarding draft years, and optional team-car
+years must be four-digit integers. This is a format guard, not an approved
+business eligibility window. Unchanged legacy years remain intact when saving
+unrelated edits; publishing a new listing still requires a valid year. Draft
+hydration preserves legacy zero values instead of substituting the current year.
+
+Current web vehicle labels and image descriptions use **Year unconfirmed** for
+invalid legacy years, preserving the supplied make/model text. Opaque legacy
+Recently Viewed cache labels remain unchanged: those entries lack structured
+year/make/model fields and have no active writer, so this release neither parses
+them nor guesses a replacement year. Public blank/nullish names use **User**,
+including legacy nullish-only placeholder strings, while account-email display
+fallbacks remain suppressed.
+
+This change does not correct historical records, choose canonical listings,
+merge duplicates, replace owner/coach names, alter image-host permissions or
+broaden CSP. Those data and asset decisions require independent owner evidence.
+No backfill or data migration is included. Verify the additive backend guard
+and web presentation in staging before any separately approved production release.
+
 ## Rental currency displays (REN-31)
 
 Rental rates, add-on prices, reservation totals, payment amounts, card fees, and

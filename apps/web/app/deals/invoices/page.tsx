@@ -25,6 +25,7 @@ import { useAccountActivity } from "@/hooks/useAccountAuth"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
+import { formatVehicleTitle } from "@/lib/vehicle-year"
 
 type LineItem = {
   description: string
@@ -336,7 +337,7 @@ function InvoicesContent({ user }: { user: { id: string } }) {
                       <SelectItem value="none">No damage deposit</SelectItem>
                       {(vehicles || []).map((vehicle) => (
                         <SelectItem key={vehicle._id} value={vehicle._id}>
-                          {vehicle.year} {vehicle.make} {vehicle.model}
+                          {formatVehicleTitle(vehicle)}
                           {vehicle.damageDepositAmount
                             ? ` (${formatCurrency(vehicle.damageDepositAmount)} deposit)`
                             : " (no deposit set)"}

@@ -13,6 +13,7 @@ import { VehicleCard } from "@/components/vehicle-card"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { r2Url } from "@/lib/r2-url"
+import { formatVehicleTitle } from "@/lib/vehicle-year"
 
 const TRACKS = [
   "Laguna Seca",
@@ -87,7 +88,7 @@ export default function HomePage() {
         id: vehicle._id,
         image: "",
         imageKey: primaryImage?.r2Key ?? undefined,
-        name: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
+        name: formatVehicleTitle(vehicle),
         year: vehicle.year,
         make: vehicle.make,
         model: vehicle.model,

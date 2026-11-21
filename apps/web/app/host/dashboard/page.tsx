@@ -38,6 +38,7 @@ import { api } from "@/lib/convex"
 import { handleError } from "@/lib/error-handler"
 import { r2Url } from "@/lib/r2-url"
 import { formatRentalUsd } from "@/lib/rental-checkout"
+import { formatVehicleTitle } from "@/lib/vehicle-year"
 
 function HostDashboardContent() {
   const { user } = useUser()
@@ -223,7 +224,7 @@ function HostDashboardContent() {
 
           return {
             id: vehicle._id,
-            name: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
+            name: formatVehicleTitle(vehicle),
             make: vehicle.make,
             model: vehicle.model,
             year: vehicle.year,
@@ -503,7 +504,7 @@ function HostDashboardContent() {
                   <div className="space-y-2">
                     {pendingReservations?.slice(0, 3).map((reservation: any) => {
                       const vehicleName = reservation.vehicle
-                        ? `${reservation.vehicle.year} ${reservation.vehicle.make} ${reservation.vehicle.model}`
+                        ? formatVehicleTitle(reservation.vehicle)
                         : "Vehicle"
                       const renterName = reservation.renter?.name || "Guest"
                       const primaryImage =
@@ -611,7 +612,7 @@ function HostDashboardContent() {
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-2">
                                 <p className="truncate font-semibold text-sm">
-                                  {vehicle.year} {vehicle.make} {vehicle.model}
+                                  {formatVehicleTitle(vehicle)}
                                 </p>
                                 {getStatusBadge(vehicle.status || "")}
                               </div>

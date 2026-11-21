@@ -20,6 +20,7 @@ import { handleErrorWithContext } from "@/lib/error-handler"
 import { r2Url } from "@/lib/r2-url"
 import { formatRentalUsd } from "@/lib/rental-checkout"
 import { vehicleRequestState } from "@/lib/vehicle-request-state"
+import { formatVehicleTitle } from "@/lib/vehicle-year"
 
 interface VehicleCardProps extends ComponentProps<"div"> {
   id: string
@@ -48,7 +49,7 @@ export function VehicleCard({
   id,
   image,
   imageKey,
-  name,
+  name: _name,
   year,
   make,
   model,
@@ -142,7 +143,7 @@ export function VehicleCard({
     <>
       {imageKey || image ? (
         <Image
-          alt={name}
+          alt={formatVehicleTitle({ year, make, model })}
           className="object-cover transition-transform duration-500 group-hover:scale-105"
           fill
           quality={80}
@@ -236,7 +237,7 @@ export function VehicleCard({
           <div>
             <div className="flex items-start justify-between gap-3">
               <h3 className="line-clamp-1 font-semibold text-base tracking-tight transition-colors group-hover:text-primary sm:text-lg">
-                {year} {make} {model}
+                {formatVehicleTitle({ year, make, model })}
               </h3>
               {ratingEl}
             </div>
@@ -295,7 +296,7 @@ export function VehicleCard({
         <CardContent className="flex flex-1 flex-col p-5">
           <div className="flex items-start justify-between gap-3">
             <h3 className="line-clamp-2 font-semibold text-base leading-snug tracking-tight transition-colors group-hover:text-primary sm:text-lg">
-              {year} {make} {model}
+              {formatVehicleTitle({ year, make, model })}
             </h3>
             {ratingEl}
           </div>
