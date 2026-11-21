@@ -67,28 +67,19 @@ export function TeamCard({
           <div className="flex flex-1 flex-col space-y-3">
             <div className="flex items-start gap-4">
               <div className="relative size-28 shrink-0 overflow-hidden rounded-xl bg-muted ring-1 ring-border">
-                {logoR2Key ? (
-                  <Image
-                    alt={name}
-                    className="object-cover"
-                    fill
-                    sizes="96px"
-                    src={r2Url(logoR2Key) ?? logoUrl}
-                    unoptimized={!r2Url(logoR2Key)}
-                  />
-                ) : logoUrl ? (
-                  <Image
-                    alt={name}
-                    className="size-full object-cover"
-                    fill
-                    src={logoUrl}
-                    unoptimized
-                  />
-                ) : (
-                  <div className="flex h-full items-center justify-center bg-primary">
-                    <h3 className="font-bold text-lg text-white">{name.slice(0, 2)}</h3>
-                  </div>
-                )}
+                <Image
+                  alt={name}
+                  className="object-cover"
+                  fallback={
+                    <span className="flex size-full items-center justify-center bg-primary">
+                      <span className="font-bold text-lg text-white">{name.slice(0, 2)}</span>
+                    </span>
+                  }
+                  fill
+                  sizes="112px"
+                  src={r2Url(logoR2Key) ?? logoUrl}
+                  unoptimized={!r2Url(logoR2Key)}
+                />
               </div>
               <div className="min-w-0 flex-1">
                 <h3 className="truncate font-semibold text-lg tracking-tight transition-colors group-hover:text-primary">
