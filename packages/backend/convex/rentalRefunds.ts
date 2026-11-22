@@ -4,6 +4,7 @@ import type { Doc } from "./_generated/dataModel"
 import type { ActionCtx } from "./_generated/server"
 import { ErrorCode, throwError } from "./errors"
 import { calculateRefundAmount } from "./pricing"
+import { refundObservations } from "./rentalSettlementProvider"
 
 type RefundPolicy = "full" | "partial" | "custom" | "none"
 
@@ -27,11 +28,11 @@ type RefundRequest = {
   requestId?: string
 }
 
-function stripeId(value: string | { id: string } | null) {
+function stripeId(value: string | { id: string } | null | undefined) {
   return typeof value === "string" ? value : value?.id
 }
 
-async function getRentalCharge(stripe: Stripe, payment: Doc<"payments">, chargeId?: string) {
+export async function getRentalCharge(stripe: Stripe, payment: Doc<"payments">, chargeId?: string) {
   let id = payment.stripeChargeId || (payment.stripePaymentIntentId && chargeId)
   if (!id) {
     let intentId = payment.stripePaymentIntentId
@@ -59,14 +60,17 @@ async function getRentalCharge(stripe: Stripe, payment: Doc<"payments">, chargeI
     metadata.renterId !== payment.renterId ||
     (payment.stripePaymentIntentId &&
       stripeId(charge.payment_intent) !== payment.stripePaymentIntentId) ||
-    (payment.stripeChargeId && charge.id !== payment.stripeChargeId)
+    (payment.stripeChargeId && charge.id !== payment.stripeChargeId) ||
+    (payment.stripeAccountId &&
+      stripeId(charge.transfer_data?.destination ?? null) !== payment.stripeAccountId) ||
+    (payment.stripeTransferId && stripeId(charge.transfer) !== payment.stripeTransferId)
   ) {
     throwError(ErrorCode.CONFLICT, "Stripe charge does not match this rental payment")
   }
   return charge
 }
 
-async function readRefunds(stripe: Stripe, chargeId: string) {
+export async function readRefunds(stripe: Stripe, chargeId: string) {
   const refunds: Stripe.Refund[] = []
   for await (const refund of stripe.refunds.list({ charge: chargeId, limit: 100 })) {
     refunds.push(refund)
@@ -100,6 +104,7 @@ async function reconcileRentalRefunds(
         (refund) => refund.status === "succeeded" && !!refund.metadata?.rentalRefundRequest
       ),
       details,
+      observations: refundObservations(refunds, charge),
     })
     if (result === null) return
     version = result
@@ -175,6 +180,15 @@ export async function issueRentalRefund(
 
   const charge = await getRentalCharge(stripe, payment)
   const refunds = await readRefunds(stripe, charge.id)
+  if (
+    payment.settlementReviewStatus === "held" ||
+    refunds.some((r) => r.status === "failed" || r.status === "canceled")
+  ) {
+    await reconcileRentalRefunds(ctx, stripe, payment, { charge })
+    const current = await ctx.runQuery(internal.rentalSettlement.load, { paymentId: payment._id })
+    if (current.payment?.settlementReviewStatus !== "resolved")
+      throwError(ErrorCode.CONFLICT, "Refund settlement review is required before another refund")
+  }
   const fingerprint = await digest(
     JSON.stringify([
       request.source,

@@ -34,6 +34,7 @@ import type { ComponentProps } from "react"
 import { useState } from "react"
 import { toast } from "sonner"
 import { RentalPaymentSummary, useRentalPayment } from "@/components/rental-payment-summary"
+import { RentalSettlementNotice } from "@/components/rental-settlement-notice"
 import { StatusBadge } from "@/components/status-badge"
 import { formatDateForDisplay } from "@/lib/date-utils"
 import { formatRentalUsd } from "@/lib/rental-checkout"
@@ -316,6 +317,11 @@ export function TripCard({
           <RentalPaymentSummary
             paymentId={paymentId}
             renterId={renterId}
+            reservationId={reservationId}
+          />
+          <RentalSettlementNotice
+            participantId={renterId}
+            participantRole="renter"
             reservationId={reservationId}
           />
 

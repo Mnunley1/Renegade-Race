@@ -33,11 +33,12 @@ import {
   User,
 } from "lucide-react"
 import { useParams, useRouter } from "next/navigation"
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { DetailPageLayout } from "@/components/detail-page-layout"
 import { LoadingState } from "@/components/loading-state"
 import PublicImage from "@/components/public-image"
+import { RentalSettlementReview } from "@/components/rental-settlement-review"
 import { StatusBadge } from "@/components/status-badge"
 import { UserAvatar } from "@/components/user-avatar"
 import type { Id } from "@/lib/convex"
@@ -113,7 +114,7 @@ function SummaryCards({ payment }: { payment: PaymentData }) {
       <Card>
         <CardContent className="p-5">
           <div className="flex items-start justify-between">
-            <p className="font-medium text-muted-foreground text-sm">Owner Payout</p>
+            <p className="font-medium text-muted-foreground text-sm">Original host allocation</p>
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-purple-100 dark:bg-purple-900/50">
               <ArrowRightLeft className="h-4 w-4 text-purple-700 dark:text-purple-400" />
             </div>
@@ -121,7 +122,7 @@ function SummaryCards({ payment }: { payment: PaymentData }) {
           <p className="mt-3 font-bold text-2xl tracking-tight">
             {formatCurrency(payment.ownerAmount)}
           </p>
-          <p className="mt-1 text-muted-foreground text-xs">After platform fee</p>
+          <p className="mt-1 text-muted-foreground text-xs">Before refund settlement adjustments</p>
         </CardContent>
       </Card>
       <Card>
@@ -171,7 +172,7 @@ function PaymentBreakdownCard({ payment }: { payment: PaymentData }) {
             </span>
           </div>
           <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Owner Payout</span>
+            <span className="text-muted-foreground">Original host allocation</span>
             <span className="font-medium">{formatCurrency(payment.ownerAmount)}</span>
           </div>
           {refundedAmount > 0 && (
@@ -193,7 +194,7 @@ function PaymentBreakdownCard({ payment }: { payment: PaymentData }) {
           )}
           <Separator />
           <div className="flex justify-between">
-            <span className="font-semibold">Net Amount</span>
+            <span className="font-semibold">Charge less successful refunds</span>
             <span className="font-bold text-lg">{formatCurrency(netAmount)}</span>
           </div>
         </div>
@@ -688,6 +689,10 @@ export default function PaymentDetailPage() {
   const payment = useQuery(api.stripe.getPaymentById, { paymentId })
 
   const [refundDialogOpen, setRefundDialogOpen] = useState(false)
+  const settlementHeld = payment?.settlementReviewStatus === "held"
+  useEffect(() => {
+    if (settlementHeld) setRefundDialogOpen(false)
+  }, [settlementHeld])
 
   if (payment === undefined) {
     return <LoadingState message="Loading payment details..." />
@@ -709,7 +714,11 @@ export default function PaymentDetailPage() {
     <DetailPageLayout
       actions={
         canRefund ? (
-          <Button onClick={() => setRefundDialogOpen(true)} variant="destructive">
+          <Button
+            disabled={settlementHeld}
+            onClick={() => setRefundDialogOpen(true)}
+            variant="destructive"
+          >
             <RefreshCw className="mr-2 h-4 w-4" />
             Process Refund
           </Button>
@@ -724,6 +733,9 @@ export default function PaymentDetailPage() {
       title={`Payment ${payment._id.slice(-8).toUpperCase()}`}
     >
       <SummaryCards payment={payment} />
+      <div className="mt-6">
+        <RentalSettlementReview paymentId={payment._id} />
+      </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
@@ -751,7 +763,7 @@ export default function PaymentDetailPage() {
         </div>
       </div>
 
-      {canRefund && (
+      {canRefund && !settlementHeld && (
         <RefundDialog
           onOpenChange={setRefundDialogOpen}
           open={refundDialogOpen}

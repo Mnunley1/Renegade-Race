@@ -269,6 +269,18 @@ async function rentalDeletionBlockers(ctx: QueryCtx, clerkUserId: string): Promi
     })
   )
   const blockers: string[] = []
+  const settlementHolds = await Promise.all([
+    ctx.db
+      .query("rentalSettlementReviews")
+      .withIndex("by_renter_status", (q) => q.eq("renterId", clerkUserId).eq("status", "held"))
+      .first(),
+    ctx.db
+      .query("rentalSettlementReviews")
+      .withIndex("by_owner_status", (q) => q.eq("ownerId", clerkUserId).eq("status", "held"))
+      .first(),
+  ])
+  if (settlementHolds.some(Boolean))
+    blockers.push("Rental refund settlement requires operator review before deleting your account.")
   if (renterCount)
     blockers.push(`${renterCount} active booking(s) as a renter. Please cancel them first.`)
   if (hostCount) blockers.push(`${hostCount} active reservation(s) on your vehicles.`)

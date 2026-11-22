@@ -84,6 +84,53 @@ Seat-specific frontend parity and seat checkout hardening require separate revie
 the rental smoke test does not establish seat-flow readiness. Passing CI alone
 does not establish production compatibility.
 
+## Failed rental refund settlement review (REN-51)
+
+A failed or canceled rental refund creates a durable **held** settlement review.
+Customer refund totals still follow Stripe's current succeeded refunds; a payment
+returning to paid does not prove the host's allocation was restored. Both rental
+participants see a narrow review notice. Operators see the retained provider
+references and ledger evidence. Unresolved reviews block both participants'
+account deletion and further refund requests on that payment. No new transfer,
+capture, refund or payout is initiated by review refresh or resolution.
+
+Failed-refund history is reconciled through the admin `rentalSettlement.refresh`
+action using a payment ID. It re-reads the verified charge's complete refund list,
+records customer outcomes, and captures immutable evidence snapshots. It does not
+fabricate webhook receipts or change provider balances. This explicit refresh can
+bring historical failed refunds under review without issuing another refund.
+
+`rentalSettlement.resolve` requires an authenticated admin, the current evidence
+ID, an operator reference and notes, followed by fresh provider reads and atomic
+review/refund-version checks. It refuses closure when allocation or any required
+binding is unknown. Evidence verifies captured amount/currency, charge and intent,
+destination transfer and application fee, reversal/refund references, platform
+failure credit and actual connected-account net debits/credits. The known sandbox
+case has an original host allocation of 95 cents, a 50-cent reversal and 15-cent
+fee return: 60 cents remain allocated, so the hold cannot be closed without
+independent evidence accounting for the 35-cent difference. These are Stripe
+balance allocations; they do not establish a completed bank payout.
+
+An operator can supply existing compensation-transfer IDs as evidence only.
+The server requires exact destination/currency and metadata
+`rentalSettlementPaymentId`, `rentalSettlementRefundId`, and
+`rentalSettlementOwnerId`, plus unreversed provider transfer and destination net
+entries. It rejects duplicate references and over/under-compensation. No component
+creates those transfers, and this feature does not authorize making one.
+
+All-success or all-failed/canceled refund sets can be reconciled from their exact
+ledger entries. Mixed successful/failed sets and pending refunds remain held when
+fee attribution cannot be independently established: application-fee refund
+objects do not identify their originating rental refund, so no time/proportional
+guess is used. Missing or inconsistent ledger coverage likewise remains held.
+Resolution actor, notes, references, timestamp and evidence are retained in the
+audit log. Meaningful changed evidence reopens a resolved review; normal balance
+availability changes preserve resolution while retaining the new full snapshot.
+
+Deploy this additive schema/backend and the matching admin/participant UI to
+staging first. Retain financial evidence and the prior runtime/frontend baseline.
+Production rollout remains a separately approved REN-7 release decision.
+
 ## Listing data guards (REN-9)
 
 New or changed rental-vehicle years, onboarding draft years, and optional team-car
