@@ -664,8 +664,9 @@ http.route({
         source: "clerk",
       })
 
-      if (alreadyProcessed) {
-        // Already processed, return 200 to acknowledge
+      if (alreadyProcessed && event.type !== "user.deleted") {
+        // Deletion replays may retry previously deferred local cleanup; the
+        // durable tombstone makes completed cleanup idempotent.
         return new Response(null, { status: 200 })
       }
     }
@@ -681,7 +682,17 @@ http.route({
       case "user.deleted": {
         const clerkUserId = event.data.id
         if (!clerkUserId) return new Response("Missing deleted Clerk user ID", { status: 400 })
-        await ctx.runAction(internal.users.performUserDeletionWithChecks, { clerkUserId })
+        await ctx.runMutation(internal.users.confirmProviderDeletion, { subject: clerkUserId })
+        try {
+          await ctx.runAction(internal.users.performUserDeletionWithChecks, { clerkUserId })
+        } catch {
+          // The signed provider fact is durable even when local financial cleanup
+          // is held. Acknowledge it; bounded reconciliation preserves all blockers.
+          await ctx.scheduler.runAfter(2 * 60_000, internal.users.reconcileAccountDeletion, {
+            subject: clerkUserId,
+            attempt: 0,
+          })
+        }
         break
       }
       default:

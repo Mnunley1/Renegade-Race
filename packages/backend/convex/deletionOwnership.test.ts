@@ -272,7 +272,7 @@ describe("account deletion ownership", () => {
     expect(await getUser()).not.toBeNull()
   })
 
-  it("requires a signed Clerk deletion event, handles replay, and removes only its subject", async () => {
+  it("requires a signed Clerk deletion event, handles replay, and anonymizes only its subject", async () => {
     const { t, postDeleted, getUser } = await setup(true)
     const otherId = await t.run((ctx) =>
       ctx.db.insert("users", { externalId: "other", name: "Other" })
@@ -282,7 +282,7 @@ describe("account deletion ownership", () => {
     expect(await getUser()).not.toBeNull()
     const first = await postDeleted()
     expect(first.status).toBe(200)
-    expect(await getUser()).toBeNull()
+    expect(await getUser()).toMatchObject({ externalId: "owner", name: "Deleted user" })
     expect((await postDeleted()).status).toBe(200)
     expect(await t.run((ctx) => ctx.db.get(otherId))).not.toBeNull()
     expect(stripe.balance).toHaveBeenCalledTimes(1)
@@ -338,6 +338,7 @@ describe("account deletion ownership", () => {
     const eligibility = await self.action(api.users.checkUserDeletionEligibility, {})
     expect(eligibility.canDelete).toBe(false)
     expect(eligibility.blockingFactors).toHaveLength(2)
+    await t.mutation(internal.users.confirmProviderDeletion, { subject: "owner" })
     await expect(
       t.mutation(internal.users.performUserDeletion, { userId, clerkUserId: "owner" })
     ).rejects.toThrow("Cannot delete")
@@ -363,19 +364,20 @@ describe("account deletion ownership", () => {
     const { reservationId } = await rentalFixture(t, role, { endDate })
     expect((await self.action(api.users.checkUserDeletionEligibility, {})).canDelete).toBe(false)
     expect((await other.action(api.users.checkUserDeletionEligibility, {})).canDelete).toBe(true)
+    await t.mutation(internal.users.confirmProviderDeletion, { subject: "owner" })
     await expect(
       t.mutation(internal.users.performUserDeletion, { userId, clerkUserId: "owner" })
     ).rejects.toThrow("Cannot delete")
-    await expect(postDeleted()).rejects.toThrow("Cannot delete")
+    expect((await postDeleted()).status).toBe(200)
     expect(await getUser()).not.toBeNull()
     expect(await t.run(({ db }) => db.query("payments").collect())).toEqual([])
 
     await t.run(({ db }) => db.patch(reservationId, { status: "cancelled" }))
     expect((await self.action(api.users.checkUserDeletionEligibility, {})).canDelete).toBe(true)
-    // The blocked delivery must not be recorded as successfully processed.
+    // The signed deletion fact is acknowledged; a replay can retry deferred cleanup.
     expect((await postDeleted()).status).toBe(200)
     expect((await postDeleted()).status).toBe(200)
-    expect(await getUser()).toBeNull()
+    expect(await getUser()).toMatchObject({ externalId: "owner", name: "Deleted user" })
     expect(await t.run(({ db }) => db.get(reservationId))).toMatchObject({ status: "cancelled" })
   })
 
@@ -497,10 +499,11 @@ describe("account deletion ownership", () => {
     expect(eligibility.canDelete).toBe(false)
     expect(eligibility.blockingFactors.join(" ").toLowerCase()).toContain("payment")
     expect((await other.action(api.users.checkUserDeletionEligibility, {})).canDelete).toBe(true)
+    await t.mutation(internal.users.confirmProviderDeletion, { subject: "owner" })
     await expect(
       t.mutation(internal.users.performUserDeletion, { userId, clerkUserId: "owner" })
     ).rejects.toThrow("Cannot delete")
-    await expect(postDeleted()).rejects.toThrow("Cannot delete")
+    expect((await postDeleted()).status).toBe(200)
     expect(await getUser()).not.toBeNull()
     expect(await t.run(({ db }) => db.get(paymentId))).toMatchObject({ status: paymentStatus })
 
@@ -511,7 +514,7 @@ describe("account deletion ownership", () => {
     }
     expect((await self.action(api.users.checkUserDeletionEligibility, {})).canDelete).toBe(true)
     expect((await postDeleted()).status).toBe(200)
-    expect(await getUser()).toBeNull()
+    expect(await getUser()).toMatchObject({ externalId: "owner", name: "Deleted user" })
     expect(await t.run(({ db }) => db.get(paymentId))).toMatchObject({ status: "cancelled" })
     expect(await t.run(({ db }) => db.get(reservationId))).not.toBeNull()
   })
@@ -565,9 +568,9 @@ describe("account deletion ownership", () => {
       }
       return { pending: [], available: [] }
     })
-    await expect(postDeleted()).rejects.toThrow("Cannot delete")
+    expect((await postDeleted()).status).toBe(200)
     expect(await getUser()).not.toBeNull()
-    expect(await t.run(({ db }) => db.query("webhookEvents").collect())).toEqual([])
+    expect(await t.run(({ db }) => db.query("webhookEvents").collect())).toHaveLength(1)
   })
 
   it("denies deletion for an outstanding balance and if Stripe ownership cannot be verified", async () => {
@@ -575,6 +578,7 @@ describe("account deletion ownership", () => {
     stripe.balance.mockResolvedValue({ pending: [{ currency: "usd", amount: 500 }], available: [] })
     const args = { clerkUserId: "owner" }
     expect((await self.action(api.users.checkUserDeletionEligibility, args)).canDelete).toBe(false)
+    await t.mutation(internal.users.confirmProviderDeletion, { subject: "owner" })
     await expect(t.action(internal.users.performUserDeletionWithChecks, args)).rejects.toThrow(
       "payouts"
     )
@@ -584,10 +588,12 @@ describe("account deletion ownership", () => {
       type: "express",
       metadata: { renegadeUserId: "other" },
     })
+    await t.mutation(internal.users.confirmProviderDeletion, { subject: "owner" })
     await expect(t.action(internal.users.performUserDeletionWithChecks, args)).rejects.toThrow(
       "Unable to verify"
     )
     expect(stripe.balance.mock.calls.length).toBe(reads)
+    await t.mutation(internal.users.confirmProviderDeletion, { subject: "owner" })
     await expect(
       t.mutation(internal.users.performUserDeletion, {
         userId,
@@ -603,7 +609,7 @@ describe("account deletion ownership", () => {
     stripe.account.mockResolvedValue({ id: "acct_owner", type: "express", metadata: {} })
     expect((await self.action(api.users.checkUserDeletionEligibility, {})).canDelete).toBe(true)
     expect((await postDeleted()).status).toBe(200)
-    expect(await getUser()).toBeNull()
+    expect(await getUser()).toMatchObject({ externalId: "owner", name: "Deleted user" })
   })
 
   it("returns one generic blocker for legacy funds, a failed balance read or an ambiguous link", async () => {
@@ -630,9 +636,25 @@ describe("account deletion ownership", () => {
     stripe.balance.mockClear()
     expect(await self.action(api.users.checkUserDeletionEligibility, {})).toMatchObject(expected)
     expect(stripe.balance).not.toHaveBeenCalled()
+    await t.mutation(internal.users.confirmProviderDeletion, { subject: "owner" })
     await expect(
       t.action(internal.users.performUserDeletionWithChecks, { clerkUserId: "owner" })
     ).rejects.toThrow("Unable to verify")
     expect(await getUser()).not.toBeNull()
+  })
+  it.each([
+    { pending: [{ amount: -1, currency: "usd" }], available: [] },
+    { pending: [], available: [], connect_reserved: [{ amount: 1, currency: "usd" }] },
+    {
+      pending: [],
+      available: [],
+      refund_and_dispute_prefunding: { pending: [{ amount: -1, currency: "usd" }], available: [] },
+    },
+  ])("blocks verified-owner deletion for nonzero liabilities or reserved funds %j", async (balance) => {
+    const { self } = await setup(true)
+    stripe.balance.mockResolvedValue(balance)
+    expect(await self.action(api.users.checkUserDeletionEligibility, {})).toMatchObject({
+      canDelete: false,
+    })
   })
 })

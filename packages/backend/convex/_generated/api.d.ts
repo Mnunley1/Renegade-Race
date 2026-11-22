@@ -8,6 +8,10 @@
  * @module
  */
 
+import type * as accountDeletionChecks from "../accountDeletionChecks.js";
+import type * as accountDeletionGuards from "../accountDeletionGuards.js";
+import type * as clerkDeletion from "../clerkDeletion.js";
+import type * as accountOperations from "../accountOperations.js";
 import type * as activity from "../activity.js";
 import type * as admin from "../admin.js";
 import type * as auditLog from "../auditLog.js";
@@ -98,6 +102,10 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  accountDeletionChecks: typeof accountDeletionChecks;
+  accountDeletionGuards: typeof accountDeletionGuards;
+  clerkDeletion: typeof clerkDeletion;
+  accountOperations: typeof accountOperations;
   activity: typeof activity;
   admin: typeof admin;
   auditLog: typeof auditLog;

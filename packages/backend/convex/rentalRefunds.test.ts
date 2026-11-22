@@ -126,7 +126,7 @@ async function setup() {
 
 describe("rental refunds", () => {
   it("admin partials remain refundable, identical requests replay, and full includes card processing", async () => {
-    const { admin, paymentId, read, sync } = await setup()
+    const { t, admin, paymentId, read, sync } = await setup()
     const request = { paymentId, amount: 4000, reason: "Rental adjustment", requestId: "first" }
     await admin.action(api.admin.initiateRefund, request)
     await sync()
@@ -150,6 +150,14 @@ describe("rental refunds", () => {
     await expect(
       admin.action(api.admin.initiateRefund, { ...request, amount: 6331, requestId: "over" })
     ).rejects.toThrow("remaining")
+    expect(
+      await t.run(({ db }) =>
+        db
+          .query("accountOperations")
+          .filter((q) => q.eq(q.field("status"), "active"))
+          .collect()
+      )
+    ).toEqual([])
     await admin.action(api.admin.initiateRefund, { ...request, requestId: "second" })
     await admin.action(api.admin.initiateRefund, { ...request, requestId: "last", amount: 2330 })
     await sync()
