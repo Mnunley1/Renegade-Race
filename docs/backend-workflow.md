@@ -4,6 +4,13 @@
 `convex/` directory contains the functions, schema, component configuration and
 checked-in generated API. Both frontends import that API through
 `@renegade/backend`; their `NEXT_PUBLIC_CONVEX_URL` selects the running deployment.
+
+Do not assume `convex codegen` is local or read-only. With components, it can
+contact a selected deployment and upload component definitions while generating
+bindings. Use an isolated development deployment or an explicitly reviewed target
+and CLI version, inspect its output, and follow the same target checks used for
+deployment. During REN-51, such a codegen run was audited: staging application
+modules and runtime remained unchanged. This does not make future runs read-only.
 The app directories are not separate Convex projects.
 
 Run the commands below from the repository root; backend commands explicitly

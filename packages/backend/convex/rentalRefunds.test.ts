@@ -28,7 +28,13 @@ beforeEach(() => {
   vi.resetAllMocks()
   process.env.STRIPE_SECRET_KEY = "sk_test_dummy"
   refunds = []
-  stripe.refunds.list.mockImplementation(() => refunds)
+  stripe.refunds.list.mockImplementation((params) =>
+    refunds.map((refund) => ({
+      ...refund,
+      charge: refund.charge ?? params.charge,
+      currency: refund.currency ?? "usd",
+    }))
+  )
   stripe.refunds.create.mockImplementation((params: Stripe.RefundCreateParams) => {
     const refund = {
       id: `re_${refunds.length + 1}`,
@@ -336,7 +342,14 @@ describe("rental refunds", () => {
     stripe.refunds.list.mockImplementationOnce(async function* () {
       enter()
       await proceed
-      yield { id: "old", status: "succeeded", amount: 1000 }
+      yield {
+        id: "old",
+        status: "succeeded",
+        amount: 1000,
+        charge: "ch_rental",
+        currency: "usd",
+        payment_intent: "pi_rental",
+      }
     })
     const stale = sync()
     await started

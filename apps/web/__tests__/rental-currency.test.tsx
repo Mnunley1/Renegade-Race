@@ -22,6 +22,7 @@ const mock = vi.hoisted(() => ({
   userId: "renter" as string | undefined,
   reservation: {} as Record<string, unknown>,
   payments: undefined as Record<string, unknown>[] | undefined,
+  settlement: null as Record<string, unknown> | null,
   queries: vi.fn(),
   mutate: vi.fn(),
   createPaymentIntent: vi.fn(),
@@ -33,6 +34,13 @@ vi.mock("@clerk/nextjs", () => ({
     isLoaded: true,
     isSignedIn: !!mock.userId,
     user: mock.userId ? { id: mock.userId } : null,
+  }),
+}))
+vi.mock("@/hooks/useAccountAuth", () => ({
+  useAccountAuth: () => ({
+    user: mock.userId ? { id: mock.userId } : null,
+    isReady: !!mock.userId,
+    accountKey: mock.userId ?? "anonymous",
   }),
 }))
 vi.mock("next/image", () => ({
@@ -51,6 +59,7 @@ vi.mock("convex/react", () => ({
     if (args === "skip") return
     if (name === "reservations:getById") return mock.reservation
     if (name === "stripe:getUserPayments") return mock.payments
+    if (name === "rentalSettlement:participantStatus") return mock.settlement
     if (name === "reservations:getByUser") return [mock.reservation]
     return []
   },
@@ -119,6 +128,7 @@ beforeEach(() => {
   mock.userId = "renter"
   mock.reservation = { ...reservation }
   mock.payments = [{ ...payment }]
+  mock.settlement = null
   mock.queries.mockClear()
   mock.mutate.mockReset()
   mock.push.mockReset()
@@ -132,6 +142,26 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   vi.useRealTimers()
+})
+
+it("shows the settlement hold alongside unchanged charge totals in renter trips and host reservations", () => {
+  mock.settlement = {
+    status: "held",
+    customerRefundStatus: "failed",
+    message: "Operator review is required.",
+  }
+  const renterView = render(<TripCard {...tripProps} />)
+  expect(screen.getByText("Settlement review pending")).toBeVisible()
+  expect(screen.getByText("Your refund failed.")).toBeVisible()
+  expect(screen.getByText("Total charged").parentElement).toHaveTextContent("$31.92")
+  expect(mock.queries).toHaveBeenCalledWith("rentalSettlement:participantStatus", {
+    reservationId: "booking",
+  })
+  renterView.unmount()
+  mock.userId = "owner"
+  render(<HostReservationsPage />)
+  expect(screen.getByText("Settlement review pending")).toBeVisible()
+  expect(screen.getByText("The customer refund failed.")).toBeVisible()
 })
 
 it("shows the same non-round multiday rental subtotal in request, trip, success, and host views", () => {

@@ -1,6 +1,7 @@
 // convex/schema.ts
 import { defineSchema, defineTable } from "convex/server"
 import { v } from "convex/values"
+import { refundObservation, settlementEvidence } from "./rentalSettlementValidators"
 
 export default defineSchema({
   users: defineTable({
@@ -736,6 +737,7 @@ export default defineSchema({
     stripeAccountId: v.optional(v.string()), // Owner's Connect account ID
     capturedAmount: v.optional(v.number()), // Actual Stripe charge amount including processing
     refundSyncVersion: v.optional(v.number()),
+    settlementReviewStatus: v.optional(v.union(v.literal("held"), v.literal("resolved"))),
     refundAmount: v.optional(v.number()),
     refundPercentage: v.optional(v.number()), // Percentage of original amount refunded (0-100)
     refundPolicy: v.optional(
@@ -763,6 +765,54 @@ export default defineSchema({
     .index("by_stripe_checkout_session", ["stripeCheckoutSessionId"])
     .index("by_stripe_customer", ["stripeCustomerId"])
     .index("by_owner_status", ["ownerId", "status"]),
+
+  rentalSettlementReviews: defineTable({
+    paymentId: v.id("payments"),
+    reservationId: v.id("reservations"),
+    renterId: v.string(),
+    ownerId: v.string(),
+    refundId: v.string(),
+    status: v.union(v.literal("held"), v.literal("resolved")),
+    customerRefundStatus: v.string(),
+    observation: refundObservation,
+    revision: v.number(),
+    latestEvidenceId: v.optional(v.id("rentalSettlementEvidence")),
+    resolution: v.optional(
+      v.object({
+        operatorId: v.string(),
+        reference: v.string(),
+        notes: v.string(),
+        resolvedAt: v.number(),
+        evidenceId: v.id("rentalSettlementEvidence"),
+        compensatingTransferIds: v.array(v.string()),
+      })
+    ),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_refund", ["refundId"])
+    .index("by_payment", ["paymentId"])
+    .index("by_reservation", ["reservationId"])
+    .index("by_status", ["status"])
+    .index("by_renter_status", ["renterId", "status"])
+    .index("by_owner_status", ["ownerId", "status"]),
+  rentalSettlementEvidence: defineTable({
+    reviewId: v.id("rentalSettlementReviews"),
+    paymentId: v.id("payments"),
+    refundId: v.string(),
+    fingerprint: v.string(),
+    evidence: settlementEvidence,
+  })
+    .index("by_review", ["reviewId"])
+    .index("by_fingerprint", ["reviewId", "fingerprint"]),
+  rentalSettlementObservations: defineTable({
+    paymentId: v.id("payments"),
+    refundId: v.string(),
+    observation: refundObservation,
+    observedAt: v.number(),
+  })
+    .index("by_refund", ["refundId"])
+    .index("by_payment", ["paymentId"]),
 
   // Disputes table
   disputes: defineTable({

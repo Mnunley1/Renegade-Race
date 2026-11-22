@@ -781,6 +781,7 @@ describe("signed rental Stripe webhooks", () => {
       charge: charge.id,
       status: "succeeded",
       amount: 1234,
+      currency: "usd",
       metadata: {},
     }
     stripeFetch.mockImplementation((url) => {

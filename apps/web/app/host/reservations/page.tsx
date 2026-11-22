@@ -20,6 +20,7 @@ import Link from "next/link"
 import { useMemo, useState } from "react"
 import Image from "@/components/public-image"
 import { RentalQuoteSummary } from "@/components/rental-quote-summary"
+import { RentalSettlementNotice } from "@/components/rental-settlement-notice"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { formatDateForDisplay } from "@/lib/date-utils"
@@ -176,6 +177,11 @@ function ReservationRow({
             confirming plans with the renter.
           </p>
         )}
+        <RentalSettlementNotice
+          participantId={reservation.ownerId}
+          participantRole="host"
+          reservationId={reservation._id}
+        />
         <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
           {needsReview && (
             <Button asChild size="sm">

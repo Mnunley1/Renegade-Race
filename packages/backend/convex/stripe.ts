@@ -32,6 +32,8 @@ import { rateLimiter } from "./rateLimiter"
 import { assertRentalDatesAvailable, getRentalConflicts } from "./rentalAvailability"
 import { validateRentalQuote } from "./rentalQuote"
 import { issueRentalRefund, syncRentalRefunds } from "./rentalRefunds"
+import { recordRefundObservations } from "./rentalSettlement"
+import { refundObservation } from "./rentalSettlementValidators"
 import {
   billingCustomerId,
   EXPRESS_SIGN_IN_URL,
@@ -1879,6 +1881,7 @@ export const updateRefundStatus = internalMutation({
     stripePaymentIntentId: v.optional(v.string()),
     expectedVersion: v.number(),
     cancelOnFull: v.boolean(),
+    observations: v.optional(v.array(refundObservation)),
     details: v.optional(
       v.object({
         reason: v.optional(v.string()),
@@ -1915,6 +1918,17 @@ export const updateRefundStatus = internalMutation({
       refundSyncVersion: version + 1,
       updatedAt: Date.now(),
     })
+    await recordRefundObservations(
+      ctx,
+      {
+        ...payment,
+        stripeChargeId: args.stripeChargeId,
+        ...(args.stripePaymentIntentId
+          ? { stripePaymentIntentId: args.stripePaymentIntentId }
+          : {}),
+      },
+      args.observations ?? []
+    )
     const reservation = await ctx.db.get(payment.reservationId)
     if (
       reservation &&
