@@ -1,3 +1,4 @@
+import { assertAccountsAvailable } from "./accountDeletionGuards"
 import { v } from "convex/values"
 import { api } from "./_generated/api"
 import type { Doc } from "./_generated/dataModel"
@@ -38,6 +39,7 @@ export const create = mutation({
       throw new Error("Rental completion already exists for this reservation")
     }
 
+    await assertAccountsAvailable(ctx, identity.subject, reservation.renterId, reservation.ownerId)
     const completionId = await ctx.db.insert("rentalCompletions", {
       reservationId: args.reservationId,
       vehicleId: reservation.vehicleId,

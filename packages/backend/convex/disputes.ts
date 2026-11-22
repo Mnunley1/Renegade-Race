@@ -1,3 +1,4 @@
+import { assertAccountsAvailable } from "./accountDeletionGuards"
 import { v } from "convex/values"
 import type { Doc } from "./_generated/dataModel"
 import { mutation, type QueryCtx, query } from "./_generated/server"
@@ -61,6 +62,7 @@ export const create = mutation({
       photos: args.photos ?? [],
     })
 
+    await assertAccountsAvailable(ctx, identity.subject, completion.renterId, completion.ownerId)
     // Update completion status to disputed
     await ctx.db.patch(args.completionId, {
       status: "disputed",

@@ -1,3 +1,5 @@
+import { withAccountOperation } from "./accountOperations"
+import { assertAccountsAvailable } from "./accountDeletionGuards"
 import { StripeSubscriptions } from "@convex-dev/stripe"
 import { v } from "convex/values"
 import Stripe from "stripe"
@@ -274,6 +276,7 @@ export const createDraft = mutation({
       discountAmount: args.discountAmount,
     })
     const now = Date.now()
+    await assertAccountsAvailable(ctx, identity.subject, args.recipientId)
     const invoiceId = await ctx.db.insert("invoices", {
       senderId: identity.subject,
       recipientId: args.recipientId,
@@ -354,6 +357,7 @@ export const updateDraft = mutation({
       discountAmount: args.discountAmount,
     })
 
+    await assertAccountsAvailable(ctx, identity.subject, invoice.senderId, invoice.recipientId)
     await ctx.db.patch(args.invoiceId, {
       title: args.title.trim(),
       description: args.description?.trim() || undefined,
@@ -393,6 +397,7 @@ export const send = mutation({
       throwError(ErrorCode.INVALID_STATUS, "Only draft invoices can be sent")
     }
 
+    await assertAccountsAvailable(ctx, identity.subject, invoice.senderId, invoice.recipientId)
     const [recipient, sender] = await Promise.all([
       ctx.db
         .query("users")
@@ -576,6 +581,7 @@ export const claimStripePayment = internalMutation({
     const current = await ctx.db.get(invoiceId)
     if (!(current && ["sent", "viewed", "payment_pending"].includes(current.status)))
       throwError(ErrorCode.INVALID_STATUS, "Invoice is not payable")
+    await assertAccountsAvailable(ctx, current.senderId, current.recipientId)
     if (current.selectedPaymentMethod) {
       if (current.selectedPaymentMethod !== method)
         throwError(ErrorCode.INVALID_STATUS, "Payment method has already been selected")
@@ -805,199 +811,216 @@ export const choosePaymentMethod = action({
     ])
     if (!sender?.stripeAccountId)
       throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE, "Provider must complete Stripe onboarding")
-    const stripe = getStripe()
-    const connectAccount = await verifiedPaymentDestination(
+    const destinationAccountId = sender.stripeAccountId
+    return withAccountOperation(
       ctx,
-      stripe,
-      sender.stripeAccountId,
-      invoice.senderId
-    )
-    if (!(connectAccount.details_submitted && connectAccount.charges_enabled)) {
-      throwError(ErrorCode.STRIPE_ACCOUNT_DISABLED, "Provider Stripe account is not ready")
-    }
-
-    const customerId = await billingCustomerId(ctx, stripe, identity, () =>
-      stripeClient.getOrCreateCustomer(ctx, {
-        userId: identity.subject,
-        email: identity.email || "",
-        name: identity.name || "",
-      })
-    )
-
-    // Fee is on the invoice total (not the ACH deposit). Early-adopter caps apply to the sender.
-    const { platformFee } = await ctx.runMutation(api.stripe.calculatePlatformFee, {
-      amount: invoice.total,
-      providerExternalId: invoice.senderId,
-    })
-    const settlement = resolveInvoiceSettlement({
-      invoiceTotal: invoice.total,
-      selectedPaymentMethod: args.paymentMethod,
-      damageDepositAmount: depositVehicle?.damageDepositAmount,
-      platformFee,
-    })
-
-    if (
-      calculateInvoiceTotal(invoice) !== invoice.total ||
-      !Number.isSafeInteger(settlement.amountDue)
-    ) {
-      throwError(ErrorCode.INVALID_AMOUNT, "Invoice line items do not match the agreed total")
-    }
-    const dueDateTimestamp = invoice.dueDate
-      ? Math.floor(new Date(`${invoice.dueDate}T23:59:59.000Z`).getTime() / 1000)
-      : undefined
-
-    if (
-      !invoice.stripeInvoiceId &&
-      dueDateTimestamp !== undefined &&
-      (!Number.isFinite(dueDateTimestamp) || dueDateTimestamp <= Date.now() / 1000)
-    ) {
-      throwError(ErrorCode.INVALID_INPUT, "Invoice due date has passed or is invalid")
-    }
-    const local = await ctx.runMutation(internal.invoices.claimStripePayment, {
-      invoiceId: invoice._id,
-      method: args.paymentMethod,
-      amountDue: settlement.amountDue,
-      damageDepositAmount: settlement.damageDepositAmount,
-      platformFee: settlement.platformFee,
-      processingFee: settlement.processingFee,
-      senderAmount: settlement.senderAmount,
-    })
-    if (local.stripeInvoiceId && local.stripeCheckoutUrl)
-      return { url: await hostedInvoiceUrl(ctx, local) }
-    const processingFee = local.processingFee ?? 0
-    const deposit = local.damageDepositAmount ?? 0
-    let draft: Stripe.Invoice
-    if (local.stripeInvoiceId) {
-      draft = await stripe.invoices.retrieve(local.stripeInvoiceId)
-      if (draft.status === "paid" || draft.status === "void")
-        return { url: await hostedInvoiceUrl(ctx, local) }
-      await verifyPayableInvoice(ctx, stripe, local, draft)
-    } else {
-      try {
-        draft = await stripe.invoices.create(
-          {
-            customer: customerId,
-            currency: local.currency,
-            collection_method: "send_invoice",
-            auto_advance: false,
-            pending_invoice_items_behavior: "exclude",
-            days_until_due: dueDateTimestamp ? undefined : 14,
-            due_date: dueDateTimestamp,
-            description: local.description,
-            metadata: {
-              type: "custom_invoice",
-              invoiceId: local._id,
-              senderId: local.senderId,
-              recipientId: local.recipientId,
-              paymentMethod: args.paymentMethod,
-              damageDepositAmount: String(deposit),
-              platformFee: String(local.platformFee),
-              processingFee: String(processingFee),
-              senderAmount: String(local.senderAmount),
-            },
-            application_fee_amount: (local.platformFee ?? 0) + processingFee,
-            transfer_data: { destination: sender.stripeAccountId },
-            payment_settings: {
-              payment_method_types: [
-                args.paymentMethod === "stripe_ach" ? "us_bank_account" : "card",
-              ],
-            },
-          },
-          { idempotencyKey: `invoice_create_${local._id}_${args.paymentMethod}` }
+      `invoice-payment:${invoice._id}`,
+      [identity.subject, invoice.senderId, invoice.recipientId],
+      async (beforeProviderMutation) => {
+        const stripe = getStripe()
+        const connectAccount = await verifiedPaymentDestination(
+          ctx,
+          stripe,
+          destinationAccountId,
+          invoice.senderId
         )
-      } catch (error) {
-        // A Stripe validation rejection creates no object. Keep ambiguous transport
-        // failures bound to the same method so the original request can be retried.
-        if ((error as { type?: string })?.type === "StripeInvalidRequestError") {
-          await ctx.runMutation(internal.invoices.releaseRejectedMethod, {
+        if (!(connectAccount.details_submitted && connectAccount.charges_enabled)) {
+          throwError(ErrorCode.STRIPE_ACCOUNT_DISABLED, "Provider Stripe account is not ready")
+        }
+
+        // Fee is on the invoice total (not the ACH deposit). Early-adopter caps apply to the sender.
+        const { platformFee } = await ctx.runMutation(api.stripe.calculatePlatformFee, {
+          amount: invoice.total,
+          providerExternalId: invoice.senderId,
+        })
+        const settlement = resolveInvoiceSettlement({
+          invoiceTotal: invoice.total,
+          selectedPaymentMethod: args.paymentMethod,
+          damageDepositAmount: depositVehicle?.damageDepositAmount,
+          platformFee,
+        })
+
+        if (
+          calculateInvoiceTotal(invoice) !== invoice.total ||
+          !Number.isSafeInteger(settlement.amountDue)
+        ) {
+          throwError(ErrorCode.INVALID_AMOUNT, "Invoice line items do not match the agreed total")
+        }
+        const dueDateTimestamp = invoice.dueDate
+          ? Math.floor(new Date(`${invoice.dueDate}T23:59:59.000Z`).getTime() / 1000)
+          : undefined
+
+        if (
+          !invoice.stripeInvoiceId &&
+          dueDateTimestamp !== undefined &&
+          (!Number.isFinite(dueDateTimestamp) || dueDateTimestamp <= Date.now() / 1000)
+        ) {
+          throwError(ErrorCode.INVALID_INPUT, "Invoice due date has passed or is invalid")
+        }
+        beforeProviderMutation()
+        const customerId = await billingCustomerId(ctx, stripe, identity, () =>
+          stripeClient.getOrCreateCustomer(ctx, {
+            userId: identity.subject,
+            email: identity.email || "",
+            name: identity.name || "",
+          })
+        )
+
+        const local = await ctx.runMutation(internal.invoices.claimStripePayment, {
+          invoiceId: invoice._id,
+          method: args.paymentMethod,
+          amountDue: settlement.amountDue,
+          damageDepositAmount: settlement.damageDepositAmount,
+          platformFee: settlement.platformFee,
+          processingFee: settlement.processingFee,
+          senderAmount: settlement.senderAmount,
+        })
+        if (local.stripeInvoiceId && local.stripeCheckoutUrl)
+          return { url: await hostedInvoiceUrl(ctx, local) }
+        const processingFee = local.processingFee ?? 0
+        const deposit = local.damageDepositAmount ?? 0
+        let draft: Stripe.Invoice
+        if (local.stripeInvoiceId) {
+          draft = await stripe.invoices.retrieve(local.stripeInvoiceId)
+          if (draft.status === "paid" || draft.status === "void")
+            return { url: await hostedInvoiceUrl(ctx, local) }
+          await verifyPayableInvoice(ctx, stripe, local, draft)
+        } else {
+          try {
+            draft = await stripe.invoices.create(
+              {
+                customer: customerId,
+                currency: local.currency,
+                collection_method: "send_invoice",
+                auto_advance: false,
+                pending_invoice_items_behavior: "exclude",
+                days_until_due: dueDateTimestamp ? undefined : 14,
+                due_date: dueDateTimestamp,
+                description: local.description,
+                metadata: {
+                  type: "custom_invoice",
+                  invoiceId: local._id,
+                  senderId: local.senderId,
+                  recipientId: local.recipientId,
+                  paymentMethod: args.paymentMethod,
+                  damageDepositAmount: String(deposit),
+                  platformFee: String(local.platformFee),
+                  processingFee: String(processingFee),
+                  senderAmount: String(local.senderAmount),
+                },
+                application_fee_amount: (local.platformFee ?? 0) + processingFee,
+                transfer_data: { destination: destinationAccountId },
+                payment_settings: {
+                  payment_method_types: [
+                    args.paymentMethod === "stripe_ach" ? "us_bank_account" : "card",
+                  ],
+                },
+              },
+              { idempotencyKey: `invoice_create_${local._id}_${args.paymentMethod}` }
+            )
+          } catch (error) {
+            // A Stripe validation rejection creates no object. Keep ambiguous transport
+            // failures bound to the same method so the original request can be retried.
+            if ((error as { type?: string })?.type === "StripeInvalidRequestError") {
+              await ctx.runMutation(internal.invoices.releaseRejectedMethod, {
+                invoiceId: local._id,
+                method: args.paymentMethod,
+              })
+            }
+            throw error
+          }
+          if (!draft.id)
+            throwError(ErrorCode.STRIPE_ERROR, "Stripe invoice was created without an ID")
+          await ctx.runMutation(internal.invoices.registerStripeDraft, {
             invoiceId: local._id,
             method: args.paymentMethod,
+            stripeInvoiceId: draft.id,
           })
         }
-        throw error
-      }
-      if (!draft.id) throwError(ErrorCode.STRIPE_ERROR, "Stripe invoice was created without an ID")
-      await ctx.runMutation(internal.invoices.registerStripeDraft, {
-        invoiceId: local._id,
-        method: args.paymentMethod,
-        stripeInvoiceId: draft.id,
-      })
-    }
-    if (!draft.id) throwError(ErrorCode.STRIPE_ERROR, "Missing Stripe invoice ID")
-    const linkedInvoice = { ...local, stripeInvoiceId: draft.id }
-    if (draft.status === "draft") {
-      const lines = [
-        ...local.lineItems.map((item, index) => ({
-          key: `line_${index}`,
-          description: item.description,
-          amount: item.amount,
-        })),
-        { key: "tax", description: "Tax", amount: local.taxAmount ?? 0 },
-        { key: "discount", description: "Discount", amount: -(local.discountAmount ?? 0) },
-        { key: "processing", description: "Card processing fee", amount: processingFee },
-        { key: "deposit", description: "Refundable damage deposit", amount: deposit },
-      ].filter((item) => item.amount !== 0)
-      const missing = new Map(lines.map((item) => [item.key, item]))
-      for await (const line of stripe.invoices.listLineItems(draft.id, { limit: 100 })) {
-        const key = line.metadata?.invoiceLineKey
-        const expected = key && missing.get(key)
-        if (!expected || expected.amount !== line.amount || line.currency !== local.currency)
-          throwError(ErrorCode.INVALID_AMOUNT, "Unexpected Stripe invoice line item")
-        missing.delete(expected.key)
-      }
-      for (const item of missing.values()) {
-        await stripe.invoiceItems.create(
+        if (!draft.id) throwError(ErrorCode.STRIPE_ERROR, "Missing Stripe invoice ID")
+        const linkedInvoice = { ...local, stripeInvoiceId: draft.id }
+        if (draft.status === "draft") {
+          const lines = [
+            ...local.lineItems.map((item, index) => ({
+              key: `line_${index}`,
+              description: item.description,
+              amount: item.amount,
+            })),
+            { key: "tax", description: "Tax", amount: local.taxAmount ?? 0 },
+            { key: "discount", description: "Discount", amount: -(local.discountAmount ?? 0) },
+            { key: "processing", description: "Card processing fee", amount: processingFee },
+            { key: "deposit", description: "Refundable damage deposit", amount: deposit },
+          ].filter((item) => item.amount !== 0)
+          const missing = new Map(lines.map((item) => [item.key, item]))
+          for await (const line of stripe.invoices.listLineItems(draft.id, { limit: 100 })) {
+            const key = line.metadata?.invoiceLineKey
+            const expected = key && missing.get(key)
+            if (!expected || expected.amount !== line.amount || line.currency !== local.currency)
+              throwError(ErrorCode.INVALID_AMOUNT, "Unexpected Stripe invoice line item")
+            missing.delete(expected.key)
+          }
+          for (const item of missing.values()) {
+            await stripe.invoiceItems.create(
+              {
+                customer: customerId,
+                invoice: draft.id,
+                currency: local.currency,
+                description: item.description,
+                amount: item.amount,
+                metadata: { invoiceId: local._id, invoiceLineKey: item.key },
+              },
+              { idempotencyKey: `invoice_item_${draft.id}_${item.key}` }
+            )
+          }
+          const completeDraft = await stripe.invoices.retrieve(draft.id)
+          verifyStripeInvoice(linkedInvoice, completeDraft)
+          if (
+            completeDraft.currency !== local.currency ||
+            completeDraft.amount_due !== local.amountDue
+          )
+            throwError(
+              ErrorCode.INVALID_AMOUNT,
+              "Stripe draft total does not match the agreed total"
+            )
+          draft = await stripe.invoices.finalizeInvoice(
+            draft.id,
+            { auto_advance: false },
+            { idempotencyKey: `invoice_finalize_${draft.id}` }
+          )
+        }
+        const finalized = draft
+        if (!finalized.id || finalized.status !== "open")
+          throwError(ErrorCode.INVALID_STATUS, "Stripe invoice is not open")
+        await verifyPayableInvoice(ctx, stripe, linkedInvoice, finalized)
+        const sent = await stripe.invoices.sendInvoice(
+          finalized.id,
+          { expand: ["payments"] },
           {
-            customer: customerId,
-            invoice: draft.id,
-            currency: local.currency,
-            description: item.description,
-            amount: item.amount,
-            metadata: { invoiceId: local._id, invoiceLineKey: item.key },
-          },
-          { idempotencyKey: `invoice_item_${draft.id}_${item.key}` }
+            idempotencyKey: `invoice_send_${args.invoiceId}_${args.paymentMethod}`,
+          }
         )
-      }
-      const completeDraft = await stripe.invoices.retrieve(draft.id)
-      verifyStripeInvoice(linkedInvoice, completeDraft)
-      if (completeDraft.currency !== local.currency || completeDraft.amount_due !== local.amountDue)
-        throwError(ErrorCode.INVALID_AMOUNT, "Stripe draft total does not match the agreed total")
-      draft = await stripe.invoices.finalizeInvoice(
-        draft.id,
-        { auto_advance: false },
-        { idempotencyKey: `invoice_finalize_${draft.id}` }
-      )
-    }
-    const finalized = draft
-    if (!finalized.id || finalized.status !== "open")
-      throwError(ErrorCode.INVALID_STATUS, "Stripe invoice is not open")
-    await verifyPayableInvoice(ctx, stripe, linkedInvoice, finalized)
-    const sent = await stripe.invoices.sendInvoice(
-      finalized.id,
-      { expand: ["payments"] },
-      {
-        idempotencyKey: `invoice_send_${args.invoiceId}_${args.paymentMethod}`,
+        if (!sent.id) {
+          throwError(ErrorCode.STRIPE_ERROR, "Stripe invoice was sent without an ID")
+        }
+        const defaultPayment = sent.payments?.data.find((payment) => payment.is_default)
+        const stripePaymentIntentId =
+          stripeId(defaultPayment?.payment.payment_intent) ??
+          stripeId(
+            (sent as Stripe.Invoice & { payment_intent?: string | Stripe.PaymentIntent })
+              .payment_intent
+          )
+
+        await ctx.runMutation(internal.invoices.updateWithStripeInvoice, {
+          invoiceId: args.invoiceId,
+          stripeInvoiceId: sent.id,
+          stripeCheckoutUrl: sent.hosted_invoice_url || undefined,
+          stripeInvoicePdf: sent.invoice_pdf || undefined,
+          stripePaymentIntentId,
+        })
+
+        return { url: await hostedInvoiceUrl(ctx, linkedInvoice) }
       }
     )
-    if (!sent.id) {
-      throwError(ErrorCode.STRIPE_ERROR, "Stripe invoice was sent without an ID")
-    }
-    const defaultPayment = sent.payments?.data.find((payment) => payment.is_default)
-    const stripePaymentIntentId =
-      stripeId(defaultPayment?.payment.payment_intent) ??
-      stripeId(
-        (sent as Stripe.Invoice & { payment_intent?: string | Stripe.PaymentIntent }).payment_intent
-      )
-
-    await ctx.runMutation(internal.invoices.updateWithStripeInvoice, {
-      invoiceId: args.invoiceId,
-      stripeInvoiceId: sent.id,
-      stripeCheckoutUrl: sent.hosted_invoice_url || undefined,
-      stripeInvoicePdf: sent.invoice_pdf || undefined,
-      stripePaymentIntentId,
-    })
-
-    return { url: await hostedInvoiceUrl(ctx, linkedInvoice) }
   },
 })
 
@@ -1552,6 +1575,7 @@ export const reserveDepositRefund = internalMutation({
     const amount = args.amount ?? remaining
     if (!Number.isSafeInteger(amount) || amount <= 0 || amount > remaining)
       throwError(ErrorCode.INVALID_REFUND_AMOUNT, "Invalid deposit refund amount")
+    await assertAccountsAvailable(ctx, invoice.senderId, invoice.recipientId)
     const id = await ctx.db.insert("invoiceDepositRefundRequests", {
       invoiceId: args.invoiceId,
       requestId: args.requestId,
@@ -1737,14 +1761,22 @@ export const refundDeposit = action({
     const requestId = args.requestId ?? `legacy-${args.amount ?? "remaining"}`
     if (!depositRequestIdPattern.test(requestId))
       throwError(ErrorCode.INVALID_INPUT, "Invalid refund request ID")
-    const stripe = getStripe()
-    const charge = await paidInvoiceCharge(stripe, invoice)
-    const refunds = await reconcileDepositRefunds(ctx, stripe, invoice, charge)
-    const request = await ctx.runMutation(internal.invoices.reserveDepositRefund, {
-      ...args,
-      requestId,
-    })
-    return submitDepositRefund(ctx, stripe, { invoice, charge, request, refunds })
+    return withAccountOperation(
+      ctx,
+      `invoice-deposit-refund:${invoice._id}`,
+      [identity.subject, invoice.senderId, invoice.recipientId],
+      async (beforeProviderMutation) => {
+        const stripe = getStripe()
+        const charge = await paidInvoiceCharge(stripe, invoice)
+        const refunds = await reconcileDepositRefunds(ctx, stripe, invoice, charge)
+        const request = await ctx.runMutation(internal.invoices.reserveDepositRefund, {
+          ...args,
+          requestId,
+        })
+        beforeProviderMutation()
+        return submitDepositRefund(ctx, stripe, { invoice, charge, request, refunds })
+      }
+    )
   },
 })
 

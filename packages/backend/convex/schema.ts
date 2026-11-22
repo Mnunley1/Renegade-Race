@@ -4,6 +4,28 @@ import { v } from "convex/values"
 import { refundObservation, settlementEvidence } from "./rentalSettlementValidators"
 
 export default defineSchema({
+  // Separate from users so a deleted identity cannot be recreated by delayed
+  // provider events, cached clients, or an old in-flight action.
+  accountDeletionIntents: defineTable({
+    subject: v.string(),
+    status: v.union(v.literal("locked"), v.literal("provider_deleted"), v.literal("completed")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    providerDeletedAt: v.optional(v.number()),
+    completedAt: v.optional(v.number()),
+    lastFailure: v.optional(v.literal("provider_unconfirmed")),
+  }).index("by_subject", ["subject"]),
+
+  accountOperations: defineTable({
+    key: v.string(),
+    subject: v.string(),
+    status: v.union(v.literal("active"), v.literal("completed")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_subject", ["subject"])
+    .index("by_key", ["key"]),
+
   users: defineTable({
     externalId: v.string(),
     name: v.string(),

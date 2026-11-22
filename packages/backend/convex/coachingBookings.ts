@@ -1,3 +1,5 @@
+import { reserveAccountOperation } from "./accountOperations"
+import { assertAccountsAvailable } from "./accountDeletionGuards"
 import { v } from "convex/values"
 import { internal } from "./_generated/api"
 import { internalMutation, mutation, query } from "./_generated/server"
@@ -165,6 +167,7 @@ export const create = mutation({
       throwError(ErrorCode.DATES_CONFLICT, "Coach already booked for these dates")
     }
 
+    await assertAccountsAvailable(ctx, renterId, profile.userId)
     const bookingId = await ctx.db.insert("coachingBookings", {
       coachProfileId: args.coachProfileId,
       coachUserId: profile.userId,
@@ -248,6 +251,7 @@ export const approve = mutation({
       throwError(ErrorCode.INVALID_STATUS, "Booking is not pending")
     }
 
+    await assertAccountsAvailable(ctx, identity.subject, booking.renterId, booking.coachUserId)
     // A coach can only hold one commitment per date span. If an overlapping
     // booking is already approved (awaiting payment) or confirmed, block the
     // approval — otherwise two renters could both pay and double-book.
@@ -425,6 +429,7 @@ export const cancel = mutation({
       })
 
       if (refundable) {
+      await reserveAccountOperation(ctx, `coaching-cancellation-refund:${booking._id}`, [booking.renterId, booking.coachUserId])
         await ctx.scheduler.runAfter(0, internal.coachingPayments.refundCoachingBooking, {
           bookingId: args.bookingId,
           reason: cancellerIsCoach
@@ -519,6 +524,7 @@ export const reportIssue = mutation({
     if (booking.renterId !== identity.subject && booking.coachUserId !== identity.subject) {
       throwError(ErrorCode.FORBIDDEN, "Not authorized to report an issue on this booking")
     }
+    await assertAccountsAvailable(ctx, identity.subject, booking.renterId, booking.coachUserId)
     if (booking.status !== "confirmed" && booking.status !== "completed") {
       throwError(
         ErrorCode.INVALID_STATUS,

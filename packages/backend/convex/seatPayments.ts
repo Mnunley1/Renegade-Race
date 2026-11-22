@@ -1,3 +1,4 @@
+import { withAccountOperation, reserveAccountOperation } from "./accountOperations"
 import { v } from "convex/values"
 import Stripe from "stripe"
 import { internal } from "./_generated/api"
@@ -195,99 +196,105 @@ async function startCheckout(
     throwError(ErrorCode.INVALID_AMOUNT, "Payment amount out of allowed range")
   }
 
-  const { stripeAccountId: destination, platformFeeCapPercentage } = await assertTeamConnectReady(
+  return await withAccountOperation(
     ctx,
-    booking.hostUserId
-  )
+    `seat-checkout:${phase}:${bookingId}`,
+    [identity.subject, booking.hostUserId],
+    async (beforeProviderMutation) => {
+      const { stripeAccountId: destination, platformFeeCapPercentage } =
+        await assertTeamConnectReady(ctx, booking.hostUserId)
 
-  // Snapshot is the ceiling (later global rate changes do not raise it). A provider
-  // fee cap can only lower it. Dollar min/max on platformSettings are not applied.
-  const feePercentage = resolvePlatformFeePercentage(
-    booking.platformFeePercentage,
-    platformFeeCapPercentage
-  )
-  const { platformFee } = calculatePlatformFeeAmount(amount, feePercentage)
-  const { chargeAmountCents, processingFeeCents, applicationFeeCents } =
-    buildDestinationChargeAmounts({
-      listingAmountCents: amount,
-      platformFeeCents: platformFee,
-    })
+      // Snapshot is the ceiling (later global rate changes do not raise it). A provider
+      // fee cap can only lower it. Dollar min/max on platformSettings are not applied.
+      const feePercentage = resolvePlatformFeePercentage(
+        booking.platformFeePercentage,
+        platformFeeCapPercentage
+      )
+      const { platformFee } = calculatePlatformFeeAmount(amount, feePercentage)
+      const { chargeAmountCents, processingFeeCents, applicationFeeCents } =
+        buildDestinationChargeAmounts({
+          listingAmountCents: amount,
+          platformFeeCents: platformFee,
+        })
 
-  const stripe = getStripe()
-  const customerId = await billingCustomerId(ctx, stripe, identity)
+      const stripe = getStripe()
+      beforeProviderMutation()
+      const customerId = await billingCustomerId(ctx, stripe, identity)
 
-  const webUrl = getWebUrl()
-  const label =
-    phase === "deposit"
-      ? `Race seat deposit — ${booking.offeringTitle}`
-      : `Race seat balance — ${booking.offeringTitle}`
-  const metadata = {
-    bookingType: "seat",
-    phase,
-    seatBookingId: bookingId,
-    driverId: booking.driverId,
-    hostUserId: booking.hostUserId,
-    platformFee: platformFee.toString(),
-    processingFee: processingFeeCents.toString(),
-    chargeAmount: chargeAmountCents.toString(),
-  }
+      const webUrl = getWebUrl()
+      const label =
+        phase === "deposit"
+          ? `Race seat deposit — ${booking.offeringTitle}`
+          : `Race seat balance — ${booking.offeringTitle}`
+      const metadata = {
+        bookingType: "seat",
+        phase,
+        seatBookingId: bookingId,
+        driverId: booking.driverId,
+        hostUserId: booking.hostUserId,
+        platformFee: platformFee.toString(),
+        processingFee: processingFeeCents.toString(),
+        chargeAmount: chargeAmountCents.toString(),
+      }
 
-  const session = await stripe.checkout.sessions.create(
-    {
-      customer: customerId,
-      mode: "payment",
-      line_items: [
+      const session = await stripe.checkout.sessions.create(
         {
-          price_data: {
-            currency: "usd",
-            product_data: {
-              name: label,
-              description: booking.eventName,
-            },
-            unit_amount: amount,
-          },
-          quantity: 1,
-        },
-        ...(processingFeeCents > 0
-          ? [
-              {
-                price_data: {
-                  currency: "usd",
-                  product_data: {
-                    name: "Card processing fee",
-                    description: "Passed through at Stripe's standard US card rate",
-                  },
-                  unit_amount: processingFeeCents,
+          customer: customerId,
+          mode: "payment",
+          line_items: [
+            {
+              price_data: {
+                currency: "usd",
+                product_data: {
+                  name: label,
+                  description: booking.eventName,
                 },
-                quantity: 1,
+                unit_amount: amount,
               },
-            ]
-          : []),
-      ],
-      payment_intent_data: {
-        // Includes Renegade fee + processing so the team nets listing − platform fee
-        application_fee_amount: applicationFeeCents,
-        transfer_data: { destination },
-        metadata,
-      },
-      success_url: `${webUrl}/checkout/success?seatBookingId=${bookingId}&phase=${phase}`,
-      cancel_url: `${webUrl}/trips`,
-      metadata,
-    },
-    { idempotencyKey: `cs_seat_${phase}_${bookingId}` }
+              quantity: 1,
+            },
+            ...(processingFeeCents > 0
+              ? [
+                  {
+                    price_data: {
+                      currency: "usd",
+                      product_data: {
+                        name: "Card processing fee",
+                        description: "Passed through at Stripe's standard US card rate",
+                      },
+                      unit_amount: processingFeeCents,
+                    },
+                    quantity: 1,
+                  },
+                ]
+              : []),
+          ],
+          payment_intent_data: {
+            // Includes Renegade fee + processing so the team nets listing − platform fee
+            application_fee_amount: applicationFeeCents,
+            transfer_data: { destination },
+            metadata,
+          },
+          success_url: `${webUrl}/checkout/success?seatBookingId=${bookingId}&phase=${phase}`,
+          cancel_url: `${webUrl}/trips`,
+          metadata,
+        },
+        { idempotencyKey: `cs_seat_${phase}_${bookingId}` }
+      )
+
+      await ctx.runMutation(internal.seatPayments.recordCheckoutSession, {
+        bookingId,
+        phase,
+        stripeCheckoutSessionId: session.id,
+        stripePaymentIntentId:
+          typeof session.payment_intent === "string"
+            ? session.payment_intent
+            : session.payment_intent?.id,
+      })
+
+      return { sessionId: session.id, url: session.url }
+    }
   )
-
-  await ctx.runMutation(internal.seatPayments.recordCheckoutSession, {
-    bookingId,
-    phase,
-    stripeCheckoutSessionId: session.id,
-    stripePaymentIntentId:
-      typeof session.payment_intent === "string"
-        ? session.payment_intent
-        : session.payment_intent?.id,
-  })
-
-  return { sessionId: session.id, url: session.url }
 }
 
 export const createDepositCheckoutSession = action({
@@ -314,7 +321,8 @@ export const recordCheckoutSession = internalMutation({
     if (!booking) return
     const now = Date.now()
     if (args.phase === "deposit") {
-      if (booking.status !== "approved") return
+      if (booking.status !== "approved")
+        throw new Error("Seat changed while creating checkout. Payment review is required.")
       await ctx.db.patch(args.bookingId, {
         stripeDepositCheckoutSessionId: args.stripeCheckoutSessionId,
         stripeDepositPaymentIntentId: args.stripePaymentIntentId,
@@ -323,7 +331,8 @@ export const recordCheckoutSession = internalMutation({
       })
       return
     }
-    if (booking.status !== "deposit_paid") return
+    if (booking.status !== "deposit_paid")
+      throw new Error("Seat changed while creating checkout. Payment review is required.")
     await ctx.db.patch(args.bookingId, {
       stripeBalanceCheckoutSessionId: args.stripeCheckoutSessionId,
       stripeBalancePaymentIntentId: args.stripePaymentIntentId,
@@ -419,6 +428,12 @@ async function refuseCapturedPayment(
   if (wasHolding && nextStatus === "cancelled") {
     await promoteOldestWaitlisted(ctx, booking.seatOfferingId)
   }
+  await reserveAccountOperation(
+    ctx,
+    `seat-cancellation-refund:${booking._id}`,
+    [booking.driverId, booking.hostUserId],
+    true
+  )
   await ctx.scheduler.runAfter(0, internal.seatPayments.refundSeatBooking, {
     bookingId: booking._id,
     reason,
@@ -759,6 +774,10 @@ export const refundSeatBooking = internalAction({
     })
     if (!booking) return
 
+    await ctx.runMutation(internal.accountOperations.begin, {
+      key: `seat-refund:${booking._id}`,
+      subjects: [booking.driverId, booking.hostUserId],
+    })
     const percentage = args.refundPercentage ?? 100
     const stripe = getStripe()
     let refundedDeposit = false

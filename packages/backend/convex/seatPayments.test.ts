@@ -619,6 +619,14 @@ describe("seat checkout gating", () => {
     await expect(
       driver.action(api.seatPayments.createDepositCheckoutSession, { bookingId })
     ).rejects.toThrow("Payments are on hold")
+    expect(
+      await t.run(({ db }) =>
+        db
+          .query("accountOperations")
+          .filter((q) => q.eq(q.field("status"), "active"))
+          .collect()
+      )
+    ).toEqual([])
     accountsRetrieve.mockResolvedValueOnce({
       ...readyConnectAccount(),
       metadata: { renegadeUserId: STRANGER },
@@ -1213,4 +1221,76 @@ describe("seat payment races and refunds", () => {
     expect(refundsCreate).toHaveBeenCalledTimes(1)
     expect(refundsCreate.mock.calls[0]?.[0]?.payment_intent).toBe("pi_full_only")
   })
+})
+
+it("keeps checkout reserved when the seat is cancelled during provider creation, without returning a payable URL", async () => {
+  const t = createTest()
+  const { bookingId } = await seedApprovedBooking(t)
+  checkoutSessionsCreate.mockImplementationOnce(async () => {
+    await t.withIdentity({ subject: DRIVER_A }).mutation(api.seatBookings.cancel, { bookingId })
+    return {
+      id: "cs_cancel_race",
+      url: "https://checkout.stripe.test/race",
+      payment_intent: "pi_cancel_race",
+    }
+  })
+  await expect(
+    t
+      .withIdentity({ subject: DRIVER_A })
+      .action(api.seatPayments.createDepositCheckoutSession, { bookingId })
+  ).rejects.toThrow("Payment review")
+  const operations = await t.run(({ db }) => db.query("accountOperations").collect())
+  expect(operations.filter((row) => row.status === "active").map((row) => row.subject)).toEqual(
+    expect.arrayContaining([DRIVER_A, OWNER])
+  )
+  await expect(
+    t.mutation(internal.users.beginAccountDeletion, { subject: DRIVER_A })
+  ).rejects.toThrow("unconfirmed")
+})
+
+it.each([
+  OWNER,
+  DRIVER_A,
+])("blocks seat request, approval and checkout for deleting participant %s", async (subject) => {
+  const t = createTest()
+  const { bookingId, offeringId } = await seedApprovedBooking(t)
+  await t.run(async ({ db }) => {
+    await db.patch(bookingId, { status: "declined" })
+    await db.insert("accountDeletionIntents", {
+      subject,
+      status: "locked",
+      createdAt: 0,
+      updatedAt: 0,
+    })
+  })
+  await expect(
+    t
+      .withIdentity({ subject: DRIVER_A })
+      .mutation(api.seatBookings.request, requestArgs(offeringId))
+  ).rejects.toThrow("being deleted")
+  await t.run(({ db }) => db.patch(bookingId, { status: "pending" }))
+  await expect(
+    t.withIdentity({ subject: OWNER }).mutation(api.seatBookings.approve, { bookingId })
+  ).rejects.toThrow("being deleted")
+  await t.run(({ db }) => db.patch(bookingId, { status: "approved" }))
+  await expect(
+    t
+      .withIdentity({ subject: DRIVER_A })
+      .action(api.seatPayments.createDepositCheckoutSession, { bookingId })
+  ).rejects.toThrow("being deleted")
+  expect(checkoutSessionsCreate).not.toHaveBeenCalled()
+})
+
+it.each([
+  OWNER,
+  DRIVER_A,
+])("blocks deleting %s while a cancelled seat payment is pending", async (subject) => {
+  const t = createTest()
+  const { bookingId } = await seedApprovedBooking(t)
+  await t.run(({ db }) =>
+    db.patch(bookingId, { status: "cancelled", depositPaymentStatus: "pending" })
+  )
+  await expect(t.mutation(internal.users.beginAccountDeletion, { subject })).rejects.toThrow(
+    "seat bookings or payments"
+  )
 })

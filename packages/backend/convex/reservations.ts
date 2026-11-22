@@ -1,3 +1,5 @@
+import { reserveAccountOperation } from "./accountOperations"
+import { assertAccountsAvailable } from "./accountDeletionGuards"
 import { v } from "convex/values"
 import { internal } from "./_generated/api"
 import type { Id } from "./_generated/dataModel"
@@ -287,6 +289,7 @@ export const create = mutation({
     })
 
     // Create the reservation with sanitized content
+    await assertAccountsAvailable(ctx, renterId, vehicle.ownerId)
     const reservationId = await ctx.db.insert("reservations", {
       vehicleId: args.vehicleId,
       renterId,
@@ -403,6 +406,7 @@ export const approve = mutation({
       })
     }
 
+    await assertAccountsAvailable(ctx, identity.subject, reservation.renterId, reservation.ownerId)
     await assertRentalDatesAvailable(ctx, {
       vehicleId: reservation.vehicleId,
       startDate: reservation.startDate,
@@ -677,6 +681,7 @@ export const cancel = mutation({
           // If owner is cancelling a confirmed reservation, force 100% refund
           const forceFullRefund = isOwnerCancelling && reservation.status === "confirmed"
 
+      await reserveAccountOperation(ctx, `rental-cancellation-refund:${reservation._id}`, [reservation.renterId, reservation.ownerId])
           // Schedule refund processing (use scheduler to call internal action)
           await ctx.scheduler.runAfter(0, internal.stripe.processRefundOnCancellation, {
             paymentId: reservation.paymentId,

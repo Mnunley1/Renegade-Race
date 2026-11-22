@@ -1,3 +1,4 @@
+import { withAccountOperation } from "./accountOperations"
 import { StripeSubscriptions } from "@convex-dev/stripe"
 import type { UserIdentity } from "convex/server"
 import { ConvexError, v } from "convex/values"
@@ -404,86 +405,97 @@ export const createConnectAccount = action({
     })
 
     if (!user) throwError(ErrorCode.NOT_FOUND, "User not found")
-    const stripe = getStripe()
-    let account: Stripe.Account | undefined
-    let replaceUnusedAccount: string | undefined
-    if (user.stripeAccountId) {
-      const linked = await retrieveLinkedConnectAccount(
-        ctx,
-        stripe,
-        user.stripeAccountId,
-        identity.subject
-      )
-      if (linked.details_submitted) {
-        return { accountId: linked.id, onboardingUrl: null, isComplete: true }
-      }
-      if (linked.metadata?.renegadeUserId === identity.subject) {
-        account = linked
-      } else if (await canRestartUnusedOnboarding(ctx, stripe, linked, user)) {
-        replaceUnusedAccount = linked.id
-      } else {
-        throwError(
-          ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,
-          "Contact support to verify your existing Stripe account and resume onboarding."
-        )
-      }
-    }
-    if (!account) {
-      account = await stripe.accounts.create(
-        {
-          type: "express",
-          country: "US",
-          email: identity.email || undefined,
-          metadata: { renegadeUserId: identity.subject },
-          capabilities: {
-            card_payments: { requested: true },
-            transfers: { requested: true },
+    return await withAccountOperation(
+      ctx,
+      `connect:${identity.subject}`,
+      [identity.subject],
+      async (beforeProviderMutation) => {
+        const stripe = getStripe()
+        let account: Stripe.Account | undefined
+        let replaceUnusedAccount: string | undefined
+        if (user.stripeAccountId) {
+          const linked = await retrieveLinkedConnectAccount(
+            ctx,
+            stripe,
+            user.stripeAccountId,
+            identity.subject
+          )
+          if (linked.details_submitted) {
+            return { accountId: linked.id, onboardingUrl: null, isComplete: true }
+          }
+          if (linked.metadata?.renegadeUserId === identity.subject) {
+            account = linked
+          } else if (await canRestartUnusedOnboarding(ctx, stripe, linked, user)) {
+            replaceUnusedAccount = linked.id
+          } else {
+            throwError(
+              ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,
+              "Contact support to verify your existing Stripe account and resume onboarding."
+            )
+          }
+        }
+        if (!account) {
+          beforeProviderMutation()
+          account = await stripe.accounts.create(
+            {
+              type: "express",
+              country: "US",
+              email: identity.email || undefined,
+              metadata: { renegadeUserId: identity.subject },
+              capabilities: {
+                card_payments: { requested: true },
+                transfers: { requested: true },
+              },
+            },
+            {
+              idempotencyKey: `renegade_connect_${identity.subject}_${replaceUnusedAccount ?? "new"}`,
+            }
+          )
+          await ctx.runMutation(internal.users.setStripeAccountId, {
+            userId: identity.subject,
+            stripeAccountId: account.id,
+            replaceUnusedAccount,
+          })
+        }
+
+        // Mark payoutSetup step as complete in onboarding (account created, even if not fully onboarded)
+        await ctx.runMutation(api.users.updateHostOnboardingStep, {
+          step: "payoutSetup",
+          completed: true,
+        })
+
+        const configuredOrigin = new URL(getWebUrl()).origin
+        const permittedOrigins = [
+          configuredOrigin,
+          "https://renegaderace.com",
+          "https://www.renegaderace.com",
+        ]
+        const baseUrl =
+          args.returnUrlBase && permittedOrigins.includes(args.returnUrlBase)
+            ? args.returnUrlBase
+            : configuredOrigin
+
+        // Create account link for onboarding
+        beforeProviderMutation()
+        const accountLink = await stripe.accountLinks.create(
+          {
+            account: account.id,
+            refresh_url: `${baseUrl}/host/dashboard?stripe_refresh=true`,
+            return_url: `${baseUrl}/host/dashboard?stripe_return=true`,
+            type: "account_onboarding",
           },
-        },
-        { idempotencyKey: `renegade_connect_${identity.subject}_${replaceUnusedAccount ?? "new"}` }
-      )
-      await ctx.runMutation(internal.users.setStripeAccountId, {
-        userId: identity.subject,
-        stripeAccountId: account.id,
-        replaceUnusedAccount,
-      })
-    }
+          {
+            idempotencyKey: `account_link_${account.id}_${Date.now()}`,
+          }
+        )
 
-    // Mark payoutSetup step as complete in onboarding (account created, even if not fully onboarded)
-    await ctx.runMutation(api.users.updateHostOnboardingStep, {
-      step: "payoutSetup",
-      completed: true,
-    })
-
-    const configuredOrigin = new URL(getWebUrl()).origin
-    const permittedOrigins = [
-      configuredOrigin,
-      "https://renegaderace.com",
-      "https://www.renegaderace.com",
-    ]
-    const baseUrl =
-      args.returnUrlBase && permittedOrigins.includes(args.returnUrlBase)
-        ? args.returnUrlBase
-        : configuredOrigin
-
-    // Create account link for onboarding
-    const accountLink = await stripe.accountLinks.create(
-      {
-        account: account.id,
-        refresh_url: `${baseUrl}/host/dashboard?stripe_refresh=true`,
-        return_url: `${baseUrl}/host/dashboard?stripe_return=true`,
-        type: "account_onboarding",
-      },
-      {
-        idempotencyKey: `account_link_${account.id}_${Date.now()}`,
+        return {
+          accountId: account.id,
+          onboardingUrl: accountLink.url,
+          isComplete: false,
+        }
       }
     )
-
-    return {
-      accountId: account.id,
-      onboardingUrl: accountLink.url,
-      isComplete: false,
-    }
   },
 })
 
@@ -779,152 +791,164 @@ export const createCheckoutSession = action({
       )
     }
 
-    // Verify Connect account is ready
-    const stripe = getStripe()
-    const connectAccount = await verifiedPaymentDestination(
+    const destinationAccountId = owner.stripeAccountId
+    return await withAccountOperation(
       ctx,
-      stripe,
-      owner.stripeAccountId,
-      owner.externalId
-    )
+      `rental-checkout:${reservation._id}`,
+      [identity.subject, reservation.ownerId],
+      async (beforeProviderMutation) => {
+        // Verify Connect account is ready
+        const stripe = getStripe()
+        const connectAccount = await verifiedPaymentDestination(
+          ctx,
+          stripe,
+          destinationAccountId,
+          owner.externalId
+        )
 
-    if (!connectAccount.details_submitted) {
-      throwError(
-        ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,
-        "Owner account onboarding is not complete. Please complete Stripe onboarding."
-      )
-    }
+        if (!connectAccount.details_submitted) {
+          throwError(
+            ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,
+            "Owner account onboarding is not complete. Please complete Stripe onboarding."
+          )
+        }
 
-    if (!connectAccount.charges_enabled) {
-      throwError(
-        ErrorCode.STRIPE_ACCOUNT_DISABLED,
-        "Owner account cannot accept charges yet. Please complete Stripe onboarding."
-      )
-    }
+        if (!connectAccount.charges_enabled) {
+          throwError(
+            ErrorCode.STRIPE_ACCOUNT_DISABLED,
+            "Owner account cannot accept charges yet. Please complete Stripe onboarding."
+          )
+        }
 
-    // Check if transfers capability is enabled (required for destination payments)
-    const capabilities = connectAccount.capabilities as Record<string, string> | undefined
-    const transfersEnabled =
-      capabilities?.transfers === "active" || capabilities?.legacy_payments === "active"
+        // Check if transfers capability is enabled (required for destination payments)
+        const capabilities = connectAccount.capabilities as Record<string, string> | undefined
+        const transfersEnabled =
+          capabilities?.transfers === "active" || capabilities?.legacy_payments === "active"
 
-    if (!transfersEnabled) {
-      throwError(
-        ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,
-        "Owner account does not have transfers enabled. Please complete Stripe onboarding to enable transfers capability."
-      )
-    }
+        if (!transfersEnabled) {
+          throwError(
+            ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,
+            "Owner account does not have transfers enabled. Please complete Stripe onboarding to enable transfers capability."
+          )
+        }
 
-    // Calculate Renegade platform fee on the listing amount; renter covers card processing.
-    const { platformFee, ownerAmount } = await ctx.runMutation(api.stripe.calculatePlatformFee, {
-      amount: args.amount,
-      providerExternalId: reservation.ownerId,
-    })
-    const { chargeAmountCents, processingFeeCents, applicationFeeCents } =
-      buildDestinationChargeAmounts({
-        listingAmountCents: args.amount,
-        platformFeeCents: platformFee,
-      })
-
-    // Get or create Stripe customer (component handles this)
-    const customerId = await rentalBillingCustomer(ctx, stripe, identity)
-
-    const webUrl = getWebUrl()
-
-    // Create checkout session using Stripe directly (component doesn't support Connect)
-    // but we use the component's customer management
-    const checkoutSession = await stripe.checkout.sessions.create(
-      {
-        customer: customerId,
-        mode: "payment",
-        line_items: [
+        // Calculate Renegade platform fee on the listing amount; renter covers card processing.
+        const { platformFee, ownerAmount } = await ctx.runMutation(
+          api.stripe.calculatePlatformFee,
           {
-            price_data: {
-              currency: "usd",
-              product_data: {
-                name: `Vehicle Rental - Reservation ${args.reservationId}`,
-              },
-              unit_amount: args.amount,
-            },
-            quantity: 1,
-          },
-          ...(processingFeeCents > 0
-            ? [
-                {
-                  price_data: {
-                    currency: "usd",
-                    product_data: {
-                      name: "Card processing fee",
-                      description: "Passed through at Stripe's standard US card rate",
-                    },
-                    unit_amount: processingFeeCents,
+            amount: args.amount,
+            providerExternalId: reservation.ownerId,
+          }
+        )
+        const { chargeAmountCents, processingFeeCents, applicationFeeCents } =
+          buildDestinationChargeAmounts({
+            listingAmountCents: args.amount,
+            platformFeeCents: platformFee,
+          })
+
+        // Get or create Stripe customer (component handles this)
+        beforeProviderMutation()
+        const customerId = await rentalBillingCustomer(ctx, stripe, identity)
+
+        const webUrl = getWebUrl()
+
+        // Create checkout session using Stripe directly (component doesn't support Connect)
+        // but we use the component's customer management
+        const checkoutSession = await stripe.checkout.sessions.create(
+          {
+            customer: customerId,
+            mode: "payment",
+            line_items: [
+              {
+                price_data: {
+                  currency: "usd",
+                  product_data: {
+                    name: `Vehicle Rental - Reservation ${args.reservationId}`,
                   },
-                  quantity: 1,
+                  unit_amount: args.amount,
                 },
-              ]
-            : []),
-        ],
-        payment_intent_data: {
-          // Includes Renegade fee + processing so the provider nets ownerAmount
-          application_fee_amount: applicationFeeCents,
-          transfer_data: {
-            destination: owner.stripeAccountId, // Owner's Connect account
+                quantity: 1,
+              },
+              ...(processingFeeCents > 0
+                ? [
+                    {
+                      price_data: {
+                        currency: "usd",
+                        product_data: {
+                          name: "Card processing fee",
+                          description: "Passed through at Stripe's standard US card rate",
+                        },
+                        unit_amount: processingFeeCents,
+                      },
+                      quantity: 1,
+                    },
+                  ]
+                : []),
+            ],
+            payment_intent_data: {
+              // Includes Renegade fee + processing so the provider nets ownerAmount
+              application_fee_amount: applicationFeeCents,
+              transfer_data: {
+                destination: destinationAccountId, // Owner's Connect account
+              },
+              metadata: {
+                reservationId: args.reservationId,
+                renterId: reservation.renterId,
+                ownerId: reservation.ownerId,
+                vehicleId: reservation.vehicleId,
+                platformFee: platformFee.toString(),
+                ownerAmount: ownerAmount.toString(),
+                processingFee: processingFeeCents.toString(),
+                chargeAmount: chargeAmountCents.toString(),
+              },
+            },
+            success_url: `${webUrl}/checkout/success?reservationId=${args.reservationId}`,
+            cancel_url: `${webUrl}/checkout?reservationId=${args.reservationId}`,
+            metadata: {
+              reservationId: args.reservationId,
+              renterId: reservation.renterId,
+              ownerId: reservation.ownerId,
+            },
           },
-          metadata: {
-            reservationId: args.reservationId,
-            renterId: reservation.renterId,
-            ownerId: reservation.ownerId,
-            vehicleId: reservation.vehicleId,
-            platformFee: platformFee.toString(),
-            ownerAmount: ownerAmount.toString(),
-            processingFee: processingFeeCents.toString(),
-            chargeAmount: chargeAmountCents.toString(),
-          },
-        },
-        success_url: `${webUrl}/checkout/success?reservationId=${args.reservationId}`,
-        cancel_url: `${webUrl}/checkout?reservationId=${args.reservationId}`,
-        metadata: {
+          {
+            idempotencyKey: `cs_create_${args.reservationId}`,
+          }
+        )
+
+        // Create payment record
+        const paymentId = await ctx.runMutation(internal.stripe.createPaymentRecord, {
           reservationId: args.reservationId,
           renterId: reservation.renterId,
           ownerId: reservation.ownerId,
-        },
-      },
-      {
-        idempotencyKey: `cs_create_${args.reservationId}`,
+          amount: args.amount,
+          platformFee,
+          ownerAmount,
+          processingFee: processingFeeCents,
+          stripeCustomerId: customerId,
+          stripeCheckoutSessionId: checkoutSession.id,
+          stripeAccountId: destinationAccountId,
+          metadata: {
+            vehicleId: reservation.vehicleId,
+            startDate: reservation.startDate,
+            endDate: reservation.endDate,
+            totalDays: reservation.totalDays,
+          },
+        })
+
+        // Cancellation may race the external Stripe request. Do not expose its URL
+        // after the booking stops being payable; retain the linked financial record.
+        await ctx.runQuery(internal.stripe.assertRentalPaymentAvailable, {
+          reservationId: reservation._id,
+          renterId: identity.subject,
+        })
+
+        return {
+          paymentId,
+          sessionId: checkoutSession.id,
+          url: checkoutSession.url,
+        }
       }
     )
-
-    // Create payment record
-    const paymentId = await ctx.runMutation(internal.stripe.createPaymentRecord, {
-      reservationId: args.reservationId,
-      renterId: reservation.renterId,
-      ownerId: reservation.ownerId,
-      amount: args.amount,
-      platformFee,
-      ownerAmount,
-      processingFee: processingFeeCents,
-      stripeCustomerId: customerId,
-      stripeCheckoutSessionId: checkoutSession.id,
-      stripeAccountId: owner.stripeAccountId,
-      metadata: {
-        vehicleId: reservation.vehicleId,
-        startDate: reservation.startDate,
-        endDate: reservation.endDate,
-        totalDays: reservation.totalDays,
-      },
-    })
-
-    // Cancellation may race the external Stripe request. Do not expose its URL
-    // after the booking stops being payable; retain the linked financial record.
-    await ctx.runQuery(internal.stripe.assertRentalPaymentAvailable, {
-      reservationId: reservation._id,
-      renterId: identity.subject,
-    })
-
-    return {
-      paymentId,
-      sessionId: checkoutSession.id,
-      url: checkoutSession.url,
-    }
   },
 })
 
@@ -1005,121 +1029,133 @@ export const createPaymentIntent = action({
       )
     }
 
-    // Verify Connect account is ready and has required capabilities
-    const stripe = getStripe()
-    const connectAccount = await verifiedPaymentDestination(
+    const destinationAccountId = owner.stripeAccountId
+    return await withAccountOperation(
       ctx,
-      stripe,
-      owner.stripeAccountId,
-      owner.externalId
-    )
+      `rental-intent:${reservation._id}`,
+      [identity.subject, reservation.ownerId],
+      async (beforeProviderMutation) => {
+        // Verify Connect account is ready and has required capabilities
+        const stripe = getStripe()
+        const connectAccount = await verifiedPaymentDestination(
+          ctx,
+          stripe,
+          destinationAccountId,
+          owner.externalId
+        )
 
-    if (!connectAccount.details_submitted) {
-      throwError(
-        ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,
-        "Owner account onboarding is not complete. Please complete Stripe onboarding."
-      )
-    }
+        if (!connectAccount.details_submitted) {
+          throwError(
+            ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,
+            "Owner account onboarding is not complete. Please complete Stripe onboarding."
+          )
+        }
 
-    if (!connectAccount.charges_enabled) {
-      throwError(
-        ErrorCode.STRIPE_ACCOUNT_DISABLED,
-        "Owner account cannot accept charges yet. Please complete Stripe onboarding."
-      )
-    }
+        if (!connectAccount.charges_enabled) {
+          throwError(
+            ErrorCode.STRIPE_ACCOUNT_DISABLED,
+            "Owner account cannot accept charges yet. Please complete Stripe onboarding."
+          )
+        }
 
-    // Check if transfers capability is enabled (required for destination payments)
-    const capabilities = connectAccount.capabilities as Record<string, string> | undefined
-    const transfersEnabled =
-      capabilities?.transfers === "active" || capabilities?.legacy_payments === "active"
+        // Check if transfers capability is enabled (required for destination payments)
+        const capabilities = connectAccount.capabilities as Record<string, string> | undefined
+        const transfersEnabled =
+          capabilities?.transfers === "active" || capabilities?.legacy_payments === "active"
 
-    if (!transfersEnabled) {
-      throwError(
-        ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,
-        "Owner account does not have transfers enabled. Please complete Stripe onboarding to enable transfers capability."
-      )
-    }
+        if (!transfersEnabled) {
+          throwError(
+            ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,
+            "Owner account does not have transfers enabled. Please complete Stripe onboarding to enable transfers capability."
+          )
+        }
 
-    // Calculate Renegade platform fee on the listing amount; renter covers card processing.
-    const { platformFee, ownerAmount } = await ctx.runMutation(api.stripe.calculatePlatformFee, {
-      amount: args.amount,
-      providerExternalId: reservation.ownerId,
-    })
-    const { chargeAmountCents, processingFeeCents, applicationFeeCents } =
-      buildDestinationChargeAmounts({
-        listingAmountCents: args.amount,
-        platformFeeCents: platformFee,
-      })
+        // Calculate Renegade platform fee on the listing amount; renter covers card processing.
+        const { platformFee, ownerAmount } = await ctx.runMutation(
+          api.stripe.calculatePlatformFee,
+          {
+            amount: args.amount,
+            providerExternalId: reservation.ownerId,
+          }
+        )
+        const { chargeAmountCents, processingFeeCents, applicationFeeCents } =
+          buildDestinationChargeAmounts({
+            listingAmountCents: args.amount,
+            platformFeeCents: platformFee,
+          })
 
-    // Get or create Stripe customer (component handles this)
-    const customerId = await rentalBillingCustomer(ctx, stripe, identity)
+        // Get or create Stripe customer (component handles this)
+        beforeProviderMutation()
+        const customerId = await rentalBillingCustomer(ctx, stripe, identity)
 
-    // Create Stripe Payment Intent with Connect
-    const paymentIntent = await stripe.paymentIntents.create(
-      {
-        amount: chargeAmountCents,
-        currency: "usd",
-        customer: customerId,
-        // Includes Renegade fee + processing so the provider nets ownerAmount
-        application_fee_amount: applicationFeeCents,
-        transfer_data: {
-          destination: owner.stripeAccountId, // Owner's Connect account
-        },
-        metadata: {
+        // Create Stripe Payment Intent with Connect
+        const paymentIntent = await stripe.paymentIntents.create(
+          {
+            amount: chargeAmountCents,
+            currency: "usd",
+            customer: customerId,
+            // Includes Renegade fee + processing so the provider nets ownerAmount
+            application_fee_amount: applicationFeeCents,
+            transfer_data: {
+              destination: destinationAccountId, // Owner's Connect account
+            },
+            metadata: {
+              reservationId: args.reservationId,
+              renterId: reservation.renterId,
+              ownerId: reservation.ownerId,
+              vehicleId: reservation.vehicleId,
+              platformFee: platformFee.toString(),
+              ownerAmount: ownerAmount.toString(),
+              processingFee: processingFeeCents.toString(),
+              chargeAmount: chargeAmountCents.toString(),
+            },
+            automatic_payment_methods: {
+              enabled: true,
+            },
+          },
+          {
+            idempotencyKey: `pi_create_${args.reservationId}`,
+          }
+        )
+
+        // Create payment record
+        const paymentId = await ctx.runMutation(internal.stripe.createPaymentRecord, {
           reservationId: args.reservationId,
           renterId: reservation.renterId,
           ownerId: reservation.ownerId,
-          vehicleId: reservation.vehicleId,
-          platformFee: platformFee.toString(),
-          ownerAmount: ownerAmount.toString(),
-          processingFee: processingFeeCents.toString(),
-          chargeAmount: chargeAmountCents.toString(),
-        },
-        automatic_payment_methods: {
-          enabled: true,
-        },
-      },
-      {
-        idempotencyKey: `pi_create_${args.reservationId}`,
+          amount: args.amount,
+          platformFee,
+          ownerAmount,
+          processingFee: processingFeeCents,
+          stripePaymentIntentId: paymentIntent.id,
+          stripeCustomerId: customerId,
+          stripeAccountId: destinationAccountId,
+          metadata: {
+            vehicleId: reservation.vehicleId,
+            startDate: reservation.startDate,
+            endDate: reservation.endDate,
+            totalDays: reservation.totalDays,
+          },
+        })
+
+        // A previously issued secret can outlive a cancellation. Recheck before
+        // returning it; signed success events separately guard final confirmation.
+        await ctx.runQuery(internal.stripe.assertRentalPaymentAvailable, {
+          reservationId: reservation._id,
+          renterId: identity.subject,
+        })
+
+        return {
+          paymentId,
+          clientSecret: paymentIntent.client_secret as string,
+          amount: args.amount,
+          processingFee: processingFeeCents,
+          chargeAmount: chargeAmountCents,
+          platformFee,
+          ownerAmount,
+        }
       }
     )
-
-    // Create payment record
-    const paymentId = await ctx.runMutation(internal.stripe.createPaymentRecord, {
-      reservationId: args.reservationId,
-      renterId: reservation.renterId,
-      ownerId: reservation.ownerId,
-      amount: args.amount,
-      platformFee,
-      ownerAmount,
-      processingFee: processingFeeCents,
-      stripePaymentIntentId: paymentIntent.id,
-      stripeCustomerId: customerId,
-      stripeAccountId: owner.stripeAccountId,
-      metadata: {
-        vehicleId: reservation.vehicleId,
-        startDate: reservation.startDate,
-        endDate: reservation.endDate,
-        totalDays: reservation.totalDays,
-      },
-    })
-
-    // A previously issued secret can outlive a cancellation. Recheck before
-    // returning it; signed success events separately guard final confirmation.
-    await ctx.runQuery(internal.stripe.assertRentalPaymentAvailable, {
-      reservationId: reservation._id,
-      renterId: identity.subject,
-    })
-
-    return {
-      paymentId,
-      clientSecret: paymentIntent.client_secret as string,
-      amount: args.amount,
-      processingFee: processingFeeCents,
-      chargeAmount: chargeAmountCents,
-      platformFee,
-      ownerAmount,
-    }
   },
 })
 
@@ -1789,6 +1825,9 @@ export const processRefundOnCancellation = internalAction({
       policy,
       forceFullRefund: args.forceFullRefund,
       requestId: reservation._id,
+    })
+    await ctx.runMutation(internal.accountOperations.complete, {
+      key: `rental-cancellation-refund:${reservation._id}`,
     })
     return {
       success: true,

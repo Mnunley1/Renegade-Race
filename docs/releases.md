@@ -84,6 +84,21 @@ Seat-specific frontend parity and seat checkout hardening require separate revie
 the rental smoke test does not establish seat-flow readiness. Passing CI alone
 does not establish production compatibility.
 
+## Server-controlled account deletion (REN-52)
+
+Account deletion now runs through the authenticated backend with Clerk's existing
+strongest-factor ten-minute reverification policy. A durable subject lock prevents
+new obligations while external deletion is checked; signed callbacks and lost
+responses preserve financial history and can recover without a live user session.
+Settled users retain only a neutral financial actor/linkage after profile cleanup.
+Outstanding obligations and unconfirmed payment/refund operations remain held.
+
+The Clerk instance must disable direct frontend self-deletion for both new and
+existing users. Exact instance/issuer/mode binding, provider configuration,
+reverification, and genuine deletion/replay tests are separate staging acceptance
+gates. See [the deletion boundary and recovery limits](account-deletion.md). This
+change does not authorize production configuration or deployment.
+
 ## Failed rental refund settlement review (REN-51)
 
 A failed or canceled rental refund creates a durable **held** settlement review.

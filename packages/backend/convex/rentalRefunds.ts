@@ -1,3 +1,4 @@
+import { withAccountOperation } from "./accountOperations"
 import type Stripe from "stripe"
 import { internal } from "./_generated/api"
 import type { Doc } from "./_generated/dataModel"
@@ -159,7 +160,7 @@ function rentalRefundAmount(
   return { amount, remaining }
 }
 
-export async function issueRentalRefund(
+export function issueRentalRefund(
   ctx: ActionCtx,
   stripe: Stripe,
   payment: Doc<"payments">,
@@ -178,87 +179,103 @@ export async function issueRentalRefund(
     )
   }
 
-  const charge = await getRentalCharge(stripe, payment)
-  const refunds = await readRefunds(stripe, charge.id)
-  if (
-    payment.settlementReviewStatus === "held" ||
-    refunds.some((r) => r.status === "failed" || r.status === "canceled")
-  ) {
-    await reconcileRentalRefunds(ctx, stripe, payment, { charge })
-    const current = await ctx.runQuery(internal.rentalSettlement.load, { paymentId: payment._id })
-    if (current.payment?.settlementReviewStatus !== "resolved")
-      throwError(ErrorCode.CONFLICT, "Refund settlement review is required before another refund")
-  }
-  const fingerprint = await digest(
-    JSON.stringify([
-      request.source,
-      request.adminId,
-      request.amount,
-      request.percentage,
-      request.reason,
-      request.policy,
-    ])
-  )
-  const requestKey = await digest(
-    JSON.stringify([payment._id, request.source, request.requestId ?? fingerprint])
-  )
-  // Stripe expires idempotency keys. The request reference on the refund also
-  // identifies completed requests after that window and after a lost response.
-  let refund = refunds.find((item) => item.metadata?.rentalRefundRequest === requestKey)
-  if (
-    refund &&
-    request.source !== "cancellation" &&
-    refund.metadata?.rentalRefundFingerprint !== fingerprint
-  ) {
-    throwError(ErrorCode.CONFLICT, "This refund request ID was already used with different details")
-  }
-  if (!refund) {
-    const { amount, remaining } = rentalRefundAmount(
-      refunds,
-      charge.amount_captured,
-      payment.amount,
-      request
-    )
-    if (amount === 0) {
+  return withAccountOperation(
+    ctx,
+    `rental-refund:${payment._id}`,
+    [payment.renterId, payment.ownerId, ...(request.adminId ? [request.adminId] : [])],
+    async (beforeProviderMutation) => {
+      const charge = await getRentalCharge(stripe, payment)
+      const refunds = await readRefunds(stripe, charge.id)
+      if (
+        payment.settlementReviewStatus === "held" ||
+        refunds.some((r) => r.status === "failed" || r.status === "canceled")
+      ) {
+        await reconcileRentalRefunds(ctx, stripe, payment, { charge })
+        const current = await ctx.runQuery(internal.rentalSettlement.load, {
+          paymentId: payment._id,
+        })
+        if (current.payment?.settlementReviewStatus !== "resolved")
+          throwError(
+            ErrorCode.CONFLICT,
+            "Refund settlement review is required before another refund"
+          )
+      }
+      const fingerprint = await digest(
+        JSON.stringify([
+          request.source,
+          request.adminId,
+          request.amount,
+          request.percentage,
+          request.reason,
+          request.policy,
+        ])
+      )
+      const requestKey = await digest(
+        JSON.stringify([payment._id, request.source, request.requestId ?? fingerprint])
+      )
+      // Stripe expires idempotency keys. The request reference on the refund also
+      // identifies completed requests after that window and after a lost response.
+      let refund = refunds.find((item) => item.metadata?.rentalRefundRequest === requestKey)
+      if (
+        refund &&
+        request.source !== "cancellation" &&
+        refund.metadata?.rentalRefundFingerprint !== fingerprint
+      ) {
+        throwError(
+          ErrorCode.CONFLICT,
+          "This refund request ID was already used with different details"
+        )
+      }
+      if (!refund) {
+        const { amount, remaining } = rentalRefundAmount(
+          refunds,
+          charge.amount_captured,
+          payment.amount,
+          request
+        )
+        if (amount === 0) {
+          await reconcileRentalRefunds(ctx, stripe, payment, {
+            charge,
+            details: { reason: request.reason, policy: request.policy },
+          })
+          return null
+        }
+        const refundFee =
+          request.source === "owner" ||
+          (request.percentage !== undefined ? request.percentage === 100 : amount === remaining)
+        const stripeReason =
+          request.source === "owner"
+            ? (request.reason as Stripe.RefundCreateParams.Reason | undefined)
+            : "requested_by_customer"
+        beforeProviderMutation()
+        refund = await stripe.refunds.create(
+          {
+            charge: charge.id,
+            amount,
+            reason: stripeReason,
+            ...(charge.transfer_data?.destination
+              ? { reverse_transfer: true, refund_application_fee: refundFee }
+              : {}),
+            metadata: { rentalRefundRequest: requestKey, rentalRefundFingerprint: fingerprint },
+          },
+          { idempotencyKey: `rental-refund-${requestKey}` }
+        )
+      }
       await reconcileRentalRefunds(ctx, stripe, payment, {
         charge,
-        details: { reason: request.reason, policy: request.policy },
+        details: {
+          reason: request.reason,
+          policy: request.policy,
+          adminId: request.adminId,
+          refundId: refund.id,
+          stripeStatus: refund.status ?? undefined,
+          amount: refund.amount,
+        },
       })
-      return null
+      if (refund.status === "failed" || refund.status === "canceled") {
+        throwError(ErrorCode.INVALID_STATUS, "Stripe did not complete this refund")
+      }
+      return refund
     }
-    const refundFee =
-      request.source === "owner" ||
-      (request.percentage !== undefined ? request.percentage === 100 : amount === remaining)
-    const stripeReason =
-      request.source === "owner"
-        ? (request.reason as Stripe.RefundCreateParams.Reason | undefined)
-        : "requested_by_customer"
-    refund = await stripe.refunds.create(
-      {
-        charge: charge.id,
-        amount,
-        reason: stripeReason,
-        ...(charge.transfer_data?.destination
-          ? { reverse_transfer: true, refund_application_fee: refundFee }
-          : {}),
-        metadata: { rentalRefundRequest: requestKey, rentalRefundFingerprint: fingerprint },
-      },
-      { idempotencyKey: `rental-refund-${requestKey}` }
-    )
-  }
-  await reconcileRentalRefunds(ctx, stripe, payment, {
-    charge,
-    details: {
-      reason: request.reason,
-      policy: request.policy,
-      adminId: request.adminId,
-      refundId: refund.id,
-      stripeStatus: refund.status ?? undefined,
-      amount: refund.amount,
-    },
-  })
-  if (refund.status === "failed" || refund.status === "canceled") {
-    throwError(ErrorCode.INVALID_STATUS, "Stripe did not complete this refund")
-  }
-  return refund
+  )
 }

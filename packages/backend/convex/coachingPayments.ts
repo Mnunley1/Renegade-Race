@@ -1,3 +1,4 @@
+import { withAccountOperation, reserveAccountOperation } from "./accountOperations"
 import { v } from "convex/values"
 import Stripe from "stripe"
 import { api, internal } from "./_generated/api"
@@ -126,124 +127,133 @@ export const createCheckoutSession = action({
       )
     }
 
-    const stripe = getStripe()
-    const connectAccount = await verifiedPaymentDestination(
+    const destinationAccountId = coach.stripeAccountId
+    return await withAccountOperation(
       ctx,
-      stripe,
-      coach.stripeAccountId,
-      coach.externalId
-    )
-    if (!connectAccount.details_submitted) {
-      throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE, "Coach's payout setup isn't complete yet")
-    }
-    if (!connectAccount.charges_enabled) {
-      throwError(ErrorCode.STRIPE_ACCOUNT_DISABLED, "Coach's payouts are temporarily disabled")
-    }
-    const capabilities = connectAccount.capabilities as Record<string, string> | undefined
-    const transfersEnabled =
-      capabilities?.transfers === "active" || capabilities?.legacy_payments === "active"
-    if (!transfersEnabled) {
-      throwError(
-        ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,
-        "Coach's payout setup isn't complete (transfers not enabled)"
-      )
-    }
+      `coaching-checkout:${booking._id}`,
+      [identity.subject, booking.coachUserId],
+      async (beforeProviderMutation) => {
+        const stripe = getStripe()
+        const connectAccount = await verifiedPaymentDestination(
+          ctx,
+          stripe,
+          destinationAccountId,
+          coach.externalId
+        )
+        if (!connectAccount.details_submitted) {
+          throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE, "Coach's payout setup isn't complete yet")
+        }
+        if (!connectAccount.charges_enabled) {
+          throwError(ErrorCode.STRIPE_ACCOUNT_DISABLED, "Coach's payouts are temporarily disabled")
+        }
+        const capabilities = connectAccount.capabilities as Record<string, string> | undefined
+        const transfersEnabled =
+          capabilities?.transfers === "active" || capabilities?.legacy_payments === "active"
+        if (!transfersEnabled) {
+          throwError(
+            ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,
+            "Coach's payout setup isn't complete (transfers not enabled)"
+          )
+        }
 
-    const { platformFee } = await ctx.runMutation(api.stripe.calculatePlatformFee, {
-      amount: booking.totalAmount,
-      providerExternalId: booking.coachUserId,
-    })
-    const { chargeAmountCents, processingFeeCents, applicationFeeCents } =
-      buildDestinationChargeAmounts({
-        listingAmountCents: booking.totalAmount,
-        platformFeeCents: platformFee,
-      })
+        const { platformFee } = await ctx.runMutation(api.stripe.calculatePlatformFee, {
+          amount: booking.totalAmount,
+          providerExternalId: booking.coachUserId,
+        })
+        const { chargeAmountCents, processingFeeCents, applicationFeeCents } =
+          buildDestinationChargeAmounts({
+            listingAmountCents: booking.totalAmount,
+            platformFeeCents: platformFee,
+          })
 
-    const customerId = await billingCustomerId(ctx, stripe, identity)
+        beforeProviderMutation()
+        const customerId = await billingCustomerId(ctx, stripe, identity)
 
-    const webUrl = getWebUrl()
-    const coachName = booking.coach?.name || "Coach"
-    const sessionLabel =
-      booking.sessionType === "hourly"
-        ? `${booking.hours}-hour coaching session`
-        : booking.sessionType === "half_day"
-          ? "Half-day coaching session"
-          : "Full-day coaching session"
+        const webUrl = getWebUrl()
+        const coachName = booking.coach?.name || "Coach"
+        const sessionLabel =
+          booking.sessionType === "hourly"
+            ? `${booking.hours}-hour coaching session`
+            : booking.sessionType === "half_day"
+              ? "Half-day coaching session"
+              : "Full-day coaching session"
 
-    const session = await stripe.checkout.sessions.create(
-      {
-        customer: customerId,
-        mode: "payment",
-        line_items: [
+        const session = await stripe.checkout.sessions.create(
           {
-            price_data: {
-              currency: "usd",
-              product_data: {
-                name: `${sessionLabel} with ${coachName}`,
-              },
-              unit_amount: booking.totalAmount,
-            },
-            quantity: 1,
-          },
-          ...(processingFeeCents > 0
-            ? [
-                {
-                  price_data: {
-                    currency: "usd",
-                    product_data: {
-                      name: "Card processing fee",
-                      description: "Passed through at Stripe's standard US card rate",
-                    },
-                    unit_amount: processingFeeCents,
+            customer: customerId,
+            mode: "payment",
+            line_items: [
+              {
+                price_data: {
+                  currency: "usd",
+                  product_data: {
+                    name: `${sessionLabel} with ${coachName}`,
                   },
-                  quantity: 1,
+                  unit_amount: booking.totalAmount,
                 },
-              ]
-            : []),
-        ],
-        payment_intent_data: {
-          application_fee_amount: applicationFeeCents,
-          transfer_data: {
-            destination: coach.stripeAccountId,
+                quantity: 1,
+              },
+              ...(processingFeeCents > 0
+                ? [
+                    {
+                      price_data: {
+                        currency: "usd",
+                        product_data: {
+                          name: "Card processing fee",
+                          description: "Passed through at Stripe's standard US card rate",
+                        },
+                        unit_amount: processingFeeCents,
+                      },
+                      quantity: 1,
+                    },
+                  ]
+                : []),
+            ],
+            payment_intent_data: {
+              application_fee_amount: applicationFeeCents,
+              transfer_data: {
+                destination: destinationAccountId,
+              },
+              metadata: {
+                type: "coaching_booking",
+                coachingBookingId: args.bookingId,
+                renterId: booking.renterId,
+                coachUserId: booking.coachUserId,
+                coachProfileId: booking.coachProfileId,
+                platformFee: platformFee.toString(),
+                processingFee: processingFeeCents.toString(),
+                chargeAmount: chargeAmountCents.toString(),
+              },
+            },
+            success_url: `${webUrl}/checkout/success?coachingBookingId=${args.bookingId}`,
+            cancel_url: `${webUrl}/coaches/${booking.coachProfileId}`,
+            metadata: {
+              type: "coaching_booking",
+              coachingBookingId: args.bookingId,
+              renterId: booking.renterId,
+              coachUserId: booking.coachUserId,
+            },
           },
-          metadata: {
-            type: "coaching_booking",
-            coachingBookingId: args.bookingId,
-            renterId: booking.renterId,
-            coachUserId: booking.coachUserId,
-            coachProfileId: booking.coachProfileId,
-            platformFee: platformFee.toString(),
-            processingFee: processingFeeCents.toString(),
-            chargeAmount: chargeAmountCents.toString(),
-          },
-        },
-        success_url: `${webUrl}/checkout/success?coachingBookingId=${args.bookingId}`,
-        cancel_url: `${webUrl}/coaches/${booking.coachProfileId}`,
-        metadata: {
-          type: "coaching_booking",
-          coachingBookingId: args.bookingId,
-          renterId: booking.renterId,
-          coachUserId: booking.coachUserId,
-        },
-      },
-      {
-        idempotencyKey: `cs_coaching_${args.bookingId}`,
+          {
+            idempotencyKey: `cs_coaching_${args.bookingId}`,
+          }
+        )
+
+        await ctx.runMutation(internal.coachingPayments.recordCheckoutSession, {
+          bookingId: args.bookingId,
+          stripeCheckoutSessionId: session.id,
+          stripePaymentIntentId:
+            typeof session.payment_intent === "string"
+              ? session.payment_intent
+              : session.payment_intent?.id,
+        })
+
+        return {
+          sessionId: session.id,
+          url: session.url,
+        }
       }
     )
-
-    await ctx.runMutation(internal.coachingPayments.recordCheckoutSession, {
-      bookingId: args.bookingId,
-      stripeCheckoutSessionId: session.id,
-      stripePaymentIntentId:
-        typeof session.payment_intent === "string"
-          ? session.payment_intent
-          : session.payment_intent?.id,
-    })
-
-    return {
-      sessionId: session.id,
-      url: session.url,
-    }
   },
 })
 
@@ -312,6 +322,12 @@ export const handlePaymentSuccess = internalMutation({
         stripePaymentIntentId: args.stripePaymentIntentId,
         updatedAt: now,
       })
+      await reserveAccountOperation(
+        ctx,
+        `coaching-cancellation-refund:${booking._id}`,
+        [booking.renterId, booking.coachUserId],
+        true
+      )
       await ctx.scheduler.runAfter(0, internal.coachingPayments.refundCoachingBooking, {
         bookingId: args.bookingId,
         reason: conflict
@@ -398,6 +414,7 @@ export const refundCoachingBooking = internalAction({
   args: {
     bookingId: v.id("coachingBookings"),
     reason: v.string(),
+    operatorId: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<void> => {
     const booking = await ctx.runQuery(api.coachingBookings.getById, {
@@ -406,6 +423,14 @@ export const refundCoachingBooking = internalAction({
     if (!booking?.stripePaymentIntentId) return
     if (booking.paymentStatus === "refunded") return
 
+    await ctx.runMutation(internal.accountOperations.begin, {
+      key: `coaching-refund:${booking._id}`,
+      subjects: [
+        booking.renterId,
+        booking.coachUserId,
+        ...(args.operatorId ? [args.operatorId] : []),
+      ],
+    })
     const stripe = getStripe()
     try {
       await stripe.refunds.create(
@@ -469,6 +494,7 @@ export const adminRefundCoachingBooking = action({
     await ctx.runAction(internal.coachingPayments.refundCoachingBooking, {
       bookingId: args.bookingId,
       reason: args.reason,
+      operatorId: identity.subject,
     })
 
     await ctx.runMutation(internal.auditLog.create, {

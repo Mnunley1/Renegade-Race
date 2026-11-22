@@ -132,3 +132,13 @@ for staging; accepted `dev` → `main` release PRs automatically deploy the fron
 production builds. A frontend rollback does not roll back backend code or data.
 Keep the existing required checks and deployment separation described in
 [Releases](releases.md).
+
+## Clerk account deletion configuration
+
+REN-52 requires deployment-owned `CLERK_SECRET_KEY` and `CLERK_INSTANCE_ID` matching
+the configured Clerk issuer and provider account. Direct frontend self-deletion
+must be disabled in the default and existing-user policies. The backend checks
+the exact provider instance, domains and key mode before deletion. See
+[account deletion](account-deletion.md) for the authenticated action, reverification,
+transaction guards, retained financial actors and bounded recovery procedure.
+Staging verification does not authorize changing the production instance.

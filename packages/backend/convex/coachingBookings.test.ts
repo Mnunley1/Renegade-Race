@@ -231,3 +231,29 @@ describe("coaching bookings — reportIssue", () => {
     ).rejects.toThrow()
   })
 })
+
+it.each([
+  COACH,
+  RENTER,
+])("blocks new coaching requests and approvals for deleting participant %s", async (subject) => {
+  const t = createTest()
+  const coachProfileId = await seedProfile(t)
+  const bookingId = await seedBooking(t, coachProfileId)
+  await t.run(({ db }) =>
+    db.insert("accountDeletionIntents", { subject, status: "locked", createdAt: 0, updatedAt: 0 })
+  )
+  await expect(
+    t
+      .withIdentity({ subject: RENTER })
+      .mutation(api.coachingBookings.create, {
+        coachProfileId,
+        sessionType: "half_day",
+        startDate: "2030-04-01",
+        endDate: "2030-04-01",
+      })
+  ).rejects.toThrow("being deleted")
+  await expect(
+    t.withIdentity({ subject: COACH }).mutation(api.coachingBookings.approve, { bookingId })
+  ).rejects.toThrow("being deleted")
+  expect(await t.run(({ db }) => db.get(bookingId))).toMatchObject({ status: "pending" })
+})

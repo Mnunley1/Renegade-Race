@@ -1,3 +1,5 @@
+import { reserveAccountOperation } from "./accountOperations"
+import { assertAccountsAvailable } from "./accountDeletionGuards"
 import { isEnduranceRaceEvent } from "./seatHelpers"
 import { v } from "convex/values"
 import { internal } from "./_generated/api"
@@ -233,6 +235,7 @@ export const request = mutation({
       note,
     })
 
+    await assertAccountsAvailable(ctx, identity.subject, offering.hostUserId, team.ownerId)
     const bookingId = await ctx.db.insert("seatBookings", {
       seatOfferingId: offering._id,
       teamCarId: offering.teamCarId,
@@ -321,6 +324,7 @@ export const approve = mutation({
     }
     await requireTeamManager(ctx, booking.teamId, identity.subject)
 
+    await assertAccountsAvailable(ctx, identity.subject, booking.driverId, booking.hostUserId)
     if (booking.status !== "pending" && booking.status !== "waitlisted") {
       throwError(ErrorCode.INVALID_STATUS, "Booking cannot be approved in current status")
     }
@@ -507,6 +511,7 @@ export const cancel = mutation({
         `Seat cancelled at least ${SEAT_DRIVER_PARTIAL_REFUND_MIN_DAYS} and less than ` +
         `${SEAT_DRIVER_FULL_REFUND_MIN_DAYS} days before the race — ${refundPercentage}% refunded.`
       const reason = refundPercentage === 100 ? fullReason : partialReason
+      await reserveAccountOperation(ctx, `seat-cancellation-refund:${booking._id}`, [booking.driverId, booking.hostUserId])
       await ctx.scheduler.runAfter(0, internal.seatPayments.refundSeatBooking, {
         bookingId: args.bookingId,
         reason,
