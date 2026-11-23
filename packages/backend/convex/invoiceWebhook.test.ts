@@ -6,13 +6,31 @@ import stripeSchema from "../node_modules/@convex-dev/stripe/dist/component/sche
 import { internal } from "./_generated/api"
 import schema from "./schema"
 
-const { stripeFetch } = vi.hoisted(() => ({ stripeFetch: vi.fn<typeof fetch>() }))
+const { stripeFetch, providerEvents } = vi.hoisted(() => ({
+  stripeFetch: vi.fn<typeof fetch>(),
+  providerEvents: new Map<string, unknown>(),
+}))
 vi.mock("stripe", async (importOriginal) => {
   const { default: RealStripe } = await importOriginal<typeof import("stripe")>()
   return {
     default: class TestStripe extends RealStripe {
       constructor(key: string, options?: Stripe.StripeConfig) {
-        super(key, { ...options, httpClient: RealStripe.createFetchHttpClient(stripeFetch) })
+        super(key, {
+          ...options,
+          httpClient: RealStripe.createFetchHttpClient((input, init) => {
+            const path = new URL(String(input)).pathname
+            if (path.startsWith("/v1/events/")) {
+              const event = providerEvents.get(decodeURIComponent(path.slice("/v1/events/".length)))
+              return Promise.resolve(
+                Response.json(
+                  event ?? { error: { message: "No such event", type: "invalid_request_error" } },
+                  { status: event ? 200 : 404 }
+                )
+              )
+            }
+            return stripeFetch(input, init)
+          }),
+        })
       }
     },
   }
@@ -28,9 +46,10 @@ const stripe = new Stripe("sk_test_invoice_events")
 
 beforeEach(() => {
   stripeFetch.mockReset()
+  providerEvents.clear()
   vi.useFakeTimers()
   vi.stubEnv("STRIPE_SECRET_KEY", "sk_test_invoice_events")
-  vi.stubEnv("STRIPE_WEBHOOK_SECRET", secret)
+  vi.stubEnv("STRIPE_PLATFORM_WEBHOOK_SECRET", secret)
 })
 afterEach(() => {
   vi.unstubAllEnvs()
@@ -159,21 +178,27 @@ async function setup() {
     type: string,
     id: string,
     object: object = intent,
-    options: { account?: string; signingSecret?: string } = {}
+    options: { account?: string; signingSecret?: string; canonicalVersion?: string } = {}
   ) {
     const payload = JSON.stringify({
       id,
       object: "event",
+      livemode: false,
+      api_version: "2025-08-27.basil",
       type,
       data: { object },
       account: options.account,
+    })
+    providerEvents.set(id, {
+      ...JSON.parse(payload),
+      api_version: options.canonicalVersion ?? "2025-08-27.basil",
     })
     const signature = await stripe.webhooks.generateTestHeaderStringAsync({
       payload,
       secret: options.signingSecret ?? secret,
       cryptoProvider: Stripe.createSubtleCryptoProvider(),
     })
-    return t.fetch("/stripe/webhook", {
+    return t.fetch("/stripe/platform-webhook", {
       method: "POST",
       headers: { "stripe-signature": signature },
       body: payload,
@@ -264,7 +289,7 @@ describe("authoritative signed invoice reconciliation", () => {
     })
   })
 
-  it("rejects invalid signatures and ignores connected-account events before provider reads", async () => {
+  it("rejects invalid signatures and rejects connected-account events before provider reads", async () => {
     const f = await setup()
     expect(
       (
@@ -275,7 +300,7 @@ describe("authoritative signed invoice reconciliation", () => {
     ).toBe(400)
     expect(
       (await f.post("invoice.paid", "evt_connected", f.remote, { account: "acct_other" })).status
-    ).toBe(200)
+    ).toBe(400)
     expect(stripeFetch).not.toHaveBeenCalled()
     expect((await f.state()).receipts).toHaveLength(0)
   })
@@ -305,6 +330,32 @@ describe("authoritative signed invoice reconciliation", () => {
     expect(state.receipts.filter((r) => r.eventId === "evt_paid")).toHaveLength(1)
     expect(state.audit.filter((a) => a.action === "invoice_paid")).toHaveLength(1)
     expect(state.notifications).toHaveLength(2)
+  })
+
+  it("reconciles an Acacia original invoice snapshot delivered in Basil without trusting its old payment_intent field", async () => {
+    const f = await setup()
+    f.remote.status = "paid"
+    f.remote.amount_paid = 10000
+    f.intent.status = "succeeded"
+    f.intent.amount_received = 10000
+    f.intent.latest_charge = "ch_paid"
+    f.payment.status = "paid"
+    f.payment.amount_paid = 10000
+    const snapshot = { ...f.remote, payment_intent: "pi_stale_legacy", subscription: null }
+    expect(
+      (
+        await f.post("invoice.paid", "evt_acacia", snapshot, {
+          canonicalVersion: "2024-10-28.acacia",
+        })
+      ).status
+    ).toBe(200)
+    expect((await f.state()).invoice).toMatchObject({
+      status: "paid",
+      stripePaymentIntentId: "pi_current",
+      stripeChargeId: "ch_paid",
+    })
+    await f.t.finishAllScheduledFunctions(vi.runAllTimers)
+    expect((await f.state()).audit.filter((row) => row.action === "invoice_paid")).toHaveLength(1)
   })
 
   it.each([

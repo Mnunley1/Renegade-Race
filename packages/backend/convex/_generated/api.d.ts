@@ -76,6 +76,7 @@ import type * as seatPayments from "../seatPayments.js";
 import type * as seedCoaches from "../seedCoaches.js";
 import type * as speedhive from "../speedhive.js";
 import type * as stripe from "../stripe.js";
+import type * as stripeWebhookRouting from "../stripeWebhookRouting.js";
 import type * as stripeOwnership from "../stripeOwnership.js";
 import type * as teamApplications from "../teamApplications.js";
 import type * as teamCars from "../teamCars.js";
@@ -170,6 +171,7 @@ declare const fullApi: ApiFromModules<{
   seedCoaches: typeof seedCoaches;
   speedhive: typeof speedhive;
   stripe: typeof stripe;
+  stripeWebhookRouting: typeof stripeWebhookRouting;
   stripeOwnership: typeof stripeOwnership;
   teamApplications: typeof teamApplications;
   teamCars: typeof teamCars;

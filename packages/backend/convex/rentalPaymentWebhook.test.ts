@@ -8,13 +8,31 @@ import schema from "./schema"
 
 // Use Stripe's real signature verification and SDK, with a test-only HTTP
 // transport for retrieving charges and the refund list during reconciliation.
-const { stripeFetch } = vi.hoisted(() => ({ stripeFetch: vi.fn<typeof fetch>() }))
+const { stripeFetch, providerEvents } = vi.hoisted(() => ({
+  stripeFetch: vi.fn<typeof fetch>(),
+  providerEvents: new Map<string, unknown>(),
+}))
 vi.mock("stripe", async (importOriginal) => {
   const { default: RealStripe } = await importOriginal<typeof import("stripe")>()
   return {
     default: class TestStripe extends RealStripe {
       constructor(key: string, options?: Stripe.StripeConfig) {
-        super(key, { ...options, httpClient: RealStripe.createFetchHttpClient(stripeFetch) })
+        super(key, {
+          ...options,
+          httpClient: RealStripe.createFetchHttpClient((input, init) => {
+            const path = new URL(String(input)).pathname
+            if (path.startsWith("/v1/events/")) {
+              const event = providerEvents.get(decodeURIComponent(path.slice("/v1/events/".length)))
+              return Promise.resolve(
+                Response.json(
+                  event ?? { error: { message: "No such event", type: "invalid_request_error" } },
+                  { status: event ? 200 : 404 }
+                )
+              )
+            }
+            return stripeFetch(input, init)
+          }),
+        })
       }
     },
   }
@@ -31,9 +49,10 @@ const stripe = new Stripe("sk_test_rental_webhook")
 
 beforeEach(() => {
   stripeFetch.mockReset()
+  providerEvents.clear()
   vi.useFakeTimers()
   vi.stubEnv("STRIPE_SECRET_KEY", "sk_test_rental_webhook")
-  vi.stubEnv("STRIPE_WEBHOOK_SECRET", webhookSecret)
+  vi.stubEnv("STRIPE_PLATFORM_WEBHOOK_SECRET", webhookSecret)
 })
 afterEach(() => {
   vi.unstubAllEnvs()
@@ -121,13 +140,22 @@ async function setup(hosted = false) {
     object: object,
     { secret = webhookSecret, account }: { secret?: string; account?: string } = {}
   ) {
-    const payload = JSON.stringify({ object: "event", id, type, data: { object }, account })
+    const payload = JSON.stringify({
+      object: "event",
+      id,
+      type,
+      data: { object },
+      account,
+      livemode: false,
+      api_version: "2025-08-27.basil",
+    })
+    providerEvents.set(id, JSON.parse(payload))
     const signature = await stripe.webhooks.generateTestHeaderStringAsync({
       payload,
       secret,
       cryptoProvider: Stripe.createSubtleCryptoProvider(),
     })
-    return t.fetch("/stripe/webhook", {
+    return t.fetch("/stripe/platform-webhook", {
       method: "POST",
       headers: { "stripe-signature": signature },
       body: payload,
@@ -238,7 +266,7 @@ describe("signed rental Stripe webhooks", () => {
     const type = kind === "intent" ? "payment_intent.canceled" : "checkout.session.expired"
     const object = kind === "intent" ? { ...intent, status: "canceled" } : expiredSession(metadata)
     expect((await post(type, "evt_terminal", object, { secret: "whsec_wrong" })).status).toBe(400)
-    expect((await post(type, "evt_connected", object, { account: "acct_other" })).status).toBe(200)
+    expect((await post(type, "evt_connected", object, { account: "acct_other" })).status).toBe(400)
     expect((await state()).payment?.status).toBe("pending")
     expect((await post(type, "evt_terminal", object)).status).toBe(200)
     expect((await post(type, "evt_terminal", object)).status).toBe(200)
@@ -423,7 +451,7 @@ describe("signed rental Stripe webhooks", () => {
     expect(result.receipts.filter((e) => e.eventId === "evt_success")).toHaveLength(1)
   })
 
-  it("ignores connected-account seat metadata and routes platform seat success exactly once", async () => {
+  it("rejects connected-account seat metadata and routes platform seat success exactly once", async () => {
     const { t, post, intent, state } = await setup()
     const bookingId = await t.run(async ({ db }) => {
       const now = Date.now()
@@ -519,7 +547,7 @@ describe("signed rental Stripe webhooks", () => {
             account: "acct_connected",
           })
         ).status
-      ).toBe(200)
+      ).toBe(400)
     }
     expect(await t.run(({ db }) => db.get(bookingId))).toMatchObject({
       status: "approved",
@@ -647,7 +675,7 @@ describe("signed rental Stripe webhooks", () => {
           account: "acct_other",
         })
       ).status
-    ).toBe(200)
+    ).toBe(400)
     for (const [id, evidence] of [
       ["wrong_amount", { ...invoiceIntent, amount_received: 1 }],
       ["wrong_currency", { ...invoiceIntent, currency: "eur" }],
@@ -684,7 +712,7 @@ describe("signed rental Stripe webhooks", () => {
     await t.finishAllScheduledFunctions(vi.runAllTimers)
   })
 
-  it("ignores a connected account's attempts to update coaching bookings and damage invoices", async () => {
+  it("rejects a connected account's attempts to update coaching bookings and damage invoices", async () => {
     const { t, ids, post, intent } = await setup()
     const { booking, damage } = await t.run(async ({ db }) => {
       const timestamps = { createdAt: 1, updatedAt: 1 }
@@ -742,7 +770,7 @@ describe("signed rental Stripe webhooks", () => {
       ["payment_intent.payment_failed", "evt_coaching_fail", coaching],
       ["payment_intent.succeeded", "evt_damage_paid", invoice],
     ] as const)
-      expect((await post(type, event, object, connected)).status).toBe(200)
+      expect((await post(type, event, object, connected)).status).toBe(400)
     expect(await t.run(({ db }) => db.get(booking))).toMatchObject({
       status: "approved",
       paymentStatus: "pending",
@@ -750,7 +778,7 @@ describe("signed rental Stripe webhooks", () => {
     expect(await t.run(({ db }) => db.get(damage))).toMatchObject({ status: "payment_pending" })
   })
 
-  it("ignores matching metadata on a connected account's own payment", async () => {
+  it("rejects matching metadata on a connected account's own payment", async () => {
     const { post, intent, state } = await setup()
     expect(
       (
@@ -758,7 +786,7 @@ describe("signed rental Stripe webhooks", () => {
           account: "acct_untrusted",
         })
       ).status
-    ).toBe(200)
+    ).toBe(400)
     expect((await state()).payment?.status).toBe("pending")
     expect((await state()).reservation?.paymentStatus).toBe("pending")
   })
@@ -767,6 +795,7 @@ describe("signed rental Stripe webhooks", () => {
     const { t, post, intent, metadata, state } = await setup()
     expect((await post("payment_intent.succeeded", "evt_success", intent)).status).toBe(200)
     const charge = {
+      object: "charge",
       id: "ch_rental",
       payment_intent: intent.id,
       metadata,
@@ -776,6 +805,7 @@ describe("signed rental Stripe webhooks", () => {
       currency: "usd",
     }
     const refund = {
+      object: "refund",
       id: "re_partial",
       payment_intent: intent.id,
       charge: charge.id,

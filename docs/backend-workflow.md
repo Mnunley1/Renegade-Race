@@ -142,3 +142,11 @@ the exact provider instance, domains and key mode before deletion. See
 [account deletion](account-deletion.md) for the authenticated action, reverification,
 transaction guards, retained financial actors and bounded recovery procedure.
 Staging verification does not authorize changing the production instance.
+
+## Stripe webhook routing
+
+Use the [webhook activation guide](stripe-webhooks.md) for the separately bound
+platform, additive Connect, and preserved legacy Connect routes. Both applications
+share these backend routes. Configuring a frontend URL or a `convex.cloud` API URL
+is not a webhook deployment. Keep endpoint IDs, account/mode, exact source/runtime
+evidence and proof results; never put signing secrets or API keys in source/logs.

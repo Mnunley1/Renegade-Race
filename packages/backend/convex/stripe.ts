@@ -2363,11 +2363,66 @@ export const handleTransferFailed = internalMutation({
   },
 })
 
+// Connect callbacks are routed only after signature/scope/mode checks. Resolve
+// current provider state before changing local health; legacy ownership stays held.
+export const reconcileConnectedAccount = internalAction({
+  args: { stripeAccountId: v.string() },
+  handler: async (ctx, { stripeAccountId }): Promise<void> => {
+    const user = await ctx.runQuery(internal.users.getByStripeAccountId, { stripeAccountId })
+    if (!user) return
+    const account = await retrieveLinkedConnectAccount(
+      ctx,
+      getStripe(),
+      stripeAccountId,
+      user.externalId
+    )
+    if (account.id !== stripeAccountId)
+      throwError(ErrorCode.CONFLICT, "Connected account does not match")
+    if (account.type !== "express" || account.metadata?.renegadeUserId !== user.externalId) return
+    let status: "pending" | "enabled" | "restricted" = "pending"
+    if (account.details_submitted && account.charges_enabled && account.payouts_enabled) {
+      status =
+        account.requirements?.currently_due?.length ||
+        account.requirements?.past_due?.length ||
+        account.requirements?.disabled_reason
+          ? "restricted"
+          : "enabled"
+    }
+    await ctx.runMutation(internal.users.updateStripeAccountStatus, { stripeAccountId, status })
+  },
+})
+
+export const reconcilePayoutFailure = internalAction({
+  args: {
+    stripeAccountId: v.string(),
+    payoutId: v.string(),
+    eventId: v.string(),
+    failureReason: v.optional(v.string()),
+  },
+  handler: async (ctx, args): Promise<void> => {
+    const user = await ctx.runQuery(internal.users.getByStripeAccountId, {
+      stripeAccountId: args.stripeAccountId,
+    })
+    if (!user) return
+    const account = await retrieveLinkedConnectAccount(
+      ctx,
+      getStripe(),
+      args.stripeAccountId,
+      user.externalId
+    )
+    if (account.id !== args.stripeAccountId)
+      throwError(ErrorCode.CONFLICT, "Connected account does not match")
+    if (account.metadata?.renegadeUserId !== user.externalId) return
+    await ctx.runMutation(internal.stripe.handlePayoutFailed, args)
+  },
+})
+
 // Handle payout failed webhook event
 export const handlePayoutFailed = internalMutation({
   args: {
     stripeAccountId: v.string(),
     payoutId: v.string(),
+    eventId: v.optional(v.string()),
     failureReason: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<void> => {
@@ -2377,9 +2432,30 @@ export const handlePayoutFailed = internalMutation({
       .withIndex("by_stripe_account", (q) => q.eq("stripeAccountId", args.stripeAccountId))
       .unique()
 
-    if (user) {
-      // TODO: handle payout failure notification
-    }
+    if (!user) return
+    const previous = await ctx.db
+      .query("auditLogs")
+      .withIndex("by_entity", (q) => q.eq("entityType", "user").eq("entityId", user.externalId))
+      .collect()
+    if (
+      previous.some(
+        (entry) =>
+          entry.action === "stripe_payout_failed" && entry.metadata?.payoutId === args.payoutId
+      )
+    )
+      return
+    await ctx.db.insert("auditLogs", {
+      entityType: "user",
+      entityId: user.externalId,
+      action: "stripe_payout_failed",
+      timestamp: Date.now(),
+      metadata: {
+        stripeAccountId: args.stripeAccountId,
+        payoutId: args.payoutId,
+        eventId: args.eventId,
+        failureReason: args.failureReason,
+      },
+    })
   },
 })
 

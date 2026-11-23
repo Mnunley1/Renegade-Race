@@ -84,6 +84,20 @@ Seat-specific frontend parity and seat checkout hardening require separate revie
 the rental smoke test does not establish seat-flow readiness. Passing CI alone
 does not establish production compatibility.
 
+## Platform and Connect webhook separation (REN-53)
+
+Additive platform and Connect routes have separate explicit signing secrets; the
+legacy Connect route/key remains intact. Signature, scope, mode, reviewed snapshot
+version and exact provider event/account binding now precede all application and
+component writes. Supported Connect callbacks use current verified owner/account
+state; platform reconciliation, retained financial actors, payout holds and refund
+settlement review remain authoritative. No automatic money movement is added.
+
+See [the webhook route/subscription and activation guide](stripe-webhooks.md) for
+the 15 platform events, two Connect events, deferred deauthorization coverage,
+legacy `transfer.failed` removal, snapshot compatibility and replay limitations.
+Staging verification and any later production activation are separate gates.
+
 ## Server-controlled account deletion (REN-52)
 
 Account deletion now runs through the authenticated backend with Clerk's existing
