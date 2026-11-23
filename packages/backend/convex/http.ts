@@ -1,15 +1,16 @@
 import type { WebhookEvent } from "@clerk/backend"
-import { registerRoutes } from "@convex-dev/stripe"
+import type { StripeEventHandlers } from "@convex-dev/stripe"
 import { httpRouter } from "convex/server"
 import type Stripe from "stripe"
 import { Webhook } from "svix"
-import { components, internal } from "./_generated/api"
+import { internal } from "./_generated/api"
 import { type ActionCtx, httpAction } from "./_generated/server"
 import { resendComponent } from "./emails"
 import { logError } from "./logger"
 import { rateLimiter } from "./rateLimiter"
 import { readReturnPhoto, returnPhotoOptions, uploadReturnPhoto } from "./returnEvidence"
 import { isSeatPaymentMetadata } from "./seatPayments"
+import { registerScopedStripeWebhook } from "./stripeWebhookRouting"
 
 function stripeObjectId(value: string | { id: string } | null): string | undefined {
   return typeof value === "string" ? value : value?.id
@@ -82,179 +83,62 @@ http.route({ path: "/return-photo", method: "GET", handler: readReturnPhoto })
 http.route({ path: "/return-photo", method: "POST", handler: uploadReturnPhoto })
 http.route({ path: "/return-photo", method: "OPTIONS", handler: returnPhotoOptions })
 
-// Register Stripe component webhook routes with custom event handlers
-registerRoutes(http, components.stripe, {
-  webhookPath: "/stripe/webhook",
-  events: {
-    // Custom handler for payment_intent.succeeded
-    "payment_intent.succeeded": async (ctx, event: Stripe.PaymentIntentSucceededEvent) => {
-      // Check idempotency
-      const alreadyProcessed = await ctx.runQuery(internal.webhookIdempotency.checkWebhookEvent, {
-        eventId: event.id,
-        source: "stripe",
-      })
+// Ingress validates signature, scope, mode and version before these handlers.
+const stripeEventHandlers: StripeEventHandlers = {
+  // Custom handler for payment_intent.succeeded
+  "payment_intent.succeeded": async (ctx, event: Stripe.PaymentIntentSucceededEvent) => {
+    // Check idempotency
+    const alreadyProcessed = await ctx.runQuery(internal.webhookIdempotency.checkWebhookEvent, {
+      eventId: event.id,
+      source: "stripe",
+    })
 
-      if (alreadyProcessed) {
-        // Already processed, skip silently
-        return
-      }
+    if (alreadyProcessed) {
+      // Already processed, skip silently
+      return
+    }
 
-      const paymentIntent = event.data.object
+    const paymentIntent = event.data.object
 
-      if (isSeatPaymentMetadata(paymentIntent.metadata)) {
-        // Seat destination charges belong to the platform, never a connected account.
-        if (event.account) return
-        await ctx.runMutation(internal.seatPayments.ingestPaymentIntentEvent, {
-          eventId: event.id,
-          eventType: "payment_intent.succeeded",
-          paymentIntentId: paymentIntent.id,
-          metadata: paymentIntent.metadata ?? {},
-        })
-        return
-      }
-
-      const rental = rentalMetadata(paymentIntent.metadata, event.account)
-      if (rental) {
-        await ctx.runMutation(internal.stripe.ingestRentalPaymentEvent, {
-          eventId: event.id,
-          eventType: event.type,
-          stripePaymentIntentId: paymentIntent.id,
-          currency: paymentIntent.currency,
-          amount: paymentIntent.amount_received,
-          stripeChargeId: stripeObjectId(paymentIntent.latest_charge),
-          ...rental,
-        })
-        return
-      }
-      if (!event.account && paymentIntent.metadata?.type === "damage_invoice") {
-        // Handle damage invoice payment
-        const damageInvoiceId = paymentIntent.metadata.damageInvoiceId
-        if (damageInvoiceId) {
-          await ctx.runMutation(internal.damageInvoices.handlePaymentSuccess, {
-            damageInvoiceId: damageInvoiceId as any,
-            stripeChargeId: (paymentIntent.latest_charge as string) || "",
-            stripePaymentIntentId: paymentIntent.id,
-          })
-        }
-      } else if (
-        !event.account &&
-        (paymentIntent.metadata?.type === "custom_invoice" || !paymentIntent.metadata?.type)
-      ) {
-        if (
-          await ctx.runAction(internal.invoices.reconcilePaymentEvent, {
-            eventId: event.id,
-            eventType: event.type,
-            stripePaymentIntentId: paymentIntent.id,
-            localInvoiceId:
-              paymentIntent.metadata?.type === "custom_invoice"
-                ? paymentIntent.metadata.invoiceId
-                : undefined,
-          })
-        )
-          return
-      } else if (!event.account && paymentIntent.metadata?.type === "coaching_booking") {
-        // Handle coaching booking payment
-        const bookingId = paymentIntent.metadata.coachingBookingId
-        if (bookingId) {
-          await ctx.runMutation(internal.coachingPayments.handlePaymentSuccess, {
-            bookingId: bookingId as any,
-            stripePaymentIntentId: paymentIntent.id,
-          })
-        }
-      }
-
-      // Record successful processing
-      await ctx.runMutation(internal.webhookIdempotency.recordWebhookEvent, {
-        eventId: event.id,
-        source: "stripe",
-        eventType: event.type,
-      })
-    },
-
-    // Custom handler for payment_intent.payment_failed
-    "payment_intent.payment_failed": async (ctx, event: Stripe.PaymentIntentPaymentFailedEvent) => {
-      // Check idempotency
-      const alreadyProcessed = await ctx.runQuery(internal.webhookIdempotency.checkWebhookEvent, {
-        eventId: event.id,
-        source: "stripe",
-      })
-
-      if (alreadyProcessed) {
-        return
-      }
-
-      const paymentIntent = event.data.object
-
-      if (isSeatPaymentMetadata(paymentIntent.metadata)) {
-        // Seat destination charges belong to the platform, never a connected account.
-        if (event.account) return
-        await ctx.runMutation(internal.seatPayments.ingestPaymentIntentEvent, {
-          eventId: event.id,
-          eventType: "payment_intent.payment_failed",
-          paymentIntentId: paymentIntent.id,
-          metadata: paymentIntent.metadata ?? {},
-          failureReason: paymentIntent.last_payment_error?.message,
-        })
-        return
-      }
-
-      const rental = rentalMetadata(paymentIntent.metadata, event.account)
-      if (rental) {
-        await ctx.runMutation(internal.stripe.ingestRentalPaymentEvent, {
-          eventId: event.id,
-          eventType: event.type,
-          stripePaymentIntentId: paymentIntent.id,
-          currency: paymentIntent.currency,
-          amount: paymentIntent.amount,
-          failureReason: paymentIntent.last_payment_error?.message,
-          ...rental,
-        })
-        return
-      }
-      if (!event.account && paymentIntent.metadata?.type === "coaching_booking") {
-        const bookingId = paymentIntent.metadata.coachingBookingId
-        if (bookingId) {
-          await ctx.runMutation(internal.coachingPayments.handlePaymentFailure, {
-            bookingId: bookingId as any,
-            failureReason: paymentIntent.last_payment_error?.message,
-          })
-        }
-      } else if (
-        !event.account &&
-        (await ctx.runAction(internal.invoices.reconcilePaymentEvent, {
-          eventId: event.id,
-          eventType: event.type,
-          stripePaymentIntentId: paymentIntent.id,
-          localInvoiceId:
-            paymentIntent.metadata?.type === "custom_invoice"
-              ? paymentIntent.metadata.invoiceId
-              : undefined,
-        }))
-      ) {
-        return
-      }
-
-      // Record successful processing
-      await ctx.runMutation(internal.webhookIdempotency.recordWebhookEvent, {
-        eventId: event.id,
-        source: "stripe",
-        eventType: event.type,
-      })
-    },
-
-    // ACH Direct Debit can enter processing before final success or late failure.
-    "payment_intent.processing": async (ctx, event: Stripe.PaymentIntentProcessingEvent) => {
+    if (isSeatPaymentMetadata(paymentIntent.metadata)) {
+      // Seat destination charges belong to the platform, never a connected account.
       if (event.account) return
-      const alreadyProcessed = await ctx.runQuery(internal.webhookIdempotency.checkWebhookEvent, {
+      await ctx.runMutation(internal.seatPayments.ingestPaymentIntentEvent, {
         eventId: event.id,
-        source: "stripe",
+        eventType: "payment_intent.succeeded",
+        paymentIntentId: paymentIntent.id,
+        metadata: paymentIntent.metadata ?? {},
       })
+      return
+    }
 
-      if (alreadyProcessed) {
-        return
+    const rental = rentalMetadata(paymentIntent.metadata, event.account)
+    if (rental) {
+      await ctx.runMutation(internal.stripe.ingestRentalPaymentEvent, {
+        eventId: event.id,
+        eventType: event.type,
+        stripePaymentIntentId: paymentIntent.id,
+        currency: paymentIntent.currency,
+        amount: paymentIntent.amount_received,
+        stripeChargeId: stripeObjectId(paymentIntent.latest_charge),
+        ...rental,
+      })
+      return
+    }
+    if (!event.account && paymentIntent.metadata?.type === "damage_invoice") {
+      // Handle damage invoice payment
+      const damageInvoiceId = paymentIntent.metadata.damageInvoiceId
+      if (damageInvoiceId) {
+        await ctx.runMutation(internal.damageInvoices.handlePaymentSuccess, {
+          damageInvoiceId: damageInvoiceId as any,
+          stripeChargeId: (paymentIntent.latest_charge as string) || "",
+          stripePaymentIntentId: paymentIntent.id,
+        })
       }
-
-      const paymentIntent = event.data.object
+    } else if (
+      !event.account &&
+      (paymentIntent.metadata?.type === "custom_invoice" || !paymentIntent.metadata?.type)
+    ) {
       if (
         await ctx.runAction(internal.invoices.reconcilePaymentEvent, {
           eventId: event.id,
@@ -267,365 +151,364 @@ registerRoutes(http, components.stripe, {
         })
       )
         return
-
-      await ctx.runMutation(internal.webhookIdempotency.recordWebhookEvent, {
-        eventId: event.id,
-        source: "stripe",
-        eventType: event.type,
-      })
-    },
-
-    // Handle charge.dispute.created
-    "charge.dispute.created": async (ctx, event: Stripe.ChargeDisputeCreatedEvent) => {
-      // Check idempotency
-      const alreadyProcessed = await ctx.runQuery(internal.webhookIdempotency.checkWebhookEvent, {
-        eventId: event.id,
-        source: "stripe",
-      })
-
-      if (alreadyProcessed) {
-        return
-      }
-
-      const dispute = event.data.object
-      const paymentIntentId = dispute.payment_intent as string
-
-      if (paymentIntentId) {
-        await ctx.runMutation(internal.stripe.handleDisputeCreated, {
-          stripePaymentIntentId: paymentIntentId,
-          disputeId: dispute.id,
-          disputeReason: dispute.reason || undefined,
-          disputeAmount: dispute.amount,
-        })
-      }
-
-      // Record successful processing
-      await ctx.runMutation(internal.webhookIdempotency.recordWebhookEvent, {
-        eventId: event.id,
-        source: "stripe",
-        eventType: event.type,
-      })
-    },
-
-    // Handle charge.refunded
-    "charge.refunded": async (ctx, event: Stripe.ChargeRefundedEvent) => {
-      // Check idempotency
-      const alreadyProcessed = await ctx.runQuery(internal.webhookIdempotency.checkWebhookEvent, {
-        eventId: event.id,
-        source: "stripe",
-      })
-
-      if (alreadyProcessed) {
-        return
-      }
-
-      if (event.account) return
-      const charge = event.data.object
-      const paymentIntentId = stripeObjectId(charge.payment_intent)
-      const rental = rentalMetadata(charge.metadata)
-      if (paymentIntentId && charge.amount_refunded > 0) {
-        await ctx.runAction(internal.stripe.syncChargeRefunds, {
-          stripePaymentIntentId: paymentIntentId,
-          chargeId: charge.id,
-          reservationId: rental?.reservationId,
-          requireMatchingPayment: Boolean(rental),
-        })
-      }
-
-      // Record successful processing
-      await ctx.runMutation(internal.webhookIdempotency.recordWebhookEvent, {
-        eventId: event.id,
-        source: "stripe",
-        eventType: event.type,
-      })
-    },
-
-    "refund.created": syncRefundEvent,
-    "refund.updated": syncRefundEvent,
-    "refund.failed": syncRefundEvent,
-
-    // Handle transfer.failed
-    // @ts-expect-error - StripeEventHandlers type doesn't include transfer.failed
-    "transfer.failed": async (ctx, event: Stripe.TransferUpdatedEvent) => {
-      // Check idempotency
-      const alreadyProcessed = await ctx.runQuery(internal.webhookIdempotency.checkWebhookEvent, {
-        eventId: event.id,
-        source: "stripe",
-      })
-
-      if (alreadyProcessed) {
-        return
-      }
-
-      const transfer = event.data.object
-
-      await ctx.runMutation(internal.stripe.handleTransferFailed, {
-        stripeTransferId: transfer.id,
-        failureReason: (transfer as unknown as { failure_message?: string }).failure_message,
-      })
-
-      // Record successful processing
-      await ctx.runMutation(internal.webhookIdempotency.recordWebhookEvent, {
-        eventId: event.id,
-        source: "stripe",
-        eventType: event.type,
-      })
-    },
-
-    // Handle payout.failed
-    "payout.failed": async (ctx, event: Stripe.PayoutFailedEvent) => {
-      // Check idempotency
-      const alreadyProcessed = await ctx.runQuery(internal.webhookIdempotency.checkWebhookEvent, {
-        eventId: event.id,
-        source: "stripe",
-      })
-
-      if (alreadyProcessed) {
-        return
-      }
-
-      const payout = event.data.object
-
-      await ctx.runMutation(internal.stripe.handlePayoutFailed, {
-        stripeAccountId: (payout.destination as string) || "",
-        payoutId: payout.id,
-        failureReason: payout.failure_message || undefined,
-      })
-
-      // Record successful processing
-      await ctx.runMutation(internal.webhookIdempotency.recordWebhookEvent, {
-        eventId: event.id,
-        source: "stripe",
-        eventType: event.type,
-      })
-    },
-
-    // Handle payment_intent.canceled
-    "payment_intent.canceled": async (ctx, event: Stripe.PaymentIntentCanceledEvent) => {
-      // Check idempotency
-      const alreadyProcessed = await ctx.runQuery(internal.webhookIdempotency.checkWebhookEvent, {
-        eventId: event.id,
-        source: "stripe",
-      })
-
-      if (alreadyProcessed) {
-        return
-      }
-
-      const paymentIntent = event.data.object
-
-      if (isSeatPaymentMetadata(paymentIntent.metadata)) {
-        // Seat destination charges belong to the platform, never a connected account.
-        if (event.account) return
-        await ctx.runMutation(internal.seatPayments.ingestPaymentIntentEvent, {
-          eventId: event.id,
-          eventType: "payment_intent.canceled",
-          paymentIntentId: paymentIntent.id,
-          metadata: paymentIntent.metadata ?? {},
-          failureReason: "Payment was canceled",
-        })
-        return
-      }
-
-      const rental = rentalMetadata(paymentIntent.metadata, event.account)
-      if (rental) {
-        await ctx.runMutation(internal.stripe.ingestRentalPaymentEvent, {
-          eventId: event.id,
-          eventType: event.type,
+    } else if (!event.account && paymentIntent.metadata?.type === "coaching_booking") {
+      // Handle coaching booking payment
+      const bookingId = paymentIntent.metadata.coachingBookingId
+      if (bookingId) {
+        await ctx.runMutation(internal.coachingPayments.handlePaymentSuccess, {
+          bookingId: bookingId as any,
           stripePaymentIntentId: paymentIntent.id,
-          currency: paymentIntent.currency,
-          amount: paymentIntent.amount,
-          ...rental,
-        })
-        return
-      }
-
-      // Record successful processing
-      await ctx.runMutation(internal.webhookIdempotency.recordWebhookEvent, {
-        eventId: event.id,
-        source: "stripe",
-        eventType: event.type,
-      })
-    },
-
-    // Handle account.application.deauthorized (Connect account disconnected)
-    "account.application.deauthorized": async (
-      ctx,
-      event: Stripe.AccountApplicationDeauthorizedEvent
-    ) => {
-      // Check idempotency
-      const alreadyProcessed = await ctx.runQuery(internal.webhookIdempotency.checkWebhookEvent, {
-        eventId: event.id,
-        source: "stripe",
-      })
-
-      if (alreadyProcessed) {
-        return
-      }
-
-      const _application = event.data.object
-      // The account ID is in the event's account field for connected accounts
-      const accountId = event.account
-
-      if (accountId) {
-        await ctx.runMutation(internal.stripe.handleAccountDeauthorized, {
-          stripeAccountId: accountId,
         })
       }
+    }
 
-      // Record successful processing
-      await ctx.runMutation(internal.webhookIdempotency.recordWebhookEvent, {
+    // Record successful processing
+    await ctx.runMutation(internal.webhookIdempotency.recordWebhookEvent, {
+      eventId: event.id,
+      source: "stripe",
+      eventType: event.type,
+    })
+  },
+
+  // Custom handler for payment_intent.payment_failed
+  "payment_intent.payment_failed": async (ctx, event: Stripe.PaymentIntentPaymentFailedEvent) => {
+    // Check idempotency
+    const alreadyProcessed = await ctx.runQuery(internal.webhookIdempotency.checkWebhookEvent, {
+      eventId: event.id,
+      source: "stripe",
+    })
+
+    if (alreadyProcessed) {
+      return
+    }
+
+    const paymentIntent = event.data.object
+
+    if (isSeatPaymentMetadata(paymentIntent.metadata)) {
+      // Seat destination charges belong to the platform, never a connected account.
+      if (event.account) return
+      await ctx.runMutation(internal.seatPayments.ingestPaymentIntentEvent, {
         eventId: event.id,
-        source: "stripe",
-        eventType: event.type,
+        eventType: "payment_intent.payment_failed",
+        paymentIntentId: paymentIntent.id,
+        metadata: paymentIntent.metadata ?? {},
+        failureReason: paymentIntent.last_payment_error?.message,
       })
-    },
+      return
+    }
 
-    "checkout.session.expired": async (ctx, event: Stripe.CheckoutSessionExpiredEvent) => {
-      const session = event.data.object
-      const rental = rentalMetadata(session.metadata, event.account)
-      if (!rental) return
+    const rental = rentalMetadata(paymentIntent.metadata, event.account)
+    if (rental) {
+      await ctx.runMutation(internal.stripe.ingestRentalPaymentEvent, {
+        eventId: event.id,
+        eventType: event.type,
+        stripePaymentIntentId: paymentIntent.id,
+        currency: paymentIntent.currency,
+        amount: paymentIntent.amount,
+        failureReason: paymentIntent.last_payment_error?.message,
+        ...rental,
+      })
+      return
+    }
+    if (!event.account && paymentIntent.metadata?.type === "coaching_booking") {
+      const bookingId = paymentIntent.metadata.coachingBookingId
+      if (bookingId) {
+        await ctx.runMutation(internal.coachingPayments.handlePaymentFailure, {
+          bookingId: bookingId as any,
+          failureReason: paymentIntent.last_payment_error?.message,
+        })
+      }
+    } else if (
+      !event.account &&
+      (await ctx.runAction(internal.invoices.reconcilePaymentEvent, {
+        eventId: event.id,
+        eventType: event.type,
+        stripePaymentIntentId: paymentIntent.id,
+        localInvoiceId:
+          paymentIntent.metadata?.type === "custom_invoice"
+            ? paymentIntent.metadata.invoiceId
+            : undefined,
+      }))
+    ) {
+      return
+    }
+
+    // Record successful processing
+    await ctx.runMutation(internal.webhookIdempotency.recordWebhookEvent, {
+      eventId: event.id,
+      source: "stripe",
+      eventType: event.type,
+    })
+  },
+
+  // ACH Direct Debit can enter processing before final success or late failure.
+  "payment_intent.processing": async (ctx, event: Stripe.PaymentIntentProcessingEvent) => {
+    if (event.account) return
+    const alreadyProcessed = await ctx.runQuery(internal.webhookIdempotency.checkWebhookEvent, {
+      eventId: event.id,
+      source: "stripe",
+    })
+
+    if (alreadyProcessed) {
+      return
+    }
+
+    const paymentIntent = event.data.object
+    if (
+      await ctx.runAction(internal.invoices.reconcilePaymentEvent, {
+        eventId: event.id,
+        eventType: event.type,
+        stripePaymentIntentId: paymentIntent.id,
+        localInvoiceId:
+          paymentIntent.metadata?.type === "custom_invoice"
+            ? paymentIntent.metadata.invoiceId
+            : undefined,
+      })
+    )
+      return
+
+    await ctx.runMutation(internal.webhookIdempotency.recordWebhookEvent, {
+      eventId: event.id,
+      source: "stripe",
+      eventType: event.type,
+    })
+  },
+
+  // Handle charge.dispute.created
+  "charge.dispute.created": async (ctx, event: Stripe.ChargeDisputeCreatedEvent) => {
+    // Check idempotency
+    const alreadyProcessed = await ctx.runQuery(internal.webhookIdempotency.checkWebhookEvent, {
+      eventId: event.id,
+      source: "stripe",
+    })
+
+    if (alreadyProcessed) {
+      return
+    }
+
+    const dispute = event.data.object
+    const paymentIntentId = dispute.payment_intent as string
+
+    if (paymentIntentId) {
+      await ctx.runMutation(internal.stripe.handleDisputeCreated, {
+        stripePaymentIntentId: paymentIntentId,
+        disputeId: dispute.id,
+        disputeReason: dispute.reason || undefined,
+        disputeAmount: dispute.amount,
+      })
+    }
+
+    // Record successful processing
+    await ctx.runMutation(internal.webhookIdempotency.recordWebhookEvent, {
+      eventId: event.id,
+      source: "stripe",
+      eventType: event.type,
+    })
+  },
+
+  // Handle charge.refunded
+  "charge.refunded": async (ctx, event: Stripe.ChargeRefundedEvent) => {
+    // Check idempotency
+    const alreadyProcessed = await ctx.runQuery(internal.webhookIdempotency.checkWebhookEvent, {
+      eventId: event.id,
+      source: "stripe",
+    })
+
+    if (alreadyProcessed) {
+      return
+    }
+
+    if (event.account) return
+    const charge = event.data.object
+    const paymentIntentId = stripeObjectId(charge.payment_intent)
+    const rental = rentalMetadata(charge.metadata)
+    if (paymentIntentId && charge.amount_refunded > 0) {
+      await ctx.runAction(internal.stripe.syncChargeRefunds, {
+        stripePaymentIntentId: paymentIntentId,
+        chargeId: charge.id,
+        reservationId: rental?.reservationId,
+        requireMatchingPayment: Boolean(rental),
+      })
+    }
+
+    // Record successful processing
+    await ctx.runMutation(internal.webhookIdempotency.recordWebhookEvent, {
+      eventId: event.id,
+      source: "stripe",
+      eventType: event.type,
+    })
+  },
+
+  "refund.created": syncRefundEvent,
+  "refund.updated": syncRefundEvent,
+  "refund.failed": syncRefundEvent,
+
+  // Handle payout.failed
+  "payout.failed": async (ctx, event: Stripe.PayoutFailedEvent) => {
+    // Check idempotency
+    const alreadyProcessed = await ctx.runQuery(internal.webhookIdempotency.checkWebhookEvent, {
+      eventId: event.id,
+      source: "stripe",
+    })
+
+    if (alreadyProcessed) {
+      return
+    }
+
+    const payout = event.data.object
+
+    if (!event.account) throw new Error("Missing Connect account")
+    await ctx.runAction(internal.stripe.reconcilePayoutFailure, {
+      eventId: event.id,
+      stripeAccountId: event.account,
+      payoutId: payout.id,
+      failureReason: payout.failure_message || undefined,
+    })
+
+    // Record successful processing
+    await ctx.runMutation(internal.webhookIdempotency.recordWebhookEvent, {
+      eventId: event.id,
+      source: "stripe",
+      eventType: event.type,
+    })
+  },
+
+  // Handle payment_intent.canceled
+  "payment_intent.canceled": async (ctx, event: Stripe.PaymentIntentCanceledEvent) => {
+    // Check idempotency
+    const alreadyProcessed = await ctx.runQuery(internal.webhookIdempotency.checkWebhookEvent, {
+      eventId: event.id,
+      source: "stripe",
+    })
+
+    if (alreadyProcessed) {
+      return
+    }
+
+    const paymentIntent = event.data.object
+
+    if (isSeatPaymentMetadata(paymentIntent.metadata)) {
+      // Seat destination charges belong to the platform, never a connected account.
+      if (event.account) return
+      await ctx.runMutation(internal.seatPayments.ingestPaymentIntentEvent, {
+        eventId: event.id,
+        eventType: "payment_intent.canceled",
+        paymentIntentId: paymentIntent.id,
+        metadata: paymentIntent.metadata ?? {},
+        failureReason: "Payment was canceled",
+      })
+      return
+    }
+
+    const rental = rentalMetadata(paymentIntent.metadata, event.account)
+    if (rental) {
+      await ctx.runMutation(internal.stripe.ingestRentalPaymentEvent, {
+        eventId: event.id,
+        eventType: event.type,
+        stripePaymentIntentId: paymentIntent.id,
+        currency: paymentIntent.currency,
+        amount: paymentIntent.amount,
+        ...rental,
+      })
+      return
+    }
+
+    // Record successful processing
+    await ctx.runMutation(internal.webhookIdempotency.recordWebhookEvent, {
+      eventId: event.id,
+      source: "stripe",
+      eventType: event.type,
+    })
+  },
+
+  "checkout.session.expired": async (ctx, event: Stripe.CheckoutSessionExpiredEvent) => {
+    const session = event.data.object
+    const rental = rentalMetadata(session.metadata, event.account)
+    if (!rental) return
+    if (session.amount_total == null || !session.currency) {
+      throw new Error("Missing rental checkout total")
+    }
+    await ctx.runMutation(internal.stripe.ingestRentalCheckoutExpired, {
+      ...rental,
+      eventId: event.id,
+      stripeCheckoutSessionId: session.id,
+      amount: session.amount_total,
+      currency: session.currency,
+      mode: session.mode,
+      status: session.status ?? "",
+      paymentStatus: session.payment_status,
+    })
+  },
+
+  // Handle checkout.session.completed
+  "checkout.session.completed": async (ctx, event: Stripe.CheckoutSessionCompletedEvent) => {
+    // Check idempotency
+    const alreadyProcessed = await ctx.runQuery(internal.webhookIdempotency.checkWebhookEvent, {
+      eventId: event.id,
+      source: "stripe",
+    })
+
+    if (alreadyProcessed) {
+      return
+    }
+
+    const session = event.data.object
+    const intentId = stripeObjectId(session.payment_intent)
+    const rental = rentalMetadata(session.metadata, event.account)
+    if (session.mode === "payment" && intentId && rental) {
       if (session.amount_total == null || !session.currency) {
         throw new Error("Missing rental checkout total")
       }
-      await ctx.runMutation(internal.stripe.ingestRentalCheckoutExpired, {
-        ...rental,
-        eventId: event.id,
+      await ctx.runMutation(internal.stripe.bindRentalCheckoutIntent, {
         stripeCheckoutSessionId: session.id,
+        stripePaymentIntentId: intentId,
         amount: session.amount_total,
         currency: session.currency,
-        mode: session.mode,
-        status: session.status ?? "",
-        paymentStatus: session.payment_status,
+        ...rental,
       })
-    },
+    }
 
-    // Handle checkout.session.completed
-    "checkout.session.completed": async (ctx, event: Stripe.CheckoutSessionCompletedEvent) => {
-      // Check idempotency
-      const alreadyProcessed = await ctx.runQuery(internal.webhookIdempotency.checkWebhookEvent, {
-        eventId: event.id,
-        source: "stripe",
-      })
-
-      if (alreadyProcessed) {
-        return
-      }
-
-      const session = event.data.object
-      const intentId = stripeObjectId(session.payment_intent)
-      const rental = rentalMetadata(session.metadata, event.account)
-      if (session.mode === "payment" && intentId && rental) {
-        if (session.amount_total == null || !session.currency) {
-          throw new Error("Missing rental checkout total")
-        }
-        await ctx.runMutation(internal.stripe.bindRentalCheckoutIntent, {
-          stripeCheckoutSessionId: session.id,
-          stripePaymentIntentId: intentId,
-          amount: session.amount_total,
-          currency: session.currency,
-          ...rental,
-        })
-      }
-
-      // Record successful processing
-      await ctx.runMutation(internal.webhookIdempotency.recordWebhookEvent, {
-        eventId: event.id,
-        source: "stripe",
-        eventType: event.type,
-      })
-    },
-
-    // Handle account.updated - updates Stripe Connect account status
-    "account.updated": async (ctx, event: Stripe.AccountUpdatedEvent) => {
-      // Check idempotency
-      const alreadyProcessed = await ctx.runQuery(internal.webhookIdempotency.checkWebhookEvent, {
-        eventId: event.id,
-        source: "stripe",
-      })
-
-      if (alreadyProcessed) {
-        return
-      }
-
-      const account = event.data.object
-
-      // Only process Connect accounts (Express accounts)
-      if (account.type !== "express") {
-        // Record even if skipped to prevent reprocessing
-        await ctx.runMutation(internal.webhookIdempotency.recordWebhookEvent, {
-          eventId: event.id,
-          source: "stripe",
-          eventType: event.type,
-        })
-        return
-      }
-
-      // Find user by Stripe account ID
-      const user = await ctx.runQuery(internal.users.getByStripeAccountId, {
-        stripeAccountId: account.id,
-      })
-
-      const stripeOwner = account.metadata?.renegadeUserId
-      if (!user || (stripeOwner !== undefined && stripeOwner !== user.externalId)) {
-        // Record even if user not found to prevent reprocessing
-        await ctx.runMutation(internal.webhookIdempotency.recordWebhookEvent, {
-          eventId: event.id,
-          source: "stripe",
-          eventType: event.type,
-        })
-        return
-      }
-
-      // Determine account status based on Stripe account state
-      let status: "pending" | "enabled" | "restricted" | "disabled"
-
-      // Check if account is disabled
-      if (account.details_submitted === false || !account.charges_enabled) {
-        status = "pending"
-      } else if (account.payouts_enabled === false) {
-        // Account can accept charges but not payouts yet
-        status = "pending"
-      } else if (account.charges_enabled && account.payouts_enabled && account.details_submitted) {
-        // Check for blocking restrictions (currently_due, past_due, or disabled_reason)
-        // Note: eventually_due requirements are normal and don't block functionality
-        const hasBlockingRestrictions =
-          (account.requirements?.currently_due && account.requirements.currently_due.length > 0) ||
-          (account.requirements?.past_due && account.requirements.past_due.length > 0) ||
-          (account.requirements?.disabled_reason !== null &&
-            account.requirements?.disabled_reason !== undefined)
-
-        if (hasBlockingRestrictions) {
-          status = "restricted"
-        } else {
-          // Account is fully enabled - charges and payouts enabled, details submitted
-          // eventually_due requirements are normal and don't affect enabled status
-          status = "enabled"
-        }
-      } else {
-        status = "pending"
-      }
-
-      // Update the status in Convex
-      await ctx.runMutation(internal.users.updateStripeAccountStatus, {
-        stripeAccountId: account.id,
-        status,
-      })
-
-      // Record successful processing
-      await ctx.runMutation(internal.webhookIdempotency.recordWebhookEvent, {
-        eventId: event.id,
-        source: "stripe",
-        eventType: event.type,
-      })
-    },
-
-    "invoice.paid": reconcileInvoiceWebhook,
-    "invoice.payment_failed": reconcileInvoiceWebhook,
-    "invoice.voided": reconcileInvoiceWebhook,
-    "invoice.marked_uncollectible": reconcileInvoiceWebhook,
+    // Record successful processing
+    await ctx.runMutation(internal.webhookIdempotency.recordWebhookEvent, {
+      eventId: event.id,
+      source: "stripe",
+      eventType: event.type,
+    })
   },
-})
+
+  // Handle account.updated - updates Stripe Connect account status
+  "account.updated": async (ctx, event: Stripe.AccountUpdatedEvent) => {
+    // Check idempotency
+    const alreadyProcessed = await ctx.runQuery(internal.webhookIdempotency.checkWebhookEvent, {
+      eventId: event.id,
+      source: "stripe",
+    })
+
+    if (alreadyProcessed) {
+      return
+    }
+
+    if (!event.account) throw new Error("Missing Connect account")
+    await ctx.runAction(internal.stripe.reconcileConnectedAccount, {
+      stripeAccountId: event.account,
+    })
+
+    // Record successful processing
+    await ctx.runMutation(internal.webhookIdempotency.recordWebhookEvent, {
+      eventId: event.id,
+      source: "stripe",
+      eventType: event.type,
+    })
+  },
+
+  "invoice.paid": reconcileInvoiceWebhook,
+  "invoice.payment_failed": reconcileInvoiceWebhook,
+  "invoice.voided": reconcileInvoiceWebhook,
+  "invoice.marked_uncollectible": reconcileInvoiceWebhook,
+}
+registerScopedStripeWebhook(http, "platform", stripeEventHandlers)
+registerScopedStripeWebhook(http, "legacyConnect", stripeEventHandlers)
+registerScopedStripeWebhook(http, "connect", stripeEventHandlers)
 
 // Add this route to your http router (after the Stripe route)
 http.route({
