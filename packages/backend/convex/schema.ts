@@ -1,8 +1,31 @@
 // convex/schema.ts
 import { defineSchema, defineTable } from "convex/server"
 import { v } from "convex/values"
+import { refundObservation, settlementEvidence } from "./rentalSettlementValidators"
 
 export default defineSchema({
+  // Separate from users so a deleted identity cannot be recreated by delayed
+  // provider events, cached clients, or an old in-flight action.
+  accountDeletionIntents: defineTable({
+    subject: v.string(),
+    status: v.union(v.literal("locked"), v.literal("provider_deleted"), v.literal("completed")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    providerDeletedAt: v.optional(v.number()),
+    completedAt: v.optional(v.number()),
+    lastFailure: v.optional(v.literal("provider_unconfirmed")),
+  }).index("by_subject", ["subject"]),
+
+  accountOperations: defineTable({
+    key: v.string(),
+    subject: v.string(),
+    status: v.union(v.literal("active"), v.literal("completed")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_subject", ["subject"])
+    .index("by_key", ["key"]),
+
   users: defineTable({
     externalId: v.string(),
     name: v.string(),
@@ -271,6 +294,8 @@ export default defineSchema({
     totalDays: v.number(),
     dailyRate: v.number(),
     totalAmount: v.number(),
+    // Server-derived immutable rental pricing; absent on historical requests.
+    quoteVersion: v.optional(v.literal(1)),
     status: v.union(
       v.literal("pending"),
       v.literal("approved"),
@@ -331,13 +356,20 @@ export default defineSchema({
     renterId: v.string(),
     ownerId: v.string(),
     conversationType: v.optional(
-      v.union(v.literal("rental"), v.literal("team"), v.literal("driver"), v.literal("coaching"))
+      v.union(
+        v.literal("rental"),
+        v.literal("team"),
+        v.literal("driver"),
+        v.literal("coaching"),
+        v.literal("seat")
+      )
     ),
     teamId: v.optional(v.id("teams")),
     driverProfileId: v.optional(v.id("driverProfiles")),
     coachProfileId: v.optional(v.id("coachProfiles")),
     reservationId: v.optional(v.id("reservations")),
     coachingBookingId: v.optional(v.id("coachingBookings")),
+    seatBookingId: v.optional(v.id("seatBookings")),
     lastMessageAt: v.number(),
     lastMessageText: v.optional(v.string()),
     lastMessageSenderId: v.optional(v.string()),
@@ -358,7 +390,9 @@ export default defineSchema({
     .index("by_owner_active", ["ownerId", "isActive"])
     .index("by_participants", ["renterId", "ownerId"])
     .index("by_last_message", ["lastMessageAt"])
-    .index("by_reservation", ["reservationId"]),
+    .index("by_reservation", ["reservationId"])
+    .index("by_coaching_booking", ["coachingBookingId"])
+    .index("by_seat_booking", ["seatBookingId"]),
 
   messages: defineTable({
     conversationId: v.id("conversations"),
@@ -725,6 +759,7 @@ export default defineSchema({
     stripeAccountId: v.optional(v.string()), // Owner's Connect account ID
     capturedAmount: v.optional(v.number()), // Actual Stripe charge amount including processing
     refundSyncVersion: v.optional(v.number()),
+    settlementReviewStatus: v.optional(v.union(v.literal("held"), v.literal("resolved"))),
     refundAmount: v.optional(v.number()),
     refundPercentage: v.optional(v.number()), // Percentage of original amount refunded (0-100)
     refundPolicy: v.optional(
@@ -752,6 +787,54 @@ export default defineSchema({
     .index("by_stripe_checkout_session", ["stripeCheckoutSessionId"])
     .index("by_stripe_customer", ["stripeCustomerId"])
     .index("by_owner_status", ["ownerId", "status"]),
+
+  rentalSettlementReviews: defineTable({
+    paymentId: v.id("payments"),
+    reservationId: v.id("reservations"),
+    renterId: v.string(),
+    ownerId: v.string(),
+    refundId: v.string(),
+    status: v.union(v.literal("held"), v.literal("resolved")),
+    customerRefundStatus: v.string(),
+    observation: refundObservation,
+    revision: v.number(),
+    latestEvidenceId: v.optional(v.id("rentalSettlementEvidence")),
+    resolution: v.optional(
+      v.object({
+        operatorId: v.string(),
+        reference: v.string(),
+        notes: v.string(),
+        resolvedAt: v.number(),
+        evidenceId: v.id("rentalSettlementEvidence"),
+        compensatingTransferIds: v.array(v.string()),
+      })
+    ),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_refund", ["refundId"])
+    .index("by_payment", ["paymentId"])
+    .index("by_reservation", ["reservationId"])
+    .index("by_status", ["status"])
+    .index("by_renter_status", ["renterId", "status"])
+    .index("by_owner_status", ["ownerId", "status"]),
+  rentalSettlementEvidence: defineTable({
+    reviewId: v.id("rentalSettlementReviews"),
+    paymentId: v.id("payments"),
+    refundId: v.string(),
+    fingerprint: v.string(),
+    evidence: settlementEvidence,
+  })
+    .index("by_review", ["reviewId"])
+    .index("by_fingerprint", ["reviewId", "fingerprint"]),
+  rentalSettlementObservations: defineTable({
+    paymentId: v.id("payments"),
+    refundId: v.string(),
+    observation: refundObservation,
+    observedAt: v.number(),
+  })
+    .index("by_refund", ["refundId"])
+    .index("by_payment", ["paymentId"]),
 
   // Disputes table
   disputes: defineTable({
@@ -853,7 +936,12 @@ export default defineSchema({
       v.literal("invoice"),
       v.literal("coach_profile"),
       v.literal("coaching_booking"),
-      v.literal("coaching_review")
+      v.literal("coaching_review"),
+      v.literal("race_series"),
+      v.literal("race_event"),
+      v.literal("team_car"),
+      v.literal("seat_offering"),
+      v.literal("seat_booking")
     ),
     entityId: v.string(), // ID of the entity being changed
     action: v.string(), // e.g., "status_change", "create", "update", "delete"
@@ -910,7 +998,14 @@ export default defineSchema({
       v.literal("coaching_approved"),
       v.literal("coaching_declined"),
       v.literal("coaching_cancelled"),
-      v.literal("coaching_completed")
+      v.literal("coaching_completed"),
+      v.literal("seat_request_pending"),
+      v.literal("seat_approved"),
+      v.literal("seat_declined"),
+      v.literal("seat_cancelled"),
+      v.literal("seat_waitlisted"),
+      v.literal("seat_spot_available"),
+      v.literal("seat_completed")
     ),
     title: v.string(),
     message: v.string(),
@@ -1118,7 +1213,8 @@ export default defineSchema({
     .index("by_track", ["trackId"])
     .index("by_created", ["createdAt"])
     .index("by_featured", ["featuredUntil"])
-    .index("by_author_created", ["authorId", "createdAt"]),
+    .index("by_author_created", ["authorId", "createdAt"])
+    .index("by_team_created", ["teamId", "createdAt"]),
 
   postReactions: defineTable({
     postId: v.id("posts"),
@@ -1197,6 +1293,7 @@ export default defineSchema({
     .index("by_actor", ["actorId"])
     .index("by_created", ["createdAt"])
     .index("by_actor_created", ["actorId", "createdAt"])
+    .index("by_target_created", ["targetType", "targetId", "createdAt"])
     .index("by_visibility_created", ["visibility", "createdAt"]),
 
   // ============================================================
@@ -1271,6 +1368,9 @@ export default defineSchema({
       v.union(v.literal("stripe_card"), v.literal("stripe_ach"), v.literal("external"))
     ),
     amountDue: v.optional(v.number()),
+    /** Compare-and-retry version for Stripe reads applied outside a transaction. */
+    paymentSyncVersion: v.optional(v.number()),
+    paymentFailureReason: v.optional(v.string()),
     /** Snapshot of Renegade platform fee in cents (not the card processing pass-through). */
     platformFee: v.optional(v.number()),
     /** Estimated Stripe card fee paid by the payer, in cents. ACH payments store 0. */
@@ -1435,25 +1535,51 @@ export default defineSchema({
   // ============================================================
 
   /** A race-monitor (or imported) race event. */
-  raceEvents: defineTable({
-    /** External event ID from race-monitor. */
-    raceMonitorEventId: v.optional(v.string()),
-    name: v.string(),
-    series: v.optional(v.string()),
-    trackId: v.optional(v.id("tracks")),
-    trackName: v.optional(v.string()),
-    location: v.optional(v.string()),
-    startDate: v.string(),
-    endDate: v.optional(v.string()),
-    source: v.union(v.literal("race_monitor"), v.literal("manual"), v.literal("iracing")),
-    isVerified: v.boolean(),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-  })
+  // Preserve legacy imported events and endurance calendar events without migration.
+  raceEvents: defineTable(
+    v.union(
+      v.object({
+        /** External event ID from race-monitor. */
+        raceMonitorEventId: v.optional(v.string()),
+        name: v.string(),
+        series: v.optional(v.string()),
+        trackId: v.optional(v.id("tracks")),
+        trackName: v.optional(v.string()),
+        location: v.optional(v.string()),
+        startDate: v.string(),
+        endDate: v.optional(v.string()),
+        source: v.union(v.literal("race_monitor"), v.literal("manual"), v.literal("iracing")),
+        isVerified: v.boolean(),
+        createdAt: v.number(),
+        updatedAt: v.number(),
+      }),
+      v.object({
+        seriesId: v.id("raceSeries"),
+        name: v.string(),
+        description: v.optional(v.string()),
+        startDate: v.string(), // YYYY-MM-DD
+        endDate: v.string(), // YYYY-MM-DD
+        trackId: v.optional(v.id("tracks")),
+        trackName: v.optional(v.string()), // free-text fallback when no catalog track
+        trackLocation: v.optional(v.string()),
+        eventUrl: v.optional(v.string()),
+        isActive: v.boolean(),
+        createdByUserId: v.string(),
+        createdByTeamId: v.optional(v.id("teams")),
+        createdAt: v.number(),
+        updatedAt: v.number(),
+      })
+    )
+  )
     .index("by_race_monitor", ["raceMonitorEventId"])
     .index("by_track", ["trackId"])
     .index("by_start_date", ["startDate"])
-    .index("by_source", ["source"]),
+    .index("by_source", ["source"])
+    .index("by_series", ["seriesId"])
+    .index("by_series_active", ["seriesId", "isActive"])
+    .index("by_active", ["isActive"])
+    .index("by_created_by_user", ["createdByUserId"])
+    .index("by_created_by_team", ["createdByTeamId"]),
 
   /** A driver/team result at a race event. */
   raceResults: defineTable({
@@ -1796,6 +1922,217 @@ export default defineSchema({
     .index("by_dispute_status", ["disputeStatus"])
     .index("by_stripe_checkout_session", ["stripeCheckoutSessionId"])
     .index("by_stripe_payment_intent", ["stripePaymentIntentId"]),
+
+  // Endurance seat rentals: RaceSeries → RaceEvent → TeamCar → SeatOffering → SeatBooking.
+  // Parallel to coaching (not vehicles/reservations). Stripe IDs live on seatBookings.
+  // Request opens an in-app seat conversation immediately; public listings omit contact.
+  raceSeries: defineTable({
+    name: v.string(),
+    description: v.optional(v.string()),
+    organizer: v.optional(v.string()),
+    website: v.optional(v.string()),
+    logoUrl: v.optional(v.string()),
+    isActive: v.boolean(),
+    // Public team pages hide this series' reliability stats when false.
+    // Missing means shown (existing series stay public).
+    showPublicResults: v.optional(v.boolean()),
+    // Optional override of DEFAULT_DNF_LAP_FRACTION (0–1). Missing uses 0.7.
+    dnfLapThreshold: v.optional(v.number()),
+    createdByUserId: v.string(),
+    createdByTeamId: v.optional(v.id("teams")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_active", ["isActive"])
+    .index("by_created_by_user", ["createdByUserId"])
+    .index("by_created_by_team", ["createdByTeamId"]),
+
+  teamCars: defineTable({
+    teamId: v.id("teams"),
+    raceEventId: v.id("raceEvents"),
+    // Stripe Connect payouts go to this user (typically the team owner).
+    hostUserId: v.string(),
+    carNumber: v.optional(v.string()),
+    carClass: v.optional(v.string()), // e.g. GT4, TCR, LMP3
+    make: v.string(),
+    model: v.string(),
+    year: v.optional(v.number()),
+    description: v.optional(v.string()),
+    isActive: v.boolean(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_team", ["teamId"])
+    .index("by_event", ["raceEventId"])
+    .index("by_team_event", ["teamId", "raceEventId"])
+    .index("by_host", ["hostUserId"])
+    .index("by_event_active", ["raceEventId", "isActive"]),
+
+  seatOfferings: defineTable({
+    teamCarId: v.id("teamCars"),
+    raceEventId: v.id("raceEvents"),
+    teamId: v.id("teams"),
+    hostUserId: v.string(),
+    title: v.string(),
+    description: v.optional(v.string()),
+    spotCount: v.number(), // N countable seats; never trust client remaining
+    priceCents: v.number(), // full seat price at listing time
+    depositCents: v.number(),
+    experienceLevel: v.optional(
+      v.union(
+        v.literal("beginner"),
+        v.literal("intermediate"),
+        v.literal("advanced"),
+        v.literal("professional")
+      )
+    ),
+    stintNotes: v.optional(v.string()),
+    isActive: v.boolean(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_team_car", ["teamCarId"])
+    .index("by_event", ["raceEventId"])
+    .index("by_team", ["teamId"])
+    .index("by_host", ["hostUserId"])
+    .index("by_event_active", ["raceEventId", "isActive"])
+    .index("by_team_active", ["teamId", "isActive"]),
+
+  seatBookings: defineTable({
+    seatOfferingId: v.id("seatOfferings"),
+    teamCarId: v.id("teamCars"),
+    raceEventId: v.id("raceEvents"),
+    teamId: v.id("teams"),
+    hostUserId: v.string(),
+    driverId: v.string(),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("waitlisted"),
+      v.literal("approved"),
+      v.literal("deposit_paid"),
+      v.literal("confirmed"),
+      v.literal("cancelled"),
+      v.literal("declined"),
+      v.literal("expired"),
+      v.literal("completed")
+    ),
+    // Snapshotted at request time — later listing edits do not change this booking.
+    priceCents: v.number(),
+    depositCents: v.number(),
+    balanceCents: v.number(),
+    platformFeePercentage: v.number(),
+    availableStartDate: v.string(),
+    availableEndDate: v.string(),
+    driverExperience: v.union(
+      v.literal("beginner"),
+      v.literal("intermediate"),
+      v.literal("advanced"),
+      v.literal("professional")
+    ),
+    budgetBand: v.string(),
+    seriesClass: v.string(),
+    whyBuying: v.string(),
+    driverMessage: v.optional(v.string()),
+    teamMessage: v.optional(v.string()),
+    cancellationReason: v.optional(v.string()),
+    approvedAt: v.optional(v.number()),
+    waitlistedAt: v.optional(v.number()),
+    depositPaidAt: v.optional(v.number()),
+    confirmedAt: v.optional(v.number()),
+    completedAt: v.optional(v.number()),
+    // Stripe Checkout state lives on this row (not payments.reservationId).
+    depositPaymentStatus: v.optional(
+      v.union(v.literal("pending"), v.literal("paid"), v.literal("failed"), v.literal("refunded"))
+    ),
+    balancePaymentStatus: v.optional(
+      v.union(v.literal("pending"), v.literal("paid"), v.literal("failed"), v.literal("refunded"))
+    ),
+    stripeDepositCheckoutSessionId: v.optional(v.string()),
+    stripeDepositPaymentIntentId: v.optional(v.string()),
+    stripeBalanceCheckoutSessionId: v.optional(v.string()),
+    stripeBalancePaymentIntentId: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_offering", ["seatOfferingId"])
+    .index("by_offering_status", ["seatOfferingId", "status"])
+    .index("by_driver", ["driverId"])
+    .index("by_driver_status", ["driverId", "status"])
+    .index("by_driver_offering", ["driverId", "seatOfferingId"])
+    .index("by_host", ["hostUserId"])
+    .index("by_host_status", ["hostUserId", "status"])
+    .index("by_team", ["teamId"])
+    .index("by_event", ["raceEventId"])
+    .index("by_status", ["status"])
+    .index("by_stripe_deposit_checkout_session", ["stripeDepositCheckoutSessionId"])
+    .index("by_stripe_deposit_payment_intent", ["stripeDepositPaymentIntentId"])
+    .index("by_stripe_balance_checkout_session", ["stripeBalanceCheckoutSessionId"])
+    .index("by_stripe_balance_payment_intent", ["stripeBalancePaymentIntentId"]),
+
+  // Imported timing results. Separate from seat-calendar `raceEvents`.
+  timingSessions: defineTable({
+    source: v.union(v.literal("speedhive"), v.literal("csv")),
+    seriesId: v.id("raceSeries"),
+    externalEventId: v.optional(v.string()),
+    externalSessionId: v.optional(v.string()),
+    eventName: v.string(),
+    sessionName: v.string(),
+    trackName: v.string(),
+    date: v.string(),
+    resultStatus: v.union(v.literal("official"), v.literal("provisional")),
+    sourceUrl: v.string(),
+    importedAt: v.number(),
+    importedBy: v.string(),
+    raceEventId: v.optional(v.id("raceEvents")),
+  })
+    .index("by_source_external_session", ["source", "externalSessionId"])
+    .index("by_series", ["seriesId"])
+    .index("by_race_event", ["raceEventId"]),
+
+  sessionEntries: defineTable({
+    sessionId: v.id("timingSessions"),
+    seriesId: v.id("raceSeries"),
+    carNumber: v.string(),
+    teamNameRaw: v.string(),
+    vehicleRaw: v.optional(v.string()),
+    class: v.string(),
+    posOverall: v.number(),
+    posInClass: v.number(),
+    laps: v.number(),
+    statusRaw: v.string(),
+    transponder: v.optional(v.string()),
+    classStarters: v.number(),
+    classWinnerLaps: v.number(),
+    finishPctile: v.number(),
+    lapsPctClassWinner: v.number(),
+    isStart: v.boolean(),
+    isDnf: v.boolean(),
+    dnfReason: v.optional(v.union(v.literal("status"), v.literal("laps"))),
+    teamId: v.optional(v.id("teams")),
+  })
+    .index("by_session", ["sessionId"])
+    .index("by_team", ["teamId"])
+    .index("by_series_car", ["seriesId", "carNumber"]),
+
+  teamResultLinks: defineTable({
+    teamId: v.id("teams"),
+    seriesId: v.id("raceSeries"),
+    carNumber: v.string(),
+    nameAliases: v.array(v.string()),
+    transponders: v.array(v.string()),
+    // Entry ids the team confirmed or rejected. Re-import updates entries in
+    // place so these ids stay valid.
+    confirmedEntryIds: v.optional(v.array(v.id("sessionEntries"))),
+    rejectedEntryIds: v.optional(v.array(v.id("sessionEntries"))),
+    status: v.union(v.literal("pending"), v.literal("verified"), v.literal("rejected")),
+    verifiedBy: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_team", ["teamId"])
+    .index("by_team_series", ["teamId", "seriesId"])
+    .index("by_status", ["status"])
+    .index("by_series_car", ["seriesId", "carNumber"]),
 
   // Webhook idempotency tracking
   webhookEvents: defineTable({

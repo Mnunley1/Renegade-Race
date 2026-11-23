@@ -2,9 +2,9 @@ import { Badge } from "@workspace/ui/components/badge"
 import { Card, CardContent } from "@workspace/ui/components/card"
 import { cn } from "@workspace/ui/lib/utils"
 import { Award, MapPin, User } from "lucide-react"
-import Image from "next/image"
 import Link from "next/link"
 import type { ComponentProps } from "react"
+import Image from "@/components/public-image"
 
 interface DriverCardProps extends ComponentProps<"div"> {
   id: string

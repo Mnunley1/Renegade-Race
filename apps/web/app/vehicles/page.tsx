@@ -9,11 +9,18 @@ import { useDebounce } from "@/hooks/useDebounce"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { formatDateToISO, parseLocalDate } from "@/lib/date-utils"
+import { formatVehicleTitle } from "@/lib/vehicle-year"
 import { ActiveFilterBadges } from "./active-filter-badges"
 import { CompareBar } from "./compare-bar"
 import { CompareModal } from "./compare-modal"
 import { FilterPanel } from "./filter-panel"
 import { MobileFilters } from "./mobile-filters"
+import {
+  matchesPriceBounds,
+  parsePriceRange,
+  priceFilterDollars,
+  readPriceFilter,
+} from "./price-filter"
 import { RecentlyViewed } from "./recently-viewed"
 import { SearchHero } from "./search-hero"
 import type { FilterActions, FilterState, SortOption, VehicleItem, ViewMode } from "./types"
@@ -72,7 +79,7 @@ function VehiclesPageContent() {
       selectedMake: searchParams.get("make") || storedFilters?.selectedMake || "all",
       selectedModel: searchParams.get("model") || storedFilters?.selectedModel || "all",
       selectedDriveType: searchParams.get("drive") || storedFilters?.selectedDriveType || "all",
-      selectedPriceRange: searchParams.get("price") || storedFilters?.selectedPriceRange || "any",
+      selectedPriceRange: readPriceFilter(searchParams, storedFilters?.selectedPriceRange),
       minHorsepower: searchParams.get("minHp") || storedFilters?.minHorsepower || "",
       maxHorsepower: searchParams.get("maxHp") || storedFilters?.maxHorsepower || "",
       selectedTransmission:
@@ -382,8 +389,9 @@ function VehiclesPageContent() {
     if (selectedDriveType !== "all") {
       params.set("drive", selectedDriveType)
     }
-    if (selectedPriceRange !== "any") {
-      params.set("price", selectedPriceRange)
+    const dollarPriceRange = priceFilterDollars(selectedPriceRange)
+    if (dollarPriceRange) {
+      params.set("priceUsd", dollarPriceRange)
     }
     if (minHorsepower) {
       params.set("minHp", minHorsepower)
@@ -499,30 +507,8 @@ function VehiclesPageContent() {
   // Data queries
   const tracksData = useQuery(api.tracks.getAll, {})
 
-  // Translate the price range chip ("$100-$200", "$500+", or "any") into bounds
-  const priceBounds = useMemo<{ min?: number; max?: number }>(() => {
-    if (customPriceRange) {
-      return { min: customPriceRange[0], max: customPriceRange[1] }
-    }
-    if (selectedPriceRange === "any") {
-      return {}
-    }
-    if (selectedPriceRange.endsWith("+")) {
-      const min = Number.parseInt(selectedPriceRange.replace(/\D/g, ""), 10)
-      return Number.isFinite(min) ? { min } : {}
-    }
-    const [rawMin, rawMax] = selectedPriceRange
-      .split("-")
-      .map((p: string) => Number.parseInt(p.replace(/\D/g, ""), 10))
-    const bounds: { min?: number; max?: number } = {}
-    if (Number.isFinite(rawMin)) {
-      bounds.min = rawMin
-    }
-    if (Number.isFinite(rawMax)) {
-      bounds.max = rawMax
-    }
-    return bounds
-  }, [customPriceRange, selectedPriceRange])
+  // Comparisons stay in integer cents; only editable fields and new URLs use dollars.
+  const priceBounds = useMemo(() => parsePriceRange(selectedPriceRange), [selectedPriceRange])
 
   const parsedInt = (s: string) => {
     const n = Number.parseInt(s, 10)
@@ -610,7 +596,7 @@ function VehiclesPageContent() {
         id: vehicle._id,
         image: "",
         imageKey: primaryImage?.r2Key ?? undefined,
-        name: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
+        name: formatVehicleTitle(vehicle),
         year: vehicle.year,
         make: vehicle.make,
         model: vehicle.model,
@@ -693,10 +679,7 @@ function VehiclesPageContent() {
       ) {
         return false
       }
-      if (priceBounds.min !== undefined && vehicle.pricePerDay < priceBounds.min) {
-        return false
-      }
-      if (priceBounds.max !== undefined && vehicle.pricePerDay > priceBounds.max) {
+      if (!matchesPriceBounds(vehicle.pricePerDay, priceBounds)) {
         return false
       }
       if (minRating && minRating !== "any" && vehicle.rating < Number.parseFloat(minRating)) {
@@ -746,6 +729,10 @@ function VehiclesPageContent() {
   )
   const hasMore = visibleCount < filteredVehicles.length
   const isLoadingMore = false
+  const isLoading =
+    vehiclesData === undefined ||
+    tracksData === undefined ||
+    (!!minRating && minRating !== "any" && vehiclesData.length > 0 && vehicleStats === undefined)
 
   // Reset to the first page whenever the filtered set changes due to a filter or
   // sort change (not when more data merely streams in from Convex).
@@ -961,7 +948,7 @@ function VehiclesPageContent() {
               filteredVehicles={filteredVehicles}
               filterState={filterState}
               hasMore={hasMore}
-              isLoading={vehiclesData === undefined || tracksData === undefined}
+              isLoading={isLoading}
               isLoadingMore={isLoadingMore}
               itemsPerPage={itemsPerPage}
               loadMore={loadMore}
@@ -971,6 +958,7 @@ function VehiclesPageContent() {
                   activeFiltersCount={activeFiltersCount}
                   filteredCount={filteredVehicles.length}
                   filters={filterState}
+                  isLoading={isLoading}
                   tracks={tracks}
                   vehicles={vehicles}
                 />
@@ -980,7 +968,6 @@ function VehiclesPageContent() {
               setSortBy={(s) => setSortBy(s as SortOption)}
               setViewMode={setViewMode}
               sortBy={sortBy}
-              vehicles={vehicles}
               viewMode={viewMode}
             />
           </div>

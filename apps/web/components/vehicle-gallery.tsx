@@ -1,11 +1,11 @@
 "use client"
 
 import { Button } from "@workspace/ui/components/button"
-import { Dialog, DialogContent } from "@workspace/ui/components/dialog"
+import { Dialog, DialogContent, DialogTitle } from "@workspace/ui/components/dialog"
 import { cn } from "@workspace/ui/lib/utils"
 import { Car, ChevronLeft, ChevronRight, Grid, X } from "lucide-react"
-import Image from "next/image"
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
+import Image from "@/components/public-image"
 import { r2Url } from "@/lib/r2-url"
 
 type VehicleGalleryProps = {
@@ -14,12 +14,22 @@ type VehicleGalleryProps = {
 }
 
 export function VehicleGallery({ images, vehicleName }: VehicleGalleryProps) {
+  const sources = images.map(r2Url).filter((url): url is string => !!url)
+  // A changed source list starts a fresh gallery, including its selected photo.
+  return (
+    <ResolvedGallery images={sources} key={JSON.stringify(sources)} vehicleName={vehicleName} />
+  )
+}
+
+function ResolvedGallery({ images, vehicleName }: VehicleGalleryProps) {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
   const [isOpen, setIsOpen] = useState(false)
+  const opener = useRef<HTMLButtonElement | null>(null)
 
-  const validImages = images.filter((img) => img && img.trim() !== "")
+  const validImages = images
 
-  const openGallery = useCallback((index: number) => {
+  const openGallery = useCallback((index: number, trigger: HTMLButtonElement) => {
+    opener.current = trigger
     setSelectedIndex(index)
     setIsOpen(true)
   }, [])
@@ -50,9 +60,8 @@ export function VehicleGallery({ images, vehicleName }: VehicleGalleryProps) {
     }
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        closeGallery()
-      } else if (e.key === "ArrowLeft") {
+      if (validImages.length < 2) return
+      if (e.key === "ArrowLeft") {
         e.preventDefault()
         goToPrevious()
       } else if (e.key === "ArrowRight") {
@@ -63,7 +72,7 @@ export function VehicleGallery({ images, vehicleName }: VehicleGalleryProps) {
 
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [isOpen, selectedIndex, closeGallery, goToPrevious, goToNext])
+  }, [isOpen, selectedIndex, validImages.length, goToPrevious, goToNext])
 
   // No images placeholder
   if (validImages.length === 0) {
@@ -87,150 +96,162 @@ export function VehicleGallery({ images, vehicleName }: VehicleGalleryProps) {
     )
   }
 
-  // Single image
-  if (validImages.length === 1) {
-    return (
-      <div className="relative mb-8 w-full">
-        <div className="relative aspect-[16/9] w-full overflow-hidden rounded-xl">
-          <button
-            aria-label={`View ${vehicleName} in full screen`}
-            className={cn(
-              "relative size-full cursor-pointer",
-              "focus:outline-none focus:ring-2 focus:ring-ring"
-            )}
-            onClick={() => openGallery(0)}
-            type="button"
-          >
-            <Image
-              alt={`${vehicleName}`}
-              className="size-full object-cover"
-              fill
-              priority
-              quality={85}
-              sizes="100vw"
-              src={r2Url(validImages[0] as string)}
-            />
-          </button>
-        </div>
-      </div>
-    )
-  }
-
   // Multi-image: Airbnb-style hero grid
   const gridImages = validImages.slice(0, 5)
   const remainingCount = validImages.length - 5
 
   return (
     <>
-      {/* Hero Grid */}
-      <div className="relative mb-8 w-full">
-        <div
-          className={cn(
-            "grid gap-2 overflow-hidden rounded-xl",
-            gridImages.length >= 5
-              ? "grid-cols-4 grid-rows-2"
-              : gridImages.length >= 3
-                ? "grid-cols-3 grid-rows-2"
-                : "grid-cols-2"
-          )}
-          style={{ height: "clamp(300px, 50vw, 520px)" }}
-        >
-          {/* Main large image */}
-          <button
-            aria-label={`View ${vehicleName} image 1 in full screen`}
-            className={cn(
-              "relative overflow-hidden",
-              "cursor-pointer transition-opacity hover:opacity-95",
-              "focus:outline-none focus:ring-2 focus:ring-ring",
-              "focus:ring-inset",
-              gridImages.length >= 5
-                ? "col-span-2 row-span-2"
-                : gridImages.length >= 3
-                  ? "col-span-2 row-span-2"
-                  : "row-span-1"
-            )}
-            onClick={() => openGallery(0)}
-            type="button"
-          >
-            <Image
-              alt={`${vehicleName} - Main`}
-              className="size-full object-cover"
-              fill
-              priority
-              quality={85}
-              sizes="(max-width: 768px) 100vw, 60vw"
-              src={r2Url(validImages[0] as string)}
-            />
-          </button>
-
-          {/* Secondary images */}
-          {gridImages.slice(1).map((image, index) => {
-            const realIndex = index + 1
-            const isLast = realIndex === gridImages.length - 1 && remainingCount > 0
-            return (
+      {validImages.length === 1 ? (
+        <div className="relative mb-8 w-full">
+          <div className="relative aspect-[16/9] w-full overflow-hidden rounded-xl">
+            <button
+              aria-label={`View ${vehicleName} in full screen`}
+              className={cn(
+                "relative size-full cursor-pointer",
+                "focus:outline-none focus:ring-2 focus:ring-ring"
+              )}
+              onClick={(event) => openGallery(0, event.currentTarget)}
+              type="button"
+            >
+              <Image
+                alt={`${vehicleName}`}
+                className="size-full object-cover"
+                fill
+                priority
+                quality={85}
+                sizes="100vw"
+                src={validImages[0]}
+              />
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Hero Grid */}
+          <div className="relative mb-8 w-full">
+            <div
+              className={cn(
+                "grid gap-2 overflow-hidden rounded-xl",
+                gridImages.length >= 5
+                  ? "grid-cols-4 grid-rows-2"
+                  : gridImages.length >= 3
+                    ? "grid-cols-3 grid-rows-2"
+                    : "grid-cols-2"
+              )}
+              style={{ height: "clamp(300px, 50vw, 520px)" }}
+            >
+              {/* Main large image */}
               <button
-                aria-label={`View ${vehicleName} image ${realIndex + 1} in full screen`}
+                aria-label={`View ${vehicleName} image 1 in full screen`}
                 className={cn(
                   "relative overflow-hidden",
                   "cursor-pointer transition-opacity hover:opacity-95",
                   "focus:outline-none focus:ring-2 focus:ring-ring",
-                  "focus:ring-inset"
+                  "focus:ring-inset",
+                  gridImages.length >= 5
+                    ? "col-span-2 row-span-2"
+                    : gridImages.length >= 3
+                      ? "col-span-2 row-span-2"
+                      : "row-span-1"
                 )}
-                key={realIndex}
-                onClick={() => openGallery(realIndex)}
+                onClick={(event) => openGallery(0, event.currentTarget)}
                 type="button"
               >
                 <Image
-                  alt={`${vehicleName} - Image ${realIndex + 1}`}
+                  alt={`${vehicleName} - Main`}
                   className="size-full object-cover"
                   fill
-                  quality={75}
-                  sizes="(max-width: 768px) 50vw, 25vw"
-                  src={r2Url(image)}
+                  priority
+                  quality={85}
+                  sizes="(max-width: 768px) 100vw, 60vw"
+                  src={validImages[0]}
                 />
-                {isLast && (
-                  <div
-                    className={cn(
-                      "absolute inset-0 flex items-center justify-center",
-                      "bg-black/40 backdrop-blur-[2px]"
-                    )}
-                  >
-                    <span className="font-semibold text-lg text-white">+{remainingCount} more</span>
-                  </div>
-                )}
               </button>
-            )
-          })}
-        </div>
 
-        {/* Show all photos button */}
-        {validImages.length > 2 && (
-          <Button
-            className={cn(
-              "absolute right-4 bottom-4",
-              "bg-white/90 text-foreground shadow-md backdrop-blur-sm",
-              "hover:bg-white"
+              {/* Secondary images */}
+              {gridImages.slice(1).map((image, index) => {
+                const realIndex = index + 1
+                const isLast = realIndex === gridImages.length - 1 && remainingCount > 0
+                return (
+                  <button
+                    aria-label={`View ${vehicleName} image ${realIndex + 1} in full screen`}
+                    className={cn(
+                      "relative overflow-hidden",
+                      "cursor-pointer transition-opacity hover:opacity-95",
+                      "focus:outline-none focus:ring-2 focus:ring-ring",
+                      "focus:ring-inset"
+                    )}
+                    key={realIndex}
+                    onClick={(event) => openGallery(realIndex, event.currentTarget)}
+                    type="button"
+                  >
+                    <Image
+                      alt={`${vehicleName} - Image ${realIndex + 1}`}
+                      className="size-full object-cover"
+                      fill
+                      quality={75}
+                      sizes="(max-width: 768px) 50vw, 25vw"
+                      src={image}
+                    />
+                    {isLast && (
+                      <div
+                        className={cn(
+                          "absolute inset-0 flex items-center justify-center",
+                          "bg-black/40 backdrop-blur-[2px]"
+                        )}
+                      >
+                        <span className="font-semibold text-lg text-white">
+                          +{remainingCount} more
+                        </span>
+                      </div>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Show all photos button */}
+            {validImages.length > 2 && (
+              <Button
+                className={cn(
+                  "absolute right-4 bottom-4",
+                  "bg-white/90 text-foreground shadow-md backdrop-blur-sm",
+                  "hover:bg-white"
+                )}
+                onClick={(event) => openGallery(0, event.currentTarget)}
+                size="sm"
+                variant="outline"
+              >
+                <Grid className="mr-2 size-4" />
+                Show all {validImages.length} photos
+              </Button>
             )}
-            onClick={() => openGallery(0)}
-            size="sm"
-            variant="outline"
-          >
-            <Grid className="mr-2 size-4" />
-            Show all {validImages.length} photos
-          </Button>
-        )}
-      </div>
+          </div>
+        </>
+      )}
 
       {/* Full Screen Gallery Modal */}
-      <Dialog onOpenChange={setIsOpen} open={isOpen}>
+      <Dialog
+        onOpenChange={(open) => {
+          if (!open) closeGallery()
+        }}
+        open={isOpen}
+      >
         <DialogContent
+          aria-describedby={undefined}
           className={cn(
-            "h-[100dvh] max-h-[100dvh] max-w-[100vw]",
+            "h-[100dvh] max-h-[100dvh] max-w-[100vw] rounded-none [&>button:last-child]:hidden",
             "border-none bg-black/95 p-0 shadow-none",
             "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
             "data-[state=closed]:animate-out data-[state=open]:animate-in"
           )}
+          onCloseAutoFocus={(event) => {
+            event.preventDefault()
+            opener.current?.focus()
+          }}
         >
+          <DialogTitle className="sr-only">{vehicleName} photos</DialogTitle>
           <div className="relative flex h-full flex-col">
             {/* Header */}
             <div
@@ -281,7 +302,7 @@ export function VehicleGallery({ images, vehicleName }: VehicleGalleryProps) {
                     priority
                     quality={90}
                     sizes="100vw"
-                    src={r2Url(validImages[selectedIndex])}
+                    src={validImages[selectedIndex]}
                   />
                 </div>
               )}
@@ -350,7 +371,7 @@ export function VehicleGallery({ images, vehicleName }: VehicleGalleryProps) {
                         fill
                         quality={60}
                         sizes="80px"
-                        src={r2Url(image)}
+                        src={image}
                       />
                     </button>
                   ))}
@@ -358,15 +379,17 @@ export function VehicleGallery({ images, vehicleName }: VehicleGalleryProps) {
               </div>
             )}
 
-            {/* Swipe hint on mobile */}
-            <div
-              className={cn(
-                "absolute right-0 bottom-20 left-0 z-40",
-                "pointer-events-none text-center md:hidden"
-              )}
-            >
-              <span className="text-white/50 text-xs">Use arrows to navigate</span>
-            </div>
+            {/* Navigation hint on mobile */}
+            {validImages.length > 1 && (
+              <div
+                className={cn(
+                  "absolute right-0 bottom-20 left-0 z-40",
+                  "pointer-events-none text-center md:hidden"
+                )}
+              >
+                <span className="text-white/50 text-xs">Use arrows to navigate</span>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>

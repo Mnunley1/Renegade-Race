@@ -5,16 +5,17 @@ import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardFooter } from "@workspace/ui/components/card"
 import { ArrowRight, Loader2 } from "lucide-react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { useEffect, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { Suspense, useEffect, useState } from "react"
 import { OtpInput } from "@/components/auth/otp-input"
+import { authReturnLink, safeReturnPath } from "@/lib/auth-return"
 import { handleError } from "@/lib/error-handler"
 
 type ClerkError = {
   errors?: Array<{ message: string }>
 }
 
-export default function VerifyEmailPage() {
+function VerifyEmailPageContent() {
   const { signUp, isLoaded, setActive } = useSignUp()
   const [code, setCode] = useState("")
   const [isLoading, setIsLoading] = useState(false)
@@ -22,13 +23,15 @@ export default function VerifyEmailPage() {
   const [error, setError] = useState("")
   const [resendSuccess, setResendSuccess] = useState(false)
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const redirectUrl = safeReturnPath(searchParams.get("redirect_url"))
 
   // Redirect if sign-up is not in progress
   useEffect(() => {
     if (isLoaded && !signUp) {
-      router.push("/sign-up")
+      router.push(authReturnLink("/sign-up", redirectUrl))
     }
-  }, [isLoaded, signUp, router])
+  }, [isLoaded, signUp, router, redirectUrl])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -47,7 +50,7 @@ export default function VerifyEmailPage() {
       if (result.status === "complete") {
         // Set the session and redirect
         await setActive({ session: result.createdSessionId })
-        router.push("/")
+        router.push(redirectUrl)
       } else {
         setError("Verification incomplete. Please try again.")
         setIsLoading(false)
@@ -190,7 +193,7 @@ export default function VerifyEmailPage() {
             <span className="text-muted-foreground">Wrong email? </span>
             <Link
               className="font-medium text-primary transition-colors hover:text-primary/80"
-              href="/sign-up"
+              href={authReturnLink("/sign-up", redirectUrl)}
             >
               Go back
             </Link>
@@ -198,5 +201,13 @@ export default function VerifyEmailPage() {
         </CardFooter>
       </Card>
     </div>
+  )
+}
+
+export default function VerifyEmailPage() {
+  return (
+    <Suspense fallback={<p>Loading...</p>}>
+      <VerifyEmailPageContent />
+    </Suspense>
   )
 }

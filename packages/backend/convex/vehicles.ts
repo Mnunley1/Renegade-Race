@@ -12,8 +12,10 @@ import {
 import { checkAdmin, isAdminIdentity } from "./admin"
 import { calculateDistance } from "./geocoding"
 import { attachVehicleUpload, removeVehicleUpload } from "./r2"
+import { getRentalConflicts } from "./rentalAvailability"
 import { publicUserProfile, userProfileWithAdminContact } from "./userProfile"
 import { normalizeMake } from "./vehicleMakes"
+import { requireVehicleYear } from "./vehicleYear"
 
 // Get all active and approved vehicles with optimized images
 export const getAllWithOptimizedImages = query({
@@ -75,8 +77,7 @@ export const getAllWithOptimizedImages = query({
           ctx.db.get(vehicle.trackId),
         ])
 
-        const hostStripeReady =
-          !!owner?.stripeAccountId && owner.stripeAccountStatus === "enabled"
+        const hostStripeReady = !!owner?.stripeAccountId && owner.stripeAccountStatus === "enabled"
 
         const optimizedImages = images.filter((image) => image.r2Key)
 
@@ -147,10 +148,7 @@ export const searchWithAvailability = query({
     // Apply optional filters. When using by_track we still need to enforce
     // active/approved/non-deleted; when using by_active_approved those are implicit.
     const filtered = baseQuery.filter((q) => {
-      const preds = [
-        q.eq(q.field("deletedAt"), undefined),
-        q.neq(q.field("isSuspended"), true),
-      ]
+      const preds = [q.eq(q.field("deletedAt"), undefined), q.neq(q.field("isSuspended"), true)]
       if (args.trackId) {
         preds.push(q.eq(q.field("isActive"), true))
         preds.push(q.eq(q.field("isApproved"), true))
@@ -217,40 +215,15 @@ export const searchWithAvailability = query({
       pageVehicles = pageVehicles.filter((vehicle) => vehicle.ownerId !== currentUserId)
     }
 
-    // Date availability filter (only over the current page)
+    // Date availability filter (only over the current page).
+    // Use the same inclusive date holds as request creation and approval.
     if (startDate && endDate && pageVehicles.length > 0) {
-      const blockedDatesInRange = await ctx.db
-        .query("availability")
-        .filter((q) =>
-          q.and(
-            q.eq(q.field("isAvailable"), false),
-            q.gte(q.field("date"), startDate),
-            q.lte(q.field("date"), endDate)
-          )
+      const availability = await Promise.all(
+        pageVehicles.map((vehicle) =>
+          getRentalConflicts(ctx, { vehicleId: vehicle._id, startDate, endDate })
         )
-        .collect()
-      const vehiclesWithBlockedDates = new Set(blockedDatesInRange.map((a) => a.vehicleId))
-
-      const overlappingReservations = await ctx.db
-        .query("reservations")
-        .withIndex("by_dates", (q) => q.lte("startDate", endDate))
-        .filter((q) =>
-          q.and(
-            q.gte(q.field("endDate"), startDate),
-            q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "confirmed"))
-          )
-        )
-        .collect()
-      const conflictingReservations = overlappingReservations.filter(
-        (reservation) =>
-          reservation.startDate <= endDate && reservation.endDate >= startDate
       )
-      const vehiclesWithConflicts = new Set(conflictingReservations.map((r) => r.vehicleId))
-
-      pageVehicles = pageVehicles.filter(
-        (vehicle) =>
-          !(vehiclesWithBlockedDates.has(vehicle._id) || vehiclesWithConflicts.has(vehicle._id))
-      )
+      pageVehicles = pageVehicles.filter((_vehicle, index) => availability[index]?.isAvailable)
     }
 
     // Distance filter (within the page only — cross-page distance sort isn't possible here)
@@ -290,8 +263,7 @@ export const searchWithAvailability = query({
           ctx.db.get(vehicle.trackId),
         ])
 
-        const hostStripeReady =
-          !!owner?.stripeAccountId && owner.stripeAccountStatus === "enabled"
+        const hostStripeReady = !!owner?.stripeAccountId && owner.stripeAccountStatus === "enabled"
         const optimizedImages = images.filter((image) => image.r2Key)
 
         return {
@@ -368,8 +340,7 @@ export const getAll = query({
           ctx.db.get(vehicle.trackId),
         ])
 
-        const hostStripeReady =
-          !!owner?.stripeAccountId && owner.stripeAccountStatus === "enabled"
+        const hostStripeReady = !!owner?.stripeAccountId && owner.stripeAccountStatus === "enabled"
 
         return {
           ...vehicle,
@@ -412,8 +383,7 @@ export const getById = query({
         .collect(),
     ])
 
-    const hostStripeReady =
-      !!owner?.stripeAccountId && owner.stripeAccountStatus === "enabled"
+    const hostStripeReady = !!owner?.stripeAccountId && owner.stripeAccountStatus === "enabled"
 
     const identity = await ctx.auth.getUserIdentity()
     const isAdmin = !!identity && isAdminIdentity(identity)
@@ -483,7 +453,7 @@ export const getByOwner = query({
   },
 })
 
-// Generate upload URL for file storage (legacy - use R2 mutations instead)
+// Retired: legacy storage uploads cannot be attributed to their uploader.
 export const generateUploadUrl = mutation({
   args: {},
   handler: async (ctx) => {
@@ -492,7 +462,7 @@ export const generateUploadUrl = mutation({
       throw new Error("Not authenticated")
     }
 
-    return await ctx.storage.generateUploadUrl()
+    throw new Error("Legacy uploads are unavailable; use the R2 image upload flow")
   },
 })
 
@@ -568,6 +538,7 @@ export const createVehicleWithImages = mutation({
 
     const userId = identity.subject
     const now = Date.now()
+    requireVehicleYear(args.year)
 
     // Schema requires trackId; fall back to the first active track when omitted.
     let trackId = args.trackId
@@ -758,6 +729,9 @@ export const update = mutation({
     if (vehicle.ownerId !== identity.subject) {
       throw new Error("Not authorized to update this vehicle")
     }
+
+    if (args.year !== undefined && !Object.is(args.year, vehicle.year))
+      requireVehicleYear(args.year)
 
     // Check if address changed and needs geocoding
     const addressChanged =

@@ -28,15 +28,17 @@ import {
   Star,
   XCircle,
 } from "lucide-react"
-import Image from "next/image"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Suspense, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 import { HostOnboardingChecklist } from "@/components/host-onboarding-checklist"
+import Image from "@/components/public-image"
 import { api } from "@/lib/convex"
 import { handleError } from "@/lib/error-handler"
 import { r2Url } from "@/lib/r2-url"
+import { formatRentalUsd } from "@/lib/rental-checkout"
+import { formatVehicleTitle } from "@/lib/vehicle-year"
 
 function HostDashboardContent() {
   const { user } = useUser()
@@ -151,7 +153,7 @@ function HostDashboardContent() {
     const pendingBookings = pendingReservations?.length || 0
     const upcomingBookings = confirmedReservations?.length || 0
 
-    // Calculate total earnings from confirmed reservations (in cents, convert to dollars)
+    // Calculate total earnings from confirmed reservations (in cents)
     const totalEarnings =
       confirmedReservations?.reduce(
         (sum: number, res: { totalAmount?: number }) => sum + (res.totalAmount || 0),
@@ -180,7 +182,7 @@ function HostDashboardContent() {
       totalVehicles,
       pendingBookings,
       upcomingBookings,
-      totalEarnings: Math.round(totalEarnings / 100), // Convert cents to dollars
+      totalEarnings, // Keep rental subtotals in cents until display
       averageRating,
       totalViews,
       totalShares,
@@ -216,16 +218,13 @@ function HostDashboardContent() {
           ].filter((res) => res.vehicleId === vehicle._id)
 
           const bookings = vehicleReservations.length
-          const earnings = vehicleReservations.reduce(
-            (sum, res) => sum + Math.round((res.totalAmount || 0) / 100),
-            0
-          )
+          const earnings = vehicleReservations.reduce((sum, res) => sum + (res.totalAmount || 0), 0)
 
           const status = vehicle.isApproved ? "active" : vehicle.isActive ? "pending" : "inactive"
 
           return {
             id: vehicle._id,
-            name: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
+            name: formatVehicleTitle(vehicle),
             make: vehicle.make,
             model: vehicle.model,
             year: vehicle.year,
@@ -437,13 +436,13 @@ function HostDashboardContent() {
           <Card>
             <CardContent className="p-5">
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground text-sm">Earnings</span>
+                <span className="text-muted-foreground text-sm">Rental subtotals</span>
                 <DollarSign className="size-4 text-muted-foreground" />
               </div>
               <div className="mt-2 font-bold text-3xl tracking-tight">
-                ${stats.totalEarnings.toLocaleString()}
+                {formatRentalUsd(stats.totalEarnings)}
               </div>
-              <p className="mt-1 text-muted-foreground text-xs">All-time revenue</p>
+              <p className="mt-1 text-muted-foreground text-xs">Confirmed bookings, before fees</p>
             </CardContent>
           </Card>
 
@@ -505,7 +504,7 @@ function HostDashboardContent() {
                   <div className="space-y-2">
                     {pendingReservations?.slice(0, 3).map((reservation: any) => {
                       const vehicleName = reservation.vehicle
-                        ? `${reservation.vehicle.year} ${reservation.vehicle.make} ${reservation.vehicle.model}`
+                        ? formatVehicleTitle(reservation.vehicle)
                         : "Vehicle"
                       const renterName = reservation.renter?.name || "Guest"
                       const primaryImage =
@@ -540,7 +539,7 @@ function HostDashboardContent() {
                             </div>
                             <div className="text-right">
                               <p className="font-semibold text-sm">
-                                ${Math.round((reservation.totalAmount || 0) / 100).toLocaleString()}
+                                {formatRentalUsd(reservation.totalAmount || 0)}
                               </p>
                               <span className="text-muted-foreground text-xs">Review →</span>
                             </div>
@@ -613,20 +612,22 @@ function HostDashboardContent() {
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-2">
                                 <p className="truncate font-semibold text-sm">
-                                  {vehicle.year} {vehicle.make} {vehicle.model}
+                                  {formatVehicleTitle(vehicle)}
                                 </p>
                                 {getStatusBadge(vehicle.status || "")}
                               </div>
                               <p className="mt-0.5 text-muted-foreground text-xs">
-                                ${vehicle.dailyRate?.toLocaleString() ?? "0"}/day •{" "}
-                                {vehicle.bookings} booking{vehicle.bookings === 1 ? "" : "s"}
+                                {formatRentalUsd(vehicle.dailyRate ?? 0)}/day • {vehicle.bookings}{" "}
+                                booking{vehicle.bookings === 1 ? "" : "s"}
                               </p>
                             </div>
                             <div className="text-right">
                               <p className="font-semibold text-primary text-sm">
-                                ${vehicle.earnings.toLocaleString()}
+                                {formatRentalUsd(vehicle.earnings)}
                               </p>
-                              <span className="text-muted-foreground text-xs">earned</span>
+                              <span className="text-muted-foreground text-xs">
+                                pending + confirmed
+                              </span>
                             </div>
                           </div>
                         </Link>

@@ -16,13 +16,17 @@ import {
   MessageSquare,
   XCircle,
 } from "lucide-react"
-import Image from "next/image"
 import Link from "next/link"
 import { useMemo, useState } from "react"
+import Image from "@/components/public-image"
+import { RentalQuoteSummary } from "@/components/rental-quote-summary"
+import { RentalSettlementNotice } from "@/components/rental-settlement-notice"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
+import { formatDateForDisplay } from "@/lib/date-utils"
 import { handleErrorWithContext } from "@/lib/error-handler"
 import { r2Url } from "@/lib/r2-url"
+import { formatRentalUsd, getRentalQuoteError } from "@/lib/rental-checkout"
 
 const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=400"
 
@@ -68,14 +72,7 @@ function getStatusBadge(status: string) {
   }
 }
 
-function formatDate(dateString: string | number) {
-  const date = new Date(dateString)
-  return date.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  })
-}
+const formatDate = formatDateForDisplay
 
 // Shared thumbnail + name + meta header used by every reservation row.
 function VehicleThumb({ imageKey, alt }: { imageKey?: string | null; alt: string }) {
@@ -131,8 +128,11 @@ function ReservationRow({
     vehicle?.images?.find((img: { isPrimary: boolean }) => img.isPrimary)?.r2Key ||
     vehicle?.images?.[0]?.r2Key
   const renterName = reservation.renter?.name || "Unknown renter"
-  const amount = Math.round((reservation.totalAmount || 0) / 100).toLocaleString()
+  const amount = formatRentalUsd(reservation.totalAmount || 0)
   const status = reservation.status
+  const needsReview =
+    status === "approved" &&
+    (reservation.paymentStatus === "paid" || reservation.paymentStatus === "partially_refunded")
 
   return (
     <Card>
@@ -142,7 +142,7 @@ function ReservationRow({
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="truncate font-semibold">{name}</h2>
-              {getStatusBadge(status)}
+              {needsReview ? <Badge>Needs review</Badge> : getStatusBadge(status)}
               {isReturnPending && (
                 <Badge className="gap-1.5 bg-orange-500/10 text-orange-700 dark:text-orange-400">
                   <Clock className="size-3" />
@@ -160,12 +160,35 @@ function ReservationRow({
             )}
           </div>
           <div className="hidden text-right sm:block">
-            <p className="font-semibold text-primary">${amount}</p>
+            <p className="font-semibold text-primary">{amount}</p>
+            <p className="text-muted-foreground text-xs">Rental subtotal</p>
           </div>
         </div>
 
+        {(status === "pending" || status === "approved") && (
+          <div className="mt-4 rounded-lg border p-3">
+            <RentalQuoteSummary quote={reservation} />
+          </div>
+        )}
+
+        {needsReview && (
+          <p className="mt-4 text-sm">
+            Payment received; booking needs review. Contact support to resolve the booking before
+            confirming plans with the renter.
+          </p>
+        )}
+        <RentalSettlementNotice
+          participantId={reservation.ownerId}
+          participantRole="host"
+          reservationId={reservation._id}
+        />
         <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
-          <p className="mr-auto font-semibold text-primary text-sm sm:hidden">${amount}</p>
+          {needsReview && (
+            <Button asChild size="sm">
+              <Link href="/contact">Contact Support</Link>
+            </Button>
+          )}
+          <p className="mr-auto font-semibold text-primary text-sm sm:hidden">{amount}</p>
           {status === "pending" && (
             <>
               <Button onClick={() => onApprove(reservation._id)} size="sm">
@@ -217,6 +240,7 @@ function ReservationRow({
 
 export default function HostReservationsPage() {
   const { user } = useUser()
+  const [approvalError, setApprovalError] = useState<string | null>(null)
   const [selectedStatus, setSelectedStatus] = useState<string>("all")
 
   // Fetch reservations from Convex
@@ -302,11 +326,19 @@ export default function HostReservationsPage() {
       : allReservations.filter((res: any) => res.status === selectedStatus)
 
   const handleApprove = async (reservationId: string) => {
+    setApprovalError(null)
     try {
       await approveReservation({
         reservationId: reservationId as Id<"reservations">,
       })
     } catch (error) {
+      const quoteError = getRentalQuoteError(error)
+      if (quoteError) {
+        setApprovalError(
+          "This booking's quote cannot be verified. Ask the renter to submit a new request for approval; this booking has not been repriced."
+        )
+        return
+      }
       handleErrorWithContext(error, {
         action: "approve reservation",
         customMessages: {
@@ -359,6 +391,15 @@ export default function HostReservationsPage() {
           Manage booking requests and confirmed reservations
         </p>
       </div>
+
+      {approvalError && (
+        <div
+          className="mb-6 rounded-lg border border-destructive p-4 text-destructive text-sm"
+          role="alert"
+        >
+          {approvalError}
+        </div>
+      )}
 
       {pendingReturnsCount > 0 && (
         <div className="mb-6 flex flex-col gap-3 rounded-xl border border-orange-200 bg-orange-50/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-orange-900/50 dark:bg-orange-950/20">

@@ -1,6 +1,5 @@
 "use client"
 
-import { useUser } from "@clerk/nextjs"
 import { Avatar, AvatarFallback, AvatarImage } from "@workspace/ui/components/avatar"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
@@ -52,8 +51,10 @@ import { use, useEffect, useState } from "react"
 import { toast } from "sonner"
 import { DriverCard } from "@/components/driver-card"
 import { DriverEndorsements } from "@/components/driver-endorsements"
+import { DriverFollowControl } from "@/components/driver-follow-control"
 import { DriverPortfolio } from "@/components/driver-portfolio"
 import { ProfileAnalytics } from "@/components/profile-analytics"
+import { useAccountActivity, useAccountAuth } from "@/hooks/useAccountAuth"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
@@ -119,9 +120,20 @@ function getWebsiteUrl(website: string): string {
 }
 
 export default function DriverDetailPage({ params }: DriverDetailPageProps) {
+  const auth = useAccountAuth()
+  return (
+    <DriverDetailContent auth={auth} key={`${auth.accountKey}:${auth.isReady}`} params={params} />
+  )
+}
+
+function DriverDetailContent({
+  params,
+  auth,
+}: DriverDetailPageProps & { auth: ReturnType<typeof useAccountAuth> }) {
   const { id } = use(params)
   const router = useRouter()
-  const { user } = useUser()
+  const { user } = auth
+  const isCurrentAccount = useAccountActivity()
   const profileId = id as Id<"driverProfiles">
   const driverProfile = useQuery(api.driverProfiles.getById, {
     profileId,
@@ -131,7 +143,12 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
   const deleteProfile = useMutation(api.driverProfiles.deleteProfile)
 
   // Get user's teams to check if they can request connection
-  const userTeams = useQuery(api.teams.getByOwner, user?.id ? {} : "skip")
+  const queriedUserTeams = useQuery(api.teams.getByOwner, auth.isReady ? {} : "skip")
+  // This query has no identity argument. Never expose a cached previous owner's teams.
+  const userTeams =
+    auth.isReady && queriedUserTeams?.every((team) => team.ownerId === user?.id)
+      ? queriedUserTeams
+      : undefined
   const [selectedTeamId, setSelectedTeamId] = useState<Id<"teams"> | null>(null)
   const [connectionMessage, setConnectionMessage] = useState("")
   const [showConnectionDialog, setShowConnectionDialog] = useState(false)
@@ -142,11 +159,17 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
   // We'll check connections for the first team (can be expanded to check all teams)
   const firstTeamConnection = useQuery(
     api.teamDriverConnections.checkConnection,
-    userTeams && userTeams.length > 0 && userTeams[0] && profileId
+    auth.isReady && userTeams && userTeams.length > 0 && userTeams[0] && profileId
       ? { teamId: userTeams[0]._id, driverProfileId: profileId }
       : "skip"
   )
-  const hasAcceptedConnection = firstTeamConnection?.status === "accepted"
+  const hasAcceptedConnection = !!(
+    auth.isReady &&
+    userTeams?.[0] &&
+    firstTeamConnection?.teamId === userTeams[0]._id &&
+    firstTeamConnection.driverProfileId === profileId &&
+    firstTeamConnection.status === "accepted"
+  )
 
   const createConversation = useMutation(api.conversations.createMotorsportsConversation)
   const recordView = useMutation(api.profileViews.recordView)
@@ -157,10 +180,12 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
 
   // Record profile view for non-owners
   useEffect(() => {
-    if (driverProfile && user && !driverProfile.isOwner) {
-      recordView({ profileId, profileType: "driver" })
+    if (auth.isReady && driverProfile && user && !driverProfile.isOwner) {
+      recordView({ profileId, profileType: "driver" }).catch((error) => {
+        if (isCurrentAccount()) handleErrorWithContext(error, { action: "record profile view" })
+      })
     }
-  }, [driverProfile, user, profileId, recordView])
+  }, [auth.isReady, driverProfile, user, profileId, recordView, isCurrentAccount])
 
   if (driverProfile === undefined) {
     return (
@@ -237,7 +262,7 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
   }
 
   // Allow owners to see their profile even if it's hidden
-  const isOwner = driverProfile.isOwner
+  const isOwner = auth.isReady && driverProfile.isOwner && driverProfile.userId === user?.id
   const isHidden = !driverProfile.isActive
   if (isHidden && !isOwner) {
     return (
@@ -269,13 +294,16 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
   const avatarUrl = driverProfile.avatarUrl || driverProfile.user?.avatarUrl
 
   const handleToggleVisibility = async () => {
+    if (!(auth.isReady && isCurrentAccount())) return
     setIsToggling(true)
     try {
       await toggleVisibility({ profileId })
+      if (!isCurrentAccount()) return
       toast.success(
         driverProfile.isActive ? "Profile hidden successfully" : "Profile made visible successfully"
       )
     } catch (error) {
+      if (!isCurrentAccount()) return
       handleErrorWithContext(error, {
         action: "update profile visibility",
         customMessages: {
@@ -288,12 +316,15 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
   }
 
   const handleDelete = async () => {
+    if (!(auth.isReady && isCurrentAccount())) return
     setIsDeleting(true)
     try {
       await deleteProfile({ profileId })
+      if (!isCurrentAccount()) return
       toast.success("Profile deleted successfully")
       router.push("/motorsports/drivers")
     } catch (error) {
+      if (!isCurrentAccount()) return
       handleErrorWithContext(error, {
         action: "delete profile",
         customMessages: {
@@ -382,6 +413,7 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
                   )}
                 </div>
               </div>
+              <DriverFollowControl followedUserId={driverProfile.userId} profileId={profileId} />
             </CardHeader>
             <CardContent className="space-y-6">
               <div>
@@ -547,21 +579,30 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
 
           {!isOwner && (
             <>
+              {(auth.isLoading || (auth.isReady && userTeams === undefined)) && (
+                <output className="text-muted-foreground text-sm">Loading your teams...</output>
+              )}
+              {!auth.isLoading && auth.isSignedIn && !auth.isReady && (
+                <p className="text-muted-foreground text-sm" role="alert">
+                  Unable to connect to your account. Please refresh the page or sign in again.
+                </p>
+              )}
               {hasAcceptedConnection && driverProfile && (
                 <Card>
                   <CardContent className="p-6">
                     <Button
                       className="w-full"
                       onClick={async () => {
+                        if (!(auth.isReady && isCurrentAccount())) return
                         try {
                           const conversationId = await createConversation({
                             participantId: driverProfile.userId,
                             conversationType: "driver",
                             driverProfileId: profileId,
                           })
-                          router.push(`/messages/${conversationId}`)
+                          if (isCurrentAccount()) router.push(`/messages/${conversationId}`)
                         } catch {
-                          toast.error("Failed to start conversation")
+                          if (isCurrentAccount()) toast.error("Failed to start conversation")
                         }
                       }}
                     >
@@ -764,15 +805,16 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
             <Button
               className="w-full"
               onClick={async () => {
+                if (!(auth.isReady && isCurrentAccount())) return
                 try {
                   const conversationId = await createConversation({
                     participantId: driverProfile.userId,
                     conversationType: "driver",
                     driverProfileId: profileId,
                   })
-                  router.push(`/messages/${conversationId}`)
+                  if (isCurrentAccount()) router.push(`/messages/${conversationId}`)
                 } catch {
-                  toast.error("Failed to start conversation")
+                  if (isCurrentAccount()) toast.error("Failed to start conversation")
                 }
               }}
             >
@@ -885,11 +927,13 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
             </Button>
             <Button
               disabled={
+                !(auth.isReady && userTeams) ||
                 isRequestingConnection ||
                 (userTeams && userTeams.length > 1 && !selectedTeamId) ||
                 (userTeams && userTeams.length === 0)
               }
               onClick={async () => {
+                if (!(auth.isReady && isCurrentAccount())) return
                 if (!userTeams || userTeams.length === 0) {
                   toast.error("You need to create a team profile first")
                   return
@@ -908,11 +952,13 @@ export default function DriverDetailPage({ params }: DriverDetailPageProps) {
                     teamId,
                     message: connectionMessage || undefined,
                   })
+                  if (!isCurrentAccount()) return
                   toast.success("Connection request sent!")
                   setShowConnectionDialog(false)
                   setConnectionMessage("")
                   setSelectedTeamId(null)
                 } catch (error) {
+                  if (!isCurrentAccount()) return
                   handleErrorWithContext(error, {
                     action: "send connection request",
                     customMessages: {

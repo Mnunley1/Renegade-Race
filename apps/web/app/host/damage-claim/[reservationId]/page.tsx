@@ -14,17 +14,18 @@ import { Label } from "@workspace/ui/components/label"
 import { Textarea } from "@workspace/ui/components/textarea"
 import { useMutation, useQuery } from "convex/react"
 import { ArrowLeft, Camera, Loader2, Upload, X } from "lucide-react"
-import Image from "next/image"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import { useState } from "react"
 import { toast } from "sonner"
+import Image from "@/components/public-image"
 import { useReservationPhotoUpload } from "@/hooks/useReservationPhotoUpload"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 import { IMAGE_ACCEPT_ATTR } from "@/lib/image-validation"
 import { r2Url } from "@/lib/r2-url"
+import { formatVehicleTitle } from "@/lib/vehicle-year"
 
 export default function DamageClaimPage() {
   const params = useParams()
@@ -171,7 +172,7 @@ export default function DamageClaimPage() {
   }
 
   const vehicle = reservation.vehicle
-  const vehicleName = vehicle ? `${vehicle.year} ${vehicle.make} ${vehicle.model}` : "Vehicle"
+  const vehicleName = vehicle ? formatVehicleTitle(vehicle) : "Vehicle"
 
   return (
     <div className="container mx-auto max-w-3xl px-4 py-8">

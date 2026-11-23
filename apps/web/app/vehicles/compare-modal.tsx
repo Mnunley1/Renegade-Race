@@ -1,6 +1,8 @@
 "use client"
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@workspace/ui/components/dialog"
+import { formatRentalUsd } from "@/lib/rental-checkout"
+import { formatVehicleTitle, formatVehicleYear } from "@/lib/vehicle-year"
 import type { VehicleItem } from "./types"
 
 type CompareModalProps = {
@@ -15,9 +17,12 @@ export function CompareModal({ open, onOpenChange, vehicles }: CompareModalProps
   }
 
   const specs = [
-    { label: "Price", render: (v: VehicleItem) => `$${v.pricePerDay}/day` },
-    { label: "Weekend", render: (v: VehicleItem) => `$${Math.round(v.pricePerDay * 2.5)}/wknd` },
-    { label: "Year", render: (v: VehicleItem) => String(v.year) },
+    { label: "Price", render: (v: VehicleItem) => `${formatRentalUsd(v.pricePerDay)}/day` },
+    {
+      label: "Estimated weekend",
+      render: (v: VehicleItem) => formatRentalUsd(Math.round(v.pricePerDay * 2.5)),
+    },
+    { label: "Year", render: (v: VehicleItem) => formatVehicleYear(v.year) },
     { label: "Make", render: (v: VehicleItem) => v.make },
     { label: "Model", render: (v: VehicleItem) => v.model },
     {
@@ -48,7 +53,7 @@ export function CompareModal({ open, onOpenChange, vehicles }: CompareModalProps
                 <th className="py-2 pr-4 text-left font-medium text-muted-foreground">Spec</th>
                 {vehicles.map((v) => (
                   <th className="px-4 py-2 text-left font-semibold" key={v.id}>
-                    {v.name}
+                    {formatVehicleTitle(v)}
                   </th>
                 ))}
               </tr>

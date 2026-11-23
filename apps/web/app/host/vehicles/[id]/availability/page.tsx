@@ -45,6 +45,7 @@ import type { DateRange } from "react-day-picker"
 import { toast } from "sonner"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
+import { formatVehicleTitle } from "@/lib/vehicle-year"
 
 const ADVANCE_NOTICE_OPTIONS = [
   { value: "same-day", label: "Same day" },
@@ -458,7 +459,7 @@ export default function HostVehicleAvailabilityPage() {
 
       <div className="mb-6">
         <h1 className="mb-2 font-bold text-3xl">
-          Manage Availability - {vehicle.year} {vehicle.make} {vehicle.model}
+          Manage Availability - {formatVehicleTitle(vehicle)}
         </h1>
         <p className="text-muted-foreground">
           Click dates to block or unblock them. Use range mode to select multiple dates at once.
@@ -493,18 +494,14 @@ export default function HostVehicleAvailabilityPage() {
             {vehicle.minTripDuration && (
               <div className="rounded-lg border p-3">
                 <div className="text-muted-foreground text-xs">Minimum Trip</div>
-                <div className="mt-1 font-semibold text-sm capitalize">
-                  {vehicle.minTripDuration.replace("-", " ")}
-                </div>
+                <div className="mt-1 font-semibold text-sm capitalize">1 calendar day</div>
               </div>
             )}
             {vehicle.maxTripDuration && (
               <div className="rounded-lg border p-3">
                 <div className="text-muted-foreground text-xs">Maximum Trip</div>
                 <div className="mt-1 font-semibold text-sm capitalize">
-                  {vehicle.maxTripDuration === "unlimited"
-                    ? "Unlimited"
-                    : vehicle.maxTripDuration.replace("-", " ")}
+                  3 calendar days (inclusive)
                 </div>
               </div>
             )}
@@ -856,6 +853,10 @@ export default function HostVehicleAvailabilityPage() {
 
                 <div className="space-y-2">
                   <Label htmlFor="editMaxTripDuration">Maximum Trip Duration</Label>
+                  <p className="text-muted-foreground text-sm">
+                    Rental checkout allows 1–3 calendar days, including pickup and dropoff. This
+                    legacy preference does not override that rule.
+                  </p>
                   <Select onValueChange={setMaxTripDuration} value={maxTripDuration}>
                     <SelectTrigger id="editMaxTripDuration">
                       <SelectValue />

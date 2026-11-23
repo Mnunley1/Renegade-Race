@@ -46,6 +46,15 @@ export const submitReview = mutation({
       throwError(ErrorCode.INVALID_STATUS, "You can only review a completed session")
     }
 
+    // No coaching-specific ownership-bound photo upload flow exists yet.
+    // Existing review photos remain readable; new reviews can be text-only.
+    if (args.photos?.length) {
+      throwError(
+        ErrorCode.INVALID_INPUT,
+        "Photo attachments are not supported for coaching reviews"
+      )
+    }
+
     // One review per booking
     const existing = await ctx.db
       .query("coachingReviews")

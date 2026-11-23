@@ -8,17 +8,19 @@ import { Label } from "@workspace/ui/components/label"
 import { Textarea } from "@workspace/ui/components/textarea"
 import { useMutation, useQuery } from "convex/react"
 import { ArrowLeft, Loader2, Star, Upload, X } from "lucide-react"
-import Image from "next/image"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
+import Image from "@/components/public-image"
 import { useReservationPhotoUpload } from "@/hooks/useReservationPhotoUpload"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
+import { formatDateForDisplay } from "@/lib/date-utils"
 import { handleErrorWithContext } from "@/lib/error-handler"
 import { IMAGE_ACCEPT_ATTR } from "@/lib/image-validation"
 import { r2Url } from "@/lib/r2-url"
+import { formatVehicleTitle } from "@/lib/vehicle-year"
 
 export default function ReviewSubmissionPage() {
   const { user: _user } = useUser()
@@ -189,7 +191,7 @@ export default function ReviewSubmissionPage() {
     )
   }
 
-  const vehicleName = `${vehicle.year} ${vehicle.make} ${vehicle.model}`
+  const vehicleName = formatVehicleTitle(vehicle)
   // Check if we're editing - wait for completion to load first
   const isEditing = completion !== undefined && !!existingReview
 
@@ -235,8 +237,8 @@ export default function ReviewSubmissionPage() {
               <div>
                 <Label>Rental Period</Label>
                 <p className="text-muted-foreground text-sm">
-                  {new Date(reservation.startDate).toLocaleDateString()} -{" "}
-                  {new Date(reservation.endDate).toLocaleDateString()}
+                  {formatDateForDisplay(reservation.startDate)} -{" "}
+                  {formatDateForDisplay(reservation.endDate)}
                 </p>
               </div>
               <div>

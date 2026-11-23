@@ -1,10 +1,11 @@
 "use client"
 
 import { Card, CardContent } from "@workspace/ui/components/card"
-import Image from "next/image"
 import Link from "next/link"
+import Image from "@/components/public-image"
 import { useRecentlyViewed } from "@/hooks/use-recently-viewed"
 import { r2Url } from "@/lib/r2-url"
+import { formatRentalUsd } from "@/lib/rental-checkout"
 
 export function RecentlyViewed() {
   const { items } = useRecentlyViewed()
@@ -18,7 +19,7 @@ export function RecentlyViewed() {
       <h3 className="mb-3 font-semibold text-muted-foreground text-sm">Recently Viewed</h3>
       <div className="flex gap-3 overflow-x-auto pb-2">
         {items.map((item) => {
-          const src = item.imageKey ? r2Url(item.imageKey) : item.image
+          const src = r2Url(item.imageKey) ?? item.image
           return (
             <Link className="shrink-0" href={`/vehicles/${item.id}`} key={item.id}>
               <Card className="w-[180px] overflow-hidden transition-colors hover:border-primary/40">
@@ -36,7 +37,9 @@ export function RecentlyViewed() {
                 </div>
                 <CardContent className="p-2">
                   <p className="truncate font-medium text-xs">{item.name}</p>
-                  <p className="text-muted-foreground text-xs">${item.pricePerDay}/day</p>
+                  <p className="text-muted-foreground text-xs">
+                    {formatRentalUsd(item.pricePerDay)}/day
+                  </p>
                 </CardContent>
               </Card>
             </Link>

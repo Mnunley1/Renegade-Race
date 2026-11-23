@@ -12,6 +12,8 @@ import { useMemo, useState } from "react"
 import { VehicleCard } from "@/components/vehicle-card"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
+import { formatRentalUsd } from "@/lib/rental-checkout"
+import { formatVehicleTitle } from "@/lib/vehicle-year"
 
 type SortOption = "newest" | "price-asc" | "price-desc" | "rating"
 
@@ -65,7 +67,7 @@ export default function FavoritesPage() {
           id: vehicle._id,
           image: primaryImage?.imageUrl ?? "",
           imageKey: primaryImage?.r2Key ?? undefined,
-          name: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
+          name: formatVehicleTitle(vehicle),
           year: vehicle.year,
           make: vehicle.make,
           model: vehicle.model,
@@ -235,11 +237,15 @@ export default function FavoritesPage() {
               <div className="flex items-center gap-2 text-muted-foreground">
                 <DollarSign className="size-4" />
                 <span>
-                  <span className="font-medium text-foreground">${stats.minPrice}</span>
+                  <span className="font-medium text-foreground">
+                    {formatRentalUsd(stats.minPrice)}
+                  </span>
                   {stats.minPrice !== stats.maxPrice && (
                     <>
                       {" - "}
-                      <span className="font-medium text-foreground">${stats.maxPrice}</span>
+                      <span className="font-medium text-foreground">
+                        {formatRentalUsd(stats.maxPrice)}
+                      </span>
                     </>
                   )}
                   /day

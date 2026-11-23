@@ -15,10 +15,10 @@ import { cn } from "@workspace/ui/lib/utils"
 import { ChevronRight, Grid3x3, List, Loader2, Search, X } from "lucide-react"
 import { Suspense } from "react"
 import { VehicleCard } from "@/components/vehicle-card"
+import { priceFilterLabel } from "./price-filter"
 import type { FilterActions, FilterState, SortOption, VehicleItem, ViewMode } from "./types"
 
 type VehicleResultsGridProps = {
-  vehicles: VehicleItem[]
   filteredVehicles: VehicleItem[]
   paginatedVehicles: VehicleItem[]
   isLoading: boolean
@@ -41,7 +41,6 @@ type VehicleResultsGridProps = {
 }
 
 export function VehicleResultsGrid({
-  vehicles,
   filteredVehicles,
   paginatedVehicles,
   isLoading,
@@ -66,11 +65,17 @@ export function VehicleResultsGrid({
     <div className="w-full">
       {/* Results Summary Bar */}
       <div className="mb-6 flex items-center justify-between border-b pb-4">
-        <p className="text-muted-foreground text-sm sm:text-base">
-          <span className="font-bold text-base text-foreground sm:text-lg">
-            {filteredVehicles.length}
-          </span>{" "}
-          {filteredVehicles.length === 1 ? "vehicle" : "vehicles"} available
+        <p className="text-muted-foreground text-sm sm:text-base" role="status">
+          {isLoading ? (
+            "Loading listings…"
+          ) : (
+            <>
+              <span className="font-bold text-base text-foreground sm:text-lg">
+                {filteredVehicles.length}
+              </span>{" "}
+              matching {filteredVehicles.length === 1 ? "listing" : "listings"}
+            </>
+          )}
         </p>
 
         <div className="flex items-center gap-2 sm:gap-3">
@@ -134,27 +139,15 @@ export function VehicleResultsGrid({
             </Card>
           ))}
         </div>
-      ) : vehicles.length === 0 ? (
-        <Card className="border-dashed">
-          <CardContent className="flex flex-col items-center justify-center py-12 sm:py-16">
-            <div className="mb-4 flex size-12 items-center justify-center rounded-full bg-muted sm:size-16">
-              <Search className="size-6 text-muted-foreground sm:size-8" />
-            </div>
-            <h3 className="mb-2 font-semibold text-lg sm:text-xl">No vehicles available</h3>
-            <p className="mb-4 max-w-md px-4 text-center text-muted-foreground text-sm sm:px-0 sm:text-base">
-              No vehicles are currently available.
-            </p>
-          </CardContent>
-        </Card>
       ) : filteredVehicles.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center justify-center py-12 sm:py-16">
             <div className="mb-4 flex size-12 items-center justify-center rounded-full bg-muted sm:size-16">
               <Search className="size-6 text-muted-foreground sm:size-8" />
             </div>
-            <h3 className="mb-2 font-semibold text-lg sm:text-xl">No vehicles found</h3>
+            <h3 className="mb-2 font-semibold text-lg sm:text-xl">No matching listings</h3>
             <p className="mb-4 max-w-md px-4 text-center text-muted-foreground text-sm sm:px-0 sm:text-base">
-              No vehicles match your current filters. Try removing some filters to see more results.
+              No listings match your search. Try adjusting your filters, search, or dates.
             </p>
             {filterState && filterActions && (
               <div className="mb-4 flex flex-wrap justify-center gap-2">
@@ -194,7 +187,8 @@ export function VehicleResultsGrid({
                     }}
                     variant="secondary"
                   >
-                    Price: {filterState.selectedPriceRange} <X className="size-3" />
+                    Price: {priceFilterLabel(filterState.selectedPriceRange)}{" "}
+                    <X className="size-3" />
                   </Badge>
                 )}
                 {filterState.selectedExperienceLevel !== "all" && (
@@ -287,7 +281,7 @@ export function VehicleResultsGrid({
                 )}
               </Button>
               <p className="text-muted-foreground text-xs sm:text-sm">
-                Showing {paginatedVehicles.length} vehicles
+                Showing {paginatedVehicles.length} matching listings
               </p>
             </div>
           )}

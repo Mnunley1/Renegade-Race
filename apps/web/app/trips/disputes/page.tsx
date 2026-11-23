@@ -6,10 +6,11 @@ import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent } from "@workspace/ui/components/card"
 import { useQuery } from "convex/react"
 import { AlertTriangle, Calendar, Loader2, MessageSquare } from "lucide-react"
-import Image from "next/image"
 import Link from "next/link"
+import Image from "@/components/public-image"
 import { api } from "@/lib/convex"
 import { r2Url } from "@/lib/r2-url"
+import { formatVehicleTitle } from "@/lib/vehicle-year"
 
 export default function DisputesPage() {
   const { user } = useUser()
@@ -85,7 +86,7 @@ export default function DisputesPage() {
             const reservation = dispute.reservation
             if (!(vehicle && reservation)) return null
 
-            const vehicleName = `${vehicle.year} ${vehicle.make} ${vehicle.model}`
+            const vehicleName = formatVehicleTitle(vehicle)
             const primaryImageKey = vehicle.images?.[0]?.r2Key
             const vehicleImage = primaryImageKey
               ? r2Url(primaryImageKey)

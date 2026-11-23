@@ -1,6 +1,7 @@
 import { v } from "convex/values"
-import type { Id } from "./_generated/dataModel"
+import type { Doc, Id } from "./_generated/dataModel"
 import { mutation, type QueryCtx, query } from "./_generated/server"
+import { toPublicTeamListing } from "./seatHelpers"
 import { publicUserProfile } from "./userProfile"
 
 // Resolve the primary (or first available) image key for a vehicle thumbnail
@@ -20,6 +21,29 @@ async function getVehicleThumbnailKey(
       .withIndex("by_vehicle", (q) => q.eq("vehicleId", vehicleId))
       .first())
   return image?.r2Key ?? null
+}
+
+async function loadSeatBookingSummary(
+  ctx: QueryCtx,
+  seatBookingId: Id<"seatBookings"> | undefined
+) {
+  if (!seatBookingId) return null
+  const seat = await ctx.db.get(seatBookingId)
+  if (!seat) return null
+  return {
+    _id: String(seat._id),
+    status: seat.status,
+    priceCents: seat.priceCents,
+    depositCents: seat.depositCents,
+  }
+}
+
+function seatConversationTeam(
+  conversationType: string | undefined,
+  team: Doc<"teams"> | null | any
+) {
+  if (conversationType !== "seat") return team
+  return toPublicTeamListing(team as Doc<"teams"> | null)
 }
 
 // Get conversations for a user (as renter or owner)
@@ -108,16 +132,19 @@ export const getByUser = query({
           }
         }
 
+        const seatBooking = await loadSeatBookingSummary(ctx, conversation.seatBookingId)
+
         return {
           ...conversation,
           vehicle,
           vehicleImageKey,
           renter: publicUserProfile(renter),
           owner: publicUserProfile(owner),
-          team,
+          team: seatConversationTeam(conversation.conversationType, team),
           driverProfile,
           coachProfile,
           reservation,
+          seatBooking,
         }
       })
     )
@@ -230,16 +257,19 @@ export const getById = query({
       }
     }
 
+    const seatBooking = await loadSeatBookingSummary(ctx, conversation.seatBookingId)
+
     return {
       ...conversation,
       vehicle,
       vehicleImageKey,
       renter: publicUserProfile(renter),
       owner: publicUserProfile(owner),
-      team,
+      team: seatConversationTeam(conversation.conversationType, team),
       driverProfile,
       coachProfile,
       reservation,
+      seatBooking,
     }
   },
 })

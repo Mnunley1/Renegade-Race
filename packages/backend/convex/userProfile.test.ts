@@ -3,6 +3,7 @@ import { convexTest } from "convex-test"
 import { describe, expect, it, vi } from "vitest"
 import { api, internal } from "./_generated/api"
 import schema from "./schema"
+import { publicDisplayName } from "./userProfile"
 
 vi.mock("./r2", () => ({ r2: {} }))
 
@@ -13,6 +14,39 @@ const modules = (
 ).glob("./**/*.ts")
 
 describe("public user lookups", () => {
+  it.each([
+    undefined,
+    null,
+    "",
+    "   ",
+    "null",
+    "undefined",
+    "null null",
+    " UNDEFINED null ",
+  ])("uses a neutral fallback for missing legacy display name %s", (name) => {
+    expect(publicDisplayName({ name, email: "private@example.test" })).toBe("User")
+  })
+  it("preserves real names and does not expose an email fallback", () => {
+    expect(publicDisplayName({ name: "A. Driver", email: "private@example.test" })).toBe(
+      "A. Driver"
+    )
+    expect(
+      publicDisplayName({ name: " PRIVATE@EXAMPLE.TEST ", email: "private@example.test" })
+    ).toBe("User")
+  })
+  it("keeps placeholder coach names neutral through public query projection", async () => {
+    const t = convexTest(schema, modules)
+    const id = await t.run(({ db }) =>
+      db.insert("users", {
+        externalId: "missing-name",
+        name: "null null",
+        email: "private@example.test",
+      })
+    )
+    const profile = await t.query(api.users.getById, { userId: id })
+    expect(profile).toMatchObject({ name: "User" })
+    expect(profile).not.toHaveProperty("email")
+  })
   it("shares the same public fields by either ID and through marketplace listings", async () => {
     const t = convexTest(schema, modules)
     const { userId, vehicleId, driverProfileId } = await t.run(async ({ db }) => {

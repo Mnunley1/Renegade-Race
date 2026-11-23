@@ -17,10 +17,12 @@ import {
   Plus,
   XCircle,
 } from "lucide-react"
-import Image from "next/image"
 import Link from "next/link"
+import Image from "@/components/public-image"
 import { api } from "@/lib/convex"
 import { r2Url } from "@/lib/r2-url"
+import { formatRentalUsd } from "@/lib/rental-checkout"
+import { formatVehicleTitle } from "@/lib/vehicle-year"
 
 export default function HostVehiclesListPage() {
   const { user } = useUser()
@@ -144,7 +146,7 @@ export default function HostVehiclesListPage() {
                     <div className="relative flex h-32 w-48 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted">
                       {hasValidImage ? (
                         <Image
-                          alt={`${vehicle.year} ${vehicle.make} ${vehicle.model}`}
+                          alt={formatVehicleTitle(vehicle)}
                           className="object-cover"
                           fill
                           quality={80}
@@ -159,9 +161,7 @@ export default function HostVehiclesListPage() {
                     {/* Vehicle Details */}
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h2 className="truncate font-semibold">
-                          {vehicle.year} {vehicle.make} {vehicle.model}
-                        </h2>
+                        <h2 className="truncate font-semibold">{formatVehicleTitle(vehicle)}</h2>
                         {getStatusBadge(vehicle)}
                       </div>
                       <p className="mt-1 line-clamp-1 text-muted-foreground text-sm">
@@ -176,7 +176,9 @@ export default function HostVehiclesListPage() {
                           <Car className="size-3.5" />
                           {vehicle.track?.name || "Track TBD"}
                         </span>
-                        <span className="font-semibold text-primary">${vehicle.dailyRate}/day</span>
+                        <span className="font-semibold text-primary">
+                          {formatRentalUsd(vehicle.dailyRate)}/day
+                        </span>
                       </div>
                     </div>
                   </div>

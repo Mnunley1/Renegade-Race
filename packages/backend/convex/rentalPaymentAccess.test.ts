@@ -70,6 +70,71 @@ async function booking() {
 }
 
 describe("rental payment access", () => {
+  it.each([
+    "createCheckoutSession",
+    "createPaymentIntent",
+  ] as const)("%s rejects an ended current attempt before contacting Stripe", async (method) => {
+    const { t, record } = await booking()
+    const paymentId = await t.mutation(internal.stripe.createPaymentRecord, record)
+    await t.run(async ({ db }) => {
+      await db.patch(paymentId, { status: "cancelled" })
+      await db.patch(record.reservationId, { paymentStatus: "failed" })
+    })
+    await expect(
+      t.withIdentity({ subject: "driver" }).action(api.stripe[method], {
+        reservationId: record.reservationId,
+        amount: record.amount,
+      })
+    ).rejects.toThrow("PAYMENT_ATTEMPT_TERMINAL")
+    await expect(t.mutation(internal.stripe.createPaymentRecord, record)).rejects.toThrow(
+      "PAYMENT_ATTEMPT_TERMINAL"
+    )
+    await expect(
+      t.mutation(internal.stripe.createPaymentRecord, {
+        ...record,
+        stripePaymentIntentId: "pi_new_attempt",
+      })
+    ).rejects.toThrow("PAYMENT_ATTEMPT_TERMINAL")
+    expect(await t.run(({ db }) => db.query("payments").collect())).toHaveLength(1)
+  })
+
+  it("blocks legacy ended attempts without a pointer but keeps failed attempts retryable", async () => {
+    const { t, record } = await booking()
+    const paymentId = await t.mutation(internal.stripe.createPaymentRecord, record)
+    await t.run(async ({ db }) => {
+      await db.patch(paymentId, { status: "failed" })
+      await db.patch(record.reservationId, { paymentId: undefined, paymentStatus: "failed" })
+    })
+    const args = { reservationId: record.reservationId, renterId: record.renterId }
+    await expect(t.query(internal.stripe.assertRentalPaymentAvailable, args)).resolves.toBeNull()
+    await expect(t.mutation(internal.stripe.createPaymentRecord, record)).resolves.toBe(paymentId)
+    await t.run(({ db }) => db.patch(paymentId, { status: "cancelled" }))
+    await expect(t.query(internal.stripe.assertRentalPaymentAvailable, args)).rejects.toThrow(
+      "PAYMENT_ATTEMPT_TERMINAL"
+    )
+  })
+
+  it.each([
+    "renterId",
+    "ownerId",
+    "amount",
+    "currency",
+    "missing",
+  ])("rejects a current pointer with invalid %s binding", async (field) => {
+    const { t, record } = await booking()
+    const paymentId = await t.mutation(internal.stripe.createPaymentRecord, record)
+    await t.run(async ({ db }) => {
+      if (field === "missing") await db.delete(paymentId)
+      else await db.patch(paymentId, { [field]: field === "amount" ? 1 : "wrong" })
+    })
+    await expect(
+      t.query(internal.stripe.assertRentalPaymentAvailable, {
+        reservationId: record.reservationId,
+        renterId: record.renterId,
+      })
+    ).rejects.toThrow("Current payment does not match")
+  })
+
   it("registers no public payment-record or Stripe event writer", () => {
     // convex-test can invoke internal functions directly. Convex's registration flags
     // determine which exported functions a real client is permitted to invoke.
@@ -125,6 +190,27 @@ describe("rental payment access", () => {
         amount: 103000,
       })
     ).rejects.toThrow("PRICE_CHANGED")
+  })
+
+  it.each([
+    "createCheckoutSession",
+    "createPaymentIntent",
+  ] as const)("%s keeps the stored duration for both inclusive and historical bookings", async (method) => {
+    const { t, record } = await booking()
+    const renter = t.withIdentity({ subject: "driver" })
+    // The same date pair can represent a historical one-night rental or a
+    // current two-occupied-day rental. Payment must honor its stored count.
+    for (const totalDays of [1, 2]) {
+      await t.run(({ db }) =>
+        db.patch(record.reservationId, { totalDays, totalAmount: 50000 * totalDays })
+      )
+      await expect(
+        renter.action(api.stripe[method], {
+          reservationId: record.reservationId,
+          amount: 100,
+        })
+      ).rejects.toThrow(`expected ${50000 * totalDays} cents`)
+    }
   })
 
   it("prevents a second checkout while the successful capture and partial refund settle", async () => {

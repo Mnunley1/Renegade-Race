@@ -2,8 +2,8 @@ import type { UserJSON } from "@clerk/backend"
 import { type Validator, v } from "convex/values"
 import { internal } from "./_generated/api"
 import {
-  action,
   type ActionCtx,
+  action,
   internalAction,
   internalMutation,
   internalQuery,
@@ -14,12 +14,18 @@ import {
 } from "./_generated/server"
 import { getWelcomeEmailTemplate, sendTransactionalEmail } from "./emails"
 import { isEarlyAdopterPromoActive, resolvePlatformFeePercentage } from "./pricing"
-import { clearDraftUploads, requireDraftUpload } from "./r2"
+import { clearDraftUploads, requireDraftUpload, requireProfileUpload } from "./r2"
 import { retrieveLinkedConnectAccount } from "./stripeOwnership"
-import { publicDisplayName, publicUserProfile } from "./userProfile"
-
-/** Matches Clerk/Convex placeholder names like "null null" from `${null} ${null}`. */
-const NULLISH_NAME_RE = /^(null|undefined)(\s+(null|undefined))+$/i
+import {
+  NULLISH_NAME_RE,
+  publicAuthorProfile,
+  publicDisplayName,
+  publicUserProfile,
+} from "./userProfile"
+import { requireVehicleYear } from "./vehicleYear"
+import { assertAccountsAvailable, deletionIntent } from "./accountDeletionGuards"
+import { additionalDeletionBlockers } from "./accountDeletionChecks"
+import { deletionProvider } from "./clerkDeletion"
 
 type EarlyAdopterGrant = {
   isEarlyAdopter: true
@@ -90,6 +96,12 @@ export const getByExternalId = query({
       ...(identity?.subject === externalId ? { stripeCustomerId: user?.stripeCustomerId } : {}),
     }
   },
+})
+
+// Public author pages never include self-only billing or private account fields.
+export const getPublicProfile = query({
+  args: { externalId: v.string() },
+  handler: (ctx, { externalId }) => publicAuthorProfile(ctx, externalId),
 })
 
 export const getByExternalIdInternal = internalQuery({
@@ -165,6 +177,7 @@ function displayNameFromClerkParts(
 export const upsertFromClerk = internalMutation({
   args: { data: v.any() as Validator<UserJSON> }, // no runtime validation, trust Clerk
   async handler(ctx, { data }) {
+    if (await deletionIntent(ctx, data.id)) return
     const userData = data as UserJSON // Type assertion for Clerk data
     const user = await userByExternalId(ctx, data.id)
     const isNewUser = user === null
@@ -220,14 +233,18 @@ async function stripeDeletionBlocker(ctx: ActionCtx, stripeAccountId: string, cl
     const stripe = new Stripe(secretKey, { apiVersion: "2025-08-27.basil" })
     const account = await retrieveLinkedConnectAccount(ctx, stripe, stripeAccountId, clerkUserId)
     const balance = await stripe.balance.retrieve({ stripeAccount: stripeAccountId })
-    const balances = [...balance.pending, ...balance.available]
+    const balances = [
+      ...balance.pending,
+      ...balance.available,
+      ...(balance.connect_reserved ?? []),
+      ...(balance.refund_and_dispute_prefunding?.available ?? []),
+      ...(balance.refund_and_dispute_prefunding?.pending ?? []),
+    ]
     if (account.metadata?.renegadeUserId !== clerkUserId) {
-      return [...balances, ...(balance.connect_reserved ?? [])].some((entry) => entry.amount !== 0)
-        ? unverified
-        : null
+      return balances.some((entry) => entry.amount !== 0) ? unverified : null
     }
-    if (balances.some((entry) => entry.amount > 0)) {
-      return "Please wait for all Stripe payouts to complete before deleting your account."
+    if (balances.some((entry) => entry.amount !== 0)) {
+      return "Please resolve all Stripe balances and payouts before deleting your account."
     }
     return null
   } catch {
@@ -246,9 +263,11 @@ async function rentalDeletionBlockers(ctx: QueryCtx, clerkUserId: string): Promi
     [byRenter, byHost].map(async (indexed) => {
       const active = await indexed
         .filter((q) =>
-          q.and(
-            q.gte(q.field("endDate"), today),
-            q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "confirmed"))
+          q.or(
+            // Approval remains payable until explicitly resolved, even after the rental date.
+            q.eq(q.field("status"), "approved"),
+            q.eq(q.field("status"), "confirmed"),
+            q.and(q.gte(q.field("endDate"), today), q.eq(q.field("status"), "pending"))
           )
         )
         .collect()
@@ -256,10 +275,41 @@ async function rentalDeletionBlockers(ctx: QueryCtx, clerkUserId: string): Promi
     })
   )
   const blockers: string[] = []
+  const settlementHolds = await Promise.all([
+    ctx.db
+      .query("rentalSettlementReviews")
+      .withIndex("by_renter_status", (q) => q.eq("renterId", clerkUserId).eq("status", "held"))
+      .first(),
+    ctx.db
+      .query("rentalSettlementReviews")
+      .withIndex("by_owner_status", (q) => q.eq("ownerId", clerkUserId).eq("status", "held"))
+      .first(),
+  ])
+  if (settlementHolds.some(Boolean))
+    blockers.push("Rental refund settlement requires operator review before deleting your account.")
   if (renterCount)
     blockers.push(`${renterCount} active booking(s) as a renter. Please cancel them first.`)
   if (hostCount) blockers.push(`${hostCount} active reservation(s) on your vehicles.`)
-  return blockers
+  // Payment settlement can outlive the booking date or cancellation. Inspect the
+  // financial records directly, including attempts not linked by reservation.paymentId.
+  const unsettledPayments = await Promise.all(
+    [
+      ctx.db.query("payments").withIndex("by_renter", (q) => q.eq("renterId", clerkUserId)),
+      ctx.db.query("payments").withIndex("by_owner", (q) => q.eq("ownerId", clerkUserId)),
+    ].map((indexed) =>
+      indexed
+        .filter((q) =>
+          q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "processing"))
+        )
+        .first()
+    )
+  )
+  if (unsettledPayments.some((payment) => payment !== null)) {
+    blockers.push(
+      "Rental payments are still pending or processing. Please wait for them to resolve before deleting your account."
+    )
+  }
+  return [...blockers, ...(await additionalDeletionBlockers(ctx, clerkUserId))]
 }
 
 export const getRentalDeletionBlockers = internalQuery({
@@ -307,20 +357,202 @@ export const checkUserDeletionEligibility = action({
   },
 })
 
-// The signed Clerk user.deleted event is the authority to remove a local identity.
+// The local eligibility check and durable subject lock share one transaction.
+// External Stripe balance reads happen after locking; no new obligation may race them.
+export const beginAccountDeletion = internalMutation({
+  args: { subject: v.string() },
+  handler: async (ctx, { subject }) => {
+    const existing = await deletionIntent(ctx, subject)
+    if (existing) return existing
+    const blockers = await rentalDeletionBlockers(ctx, subject)
+    if (blockers.length) throw new Error(`Cannot delete account: ${blockers.join(" ")}`)
+    const now = Date.now()
+    const id = await ctx.db.insert("accountDeletionIntents", {
+      subject,
+      status: "locked",
+      createdAt: now,
+      updatedAt: now,
+    })
+    await ctx.scheduler.runAfter(2 * 60_000, internal.users.reconcileAccountDeletion, {
+      subject,
+      attempt: 0,
+    })
+    await ctx.db.insert("auditLogs", {
+      entityType: "user",
+      entityId: subject,
+      action: "deletion_requested",
+      userId: subject,
+      timestamp: now,
+    })
+    return (await ctx.db.get(id))!
+  },
+})
+
+export const noteDeletionFailure = internalMutation({
+  args: { subject: v.string() },
+  handler: async (ctx, { subject }) => {
+    const intent = await deletionIntent(ctx, subject)
+    if (intent?.status === "locked")
+      await ctx.db.patch(intent._id, { lastFailure: "provider_unconfirmed", updatedAt: Date.now() })
+  },
+})
+
+// Recovery only reads the exact provider subject of an existing durable intent.
+// It never starts deletion of an arbitrary identity or depends on a live user JWT.
+export const reconcileAccountDeletion = internalAction({
+  args: { subject: v.string(), attempt: v.optional(v.number()) },
+  handler: async (ctx, { subject, attempt = 0 }): Promise<void> => {
+    const intent = await ctx.runQuery(internal.users.getDeletionIntent, { subject })
+    if (!intent || intent.status === "completed") return
+    try {
+      const issuer = process.env.CLERK_JWT_ISSUER_DOMAIN || process.env.CLERK_FRONTEND_API_URL || ""
+      const provider = await deletionProvider({ subject, issuer })
+      if (await provider.exists()) return
+      await ctx.runMutation(internal.users.confirmProviderDeletion, { subject })
+      await ctx.runAction(internal.users.performUserDeletionWithChecks, { clerkUserId: subject })
+    } catch {
+      await ctx.runMutation(internal.users.noteDeletionFailure, { subject })
+      if (attempt < 2)
+        await ctx.scheduler.runAfter(
+          (attempt + 1) * 10 * 60_000,
+          internal.users.reconcileAccountDeletion,
+          { subject, attempt: attempt + 1 }
+        )
+    }
+  },
+})
+
+export const confirmProviderDeletion = internalMutation({
+  args: { subject: v.string() },
+  handler: async (ctx, { subject }) => {
+    const intent = await deletionIntent(ctx, subject)
+    if (intent?.status === "completed") return
+    const now = Date.now()
+    if (intent)
+      await ctx.db.patch(intent._id, {
+        status: "provider_deleted",
+        providerDeletedAt: now,
+        updatedAt: now,
+      })
+    else
+      await ctx.db.insert("accountDeletionIntents", {
+        subject,
+        status: "provider_deleted",
+        providerDeletedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      })
+  },
+})
+
+export const requestAccountDeletion = action({
+  args: { reauthToken: v.string() },
+  handler: async (
+    ctx,
+    { reauthToken }
+  ): Promise<
+    | { deleted: true; cleanupPending: boolean }
+    | {
+        clerk_error: {
+          type: "forbidden"
+          reason: "reverification-error"
+          metadata: { reverification: { level: "second_factor"; afterMinutes: number } }
+        }
+      }
+  > => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) throw new Error("Not authenticated")
+    // Verify exact provider/issuer binding before creating an otherwise durable lock.
+    const provider = await deletionProvider(identity)
+    if (!(await provider.verifyRecentAuthentication(reauthToken)))
+      return {
+        clerk_error: {
+          type: "forbidden",
+          reason: "reverification-error",
+          metadata: { reverification: { level: "second_factor", afterMinutes: 10 } },
+        },
+      }
+    const intent = await ctx.runMutation(internal.users.beginAccountDeletion, {
+      subject: identity.subject,
+    })
+    if (intent.status === "completed") return { deleted: true, cleanupPending: false }
+    let providerConfirmed = intent.status === "provider_deleted"
+    try {
+      if (intent.status === "locked") {
+        // An absent exact subject is authoritative confirmation after a lost response.
+        if (await provider.exists()) {
+          const user = await ctx.runQuery(internal.users.getByExternalIdInternal, {
+            externalId: identity.subject,
+          })
+          const eligibility = await deletionEligibility(
+            ctx,
+            identity.subject,
+            user?.stripeAccountId
+          )
+          if (!eligibility.canDelete) throw new Error(eligibility.reason)
+          await provider.delete()
+          if (await provider.exists())
+            throw new Error("Account deletion is not confirmed. Please retry.")
+        }
+        await ctx.runMutation(internal.users.confirmProviderDeletion, { subject: identity.subject })
+        providerConfirmed = true
+      }
+      await ctx.runAction(internal.users.performUserDeletionWithChecks, {
+        clerkUserId: identity.subject,
+      })
+      return { deleted: true, cleanupPending: false }
+    } catch (error) {
+      await ctx.runMutation(internal.users.noteDeletionFailure, { subject: identity.subject })
+      if (providerConfirmed) {
+        await ctx.scheduler.runAfter(2 * 60_000, internal.users.reconcileAccountDeletion, {
+          subject: identity.subject,
+          attempt: 0,
+        })
+        return { deleted: true, cleanupPending: true }
+      }
+      throw error
+    }
+  },
+})
+
+// Provider confirmation (BAPI or signed user.deleted) is required for cleanup.
 export const performUserDeletionWithChecks = internalAction({
   args: { clerkUserId: v.string() },
   handler: async (ctx, { clerkUserId }): Promise<void> => {
+    const intent = await ctx.runQuery(internal.users.getDeletionIntent, { subject: clerkUserId })
+    if (!intent || intent.status === "locked") throw new Error("Provider deletion is not confirmed")
+    if (intent.status === "completed") return
     const user = await ctx.runQuery(internal.users.getByExternalIdInternal, {
       externalId: clerkUserId,
     })
-    if (!user) return
+    if (!user) {
+      await ctx.runMutation(internal.users.finishAccountDeletion, { subject: clerkUserId })
+      return
+    }
     const eligibility = await deletionEligibility(ctx, clerkUserId, user.stripeAccountId)
     if (!eligibility.canDelete) throw new Error(eligibility.reason)
     await ctx.runMutation(internal.users.performUserDeletion, {
       userId: user._id,
       clerkUserId,
       checkedStripeAccountId: user.stripeAccountId,
+    })
+  },
+})
+
+export const getDeletionIntent = internalQuery({
+  args: { subject: v.string() },
+  handler: (ctx, { subject }) => deletionIntent(ctx, subject),
+})
+
+export const finishAccountDeletion = internalMutation({
+  args: { subject: v.string() },
+  handler: async (ctx, { subject }) => {
+    const intent = await deletionIntent(ctx, subject)
+    if (!intent || intent.status === "locked") throw new Error("Provider deletion is not confirmed")
+    await ctx.db.patch(intent._id, {
+      status: "completed",
+      completedAt: Date.now(),
+      updatedAt: Date.now(),
     })
   },
 })
@@ -332,6 +564,8 @@ export const performUserDeletion = internalMutation({
     checkedStripeAccountId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const intent = await deletionIntent(ctx, args.clerkUserId)
+    if (!intent || intent.status === "locked") throw new Error("Provider deletion is not confirmed")
     const user = await ctx.db.get(args.userId)
     if (!user) return
     if (
@@ -345,19 +579,42 @@ export const performUserDeletion = internalMutation({
     // Recheck local obligations inside the deletion transaction after external Stripe I/O.
     const blockers = await rentalDeletionBlockers(ctx, args.clerkUserId)
     if (blockers.length) throw new Error(`Cannot delete account: ${blockers.join(" ")}`)
-    await ctx.db.delete(user._id)
+    // Keep the financial actor and provider IDs for late signed settlement events.
+    // The tombstone prevents resurrection; private profile fields are removed.
+    await ctx.db.replace(user._id, {
+      externalId: user.externalId,
+      name: "Deleted user",
+      stripeAccountId: user.stripeAccountId,
+      stripeAccountStatus: user.stripeAccountStatus,
+      stripeCustomerId: user.stripeCustomerId,
+    })
+    await ctx.db.patch(intent._id, {
+      status: "completed",
+      completedAt: Date.now(),
+      updatedAt: Date.now(),
+    })
   },
 })
 
 export const updateProfileImage = mutation({
   args: {
     r2Key: v.optional(v.string()), // R2 object key (preferred)
-    storageId: v.optional(v.id("_storage")), // Legacy Convex storage ID
+    storageId: v.optional(v.id("_storage")), // Retained to give legacy clients a re-upload error.
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()
+    if (identity) await assertAccountsAvailable(ctx, identity.subject)
     if (!identity) {
       throw new Error("Not authenticated")
+    }
+
+    // Legacy blobs have no server-proven uploader. Keep existing profile URLs
+    // readable, but never publish a new URL from an arbitrary storage ID.
+    if (args.storageId) {
+      throw new Error("Legacy storage is unavailable for profile use; upload a new profile photo")
+    }
+    if (!args.r2Key) {
+      throw new Error("A profile photo upload is required")
     }
 
     const userId = identity.subject
@@ -381,27 +638,8 @@ export const updateProfileImage = mutation({
       throw new Error("Failed to create or retrieve user")
     }
 
-    if (args.r2Key) {
-      await ctx.db.patch(user._id, {
-        profileImageR2Key: args.r2Key,
-      })
-    } else if (args.storageId) {
-      // Legacy: Get the URL from the storage ID
-      const storageId = args.storageId
-      const returnEvidence = await ctx.db.query("returnEvidence")
-        .withIndex("by_storage", (q) => q.eq("storageId", storageId))
-        .first()
-      if (returnEvidence) throw new Error("File is unavailable for profile use")
-      const profileImageUrl = await ctx.storage.getUrl(args.storageId)
-      if (!profileImageUrl) {
-        throw new Error("Failed to get image URL from storage")
-      }
-      await ctx.db.patch(user._id, {
-        profileImage: profileImageUrl,
-      })
-    } else {
-      throw new Error("Either r2Key or storageId must be provided")
-    }
+    await requireProfileUpload(ctx, user, args.r2Key)
+    await ctx.db.patch(user._id, { profileImageR2Key: args.r2Key })
 
     return user._id
   },
@@ -419,6 +657,7 @@ export const updateProfile = mutation({
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()
+    if (identity) await assertAccountsAvailable(ctx, identity.subject)
     if (!identity) {
       throw new Error("Not authenticated")
     }
@@ -476,6 +715,7 @@ export const updateNotificationPreferences = mutation({
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()
+    if (identity) await assertAccountsAvailable(ctx, identity.subject)
     if (!identity) {
       throw new Error("Not authenticated")
     }
@@ -561,6 +801,18 @@ async function hasPayoutHistory(ctx: QueryCtx, userId: string): Promise<boolean>
         )
       )
       .first(),
+    ctx.db
+      .query("seatBookings")
+      .withIndex("by_host", (q) => q.eq("hostUserId", userId))
+      .filter((q) =>
+        q.or(
+          q.neq(q.field("stripeDepositCheckoutSessionId"), undefined),
+          q.neq(q.field("stripeBalanceCheckoutSessionId"), undefined),
+          q.neq(q.field("stripeDepositPaymentIntentId"), undefined),
+          q.neq(q.field("stripeBalancePaymentIntentId"), undefined)
+        )
+      )
+      .first(),
   ])
   return records.some(Boolean)
 }
@@ -578,6 +830,7 @@ export const setStripeAccountId = internalMutation({
     replaceUnusedAccount: v.optional(v.string()),
   },
   handler: async (ctx, { userId, stripeAccountId, replaceUnusedAccount }) => {
+    await assertAccountsAvailable(ctx, userId)
     const user = await userByExternalId(ctx, userId)
     if (!user) throw new Error("User not found")
     const existing = await ctx.db
@@ -629,6 +882,7 @@ export const updateStripeAccountStatus = internalMutation({
 export const setStripeCustomerId = internalMutation({
   args: { userId: v.string(), stripeCustomerId: v.string() },
   handler: async (ctx, { userId, stripeCustomerId }) => {
+    await assertAccountsAvailable(ctx, userId)
     const user = await userByExternalId(ctx, userId)
     if (!user) throw new Error("User not found")
     const existing = await ctx.db
@@ -657,6 +911,7 @@ export async function getCurrentUser(ctx: QueryCtx) {
   if (identity === null) {
     return null
   }
+  if (await deletionIntent(ctx, identity.subject)) return null
   return await userByExternalId(ctx, identity.subject)
 }
 
@@ -744,6 +999,7 @@ export const updateHostOnboardingStep = mutation({
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()
+    if (identity) await assertAccountsAvailable(ctx, identity.subject)
     if (!identity) {
       throw new Error("Not authenticated")
     }
@@ -794,6 +1050,7 @@ export const saveOnboardingVehicleAddress = mutation({
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()
+    if (identity) await assertAccountsAvailable(ctx, identity.subject)
     if (!identity) {
       throw new Error("Not authenticated")
     }
@@ -896,6 +1153,7 @@ export const completeHostOnboarding = mutation({
   args: {},
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity()
+    if (identity) await assertAccountsAvailable(ctx, identity.subject)
     if (!identity) {
       throw new Error("Not authenticated")
     }
@@ -922,6 +1180,7 @@ export const resetHostOnboarding = mutation({
   args: {},
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity()
+    if (identity) await assertAccountsAvailable(ctx, identity.subject)
     if (!identity) {
       throw new Error("Not authenticated")
     }
@@ -1015,6 +1274,7 @@ export const saveOnboardingDraft = mutation({
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()
+    if (identity) await assertAccountsAvailable(ctx, identity.subject)
     if (!identity) {
       throw new Error("Not authenticated")
     }
@@ -1024,6 +1284,11 @@ export const saveOnboardingDraft = mutation({
       throw new Error("User not found")
     }
 
+    const currentDraft = user.hostOnboardingDraft || {}
+    if (args.vehicleData && !Object.is(args.vehicleData.year, currentDraft.vehicleData?.year)) {
+      requireVehicleYear(args.vehicleData.year)
+    }
+
     if (args.images) {
       const keys = new Set(args.images.map((image) => image.r2Key))
       if (keys.size !== args.images.length) throw new Error("Choose distinct onboarding photos")
@@ -1031,7 +1296,6 @@ export const saveOnboardingDraft = mutation({
       await clearDraftUploads(ctx, user, keys)
     }
 
-    const currentDraft = user.hostOnboardingDraft || {}
     const updatedDraft = {
       ...currentDraft,
       address: args.address ?? currentDraft.address,
@@ -1076,6 +1340,7 @@ export const clearOnboardingDraft = mutation({
   args: {},
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity()
+    if (identity) await assertAccountsAvailable(ctx, identity.subject)
     if (!identity) {
       throw new Error("Not authenticated")
     }
@@ -1100,6 +1365,7 @@ export const startOverOnboarding = mutation({
   args: {},
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity()
+    if (identity) await assertAccountsAvailable(ctx, identity.subject)
     if (!identity) {
       throw new Error("Not authenticated")
     }

@@ -1,8 +1,11 @@
+import { withAccountOperation } from "./accountOperations"
 import { StripeSubscriptions } from "@convex-dev/stripe"
-import { v } from "convex/values"
+import type { UserIdentity } from "convex/server"
+import { ConvexError, v } from "convex/values"
 import Stripe from "stripe"
 import { api, components, internal } from "./_generated/api"
 import type { Doc, Id } from "./_generated/dataModel"
+import type { ActionCtx, MutationCtx, QueryCtx } from "./_generated/server"
 import {
   action,
   internalAction,
@@ -11,9 +14,8 @@ import {
   mutation,
   query,
 } from "./_generated/server"
-import type { MutationCtx, QueryCtx } from "./_generated/server"
 import { checkAdmin } from "./admin"
-import { calculateDaysBetween, parseLocalDate } from "./dateUtils"
+import { parseLocalDate } from "./dateUtils"
 import {
   getPaymentFailedEmailTemplate,
   getPaymentSucceededEmailTemplate,
@@ -24,14 +26,15 @@ import { getWebUrl } from "./helpers"
 import { verifyPayableInvoice } from "./invoices"
 import {
   buildDestinationChargeAmounts,
-  calculateAddOnsTotal,
   calculatePlatformFeeAmount,
   resolvePlatformFeePercentage,
 } from "./pricing"
 import { rateLimiter } from "./rateLimiter"
+import { assertRentalDatesAvailable, getRentalConflicts } from "./rentalAvailability"
+import { validateRentalQuote } from "./rentalQuote"
 import { issueRentalRefund, syncRentalRefunds } from "./rentalRefunds"
-
-import { publicUserProfile } from "./userProfile"
+import { recordRefundObservations } from "./rentalSettlement"
+import { refundObservation } from "./rentalSettlementValidators"
 import {
   billingCustomerId,
   EXPRESS_SIGN_IN_URL,
@@ -39,8 +42,7 @@ import {
   retrieveOwnedCustomer,
   verifiedPaymentDestination,
 } from "./stripeOwnership"
-import type { ActionCtx } from "./_generated/server"
-import type { UserIdentity } from "convex/server"
+import { publicUserProfile } from "./userProfile"
 
 // ============================================================================
 // Cancellation Policy - Tiered Refund Calculation
@@ -403,86 +405,97 @@ export const createConnectAccount = action({
     })
 
     if (!user) throwError(ErrorCode.NOT_FOUND, "User not found")
-    const stripe = getStripe()
-    let account: Stripe.Account | undefined
-    let replaceUnusedAccount: string | undefined
-    if (user.stripeAccountId) {
-      const linked = await retrieveLinkedConnectAccount(
-        ctx,
-        stripe,
-        user.stripeAccountId,
-        identity.subject
-      )
-      if (linked.details_submitted) {
-        return { accountId: linked.id, onboardingUrl: null, isComplete: true }
-      }
-      if (linked.metadata?.renegadeUserId === identity.subject) {
-        account = linked
-      } else if (await canRestartUnusedOnboarding(ctx, stripe, linked, user)) {
-        replaceUnusedAccount = linked.id
-      } else {
-        throwError(
-          ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,
-          "Contact support to verify your existing Stripe account and resume onboarding."
-        )
-      }
-    }
-    if (!account) {
-      account = await stripe.accounts.create(
-        {
-          type: "express",
-          country: "US",
-          email: identity.email || undefined,
-          metadata: { renegadeUserId: identity.subject },
-          capabilities: {
-            card_payments: { requested: true },
-            transfers: { requested: true },
+    return await withAccountOperation(
+      ctx,
+      `connect:${identity.subject}`,
+      [identity.subject],
+      async (beforeProviderMutation) => {
+        const stripe = getStripe()
+        let account: Stripe.Account | undefined
+        let replaceUnusedAccount: string | undefined
+        if (user.stripeAccountId) {
+          const linked = await retrieveLinkedConnectAccount(
+            ctx,
+            stripe,
+            user.stripeAccountId,
+            identity.subject
+          )
+          if (linked.details_submitted) {
+            return { accountId: linked.id, onboardingUrl: null, isComplete: true }
+          }
+          if (linked.metadata?.renegadeUserId === identity.subject) {
+            account = linked
+          } else if (await canRestartUnusedOnboarding(ctx, stripe, linked, user)) {
+            replaceUnusedAccount = linked.id
+          } else {
+            throwError(
+              ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,
+              "Contact support to verify your existing Stripe account and resume onboarding."
+            )
+          }
+        }
+        if (!account) {
+          beforeProviderMutation()
+          account = await stripe.accounts.create(
+            {
+              type: "express",
+              country: "US",
+              email: identity.email || undefined,
+              metadata: { renegadeUserId: identity.subject },
+              capabilities: {
+                card_payments: { requested: true },
+                transfers: { requested: true },
+              },
+            },
+            {
+              idempotencyKey: `renegade_connect_${identity.subject}_${replaceUnusedAccount ?? "new"}`,
+            }
+          )
+          await ctx.runMutation(internal.users.setStripeAccountId, {
+            userId: identity.subject,
+            stripeAccountId: account.id,
+            replaceUnusedAccount,
+          })
+        }
+
+        // Mark payoutSetup step as complete in onboarding (account created, even if not fully onboarded)
+        await ctx.runMutation(api.users.updateHostOnboardingStep, {
+          step: "payoutSetup",
+          completed: true,
+        })
+
+        const configuredOrigin = new URL(getWebUrl()).origin
+        const permittedOrigins = [
+          configuredOrigin,
+          "https://renegaderace.com",
+          "https://www.renegaderace.com",
+        ]
+        const baseUrl =
+          args.returnUrlBase && permittedOrigins.includes(args.returnUrlBase)
+            ? args.returnUrlBase
+            : configuredOrigin
+
+        // Create account link for onboarding
+        beforeProviderMutation()
+        const accountLink = await stripe.accountLinks.create(
+          {
+            account: account.id,
+            refresh_url: `${baseUrl}/host/dashboard?stripe_refresh=true`,
+            return_url: `${baseUrl}/host/dashboard?stripe_return=true`,
+            type: "account_onboarding",
           },
-        },
-        { idempotencyKey: `renegade_connect_${identity.subject}_${replaceUnusedAccount ?? "new"}` }
-      )
-      await ctx.runMutation(internal.users.setStripeAccountId, {
-        userId: identity.subject,
-        stripeAccountId: account.id,
-        replaceUnusedAccount,
-      })
-    }
+          {
+            idempotencyKey: `account_link_${account.id}_${Date.now()}`,
+          }
+        )
 
-    // Mark payoutSetup step as complete in onboarding (account created, even if not fully onboarded)
-    await ctx.runMutation(api.users.updateHostOnboardingStep, {
-      step: "payoutSetup",
-      completed: true,
-    })
-
-    const configuredOrigin = new URL(getWebUrl()).origin
-    const permittedOrigins = [
-      configuredOrigin,
-      "https://renegaderace.com",
-      "https://www.renegaderace.com",
-    ]
-    const baseUrl =
-      args.returnUrlBase && permittedOrigins.includes(args.returnUrlBase)
-        ? args.returnUrlBase
-        : configuredOrigin
-
-    // Create account link for onboarding
-    const accountLink = await stripe.accountLinks.create(
-      {
-        account: account.id,
-        refresh_url: `${baseUrl}/host/dashboard?stripe_refresh=true`,
-        return_url: `${baseUrl}/host/dashboard?stripe_return=true`,
-        type: "account_onboarding",
-      },
-      {
-        idempotencyKey: `account_link_${account.id}_${Date.now()}`,
+        return {
+          accountId: account.id,
+          onboardingUrl: accountLink.url,
+          isComplete: false,
+        }
       }
     )
-
-    return {
-      accountId: account.id,
-      onboardingUrl: accountLink.url,
-      isComplete: false,
-    }
   },
 })
 
@@ -664,6 +677,58 @@ function assertRentalAwaitingPayment(
   }
 }
 
+function assertPaymentAttemptRetryable(payment: Doc<"payments">) {
+  if (payment.status === "cancelled") {
+    throwError(
+      ErrorCode.PAYMENT_ATTEMPT_TERMINAL,
+      "This payment attempt has ended. Cancel this unpaid booking and submit a fresh rental request for host approval."
+    )
+  }
+}
+
+async function assertCurrentRentalAttempt(ctx: QueryCtx, reservation: Doc<"reservations">) {
+  const payments = reservation.paymentId
+    ? [await ctx.db.get(reservation.paymentId)]
+    : await ctx.db
+        .query("payments")
+        .withIndex("by_reservation", (q) => q.eq("reservationId", reservation._id))
+        .collect()
+  for (const payment of payments) {
+    if (
+      !payment ||
+      payment.reservationId !== reservation._id ||
+      payment.renterId !== reservation.renterId ||
+      payment.ownerId !== reservation.ownerId ||
+      payment.amount !== reservation.totalAmount ||
+      payment.currency !== "usd"
+    ) {
+      throwError(
+        ErrorCode.CONFLICT,
+        "Current payment does not match this booking. Contact support."
+      )
+    }
+    assertPaymentAttemptRetryable(payment)
+  }
+}
+
+export const assertRentalPaymentAvailable = internalQuery({
+  args: { reservationId: v.id("reservations"), renterId: v.string() },
+  handler: async (ctx, args) => {
+    const reservation = await ctx.db.get(args.reservationId)
+    if (!reservation || reservation.renterId !== args.renterId) {
+      throwError(ErrorCode.FORBIDDEN, "Payment reservation does not match the renter")
+    }
+    assertRentalAwaitingPayment(reservation)
+    await assertCurrentRentalAttempt(ctx, reservation)
+    await assertRentalDatesAvailable(ctx, {
+      vehicleId: reservation.vehicleId,
+      startDate: reservation.startDate,
+      endDate: reservation.endDate,
+      excludeReservationId: reservation._id,
+    })
+  },
+})
+
 // Create checkout session for one-time payment (using component + Connect)
 export const createCheckoutSession = action({
   args: {
@@ -695,63 +760,23 @@ export const createCheckoutSession = action({
 
     assertRentalAwaitingPayment(reservation)
 
-    // Monetary validation
-    const MAX_AMOUNT_CENTS = 1_000_000 // $10,000 max
-    const MIN_AMOUNT_CENTS = 100 // $1 min
+    await ctx.runQuery(internal.stripe.assertRentalPaymentAvailable, {
+      reservationId: reservation._id,
+      renterId: identity.subject,
+    })
 
-    if (args.amount <= 0 || args.amount < MIN_AMOUNT_CENTS) {
-      throwError(ErrorCode.INVALID_AMOUNT, "Payment amount must be at least $1.00")
-    }
-
-    if (args.amount > MAX_AMOUNT_CENTS) {
-      throwError(ErrorCode.INVALID_AMOUNT, "Payment amount cannot exceed $10,000.00")
-    }
-
-    // Get current vehicle pricing to validate payment amount
+    // Trusted request snapshots keep their approved prices after listing edits.
+    // Historical quotes are payable only when every stored amount/cadence matches.
     const vehicle = await ctx.runQuery(api.vehicles.getById, {
       id: reservation.vehicleId,
     })
-
-    if (!vehicle) {
-      throwError(ErrorCode.NOT_FOUND, "Vehicle not found")
-    }
-
-    // Recalculate total from current pricing (server-side validation)
-    const totalDays = calculateDaysBetween(reservation.startDate, reservation.endDate)
-    const baseAmount = totalDays * vehicle.dailyRate
-
-    // Validate add-ons against vehicle's current add-ons
-    const validatedAddOns: Array<{ price: number; priceType?: "daily" | "one-time" }> = []
-    if (reservation.addOns && reservation.addOns.length > 0) {
-      for (const reservationAddOn of reservation.addOns) {
-        const vehicleAddOn = vehicle.addOns?.find((va: any) => va.name === reservationAddOn.name)
-        if (!vehicleAddOn) {
-          throwError(
-            ErrorCode.INVALID_INPUT,
-            `Add-on "${reservationAddOn.name}" is no longer available`
-          )
-        }
-        if (vehicleAddOn.price !== reservationAddOn.price) {
-          throwError(
-            ErrorCode.PRICE_CHANGED,
-            `Add-on "${reservationAddOn.name}" price has changed from ${reservationAddOn.price} to ${vehicleAddOn.price} cents`
-          )
-        }
-        const priceType = vehicleAddOn.priceType || "one-time"
-        validatedAddOns.push({ price: reservationAddOn.price, priceType })
-      }
-    }
-
-    const addOnsTotal = calculateAddOnsTotal(validatedAddOns, totalDays)
-    const expectedTotal = baseAmount + addOnsTotal
-
-    // Validate that the payment amount matches the recalculated total
-    if (args.amount !== expectedTotal) {
-      throwError(
-        ErrorCode.PRICE_CHANGED,
-        `Payment amount mismatch: expected ${expectedTotal} cents (based on current pricing), got ${args.amount} cents. ` +
-          "Vehicle daily rate may have changed."
-      )
+    if (!vehicle) throwError(ErrorCode.NOT_FOUND, "Vehicle not found")
+    const quote = validateRentalQuote(reservation, vehicle)
+    if (!Number.isSafeInteger(args.amount) || args.amount !== quote.totalAmount) {
+      throw new ConvexError({
+        code: ErrorCode.PRICE_CHANGED,
+        message: `Payment amount mismatch: expected ${quote.totalAmount} cents from the approved rental quote`,
+      })
     }
 
     // Get owner's Stripe Connect account
@@ -766,145 +791,164 @@ export const createCheckoutSession = action({
       )
     }
 
-    // Verify Connect account is ready
-    const stripe = getStripe()
-    const connectAccount = await verifiedPaymentDestination(
+    const destinationAccountId = owner.stripeAccountId
+    return await withAccountOperation(
       ctx,
-      stripe,
-      owner.stripeAccountId,
-      owner.externalId
-    )
+      `rental-checkout:${reservation._id}`,
+      [identity.subject, reservation.ownerId],
+      async (beforeProviderMutation) => {
+        // Verify Connect account is ready
+        const stripe = getStripe()
+        const connectAccount = await verifiedPaymentDestination(
+          ctx,
+          stripe,
+          destinationAccountId,
+          owner.externalId
+        )
 
-    if (!connectAccount.details_submitted) {
-      throwError(
-        ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,
-        "Owner account onboarding is not complete. Please complete Stripe onboarding."
-      )
-    }
+        if (!connectAccount.details_submitted) {
+          throwError(
+            ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,
+            "Owner account onboarding is not complete. Please complete Stripe onboarding."
+          )
+        }
 
-    if (!connectAccount.charges_enabled) {
-      throwError(
-        ErrorCode.STRIPE_ACCOUNT_DISABLED,
-        "Owner account cannot accept charges yet. Please complete Stripe onboarding."
-      )
-    }
+        if (!connectAccount.charges_enabled) {
+          throwError(
+            ErrorCode.STRIPE_ACCOUNT_DISABLED,
+            "Owner account cannot accept charges yet. Please complete Stripe onboarding."
+          )
+        }
 
-    // Check if transfers capability is enabled (required for destination payments)
-    const capabilities = connectAccount.capabilities as Record<string, string> | undefined
-    const transfersEnabled =
-      capabilities?.transfers === "active" || capabilities?.legacy_payments === "active"
+        // Check if transfers capability is enabled (required for destination payments)
+        const capabilities = connectAccount.capabilities as Record<string, string> | undefined
+        const transfersEnabled =
+          capabilities?.transfers === "active" || capabilities?.legacy_payments === "active"
 
-    if (!transfersEnabled) {
-      throwError(
-        ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,
-        "Owner account does not have transfers enabled. Please complete Stripe onboarding to enable transfers capability."
-      )
-    }
+        if (!transfersEnabled) {
+          throwError(
+            ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,
+            "Owner account does not have transfers enabled. Please complete Stripe onboarding to enable transfers capability."
+          )
+        }
 
-    // Calculate Renegade platform fee on the listing amount; renter covers card processing.
-    const { platformFee, ownerAmount } = await ctx.runMutation(api.stripe.calculatePlatformFee, {
-      amount: args.amount,
-      providerExternalId: reservation.ownerId,
-    })
-    const { chargeAmountCents, processingFeeCents, applicationFeeCents } =
-      buildDestinationChargeAmounts({
-        listingAmountCents: args.amount,
-        platformFeeCents: platformFee,
-      })
-
-    // Get or create Stripe customer (component handles this)
-    const customerId = await rentalBillingCustomer(ctx, stripe, identity)
-
-    const webUrl = getWebUrl()
-
-    // Create checkout session using Stripe directly (component doesn't support Connect)
-    // but we use the component's customer management
-    const checkoutSession = await stripe.checkout.sessions.create(
-      {
-        customer: customerId,
-        mode: "payment",
-        line_items: [
+        // Calculate Renegade platform fee on the listing amount; renter covers card processing.
+        const { platformFee, ownerAmount } = await ctx.runMutation(
+          api.stripe.calculatePlatformFee,
           {
-            price_data: {
-              currency: "usd",
-              product_data: {
-                name: `Vehicle Rental - Reservation ${args.reservationId}`,
-              },
-              unit_amount: args.amount,
-            },
-            quantity: 1,
-          },
-          ...(processingFeeCents > 0
-            ? [
-                {
-                  price_data: {
-                    currency: "usd",
-                    product_data: {
-                      name: "Card processing fee",
-                      description: "Passed through at Stripe's standard US card rate",
-                    },
-                    unit_amount: processingFeeCents,
+            amount: args.amount,
+            providerExternalId: reservation.ownerId,
+          }
+        )
+        const { chargeAmountCents, processingFeeCents, applicationFeeCents } =
+          buildDestinationChargeAmounts({
+            listingAmountCents: args.amount,
+            platformFeeCents: platformFee,
+          })
+
+        // Get or create Stripe customer (component handles this)
+        beforeProviderMutation()
+        const customerId = await rentalBillingCustomer(ctx, stripe, identity)
+
+        const webUrl = getWebUrl()
+
+        // Create checkout session using Stripe directly (component doesn't support Connect)
+        // but we use the component's customer management
+        const checkoutSession = await stripe.checkout.sessions.create(
+          {
+            customer: customerId,
+            mode: "payment",
+            line_items: [
+              {
+                price_data: {
+                  currency: "usd",
+                  product_data: {
+                    name: `Vehicle Rental - Reservation ${args.reservationId}`,
                   },
-                  quantity: 1,
+                  unit_amount: args.amount,
                 },
-              ]
-            : []),
-        ],
-        payment_intent_data: {
-          // Includes Renegade fee + processing so the provider nets ownerAmount
-          application_fee_amount: applicationFeeCents,
-          transfer_data: {
-            destination: owner.stripeAccountId, // Owner's Connect account
+                quantity: 1,
+              },
+              ...(processingFeeCents > 0
+                ? [
+                    {
+                      price_data: {
+                        currency: "usd",
+                        product_data: {
+                          name: "Card processing fee",
+                          description: "Passed through at Stripe's standard US card rate",
+                        },
+                        unit_amount: processingFeeCents,
+                      },
+                      quantity: 1,
+                    },
+                  ]
+                : []),
+            ],
+            payment_intent_data: {
+              // Includes Renegade fee + processing so the provider nets ownerAmount
+              application_fee_amount: applicationFeeCents,
+              transfer_data: {
+                destination: destinationAccountId, // Owner's Connect account
+              },
+              metadata: {
+                reservationId: args.reservationId,
+                renterId: reservation.renterId,
+                ownerId: reservation.ownerId,
+                vehicleId: reservation.vehicleId,
+                platformFee: platformFee.toString(),
+                ownerAmount: ownerAmount.toString(),
+                processingFee: processingFeeCents.toString(),
+                chargeAmount: chargeAmountCents.toString(),
+              },
+            },
+            success_url: `${webUrl}/checkout/success?reservationId=${args.reservationId}`,
+            cancel_url: `${webUrl}/checkout?reservationId=${args.reservationId}`,
+            metadata: {
+              reservationId: args.reservationId,
+              renterId: reservation.renterId,
+              ownerId: reservation.ownerId,
+            },
           },
-          metadata: {
-            reservationId: args.reservationId,
-            renterId: reservation.renterId,
-            ownerId: reservation.ownerId,
-            vehicleId: reservation.vehicleId,
-            platformFee: platformFee.toString(),
-            ownerAmount: ownerAmount.toString(),
-            processingFee: processingFeeCents.toString(),
-            chargeAmount: chargeAmountCents.toString(),
-          },
-        },
-        success_url: `${webUrl}/checkout/success?reservationId=${args.reservationId}`,
-        cancel_url: `${webUrl}/checkout?reservationId=${args.reservationId}`,
-        metadata: {
+          {
+            idempotencyKey: `cs_create_${args.reservationId}`,
+          }
+        )
+
+        // Create payment record
+        const paymentId = await ctx.runMutation(internal.stripe.createPaymentRecord, {
           reservationId: args.reservationId,
           renterId: reservation.renterId,
           ownerId: reservation.ownerId,
-        },
-      },
-      {
-        idempotencyKey: `cs_create_${args.reservationId}`,
+          amount: args.amount,
+          platformFee,
+          ownerAmount,
+          processingFee: processingFeeCents,
+          stripeCustomerId: customerId,
+          stripeCheckoutSessionId: checkoutSession.id,
+          stripeAccountId: destinationAccountId,
+          metadata: {
+            vehicleId: reservation.vehicleId,
+            startDate: reservation.startDate,
+            endDate: reservation.endDate,
+            totalDays: reservation.totalDays,
+          },
+        })
+
+        // Cancellation may race the external Stripe request. Do not expose its URL
+        // after the booking stops being payable; retain the linked financial record.
+        await ctx.runQuery(internal.stripe.assertRentalPaymentAvailable, {
+          reservationId: reservation._id,
+          renterId: identity.subject,
+        })
+
+        return {
+          paymentId,
+          sessionId: checkoutSession.id,
+          url: checkoutSession.url,
+        }
       }
     )
-
-    // Create payment record
-    const paymentId = await ctx.runMutation(internal.stripe.createPaymentRecord, {
-      reservationId: args.reservationId,
-      renterId: reservation.renterId,
-      ownerId: reservation.ownerId,
-      amount: args.amount,
-      platformFee,
-      ownerAmount,
-      processingFee: processingFeeCents,
-      stripeCustomerId: customerId,
-      stripeCheckoutSessionId: checkoutSession.id,
-      stripeAccountId: owner.stripeAccountId,
-      metadata: {
-        vehicleId: reservation.vehicleId,
-        startDate: reservation.startDate,
-        endDate: reservation.endDate,
-        totalDays: reservation.totalDays,
-      },
-    })
-
-    return {
-      paymentId,
-      sessionId: checkoutSession.id,
-      url: checkoutSession.url,
-    }
   },
 })
 
@@ -954,63 +998,23 @@ export const createPaymentIntent = action({
 
     assertRentalAwaitingPayment(reservation)
 
-    // Monetary validation
-    const MAX_AMOUNT_CENTS = 1_000_000 // $10,000 max
-    const MIN_AMOUNT_CENTS = 100 // $1 min
+    await ctx.runQuery(internal.stripe.assertRentalPaymentAvailable, {
+      reservationId: reservation._id,
+      renterId: identity.subject,
+    })
 
-    if (args.amount <= 0 || args.amount < MIN_AMOUNT_CENTS) {
-      throwError(ErrorCode.INVALID_AMOUNT, "Payment amount must be at least $1.00")
-    }
-
-    if (args.amount > MAX_AMOUNT_CENTS) {
-      throwError(ErrorCode.INVALID_AMOUNT, "Payment amount cannot exceed $10,000.00")
-    }
-
-    // Get current vehicle pricing to validate payment amount
+    // Trusted request snapshots keep their approved prices after listing edits.
+    // Historical quotes are payable only when every stored amount/cadence matches.
     const vehicle = await ctx.runQuery(api.vehicles.getById, {
       id: reservation.vehicleId,
     })
-
-    if (!vehicle) {
-      throwError(ErrorCode.NOT_FOUND, "Vehicle not found")
-    }
-
-    // Recalculate total from current pricing (server-side validation)
-    const totalDays = calculateDaysBetween(reservation.startDate, reservation.endDate)
-    const baseAmount = totalDays * vehicle.dailyRate
-
-    // Validate add-ons against vehicle's current add-ons
-    const validatedAddOns: Array<{ price: number; priceType?: "daily" | "one-time" }> = []
-    if (reservation.addOns && reservation.addOns.length > 0) {
-      for (const reservationAddOn of reservation.addOns) {
-        const vehicleAddOn = vehicle.addOns?.find((va: any) => va.name === reservationAddOn.name)
-        if (!vehicleAddOn) {
-          throwError(
-            ErrorCode.INVALID_INPUT,
-            `Add-on "${reservationAddOn.name}" is no longer available`
-          )
-        }
-        if (vehicleAddOn.price !== reservationAddOn.price) {
-          throwError(
-            ErrorCode.PRICE_CHANGED,
-            `Add-on "${reservationAddOn.name}" price has changed from ${reservationAddOn.price} to ${vehicleAddOn.price} cents`
-          )
-        }
-        const priceType = vehicleAddOn.priceType || "one-time"
-        validatedAddOns.push({ price: reservationAddOn.price, priceType })
-      }
-    }
-
-    const addOnsTotal = calculateAddOnsTotal(validatedAddOns, totalDays)
-    const expectedTotal = baseAmount + addOnsTotal
-
-    // Validate that the payment amount matches the recalculated total
-    if (args.amount !== expectedTotal) {
-      throwError(
-        ErrorCode.PRICE_CHANGED,
-        `Payment amount mismatch: expected ${expectedTotal} cents (based on current pricing), got ${args.amount} cents. ` +
-          "Vehicle daily rate may have changed."
-      )
+    if (!vehicle) throwError(ErrorCode.NOT_FOUND, "Vehicle not found")
+    const quote = validateRentalQuote(reservation, vehicle)
+    if (!Number.isSafeInteger(args.amount) || args.amount !== quote.totalAmount) {
+      throw new ConvexError({
+        code: ErrorCode.PRICE_CHANGED,
+        message: `Payment amount mismatch: expected ${quote.totalAmount} cents from the approved rental quote`,
+      })
     }
 
     // Get owner's Stripe Connect account
@@ -1025,114 +1029,133 @@ export const createPaymentIntent = action({
       )
     }
 
-    // Verify Connect account is ready and has required capabilities
-    const stripe = getStripe()
-    const connectAccount = await verifiedPaymentDestination(
+    const destinationAccountId = owner.stripeAccountId
+    return await withAccountOperation(
       ctx,
-      stripe,
-      owner.stripeAccountId,
-      owner.externalId
-    )
+      `rental-intent:${reservation._id}`,
+      [identity.subject, reservation.ownerId],
+      async (beforeProviderMutation) => {
+        // Verify Connect account is ready and has required capabilities
+        const stripe = getStripe()
+        const connectAccount = await verifiedPaymentDestination(
+          ctx,
+          stripe,
+          destinationAccountId,
+          owner.externalId
+        )
 
-    if (!connectAccount.details_submitted) {
-      throwError(
-        ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,
-        "Owner account onboarding is not complete. Please complete Stripe onboarding."
-      )
-    }
+        if (!connectAccount.details_submitted) {
+          throwError(
+            ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,
+            "Owner account onboarding is not complete. Please complete Stripe onboarding."
+          )
+        }
 
-    if (!connectAccount.charges_enabled) {
-      throwError(
-        ErrorCode.STRIPE_ACCOUNT_DISABLED,
-        "Owner account cannot accept charges yet. Please complete Stripe onboarding."
-      )
-    }
+        if (!connectAccount.charges_enabled) {
+          throwError(
+            ErrorCode.STRIPE_ACCOUNT_DISABLED,
+            "Owner account cannot accept charges yet. Please complete Stripe onboarding."
+          )
+        }
 
-    // Check if transfers capability is enabled (required for destination payments)
-    const capabilities = connectAccount.capabilities as Record<string, string> | undefined
-    const transfersEnabled =
-      capabilities?.transfers === "active" || capabilities?.legacy_payments === "active"
+        // Check if transfers capability is enabled (required for destination payments)
+        const capabilities = connectAccount.capabilities as Record<string, string> | undefined
+        const transfersEnabled =
+          capabilities?.transfers === "active" || capabilities?.legacy_payments === "active"
 
-    if (!transfersEnabled) {
-      throwError(
-        ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,
-        "Owner account does not have transfers enabled. Please complete Stripe onboarding to enable transfers capability."
-      )
-    }
+        if (!transfersEnabled) {
+          throwError(
+            ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,
+            "Owner account does not have transfers enabled. Please complete Stripe onboarding to enable transfers capability."
+          )
+        }
 
-    // Calculate Renegade platform fee on the listing amount; renter covers card processing.
-    const { platformFee, ownerAmount } = await ctx.runMutation(api.stripe.calculatePlatformFee, {
-      amount: args.amount,
-      providerExternalId: reservation.ownerId,
-    })
-    const { chargeAmountCents, processingFeeCents, applicationFeeCents } =
-      buildDestinationChargeAmounts({
-        listingAmountCents: args.amount,
-        platformFeeCents: platformFee,
-      })
+        // Calculate Renegade platform fee on the listing amount; renter covers card processing.
+        const { platformFee, ownerAmount } = await ctx.runMutation(
+          api.stripe.calculatePlatformFee,
+          {
+            amount: args.amount,
+            providerExternalId: reservation.ownerId,
+          }
+        )
+        const { chargeAmountCents, processingFeeCents, applicationFeeCents } =
+          buildDestinationChargeAmounts({
+            listingAmountCents: args.amount,
+            platformFeeCents: platformFee,
+          })
 
-    // Get or create Stripe customer (component handles this)
-    const customerId = await rentalBillingCustomer(ctx, stripe, identity)
+        // Get or create Stripe customer (component handles this)
+        beforeProviderMutation()
+        const customerId = await rentalBillingCustomer(ctx, stripe, identity)
 
-    // Create Stripe Payment Intent with Connect
-    const paymentIntent = await stripe.paymentIntents.create(
-      {
-        amount: chargeAmountCents,
-        currency: "usd",
-        customer: customerId,
-        // Includes Renegade fee + processing so the provider nets ownerAmount
-        application_fee_amount: applicationFeeCents,
-        transfer_data: {
-          destination: owner.stripeAccountId, // Owner's Connect account
-        },
-        metadata: {
+        // Create Stripe Payment Intent with Connect
+        const paymentIntent = await stripe.paymentIntents.create(
+          {
+            amount: chargeAmountCents,
+            currency: "usd",
+            customer: customerId,
+            // Includes Renegade fee + processing so the provider nets ownerAmount
+            application_fee_amount: applicationFeeCents,
+            transfer_data: {
+              destination: destinationAccountId, // Owner's Connect account
+            },
+            metadata: {
+              reservationId: args.reservationId,
+              renterId: reservation.renterId,
+              ownerId: reservation.ownerId,
+              vehicleId: reservation.vehicleId,
+              platformFee: platformFee.toString(),
+              ownerAmount: ownerAmount.toString(),
+              processingFee: processingFeeCents.toString(),
+              chargeAmount: chargeAmountCents.toString(),
+            },
+            automatic_payment_methods: {
+              enabled: true,
+            },
+          },
+          {
+            idempotencyKey: `pi_create_${args.reservationId}`,
+          }
+        )
+
+        // Create payment record
+        const paymentId = await ctx.runMutation(internal.stripe.createPaymentRecord, {
           reservationId: args.reservationId,
           renterId: reservation.renterId,
           ownerId: reservation.ownerId,
-          vehicleId: reservation.vehicleId,
-          platformFee: platformFee.toString(),
-          ownerAmount: ownerAmount.toString(),
-          processingFee: processingFeeCents.toString(),
-          chargeAmount: chargeAmountCents.toString(),
-        },
-        automatic_payment_methods: {
-          enabled: true,
-        },
-      },
-      {
-        idempotencyKey: `pi_create_${args.reservationId}`,
+          amount: args.amount,
+          platformFee,
+          ownerAmount,
+          processingFee: processingFeeCents,
+          stripePaymentIntentId: paymentIntent.id,
+          stripeCustomerId: customerId,
+          stripeAccountId: destinationAccountId,
+          metadata: {
+            vehicleId: reservation.vehicleId,
+            startDate: reservation.startDate,
+            endDate: reservation.endDate,
+            totalDays: reservation.totalDays,
+          },
+        })
+
+        // A previously issued secret can outlive a cancellation. Recheck before
+        // returning it; signed success events separately guard final confirmation.
+        await ctx.runQuery(internal.stripe.assertRentalPaymentAvailable, {
+          reservationId: reservation._id,
+          renterId: identity.subject,
+        })
+
+        return {
+          paymentId,
+          clientSecret: paymentIntent.client_secret as string,
+          amount: args.amount,
+          processingFee: processingFeeCents,
+          chargeAmount: chargeAmountCents,
+          platformFee,
+          ownerAmount,
+        }
       }
     )
-
-    // Create payment record
-    const paymentId = await ctx.runMutation(internal.stripe.createPaymentRecord, {
-      reservationId: args.reservationId,
-      renterId: reservation.renterId,
-      ownerId: reservation.ownerId,
-      amount: args.amount,
-      platformFee,
-      ownerAmount,
-      processingFee: processingFeeCents,
-      stripePaymentIntentId: paymentIntent.id,
-      stripeCustomerId: customerId,
-      stripeAccountId: owner.stripeAccountId,
-      metadata: {
-        vehicleId: reservation.vehicleId,
-        startDate: reservation.startDate,
-        endDate: reservation.endDate,
-        totalDays: reservation.totalDays,
-      },
-    })
-
-    return {
-      paymentId,
-      clientSecret: paymentIntent.client_secret as string,
-      amount: args.amount,
-      processingFee: processingFeeCents,
-      chargeAmount: chargeAmountCents,
-      platformFee,
-      ownerAmount,
-    }
   },
 })
 
@@ -1170,6 +1193,13 @@ export const createPaymentRecord = internalMutation({
       throwError(ErrorCode.CONFLICT, "Payment participants do not match the reservation")
     }
 
+    await assertRentalDatesAvailable(ctx, {
+      vehicleId: reservation.vehicleId,
+      startDate: reservation.startDate,
+      endDate: reservation.endDate,
+      excludeReservationId: reservation._id,
+    })
+
     const existing = args.stripePaymentIntentId
       ? await paymentForIntent(ctx, args.stripePaymentIntentId)
       : args.stripeCheckoutSessionId
@@ -1184,12 +1214,15 @@ export const createPaymentRecord = internalMutation({
       ) {
         throwError(ErrorCode.CONFLICT, "Stripe payment is linked to a different booking or amount")
       }
+      await assertCurrentRentalAttempt(ctx, reservation)
+      assertPaymentAttemptRetryable(existing)
       return existing._id
     }
     if (!(args.stripePaymentIntentId || args.stripeCheckoutSessionId)) {
       throwError(ErrorCode.INVALID_INPUT, "A Stripe payment intent or checkout session is required")
     }
     assertRentalAwaitingPayment(reservation)
+    await assertCurrentRentalAttempt(ctx, reservation)
 
     const paymentId = await ctx.db.insert("payments", {
       reservationId: args.reservationId,
@@ -1311,6 +1344,110 @@ async function getRentalReservation(ctx: MutationCtx, reservationId: string) {
   return reservation
 }
 
+async function isCurrentRentalPayment(
+  ctx: QueryCtx,
+  reservation: Doc<"reservations">,
+  payment: Doc<"payments">
+) {
+  if (reservation.paymentId) return reservation.paymentId === payment._id
+  // Legacy rows without a pointer are safe only when the attempt is unambiguous.
+  const attempts = await ctx.db
+    .query("payments")
+    .withIndex("by_reservation", (q) => q.eq("reservationId", reservation._id))
+    .take(2)
+  return attempts.length === 1 && attempts[0]?._id === payment._id
+}
+
+async function reconcileTerminalRentalAttempt(
+  ctx: MutationCtx,
+  reservation: Doc<"reservations">,
+  payments: Doc<"payments">[],
+  evidence: RentalEventFields & {
+    eventId: string
+    eventType: "payment_intent.canceled" | "checkout.session.expired"
+    failureReason?: string
+  }
+) {
+  // Every row is selected by the exact signed Stripe object. Validate all of
+  // them before changing any: a conflicting legacy binding needs manual review.
+  if (evidence.currency !== "usd" || !payments.length) {
+    throw new Error("Stripe event does not match the rental payment")
+  }
+  for (const payment of payments) verifyRentalPayment(payment, reservation, evidence)
+  await ctx.runMutation(internal.webhookIdempotency.recordWebhookEvent, {
+    eventId: evidence.eventId,
+    source: "stripe",
+    eventType: evidence.eventType,
+  })
+  const unsettled = payments.filter((payment) =>
+    ["pending", "processing", "failed"].includes(payment.status)
+  )
+  const now = Date.now()
+  for (const payment of unsettled) {
+    await ctx.db.patch(payment._id, {
+      status: "cancelled",
+      failureReason: evidence.failureReason,
+      updatedAt: now,
+    })
+  }
+  let isCurrent = unsettled.some((payment) => payment._id === reservation.paymentId)
+  if (!reservation.paymentId && unsettled.length) {
+    const attempts = await ctx.db
+      .query("payments")
+      .withIndex("by_reservation", (q) => q.eq("reservationId", reservation._id))
+      .collect()
+    // No pointer is safe only when all ledger rows describe this unpaid object.
+    isCurrent = attempts.every((attempt) =>
+      unsettled.some((payment) => payment._id === attempt._id)
+    )
+  }
+  if (
+    isCurrent &&
+    reservation.status === "approved" &&
+    (!reservation.paymentStatus || ["pending", "failed"].includes(reservation.paymentStatus))
+  )
+    await ctx.db.patch(reservation._id, { paymentStatus: "failed", updatedAt: now })
+}
+
+export const ingestRentalCheckoutExpired = internalMutation({
+  args: {
+    ...rentalEventFields,
+    stripeCheckoutSessionId: v.string(),
+    mode: v.string(),
+    status: v.string(),
+    paymentStatus: v.string(),
+    eventId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    if (
+      await ctx.runQuery(internal.webhookIdempotency.checkWebhookEvent, {
+        eventId: args.eventId,
+        source: "stripe",
+      })
+    )
+      return
+    if (
+      args.mode !== "payment" ||
+      args.status !== "expired" ||
+      args.paymentStatus !== "unpaid" ||
+      args.currency !== "usd"
+    )
+      throw new Error("Invalid expired rental checkout evidence")
+    const reservation = await getRentalReservation(ctx, args.reservationId)
+    const payments = await ctx.db
+      .query("payments")
+      .withIndex("by_stripe_checkout_session", (q) =>
+        q.eq("stripeCheckoutSessionId", args.stripeCheckoutSessionId)
+      )
+      .collect()
+    await reconcileTerminalRentalAttempt(ctx, reservation, payments, {
+      ...args,
+      eventType: "checkout.session.expired",
+      failureReason: "Checkout session expired",
+    })
+  },
+})
+
 export const bindRentalCheckoutIntent = internalMutation({
   args: {
     ...rentalEventFields,
@@ -1404,6 +1541,19 @@ export const ingestRentalPaymentEvent = internalMutation({
     )
       return
     const reservation = await getRentalReservation(ctx, args.reservationId)
+    if (args.eventType === "payment_intent.canceled") {
+      const payments = await ctx.db
+        .query("payments")
+        .withIndex("by_stripe_payment_intent", (q) =>
+          q.eq("stripePaymentIntentId", args.stripePaymentIntentId)
+        )
+        .collect()
+      await reconcileTerminalRentalAttempt(ctx, reservation, payments, {
+        ...args,
+        eventType: "payment_intent.canceled",
+      })
+      return
+    }
     const payment = await paymentForIntent(ctx, args.stripePaymentIntentId, reservation._id)
     verifyRentalPayment(payment, reservation, args)
     await ctx.runMutation(internal.webhookIdempotency.recordWebhookEvent, {
@@ -1441,6 +1591,58 @@ export const ingestRentalPaymentEvent = internalMutation({
         reservation.status === "confirmed" &&
         reservation.paymentId === payment._id &&
         reservation.paymentStatus !== "refunded"
+
+      if (canConfirm) {
+        // Stripe confirmation is outside Convex's transaction. A previously
+        // issued checkout can capture after dates become blocked or reserved.
+        const conflicts = await getRentalConflicts(ctx, {
+          vehicleId: reservation.vehicleId,
+          startDate: reservation.startDate,
+          endDate: reservation.endDate,
+          excludeReservationId: reservation._id,
+        })
+        const priorReview = await ctx.db
+          .query("auditLogs")
+          .withIndex("by_entity", (q) => q.eq("entityType", "payment").eq("entityId", payment._id))
+          .filter((q) => q.eq(q.field("action"), "rental_capture_requires_reconciliation"))
+          .first()
+        if (!conflicts.isAvailable || priorReview) {
+          // Preserve capture truth and stop new payment attempts, but do not
+          // confirm a second booking or refund without an explicit resolution.
+          await ctx.db.patch(reservation._id, {
+            paymentId: payment._id,
+            paymentStatus: payment.status === "partially_refunded" ? "partially_refunded" : "paid",
+            updatedAt: now,
+          })
+          if (!priorReview) {
+            await ctx.runMutation(internal.auditLog.create, {
+              entityType: "payment",
+              entityId: payment._id,
+              action: "rental_capture_requires_reconciliation",
+              metadata: {
+                reservationId: reservation._id,
+                reservationStatus: reservation.status,
+                stripePaymentIntentId: args.stripePaymentIntentId,
+                reason: "rental_dates_unavailable",
+                blockedDates: conflicts.blockedDates.map((item) => item.date),
+                conflictingReservationIds: conflicts.reservedReservations.map((item) => item._id),
+              },
+            })
+            for (const userId of new Set([reservation.renterId, reservation.ownerId])) {
+              await ctx.scheduler.runAfter(0, internal.notifications.createNotification, {
+                userId,
+                type: "system",
+                title: "Rental payment needs review",
+                message:
+                  "Payment was received, but the rental dates conflict with another booking or a host block. The rental is not confirmed. Contact support to resolve it; do not submit another payment.",
+                link: userId === reservation.renterId ? "/trips" : "/host/reservations",
+                metadata: { reservationId: reservation._id, paymentId: payment._id },
+              })
+            }
+          }
+          return
+        }
+      }
       if (canConfirm || sameConfirmedRental) {
         const paymentStatus =
           payment.status === "partially_refunded" ? "partially_refunded" : "paid"
@@ -1474,31 +1676,24 @@ export const ingestRentalPaymentEvent = internalMutation({
       return
     }
 
-    if (
-      payment.status !== "pending" &&
-      payment.status !== "processing" &&
-      !(payment.status === "failed" && args.eventType === "payment_intent.canceled")
-    )
-      return
-    const canceled = args.eventType === "payment_intent.canceled"
+    if (payment.status !== "pending" && payment.status !== "processing") return
     await ctx.db.patch(payment._id, {
-      status: canceled ? "cancelled" : "failed",
+      status: "failed",
       failureReason: args.failureReason,
       updatedAt: now,
     })
     if (
-      (reservation.paymentId == null || reservation.paymentId === payment._id) &&
+      (await isCurrentRentalPayment(ctx, reservation, payment)) &&
       reservation.status === "approved" &&
       (reservation.paymentStatus === "pending" ||
         reservation.paymentStatus === "failed" ||
         !reservation.paymentStatus)
     ) {
       await ctx.db.patch(reservation._id, { paymentStatus: "failed", updatedAt: now })
-      if (!canceled)
-        await notifyRentalPayment(ctx, payment, reservation, {
-          succeeded: false,
-          failureReason: args.failureReason,
-        })
+      await notifyRentalPayment(ctx, payment, reservation, {
+        succeeded: false,
+        failureReason: args.failureReason,
+      })
     }
   },
 })
@@ -1631,6 +1826,9 @@ export const processRefundOnCancellation = internalAction({
       forceFullRefund: args.forceFullRefund,
       requestId: reservation._id,
     })
+    await ctx.runMutation(internal.accountOperations.complete, {
+      key: `rental-cancellation-refund:${reservation._id}`,
+    })
     return {
       success: true,
       refunded: refund?.status === "succeeded",
@@ -1722,6 +1920,7 @@ export const updateRefundStatus = internalMutation({
     stripePaymentIntentId: v.optional(v.string()),
     expectedVersion: v.number(),
     cancelOnFull: v.boolean(),
+    observations: v.optional(v.array(refundObservation)),
     details: v.optional(
       v.object({
         reason: v.optional(v.string()),
@@ -1758,6 +1957,17 @@ export const updateRefundStatus = internalMutation({
       refundSyncVersion: version + 1,
       updatedAt: Date.now(),
     })
+    await recordRefundObservations(
+      ctx,
+      {
+        ...payment,
+        stripeChargeId: args.stripeChargeId,
+        ...(args.stripePaymentIntentId
+          ? { stripePaymentIntentId: args.stripePaymentIntentId }
+          : {}),
+      },
+      args.observations ?? []
+    )
     const reservation = await ctx.db.get(payment.reservationId)
     if (
       reservation &&
@@ -2153,11 +2363,66 @@ export const handleTransferFailed = internalMutation({
   },
 })
 
+// Connect callbacks are routed only after signature/scope/mode checks. Resolve
+// current provider state before changing local health; legacy ownership stays held.
+export const reconcileConnectedAccount = internalAction({
+  args: { stripeAccountId: v.string() },
+  handler: async (ctx, { stripeAccountId }): Promise<void> => {
+    const user = await ctx.runQuery(internal.users.getByStripeAccountId, { stripeAccountId })
+    if (!user) return
+    const account = await retrieveLinkedConnectAccount(
+      ctx,
+      getStripe(),
+      stripeAccountId,
+      user.externalId
+    )
+    if (account.id !== stripeAccountId)
+      throwError(ErrorCode.CONFLICT, "Connected account does not match")
+    if (account.type !== "express" || account.metadata?.renegadeUserId !== user.externalId) return
+    let status: "pending" | "enabled" | "restricted" = "pending"
+    if (account.details_submitted && account.charges_enabled && account.payouts_enabled) {
+      status =
+        account.requirements?.currently_due?.length ||
+        account.requirements?.past_due?.length ||
+        account.requirements?.disabled_reason
+          ? "restricted"
+          : "enabled"
+    }
+    await ctx.runMutation(internal.users.updateStripeAccountStatus, { stripeAccountId, status })
+  },
+})
+
+export const reconcilePayoutFailure = internalAction({
+  args: {
+    stripeAccountId: v.string(),
+    payoutId: v.string(),
+    eventId: v.string(),
+    failureReason: v.optional(v.string()),
+  },
+  handler: async (ctx, args): Promise<void> => {
+    const user = await ctx.runQuery(internal.users.getByStripeAccountId, {
+      stripeAccountId: args.stripeAccountId,
+    })
+    if (!user) return
+    const account = await retrieveLinkedConnectAccount(
+      ctx,
+      getStripe(),
+      args.stripeAccountId,
+      user.externalId
+    )
+    if (account.id !== args.stripeAccountId)
+      throwError(ErrorCode.CONFLICT, "Connected account does not match")
+    if (account.metadata?.renegadeUserId !== user.externalId) return
+    await ctx.runMutation(internal.stripe.handlePayoutFailed, args)
+  },
+})
+
 // Handle payout failed webhook event
 export const handlePayoutFailed = internalMutation({
   args: {
     stripeAccountId: v.string(),
     payoutId: v.string(),
+    eventId: v.optional(v.string()),
     failureReason: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<void> => {
@@ -2167,9 +2432,30 @@ export const handlePayoutFailed = internalMutation({
       .withIndex("by_stripe_account", (q) => q.eq("stripeAccountId", args.stripeAccountId))
       .unique()
 
-    if (user) {
-      // TODO: handle payout failure notification
-    }
+    if (!user) return
+    const previous = await ctx.db
+      .query("auditLogs")
+      .withIndex("by_entity", (q) => q.eq("entityType", "user").eq("entityId", user.externalId))
+      .collect()
+    if (
+      previous.some(
+        (entry) =>
+          entry.action === "stripe_payout_failed" && entry.metadata?.payoutId === args.payoutId
+      )
+    )
+      return
+    await ctx.db.insert("auditLogs", {
+      entityType: "user",
+      entityId: user.externalId,
+      action: "stripe_payout_failed",
+      timestamp: Date.now(),
+      metadata: {
+        stripeAccountId: args.stripeAccountId,
+        payoutId: args.payoutId,
+        eventId: args.eventId,
+        failureReason: args.failureReason,
+      },
+    })
   },
 })
 

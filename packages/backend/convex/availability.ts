@@ -1,6 +1,25 @@
-import { v } from "convex/values"
+import { ConvexError, v } from "convex/values"
+import type { Id } from "./_generated/dataModel"
+import type { MutationCtx } from "./_generated/server"
 import { mutation, query } from "./_generated/server"
 import { generateDateRange } from "./dateUtils"
+import { assertRentalDateRange, getRentalConflicts } from "./rentalAvailability"
+
+async function assertHostCanBlock(
+  ctx: MutationCtx,
+  vehicleId: Id<"vehicles">,
+  startDate: string,
+  endDate: string
+) {
+  const conflicts = await getRentalConflicts(ctx, { vehicleId, startDate, endDate })
+  if (conflicts.reservedReservations.length) {
+    throw new ConvexError({
+      code: "DATES_UNAVAILABLE",
+      message:
+        "These dates belong to an approved or confirmed booking. Resolve that booking before blocking its dates.",
+    })
+  }
+}
 
 // Get availability for a vehicle
 export const getByVehicle = query({
@@ -36,36 +55,29 @@ export const checkAvailability = query({
   handler: async (ctx, args) => {
     const { vehicleId, startDate, endDate } = args
 
-    // Get all availability records for the date range
-    const availability = await ctx.db
-      .query("availability")
-      .withIndex("by_vehicle_date", (q) => q.eq("vehicleId", vehicleId))
-      .filter((q) => q.and(q.gte(q.field("date"), startDate), q.lte(q.field("date"), endDate)))
-      .collect()
+    const { blockedDates, reservedReservations, isAvailable } = await getRentalConflicts(ctx, args)
 
-    // Check if any date in the range is blocked
-    const blockedDates = availability.filter((a) => !a.isAvailable)
-
-    // Get conflicting reservations
-    // Two date ranges overlap if: existingStart <= newEnd AND existingEnd >= newStart
-    const conflictingReservations = await ctx.db
+    // Preserve pending demand for calendars without treating it as a date hold.
+    const overlappingReservations = await ctx.db
       .query("reservations")
       .withIndex("by_vehicle", (q) => q.eq("vehicleId", vehicleId))
       .filter((q) =>
         q.and(
-          // Only confirmed reservations block availability
-          q.eq(q.field("status"), "confirmed"),
-          // Check for date overlap: existing reservation overlaps if
-          // existingStart <= newEnd AND existingEnd >= newStart
+          q.or(
+            q.eq(q.field("status"), "pending"),
+            q.eq(q.field("status"), "approved"),
+            q.eq(q.field("status"), "confirmed")
+          ),
           q.and(q.lte(q.field("startDate"), endDate), q.gte(q.field("endDate"), startDate))
         )
       )
       .collect()
 
     return {
-      isAvailable: blockedDates.length === 0 && conflictingReservations.length === 0,
+      isAvailable,
       blockedDates,
-      conflictingReservations,
+      conflictingReservations: reservedReservations,
+      overlappingReservations,
     }
   },
 })
@@ -91,6 +103,8 @@ export const blockDate = mutation({
     if (vehicle.ownerId !== identity.subject) {
       throw new Error("Not authorized to modify this vehicle")
     }
+
+    await assertHostCanBlock(ctx, args.vehicleId, args.date, args.date)
 
     // Check if availability record already exists
     const existing = await ctx.db
@@ -139,6 +153,8 @@ export const blockDateRange = mutation({
     if (vehicle.ownerId !== identity.subject) {
       throw new Error("Not authorized to modify this vehicle")
     }
+
+    await assertHostCanBlock(ctx, args.vehicleId, args.startDate, args.endDate)
 
     // Generate all dates in the range using date utility to avoid timezone issues
     const dates = generateDateRange(args.startDate, args.endDate)
@@ -257,6 +273,11 @@ export const setDefaultAvailability = mutation({
     // Generate all dates in the range using date utility to avoid timezone issues
     const dates = generateDateRange(args.startDate, args.endDate)
 
+    assertRentalDateRange(args.startDate, args.endDate)
+    if (!args.isAvailable) {
+      await assertHostCanBlock(ctx, args.vehicleId, args.startDate, args.endDate)
+    }
+
     // Set availability for each date
     const results = await Promise.all(
       dates.map((date) =>
@@ -295,13 +316,18 @@ export const getCalendarData = query({
       .filter((q) => q.and(q.gte(q.field("date"), startDate), q.lte(q.field("date"), endDate)))
       .collect()
 
-    // Get reservations for the month
+    // Get reservations and pending/approved requests for the month so owners
+    // can see demand without treating it as a renter-side block.
     const reservations = await ctx.db
       .query("reservations")
       .withIndex("by_vehicle", (q) => q.eq("vehicleId", vehicleId))
       .filter((q) =>
         q.and(
-          q.eq(q.field("status"), "confirmed"),
+          q.or(
+            q.eq(q.field("status"), "pending"),
+            q.eq(q.field("status"), "approved"),
+            q.eq(q.field("status"), "confirmed")
+          ),
           q.or(q.and(q.lte(q.field("startDate"), endDate), q.gte(q.field("endDate"), startDate)))
         )
       )

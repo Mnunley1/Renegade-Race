@@ -1,6 +1,6 @@
 "use client"
 
-import { useUser } from "@clerk/nextjs"
+import { useAuth, useReverification, useUser } from "@clerk/nextjs"
 import { Alert, AlertDescription } from "@workspace/ui/components/alert"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
@@ -51,8 +51,10 @@ import {
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useTheme } from "next-themes"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
+import { AccountAuthBoundary } from "@/components/account-auth-boundary"
+import { useAccountActivity } from "@/hooks/useAccountAuth"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 
@@ -205,18 +207,52 @@ function InvoiceStatusBadge({ status }: { status: string }) {
 }
 
 export default function SettingsPage() {
+  return (
+    <AccountAuthBoundary
+      loadingLabel="Loading your settings…"
+      signedOutDescription="You need to be signed in to manage your account."
+    >
+      {(user) => <SettingsContent userId={user.id} />}
+    </AccountAuthBoundary>
+  )
+}
+
+function SettingsContent({ userId }: { userId: string }) {
   const { theme, setTheme } = useTheme()
   const { user: clerkUser, isLoaded: isClerkLoaded } = useUser()
+  const { signOut, sessionId, getToken } = useAuth()
+  const isCurrentAccount = useAccountActivity()
   const router = useRouter()
   const user = useQuery(
     api.users.getByExternalId,
-    clerkUser?.id ? { externalId: clerkUser.id } : "skip"
+    clerkUser?.id === userId ? { externalId: userId } : "skip"
   )
 
   const [activeSection, setActiveSection] = useState<Section>("account")
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteConfirmText, setDeleteConfirmText] = useState("")
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [isReverifying, setIsReverifying] = useState(false)
+  const deletionInFlight = useRef(false)
+  const checkDeletionEligibility = useAction(api.users.checkUserDeletionEligibility)
+  const requestAccountDeletion = useAction(api.users.requestAccountDeletion)
+  const deleteWithVerification = useReverification(async () => {
+    if (!isCurrentAccount()) throw new Error("Account session changed")
+    // Refresh the native Clerk token on every attempt, including the SDK's
+    // automatic retry after verification. Convex's template omits sid/fva.
+    const reauthToken = await getToken({ skipCache: true })
+    if (!isCurrentAccount()) throw new Error("Account session changed")
+    if (!reauthToken) throw new Error("Account verification is unavailable")
+    const result = await requestAccountDeletion({ reauthToken })
+    if (!isCurrentAccount()) throw new Error("Account session changed")
+    if ("clerk_error" in result) {
+      // Let Clerk's verification modal own focus instead of nesting it inside
+      // this dialog's focus trap. Keep confirmation and submission locked.
+      setIsReverifying(true)
+    }
+    return result
+  })
 
   // Account editing
   const [isEditingAccount, setIsEditingAccount] = useState(false)
@@ -421,29 +457,79 @@ export default function SettingsPage() {
     }
   }
 
+  const finishConfirmedDeletion = async (cleanupPending: boolean) => {
+    // Keep the submission locked until navigation. The backend confirms the
+    // provider deletion; the client never enables or invokes self-deletion.
+    toast.success(
+      cleanupPending
+        ? "Sign-in access removed. Final account cleanup is under review."
+        : "Account deleted"
+    )
+    router.push("/")
+    // The identity is already deleted. A local sign-out failure must not
+    // misreport deletion as failed or offer another deletion attempt.
+    if (sessionId) {
+      try {
+        await signOut({ sessionId })
+      } catch {
+        if (isCurrentAccount()) {
+          toast.error("Sign-in access was removed. Please refresh to clear this session.")
+        }
+      }
+    }
+  }
+
   const handleDeleteAccount = async () => {
+    if (deletionInFlight.current) return
+
     if (deleteConfirmText !== "DELETE") {
       toast.error('Please type "DELETE" to confirm account deletion')
       return
     }
 
-    if (!clerkUser) {
+    if (!clerkUser || clerkUser.id !== userId || !isCurrentAccount()) {
       toast.error("Unable to delete account. Please try again.")
       return
     }
 
+    deletionInFlight.current = true
     setIsDeleting(true)
+    setDeleteError(null)
+    let eligibilityVerified = false
     try {
-      await clerkUser.delete()
-      toast.success("Account deleted successfully")
-      router.push("/")
+      // The authenticated subject is authoritative; do not pass a client-selected user ID.
+      const eligibility = await checkDeletionEligibility({})
+      if (!isCurrentAccount()) return
+      if (eligibility.canDelete !== true) {
+        setDeleteError(
+          eligibility.reason ||
+            eligibility.blockingFactors.join(" ") ||
+            "Your account cannot be deleted yet. Please contact support."
+        )
+        deletionInFlight.current = false
+        setIsDeleting(false)
+        return
+      }
+      eligibilityVerified = true
+      const result = await deleteWithVerification()
+      if (!isCurrentAccount()) return
+      if (result?.deleted !== true) throw new Error("Account deletion was not confirmed")
+      await finishConfirmedDeletion(result.cleanupPending === true)
     } catch (error) {
+      if (!isCurrentAccount()) return
+      setIsReverifying(false)
+      setDeleteError(
+        eligibilityVerified
+          ? "Account deletion could not be confirmed. Please try again or contact support."
+          : "Unable to verify account deletion eligibility. No new deletion request was made. Please retry or contact support."
+      )
       handleErrorWithContext(error, {
         action: "delete account",
         customMessages: {
           generic: "Failed to delete account. Please contact support if the issue persists.",
         },
       })
+      deletionInFlight.current = false
       setIsDeleting(false)
     }
   }
@@ -599,8 +685,8 @@ export default function SettingsPage() {
                   <div>
                     <Label>Delete Account</Label>
                     <p className="text-muted-foreground text-sm">
-                      Once you delete your account, there is no going back. This will permanently
-                      delete your account, profile, and all associated data. Please be certain.
+                      Permanently remove your sign-in access and request deletion of your account
+                      profile. Active rental obligations or outstanding balances can block deletion.
                     </p>
                     <Button
                       className="mt-2"
@@ -1195,19 +1281,21 @@ export default function SettingsPage() {
       {/* Delete Account Dialog */}
       <Dialog
         onOpenChange={(open) => {
+          if (deletionInFlight.current) return
           setShowDeleteDialog(open)
           if (!open) {
             setDeleteConfirmText("")
+            setDeleteError(null)
           }
         }}
-        open={showDeleteDialog}
+        open={showDeleteDialog && !isReverifying}
       >
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="text-destructive">Delete Account</DialogTitle>
             <DialogDescription>
-              This action cannot be undone. This will permanently delete your account, profile,
-              vehicles, reservations, and all associated data.
+              This action cannot be undone. This removes your sign-in access and requests deletion
+              of your account profile. Existing booking and payment records are retained.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -1216,19 +1304,23 @@ export default function SettingsPage() {
                 Warning: This action is permanent and irreversible.
               </p>
               <ul className="mt-2 ml-4 list-disc space-y-1 text-destructive/80 text-sm">
-                <li>Your account will be permanently deleted</li>
-                <li>All your vehicle listings will be removed</li>
-                <li>All your reservations will be cancelled</li>
-                <li>All your messages and conversations will be deleted</li>
+                <li>Your sign-in access will be removed and your profile scheduled for cleanup</li>
+                <li>Active rental obligations or outstanding balances can block deletion</li>
                 <li>You will lose access to all platform features</li>
               </ul>
             </div>
+            {deleteError && (
+              <Alert variant="destructive">
+                <AlertDescription>{deleteError}</AlertDescription>
+              </Alert>
+            )}
             <div>
               <Label htmlFor="delete-confirm">
                 Type <strong>DELETE</strong> to confirm:
               </Label>
               <Input
                 className="mt-2"
+                disabled={isDeleting}
                 id="delete-confirm"
                 onChange={(e) => setDeleteConfirmText(e.target.value)}
                 placeholder="DELETE"
@@ -1242,6 +1334,7 @@ export default function SettingsPage() {
               onClick={() => {
                 setShowDeleteDialog(false)
                 setDeleteConfirmText("")
+                setDeleteError(null)
               }}
               variant="outline"
             >
@@ -1255,7 +1348,7 @@ export default function SettingsPage() {
               {isDeleting ? (
                 <>
                   <Loader2 className="mr-2 size-4 animate-spin" />
-                  Deleting...
+                  Checking and deleting...
                 </>
               ) : (
                 "Delete Account"

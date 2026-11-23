@@ -1,6 +1,5 @@
 "use client"
 
-import { useUser } from "@clerk/nextjs"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardHeader } from "@workspace/ui/components/card"
 import { cn } from "@workspace/ui/lib/utils"
@@ -9,17 +8,20 @@ import { AlertCircle, ArrowDown, ArrowLeft, Clock, MessageSquare, RefreshCw } fr
 import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
+import { AccountAuthBoundary } from "@/components/account-auth-boundary"
+import { useAccountActivity } from "@/hooks/useAccountAuth"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleError, handleErrorWithContext } from "@/lib/error-handler"
+import { formatVehicleTitle } from "@/lib/vehicle-year"
 import { ChatHeader } from "./chat-header"
 import { ConfirmationDialogs } from "./confirmation-dialogs"
 import type { MessageData } from "./message-bubble"
 import { MessageInput } from "./message-input"
 import { MessageList } from "./message-list"
 
-function ChatPageContent() {
-  const { user, isSignedIn } = useUser()
+function ChatPageContent({ user }: { user: { id: string } }) {
+  const isCurrentAccount = useAccountActivity()
   const params = useParams()
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -196,12 +198,13 @@ function ChatPageContent() {
         conversationId: conversationId as Id<"conversations">,
         userId: user.id,
       }).catch((error) => {
+        if (!isCurrentAccount()) return
         handleErrorWithContext(error, {
           action: "mark conversation as read",
         })
       })
     }
-  }, [conversation, user?.id, conversationId, messages, markAsRead])
+  }, [conversation, user?.id, conversationId, messages, markAsRead, isCurrentAccount])
 
   // Smart scroll: track if user is near bottom
   const handleScroll = useCallback(() => {
@@ -256,24 +259,6 @@ function ChatPageContent() {
       router.replace("/messages")
     }
   }, [conversation, conversationId, messages, router, isNavigatingAway, user?.id])
-
-  if (!(isSignedIn && user)) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <Card className="w-full max-w-md">
-          <CardContent className="p-6">
-            <div className="text-center">
-              <MessageSquare className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
-              <h2 className="mb-2 font-semibold text-foreground text-xl">Please sign in</h2>
-              <p className="text-muted-foreground">
-                You need to be signed in to view conversations.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
 
   if (!(conversationId || pendingConversation)) {
     return (
@@ -354,6 +339,7 @@ function ChatPageContent() {
     : null
 
   const handleSendMessage = async () => {
+    if (!isCurrentAccount()) return
     const content = newMessage.trim()
     if (!content) return
     if (content.length > MESSAGE_MAX_LENGTH) return
@@ -398,6 +384,7 @@ function ChatPageContent() {
           replyTo: savedReplyTo,
         })
 
+        if (!isCurrentAccount()) return
         if (result?.conversationId) {
           setPendingConversation(null)
           router.replace(`/messages/${result.conversationId}`)
@@ -407,6 +394,7 @@ function ChatPageContent() {
       }
       // Optimistic message will be cleared by the useEffect that watches real messages
     } catch (error) {
+      if (!isCurrentAccount()) return
       // Mark optimistic message as failed
       setOptimisticMessages((prev) =>
         prev.map((msg) => (msg._id === optimisticId ? { ...msg, status: "failed" as const } : msg))
@@ -425,6 +413,7 @@ function ChatPageContent() {
     content: string
     replyTo?: string
   }) => {
+    if (!isCurrentAccount()) return
     // Remove the failed message and re-send
     setOptimisticMessages((prev) =>
       prev.map((msg) => (msg._id === failedMsg._id ? { ...msg, status: "sending" as const } : msg))
@@ -440,6 +429,7 @@ function ChatPageContent() {
       }
       // Will be cleaned up by the real-message sync effect
     } catch {
+      if (!isCurrentAccount()) return
       setOptimisticMessages((prev) =>
         prev.map((msg) => (msg._id === failedMsg._id ? { ...msg, status: "failed" as const } : msg))
       )
@@ -456,16 +446,19 @@ function ChatPageContent() {
   }
 
   const confirmDeleteMessage = async () => {
+    if (!isCurrentAccount()) return
     if (!messageToDelete) return
 
     setIsDeletingMessage(true)
     setDeleteError(null)
     try {
       await deleteMessageMutation({ messageId: messageToDelete as Id<"messages"> })
+      if (!isCurrentAccount()) return
       setShowDeleteMessageDialog(false)
       setMessageToDelete(null)
       toast.success("Message deleted")
     } catch (error) {
+      if (!isCurrentAccount()) return
       handleErrorWithContext(error, {
         action: "delete message",
         customMessages: {
@@ -474,7 +467,7 @@ function ChatPageContent() {
       })
       setDeleteError("Failed to delete message. Please try again.")
     } finally {
-      setIsDeletingMessage(false)
+      if (isCurrentAccount()) setIsDeletingMessage(false)
     }
   }
 
@@ -485,6 +478,7 @@ function ChatPageContent() {
         description: "Message copied to clipboard",
       })
     } catch (error) {
+      if (!isCurrentAccount()) return
       // Log error but don't show duplicate toast (toast.error already called below)
       void handleError(error, { showToast: false })
       toast.error("Failed to copy", {
@@ -499,6 +493,7 @@ function ChatPageContent() {
   }
 
   const handleSaveEdit = async () => {
+    if (!isCurrentAccount()) return
     if (!(editingMessage && editMessageContent.trim())) return
 
     setIsEditingMessage(true)
@@ -507,10 +502,12 @@ function ChatPageContent() {
         messageId: editingMessage as Id<"messages">,
         content: editMessageContent.trim(),
       })
+      if (!isCurrentAccount()) return
       setEditingMessage(null)
       setEditMessageContent("")
       toast.success("Message updated")
     } catch (error) {
+      if (!isCurrentAccount()) return
       handleErrorWithContext(error, {
         action: "update message",
         customMessages: {
@@ -518,7 +515,7 @@ function ChatPageContent() {
         },
       })
     } finally {
-      setIsEditingMessage(false)
+      if (isCurrentAccount()) setIsEditingMessage(false)
     }
   }
 
@@ -547,6 +544,7 @@ function ChatPageContent() {
   }
 
   const confirmDeleteConversation = async () => {
+    if (!isCurrentAccount()) return
     if (!conversationId) return
 
     setIsDeletingConversation(true)
@@ -557,10 +555,12 @@ function ChatPageContent() {
       await deleteConversationMutation({
         conversationId: conversationId as Id<"conversations">,
       })
+      if (!isCurrentAccount()) return
       setShowDeleteConversationDialog(false)
       // Navigate immediately after successful deletion
       router.replace("/messages")
     } catch (error) {
+      if (!isCurrentAccount()) return
       // If deletion fails, reset the navigation flag
       setIsNavigatingAway(false)
       handleErrorWithContext(error, {
@@ -568,7 +568,7 @@ function ChatPageContent() {
       })
       setDeleteError("Failed to delete conversation. Please try again.")
     } finally {
-      setIsDeletingConversation(false)
+      if (isCurrentAccount()) setIsDeletingConversation(false)
     }
   }
 
@@ -577,6 +577,7 @@ function ChatPageContent() {
   }
 
   const confirmArchiveConversation = async () => {
+    if (!isCurrentAccount()) return
     if (!conversationId) return
 
     setIsArchivingConversation(true)
@@ -584,10 +585,12 @@ function ChatPageContent() {
       await archiveConversationMutation({
         conversationId: conversationId as Id<"conversations">,
       })
+      if (!isCurrentAccount()) return
       setShowArchiveConversationDialog(false)
       router.replace("/messages")
       toast.success("Conversation archived")
     } catch (error) {
+      if (!isCurrentAccount()) return
       handleErrorWithContext(error, {
         action: "archive conversation",
         customMessages: {
@@ -595,7 +598,7 @@ function ChatPageContent() {
         },
       })
     } finally {
-      setIsArchivingConversation(false)
+      if (isCurrentAccount()) setIsArchivingConversation(false)
     }
   }
 
@@ -658,11 +661,7 @@ function ChatPageContent() {
               onReply={handleReplyToMessage}
               onSaveEdit={handleSaveEdit}
               pendingRecipientName={recipientUser?.name}
-              pendingVehicleLabel={
-                pendingVehicle
-                  ? `${pendingVehicle.year} ${pendingVehicle.make} ${pendingVehicle.model}`
-                  : undefined
-              }
+              pendingVehicleLabel={pendingVehicle ? formatVehicleTitle(pendingVehicle) : undefined}
             />
 
             {/* Optimistic messages */}
@@ -799,7 +798,9 @@ export default function ChatPage() {
         </div>
       }
     >
-      <ChatPageContent />
+      <AccountAuthBoundary loadingLabel="Loading conversation...">
+        {(user) => <ChatPageContent user={user} />}
+      </AccountAuthBoundary>
     </Suspense>
   )
 }

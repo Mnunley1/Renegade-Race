@@ -5,14 +5,17 @@ import { Card, CardContent } from "@workspace/ui/components/card"
 import { Separator } from "@workspace/ui/components/separator"
 import { useQuery } from "convex/react"
 import { Calendar, CheckCircle2, Clock, MapPin } from "lucide-react"
-import Image from "next/image"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { Suspense } from "react"
+import Image from "@/components/public-image"
+import { RentalPaymentSummary } from "@/components/rental-payment-summary"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { formatDateForDisplay } from "@/lib/date-utils"
 import { r2Url } from "@/lib/r2-url"
+import { formatRentalUsd } from "@/lib/rental-checkout"
+import { formatVehicleTitle } from "@/lib/vehicle-year"
 
 function CoachingSuccessCard({ bookingId }: { bookingId: Id<"coachingBookings"> }) {
   const booking = useQuery(api.coachingBookings.getById, { id: bookingId })
@@ -73,7 +76,7 @@ function CoachingSuccessCard({ bookingId }: { bookingId: Id<"coachingBookings"> 
               <Separator className="my-4" />
               <div className="flex justify-between font-semibold">
                 <span>Total paid</span>
-                <span>${(booking.totalAmount / 100).toFixed(2)}</span>
+                <span>{formatRentalUsd(booking.totalAmount)}</span>
               </div>
             </div>
 
@@ -90,6 +93,64 @@ function CoachingSuccessCard({ bookingId }: { bookingId: Id<"coachingBookings"> 
       </Card>
     </div>
   )
+}
+
+function rentalPaymentNotice(reservation: { status: string; paymentStatus?: string } | null): {
+  title: string
+  message: string
+  canRetry?: boolean
+  needsReview?: boolean
+} {
+  if (!reservation) {
+    return {
+      title: "Reservation unavailable",
+      message: "We could not find this reservation. Check your trips for its current status.",
+    }
+  }
+  if (reservation.paymentStatus === "refunded") {
+    return {
+      title: "Payment refunded",
+      message:
+        "This payment has been refunded. Check your trips for the reservation's current status.",
+    }
+  }
+  if (
+    reservation.status === "approved" &&
+    (reservation.paymentStatus === "paid" || reservation.paymentStatus === "partially_refunded")
+  ) {
+    return {
+      title: "Payment received; booking needs review",
+      message:
+        "Your payment was received, but your booking could not be confirmed. Contact support to resolve the booking. Do not submit another payment.",
+      needsReview: true,
+    }
+  }
+  if (reservation.status === "pending") {
+    return {
+      title: "Awaiting host approval",
+      message: "Your host must approve this request before you can pay.",
+    }
+  }
+  if (reservation.status === "approved" && reservation.paymentStatus === "failed") {
+    return {
+      title: "Payment failed",
+      message:
+        "Your payment did not complete. Your reservation is not confirmed. You can try again.",
+      canRetry: true,
+    }
+  }
+  if (reservation.status === "approved" || reservation.status === "confirmed") {
+    return {
+      title: "Awaiting payment confirmation",
+      message:
+        "Your reservation is not confirmed yet. This page will update when payment confirmation arrives. Check your trips before trying another payment.",
+    }
+  }
+  return {
+    title: "Reservation not confirmed",
+    message:
+      "This reservation is no longer awaiting payment. Check your trips for its current status.",
+  }
 }
 
 function CheckoutSuccessContent() {
@@ -122,7 +183,7 @@ function CheckoutSuccessContent() {
     )
   }
 
-  if (!reservation) {
+  if (reservation === undefined) {
     return (
       <div className="container mx-auto max-w-4xl px-4 py-8">
         <Card>
@@ -134,13 +195,57 @@ function CheckoutSuccessContent() {
     )
   }
 
+  if (
+    !reservation ||
+    reservation.status !== "confirmed" ||
+    (reservation.paymentStatus !== "paid" && reservation.paymentStatus !== "partially_refunded")
+  ) {
+    const { title, message, canRetry, needsReview } = rentalPaymentNotice(reservation)
+
+    return (
+      <div className="container mx-auto max-w-4xl px-4 py-8">
+        <Card>
+          <CardContent aria-live="polite" className="py-12 text-center">
+            <h1 className="mb-2 font-bold text-2xl">{title}</h1>
+            <p className="mb-6 text-muted-foreground">{message}</p>
+            {reservation && (
+              <div className="mx-auto mb-6 max-w-md text-left">
+                <RentalPaymentSummary
+                  paymentId={reservation.paymentId}
+                  renterId={reservation.renterId}
+                  reservationId={reservation._id}
+                />
+              </div>
+            )}
+            <div className="flex flex-col gap-4 sm:flex-row sm:justify-center">
+              {needsReview && (
+                <Button asChild>
+                  <Link href="/contact">Contact Support</Link>
+                </Button>
+              )}
+              {canRetry && (
+                <Button asChild>
+                  <Link href={`/checkout/pay?reservationId=${reservationId}`}>
+                    Try Payment Again
+                  </Link>
+                </Button>
+              )}
+              <Button asChild variant="outline">
+                <Link href="/trips">View My Trips</Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   const vehicle = reservation.vehicle
   const vehicleImages = (vehicle as any)?.images as
     | Array<{ isPrimary: boolean; imageUrl?: string; r2Key?: string }>
     | undefined
   const primaryImageData = vehicleImages?.find((img) => img.isPrimary) || vehicleImages?.[0]
-  const primaryImage =
-    (primaryImageData?.r2Key ? r2Url(primaryImageData.r2Key) : primaryImageData?.imageUrl) || ""
+  const primaryImage = (r2Url(primaryImageData?.r2Key) ?? primaryImageData?.imageUrl) || ""
 
   return (
     <div className="container mx-auto max-w-4xl px-4 py-8">
@@ -159,7 +264,7 @@ function CheckoutSuccessContent() {
                   {primaryImage && primaryImage.trim() !== "" ? (
                     <div className="relative h-32 w-48 shrink-0 overflow-hidden rounded-lg">
                       <Image
-                        alt={`${vehicle.year} ${vehicle.make} ${vehicle.model}`}
+                        alt={formatVehicleTitle(vehicle)}
                         className="object-cover"
                         fill
                         sizes="192px"
@@ -168,9 +273,7 @@ function CheckoutSuccessContent() {
                     </div>
                   ) : null}
                   <div className="flex-1">
-                    <h2 className="mb-2 font-bold text-2xl">
-                      {vehicle.year} {vehicle.make} {vehicle.model}
-                    </h2>
+                    <h2 className="mb-2 font-bold text-2xl">{formatVehicleTitle(vehicle)}</h2>
                     {vehicle.address && (
                       <div className="mb-2 flex items-center gap-2 text-muted-foreground">
                         <MapPin className="size-4" />
@@ -226,11 +329,16 @@ function CheckoutSuccessContent() {
                 <Separator />
 
                 <div className="flex items-center justify-between">
-                  <span className="font-medium">Total Amount</span>
+                  <span className="font-medium">Rental subtotal</span>
                   <span className="font-bold text-2xl">
-                    ${((reservation.totalAmount || 0) / 100).toLocaleString()}
+                    {formatRentalUsd(reservation.totalAmount || 0)}
                   </span>
                 </div>
+                <RentalPaymentSummary
+                  paymentId={reservation.paymentId}
+                  renterId={reservation.renterId}
+                  reservationId={reservation._id}
+                />
               </div>
             </div>
 

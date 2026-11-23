@@ -1,3 +1,5 @@
+import { withAccountOperation } from "./accountOperations"
+import { assertAccountsAvailable } from "./accountDeletionGuards"
 import { v } from "convex/values"
 import Stripe from "stripe"
 import { api, internal } from "./_generated/api"
@@ -15,6 +17,7 @@ import {
 import { ErrorCode, throwError } from "./errors"
 import { getWebUrl } from "./helpers"
 import { buildDestinationChargeAmounts } from "./pricing"
+import { requireReservationPhotoUploads } from "./r2"
 
 // ============================================================================
 // Queries
@@ -161,6 +164,8 @@ export const create = mutation({
       throwError(ErrorCode.FORBIDDEN, "Only the vehicle owner can file a damage claim")
     }
 
+    await assertAccountsAvailable(ctx, identity.subject, reservation.renterId, reservation.ownerId)
+
     // Reservation must be completed
     if (reservation.status !== "completed") {
       throwError(ErrorCode.INVALID_STATUS, "Reservation must be completed to file a damage claim")
@@ -178,6 +183,13 @@ export const create = mutation({
     if (args.photos.length === 0) {
       throwError(ErrorCode.INVALID_INPUT, "At least one photo is required for a damage claim")
     }
+
+    await requireReservationPhotoUploads(ctx, {
+      reservationId: args.reservationId,
+      uploader: identity.subject,
+      purpose: "damage",
+      photos: args.photos,
+    })
 
     // Check for existing open invoice on this reservation
     const existingInvoice = await ctx.db
@@ -500,174 +512,182 @@ export const adminApprove: ReturnType<typeof action> = action({
       )
     }
 
-    // Get owner's Connect account
-    const owner = await ctx.runQuery(internal.users.getByExternalIdInternal, {
-      externalId: invoice.ownerId,
-    })
-
-    if (!owner?.stripeAccountId) {
-      throwError(
-        ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,
-        "Owner must complete Stripe onboarding before receiving damage payments"
-      )
-    }
-
-    // Verify Connect account is ready
-    const secretKey = process.env.STRIPE_SECRET_KEY
-    if (!secretKey) {
-      throwError(ErrorCode.STRIPE_ERROR, "STRIPE_SECRET_KEY environment variable is not set")
-    }
-    const stripe = new Stripe(secretKey, {
-      apiVersion: "2025-08-27.basil",
-    })
-
-    const connectAccount = await verifiedPaymentDestination(
+    return await withAccountOperation(
       ctx,
-      stripe,
-      owner.stripeAccountId,
-      owner.externalId
-    )
-    if (!connectAccount.charges_enabled) {
-      throwError(
-        ErrorCode.STRIPE_ACCOUNT_DISABLED,
-        "Owner account cannot accept charges. Please complete Stripe onboarding."
-      )
-    }
+      `damage-checkout:${invoice._id}`,
+      [identity.subject, invoice.ownerId, invoice.renterId],
+      async (beforeProviderMutation) => {
+        // Get owner's Connect account
+        const owner = await ctx.runQuery(internal.users.getByExternalIdInternal, {
+          externalId: invoice.ownerId,
+        })
 
-    const webUrl = getWebUrl()
+        if (!owner?.stripeAccountId) {
+          throwError(
+            ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,
+            "Owner must complete Stripe onboarding before receiving damage payments"
+          )
+        }
 
-    // Renter covers card processing; owner receives the full damage amount (0% Renegade fee).
-    const { processingFeeCents, applicationFeeCents } = buildDestinationChargeAmounts({
-      listingAmountCents: invoice.amount,
-      platformFeeCents: 0,
-    })
+        // Verify Connect account is ready
+        const secretKey = process.env.STRIPE_SECRET_KEY
+        if (!secretKey) {
+          throwError(ErrorCode.STRIPE_ERROR, "STRIPE_SECRET_KEY environment variable is not set")
+        }
+        const stripe = new Stripe(secretKey, {
+          apiVersion: "2025-08-27.basil",
+        })
 
-    // Create Stripe Checkout Session with 0% platform fee
-    const checkoutSession = await stripe.checkout.sessions.create({
-      mode: "payment",
-      line_items: [
-        {
-          price_data: {
-            currency: "usd",
-            product_data: {
-              name: `Damage Charge - ${invoice.vehicle ? `${invoice.vehicle.year} ${invoice.vehicle.make} ${invoice.vehicle.model}` : "Vehicle"}`,
-              description: invoice.description,
-            },
-            unit_amount: invoice.amount,
-          },
-          quantity: 1,
-        },
-        ...(processingFeeCents > 0
-          ? [
-              {
-                price_data: {
-                  currency: "usd",
-                  product_data: {
-                    name: "Card processing fee",
-                    description: "Passed through at Stripe's standard US card rate",
-                  },
-                  unit_amount: processingFeeCents,
+        const connectAccount = await verifiedPaymentDestination(
+          ctx,
+          stripe,
+          owner.stripeAccountId,
+          owner.externalId
+        )
+        if (!connectAccount.charges_enabled) {
+          throwError(
+            ErrorCode.STRIPE_ACCOUNT_DISABLED,
+            "Owner account cannot accept charges. Please complete Stripe onboarding."
+          )
+        }
+
+        const webUrl = getWebUrl()
+
+        // Renter covers card processing; owner receives the full damage amount (0% Renegade fee).
+        const { processingFeeCents, applicationFeeCents } = buildDestinationChargeAmounts({
+          listingAmountCents: invoice.amount,
+          platformFeeCents: 0,
+        })
+
+        // Create Stripe Checkout Session with 0% platform fee
+        beforeProviderMutation()
+        const checkoutSession = await stripe.checkout.sessions.create({
+          mode: "payment",
+          line_items: [
+            {
+              price_data: {
+                currency: "usd",
+                product_data: {
+                  name: `Damage Charge - ${invoice.vehicle ? `${invoice.vehicle.year} ${invoice.vehicle.make} ${invoice.vehicle.model}` : "Vehicle"}`,
+                  description: invoice.description,
                 },
-                quantity: 1,
+                unit_amount: invoice.amount,
               },
-            ]
-          : []),
-      ],
-      payment_intent_data: {
-        application_fee_amount: applicationFeeCents,
-        transfer_data: {
-          destination: owner.stripeAccountId,
-        },
-        metadata: {
-          type: "damage_invoice",
+              quantity: 1,
+            },
+            ...(processingFeeCents > 0
+              ? [
+                  {
+                    price_data: {
+                      currency: "usd",
+                      product_data: {
+                        name: "Card processing fee",
+                        description: "Passed through at Stripe's standard US card rate",
+                      },
+                      unit_amount: processingFeeCents,
+                    },
+                    quantity: 1,
+                  },
+                ]
+              : []),
+          ],
+          payment_intent_data: {
+            application_fee_amount: applicationFeeCents,
+            transfer_data: {
+              destination: owner.stripeAccountId,
+            },
+            metadata: {
+              type: "damage_invoice",
+              damageInvoiceId: args.damageInvoiceId,
+              reservationId: invoice.reservationId as string,
+              renterId: invoice.renterId,
+              ownerId: invoice.ownerId,
+              vehicleId: invoice.vehicleId as string,
+              processingFee: processingFeeCents.toString(),
+            },
+          },
+          success_url: `${webUrl}/damage-payment/success?damageInvoiceId=${args.damageInvoiceId}`,
+          cancel_url: `${webUrl}/trips`,
+          metadata: {
+            type: "damage_invoice",
+            damageInvoiceId: args.damageInvoiceId,
+          },
+        })
+
+        // Update the invoice with checkout session details
+        await ctx.runMutation(internal.damageInvoices.updateWithCheckoutSession, {
           damageInvoiceId: args.damageInvoiceId,
-          reservationId: invoice.reservationId as string,
-          renterId: invoice.renterId,
-          ownerId: invoice.ownerId,
-          vehicleId: invoice.vehicleId as string,
-          processingFee: processingFeeCents.toString(),
-        },
-      },
-      success_url: `${webUrl}/damage-payment/success?damageInvoiceId=${args.damageInvoiceId}`,
-      cancel_url: `${webUrl}/trips`,
-      metadata: {
-        type: "damage_invoice",
-        damageInvoiceId: args.damageInvoiceId,
-      },
-    })
+          stripeCheckoutSessionId: checkoutSession.id,
+          stripeCheckoutUrl: checkoutSession.url || "",
+          stripePaymentIntentId: checkoutSession.payment_intent as string | undefined,
+          adminReviewedBy: identity.subject,
+          adminNotes: args.adminNotes,
+        })
 
-    // Update the invoice with checkout session details
-    await ctx.runMutation(internal.damageInvoices.updateWithCheckoutSession, {
-      damageInvoiceId: args.damageInvoiceId,
-      stripeCheckoutSessionId: checkoutSession.id,
-      stripeCheckoutUrl: checkoutSession.url || "",
-      stripePaymentIntentId: checkoutSession.payment_intent as string | undefined,
-      adminReviewedBy: identity.subject,
-      adminNotes: args.adminNotes,
-    })
+        // Get vehicle name for notifications/emails
+        const vehicleName = invoice.vehicle
+          ? `${invoice.vehicle.year} ${invoice.vehicle.make} ${invoice.vehicle.model}`
+          : "Vehicle"
 
-    // Get vehicle name for notifications/emails
-    const vehicleName = invoice.vehicle
-      ? `${invoice.vehicle.year} ${invoice.vehicle.make} ${invoice.vehicle.model}`
-      : "Vehicle"
+        // Send email to renter with payment link
+        const renter = await ctx.runQuery(internal.users.getByExternalIdInternal, {
+          externalId: invoice.renterId,
+        })
 
-    // Send email to renter with payment link
-    const renter = await ctx.runQuery(internal.users.getByExternalIdInternal, {
-      externalId: invoice.renterId,
-    })
+        if (renter?.email) {
+          const template = getDamageInvoicePaymentEmailTemplate({
+            renterName: renter.name || "Renter",
+            vehicleName,
+            amount: invoice.amount,
+            paymentUrl: checkoutSession.url || "",
+          })
+          await ctx.runMutation(internal.damageInvoices.sendDamageEmail, {
+            to: renter.email,
+            subject: template.subject,
+            html: template.html,
+            text: template.text,
+          })
+        }
 
-    if (renter?.email) {
-      const template = getDamageInvoicePaymentEmailTemplate({
-        renterName: renter.name || "Renter",
-        vehicleName,
-        amount: invoice.amount,
-        paymentUrl: checkoutSession.url || "",
-      })
-      await ctx.runMutation(internal.damageInvoices.sendDamageEmail, {
-        to: renter.email,
-        subject: template.subject,
-        html: template.html,
-        text: template.text,
-      })
-    }
+        // Notify owner that claim was approved
+        await ctx.runMutation(internal.notifications.createNotification, {
+          userId: invoice.ownerId,
+          type: "damage_invoice",
+          title: "Damage Claim Approved",
+          message: `Your damage claim of $${(invoice.amount / 100).toFixed(2)} for ${vehicleName} has been approved. The renter has been sent a payment link.`,
+          link: "/host/reservations",
+        })
 
-    // Notify owner that claim was approved
-    await ctx.runMutation(internal.notifications.createNotification, {
-      userId: invoice.ownerId,
-      type: "damage_invoice",
-      title: "Damage Claim Approved",
-      message: `Your damage claim of $${(invoice.amount / 100).toFixed(2)} for ${vehicleName} has been approved. The renter has been sent a payment link.`,
-      link: "/host/reservations",
-    })
+        // Notify renter about payment
+        await ctx.runMutation(internal.notifications.createNotification, {
+          userId: invoice.renterId,
+          type: "damage_invoice",
+          title: "Damage Payment Required",
+          message: `A damage charge of $${(invoice.amount / 100).toFixed(2)} for ${vehicleName} has been approved. Please complete payment.`,
+          link: "/trips",
+        })
 
-    // Notify renter about payment
-    await ctx.runMutation(internal.notifications.createNotification, {
-      userId: invoice.renterId,
-      type: "damage_invoice",
-      title: "Damage Payment Required",
-      message: `A damage charge of $${(invoice.amount / 100).toFixed(2)} for ${vehicleName} has been approved. Please complete payment.`,
-      link: "/trips",
-    })
+        // Audit log
+        await ctx.runMutation(internal.auditLog.create, {
+          entityType: "damage_invoice",
+          entityId: args.damageInvoiceId,
+          action: "approve_damage_invoice",
+          userId: identity.subject,
+          previousState: { status: "pending_review" },
+          newState: { status: "payment_pending" },
+          metadata: {
+            adminNotes: args.adminNotes,
+            stripeCheckoutSessionId: checkoutSession.id,
+            amount: invoice.amount,
+          },
+        })
 
-    // Audit log
-    await ctx.runMutation(internal.auditLog.create, {
-      entityType: "damage_invoice",
-      entityId: args.damageInvoiceId,
-      action: "approve_damage_invoice",
-      userId: identity.subject,
-      previousState: { status: "pending_review" },
-      newState: { status: "payment_pending" },
-      metadata: {
-        adminNotes: args.adminNotes,
-        stripeCheckoutSessionId: checkoutSession.id,
-        amount: invoice.amount,
-      },
-    })
-
-    return {
-      damageInvoiceId: args.damageInvoiceId,
-      checkoutUrl: checkoutSession.url,
-    }
+        return {
+          damageInvoiceId: args.damageInvoiceId,
+          checkoutUrl: checkoutSession.url,
+        }
+      }
+    )
   },
 })
 

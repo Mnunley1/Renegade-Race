@@ -1,6 +1,5 @@
 "use client"
 
-import { useUser } from "@clerk/nextjs"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
@@ -8,22 +7,25 @@ import { Input } from "@workspace/ui/components/input"
 import { cn } from "@workspace/ui/lib/utils"
 import { useMutation, useQuery } from "convex/react"
 import { MessageSquare, Search } from "lucide-react"
-import Image from "next/image"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Suspense, useEffect, useState } from "react"
+import { AccountAuthBoundary } from "@/components/account-auth-boundary"
+import Image from "@/components/public-image"
 import { UserAvatar } from "@/components/user-avatar"
+import { useAccountActivity } from "@/hooks/useAccountAuth"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 import { formatTime } from "@/lib/format-time"
 import { r2Url } from "@/lib/r2-url"
 import { getReservationStatusMeta } from "@/lib/reservation-status"
+import { formatVehicleTitle } from "@/lib/vehicle-year"
 
 type FilterTab = "all" | "unread" | "archived"
 
-function MessagesPageContent() {
-  const { user, isSignedIn } = useUser()
+function MessagesPageContent({ user }: { user: { id: string } }) {
+  const isCurrentAccount = useAccountActivity()
   const [searchQuery, setSearchQuery] = useState("")
   const [filterTab, setFilterTab] = useState<FilterTab>("all")
   const searchParams = useSearchParams()
@@ -98,24 +100,6 @@ function MessagesPageContent() {
   // Mutations
   const bulkConversationActions = useMutation(api.conversations.bulkHostConversationActions)
 
-  if (!(isSignedIn && user)) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <Card className="w-full max-w-md">
-          <CardContent className="p-6">
-            <div className="text-center">
-              <MessageSquare className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
-              <h2 className="mb-2 font-semibold text-foreground text-xl">Please sign in</h2>
-              <p className="text-muted-foreground">
-                You need to be signed in to view conversations.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
   // Bulk operations handlers
   const handleBulkSelect = (conversationId: string) => {
     setSelectedConversations((prev) =>
@@ -134,7 +118,7 @@ function MessagesPageContent() {
   }
 
   const handleBulkAction = async (action: "archive" | "delete" | "mark_read") => {
-    if (selectedConversations.length === 0) return
+    if (!isCurrentAccount() || selectedConversations.length === 0) return
     setIsPerformingBulkAction(true)
     try {
       await bulkConversationActions({
@@ -142,9 +126,11 @@ function MessagesPageContent() {
         conversationIds: selectedConversations.map((id) => id as Id<"conversations">),
         action,
       })
+      if (!isCurrentAccount()) return
       setSelectedConversations([])
       setIsBulkMode(false)
     } catch (error) {
+      if (!isCurrentAccount()) return
       handleErrorWithContext(error, {
         action: `${action} conversations`,
         customMessages: {
@@ -152,7 +138,7 @@ function MessagesPageContent() {
         },
       })
     } finally {
-      setIsPerformingBulkAction(false)
+      if (isCurrentAccount()) setIsPerformingBulkAction(false)
     }
   }
 
@@ -276,7 +262,7 @@ function MessagesPageContent() {
           <CardContent className="overflow-y-auto p-0">
             {isLoading ? (
               // Loading state
-              <div className="space-y-3 p-4">
+              <div aria-label="Loading conversations" className="space-y-3 p-4" role="status">
                 {Array.from({ length: 5 }).map((_, index) => (
                   <div
                     className="flex animate-pulse items-center space-x-3 rounded-lg bg-muted p-3"
@@ -327,12 +313,10 @@ function MessagesPageContent() {
                       ? conversation.unreadCountRenter
                       : conversation.unreadCountOwner
 
-                  const avatarUrl = otherUser?.profileImageR2Key
-                    ? r2Url(otherUser.profileImageR2Key)
-                    : otherUser?.profileImage
+                  const avatarUrl = r2Url(otherUser?.profileImageR2Key) ?? otherUser?.profileImage
                   const statusMeta = getReservationStatusMeta(conversation.reservation?.status)
                   const contextLabel = conversation.vehicle
-                    ? `${conversation.vehicle.year} ${conversation.vehicle.make} ${conversation.vehicle.model}`
+                    ? formatVehicleTitle(conversation.vehicle)
                     : conversation.coachProfile
                       ? "Coaching"
                       : conversation.team
@@ -500,7 +484,9 @@ export default function MessagesPage() {
         </div>
       }
     >
-      <MessagesPageContent />
+      <AccountAuthBoundary loadingLabel="Loading conversations...">
+        {(user) => <MessagesPageContent user={user} />}
+      </AccountAuthBoundary>
     </Suspense>
   )
 }

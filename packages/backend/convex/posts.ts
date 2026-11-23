@@ -2,8 +2,9 @@ import { v } from "convex/values"
 import type { Doc, Id } from "./_generated/dataModel"
 import { mutation, type QueryCtx, query } from "./_generated/server"
 import { logActivityEventInternal } from "./activity"
+import { requirePublicMediaUpload } from "./r2"
+import { loadPublicActor, publicDisplayName } from "./userProfile"
 import { getCurrentUser, getCurrentUserOrThrow } from "./users"
-import { publicDisplayName } from "./userProfile"
 
 const REACTION_TYPES = [
   v.literal("like"),
@@ -50,9 +51,13 @@ export const createPost = mutation({
           q.eq("teamId", args.teamId as Id<"teams">).eq("userId", user.externalId)
         )
         .first()
-      if (!(isOwner || membership)) {
+      if (!(isOwner || membership?.status === "active")) {
         throw new Error("Not authorized to post on behalf of this team")
       }
+    }
+
+    for (const key of new Set(args.mediaR2Keys ?? [])) {
+      await requirePublicMediaUpload(ctx, user, key, "general")
     }
 
     const now = Date.now()
@@ -154,6 +159,13 @@ export const addComment = mutation({
     const post = await ctx.db.get(args.postId)
     if (!post || post.isDeleted) throw new Error("Post not found")
 
+    if (args.parentCommentId) {
+      const parent = await ctx.db.get(args.parentCommentId)
+      if (!parent || parent.isDeleted || parent.postId !== args.postId) {
+        throw new Error("Parent comment not found")
+      }
+    }
+
     const commentId = await ctx.db.insert("postComments", {
       postId: args.postId,
       authorId: user.externalId,
@@ -177,7 +189,12 @@ export const deleteComment = mutation({
     if (comment.authorId !== user.externalId) {
       throw new Error("Not authorized to delete this comment")
     }
+    if (comment.isDeleted) return
     await ctx.db.patch(args.commentId, { isDeleted: true })
+    const post = await ctx.db.get(comment.postId)
+    if (post) {
+      await ctx.db.patch(post._id, { commentCount: Math.max(0, (post.commentCount ?? 0) - 1) })
+    }
   },
 })
 
@@ -186,9 +203,11 @@ export const deleteComment = mutation({
 // ============================================================
 
 export const getPost = query({
-  args: { postId: v.id("posts") },
+  args: { postId: v.string() },
   handler: async (ctx, args) => {
-    const post = await ctx.db.get(args.postId)
+    const postId = ctx.db.normalizeId("posts", args.postId)
+    if (!postId) return null
+    const post = await ctx.db.get(postId)
     if (!post || post.isDeleted) return null
     return await enrichPost(ctx, post)
   },
@@ -203,24 +222,15 @@ export const listFeed = query({
     const limit = Math.min(args.limit ?? FEED_PAGE_SIZE, 100)
     const me = await getCurrentUser(ctx)
 
-    let posts: Doc<"posts">[]
-    if (args.scope === "following" && me) {
-      const followedIds = await getFollowedUserIds(ctx, me.externalId)
-      followedIds.add(me.externalId)
-      const all = await ctx.db
-        .query("posts")
-        .withIndex("by_created")
-        .order("desc")
-        .take(limit * 4)
-      posts = all.filter((p) => !p.isDeleted && followedIds.has(p.authorId)).slice(0, limit)
-    } else {
-      posts = await ctx.db
-        .query("posts")
-        .withIndex("by_created")
-        .order("desc")
-        .filter((q) => q.neq(q.field("isDeleted"), true))
-        .take(limit)
+    if (args.scope === "following") {
+      return me ? await followingFeed(ctx, me.externalId, limit) : []
     }
+    const posts = await ctx.db
+      .query("posts")
+      .withIndex("by_created")
+      .order("desc")
+      .filter((q) => q.neq(q.field("isDeleted"), true))
+      .take(limit)
 
     const enrichedPosts = await Promise.all(posts.map((p) => enrichPost(ctx, p)))
 
@@ -228,7 +238,7 @@ export const listFeed = query({
       return enrichedPosts
     }
 
-    // Mix in recent activity events for variety on for_you / following.
+    // Preserve the public activity mix for For You.
     const activitiesRaw = await ctx.db
       .query("activityEvents")
       .withIndex("by_visibility_created", (q) => q.eq("visibility", "public"))
@@ -238,16 +248,7 @@ export const listFeed = query({
       activitiesRaw
         .filter((a) => a.type !== "post_created")
         .slice(0, 10)
-        .map(async (a) => ({
-          _kind: "activity" as const,
-          _id: a._id,
-          createdAt: a.createdAt,
-          type: a.type,
-          targetType: a.targetType,
-          targetId: a.targetId,
-          metadata: a.metadata,
-          actor: await loadActor(ctx, a.actorId),
-        }))
+        .map((a) => enrichActivity(ctx, a))
     )
 
     return [...enrichedPosts, ...activities]
@@ -293,6 +294,8 @@ export const listOnlineNow = query({
 export const listComments = query({
   args: { postId: v.id("posts") },
   handler: async (ctx, args) => {
+    const post = await ctx.db.get(args.postId)
+    if (!post || post.isDeleted) return []
     const comments = await ctx.db
       .query("postComments")
       .withIndex("by_post_created", (q) => q.eq("postId", args.postId))
@@ -332,27 +335,87 @@ async function enrichPost(ctx: QueryCtx, post: Doc<"posts">) {
 }
 
 async function loadActor(ctx: QueryCtx, externalId: string) {
-  const user = await ctx.db
-    .query("users")
-    .withIndex("by_external_id", (q) => q.eq("externalId", externalId))
-    .first()
-  if (!user) return null
+  return await loadPublicActor(ctx, externalId)
+}
+
+async function enrichActivity(ctx: QueryCtx, activity: Doc<"activityEvents">) {
   return {
-    userId: user.externalId,
-    name: publicDisplayName(user),
-    profileImage: user.profileImage,
-    profileImageR2Key: user.profileImageR2Key,
+    _kind: "activity" as const,
+    _id: activity._id,
+    createdAt: activity.createdAt,
+    type: activity.type,
+    targetType: activity.targetType,
+    targetId: activity.targetId,
+    metadata: activity.metadata,
+    actor: await loadActor(ctx, activity.actorId),
   }
 }
 
-async function getFollowedUserIds(ctx: QueryCtx, followerId: string): Promise<Set<string>> {
+function newestUnique<T extends { _id: string; createdAt: number }>(rows: T[], limit: number) {
+  return [...new Map(rows.map((row) => [row._id, row])).values()]
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .slice(0, limit)
+}
+
+async function followingFeed(ctx: QueryCtx, followerId: string, limit: number) {
   const follows = await ctx.db
     .query("follows")
     .withIndex("by_follower", (q) => q.eq("followerId", followerId))
     .collect()
-  const ids = new Set<string>()
+  const userIds = new Set<string>([followerId])
+  const teamIds = new Set<Id<"teams">>()
   for (const f of follows) {
-    if (f.followedUserId) ids.add(f.followedUserId)
+    if (f.followedUserId) userIds.add(f.followedUserId)
+    if (f.followedTeamId) teamIds.add(f.followedTeamId)
   }
-  return ids
+  // Each source contributes at most one page. Unrelated global traffic cannot
+  // hide older followed content; duplicate user/team matches are merged below.
+  const postGroups = await Promise.all([
+    ...[...userIds].map((authorId) =>
+      ctx.db
+        .query("posts")
+        .withIndex("by_author_created", (q) => q.eq("authorId", authorId))
+        .order("desc")
+        .filter((q) => q.neq(q.field("isDeleted"), true))
+        .take(limit)
+    ),
+    ...[...teamIds].map((teamId) =>
+      ctx.db
+        .query("posts")
+        .withIndex("by_team_created", (q) => q.eq("teamId", teamId))
+        .order("desc")
+        .filter((q) => q.neq(q.field("isDeleted"), true))
+        .take(limit)
+    ),
+  ])
+  const activityGroups = await Promise.all([
+    ...[...userIds].map((actorId) =>
+      ctx.db
+        .query("activityEvents")
+        .withIndex("by_actor_created", (q) => q.eq("actorId", actorId))
+        .order("desc")
+        .filter((q) =>
+          q.and(q.eq(q.field("visibility"), "public"), q.neq(q.field("type"), "post_created"))
+        )
+        .take(10)
+    ),
+    ...[...teamIds].map((teamId) =>
+      ctx.db
+        .query("activityEvents")
+        .withIndex("by_target_created", (q) => q.eq("targetType", "team").eq("targetId", teamId))
+        .order("desc")
+        .filter((q) =>
+          q.and(q.eq(q.field("visibility"), "public"), q.neq(q.field("type"), "post_created"))
+        )
+        .take(10)
+    ),
+  ])
+  const posts = newestUnique(postGroups.flat(), limit)
+  const activities = newestUnique(activityGroups.flat(), 10)
+  return [
+    ...(await Promise.all(posts.map((post) => enrichPost(ctx, post)))),
+    ...(await Promise.all(activities.map((activity) => enrichActivity(ctx, activity)))),
+  ]
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .slice(0, limit)
 }

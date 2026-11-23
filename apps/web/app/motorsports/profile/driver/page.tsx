@@ -22,11 +22,11 @@ import { Separator } from "@workspace/ui/components/separator"
 import { Textarea } from "@workspace/ui/components/textarea"
 import { useMutation, useQuery } from "convex/react"
 import { ArrowLeft, Check, Loader2, Upload, X } from "lucide-react"
-import Image from "next/image"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
+import Image from "@/components/public-image"
 import {
   AVAILABILITY_OPTIONS,
   COMMON_LICENSES,
@@ -260,7 +260,7 @@ export default function CreateDriverProfilePage() {
       const { url: uploadUrl, key } = result
       await uploadImageToR2(file, uploadUrl)
 
-      setAvatarUrl(r2Url(key))
+      setAvatarUrl(r2Url(key) ?? "")
       toast.success("Driver image uploaded successfully")
     } catch {
       toast.error("An error occurred")

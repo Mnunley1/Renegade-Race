@@ -28,7 +28,13 @@ beforeEach(() => {
   vi.resetAllMocks()
   process.env.STRIPE_SECRET_KEY = "sk_test_dummy"
   refunds = []
-  stripe.refunds.list.mockImplementation(() => refunds)
+  stripe.refunds.list.mockImplementation((params) =>
+    refunds.map((refund) => ({
+      ...refund,
+      charge: refund.charge ?? params.charge,
+      currency: refund.currency ?? "usd",
+    }))
+  )
   stripe.refunds.create.mockImplementation((params: Stripe.RefundCreateParams) => {
     const refund = {
       id: `re_${refunds.length + 1}`,
@@ -120,7 +126,7 @@ async function setup() {
 
 describe("rental refunds", () => {
   it("admin partials remain refundable, identical requests replay, and full includes card processing", async () => {
-    const { admin, paymentId, read, sync } = await setup()
+    const { t, admin, paymentId, read, sync } = await setup()
     const request = { paymentId, amount: 4000, reason: "Rental adjustment", requestId: "first" }
     await admin.action(api.admin.initiateRefund, request)
     await sync()
@@ -144,6 +150,14 @@ describe("rental refunds", () => {
     await expect(
       admin.action(api.admin.initiateRefund, { ...request, amount: 6331, requestId: "over" })
     ).rejects.toThrow("remaining")
+    expect(
+      await t.run(({ db }) =>
+        db
+          .query("accountOperations")
+          .filter((q) => q.eq(q.field("status"), "active"))
+          .collect()
+      )
+    ).toEqual([])
     await admin.action(api.admin.initiateRefund, { ...request, requestId: "second" })
     await admin.action(api.admin.initiateRefund, { ...request, requestId: "last", amount: 2330 })
     await sync()
@@ -336,7 +350,14 @@ describe("rental refunds", () => {
     stripe.refunds.list.mockImplementationOnce(async function* () {
       enter()
       await proceed
-      yield { id: "old", status: "succeeded", amount: 1000 }
+      yield {
+        id: "old",
+        status: "succeeded",
+        amount: 1000,
+        charge: "ch_rental",
+        currency: "usd",
+        payment_intent: "pi_rental",
+      }
     })
     const stale = sync()
     await started

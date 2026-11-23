@@ -1,3 +1,4 @@
+import { assertAccountsAvailable } from "./accountDeletionGuards"
 import { v } from "convex/values"
 import type { Doc } from "./_generated/dataModel"
 import { mutation, type QueryCtx, query } from "./_generated/server"
@@ -9,6 +10,7 @@ import {
   sendTransactionalEmail,
 } from "./emails"
 import { getWebUrl, isReservationParticipant, participantCompletion } from "./helpers"
+import { requireReservationPhotoUploads } from "./r2"
 import { rateLimiter } from "./rateLimiter"
 import { visibleReturnPhotos } from "./returnEvidence"
 import { userProfileWithAdminContact } from "./userProfile"
@@ -53,6 +55,14 @@ export const create = mutation({
       throw new Error("Disputes can only be created for pending or completed rentals")
     }
 
+    await requireReservationPhotoUploads(ctx, {
+      reservationId: completion.reservationId,
+      uploader: identity.subject,
+      purpose: "disputes",
+      photos: args.photos ?? [],
+    })
+
+    await assertAccountsAvailable(ctx, identity.subject, completion.renterId, completion.ownerId)
     // Update completion status to disputed
     await ctx.db.patch(args.completionId, {
       status: "disputed",
@@ -270,6 +280,13 @@ export const addMessage = mutation({
     if (dispute.status !== "open") {
       throw new Error("Cannot add messages to a closed dispute")
     }
+
+    await requireReservationPhotoUploads(ctx, {
+      reservationId: dispute.reservationId,
+      uploader: identity.subject,
+      purpose: "disputes",
+      photos: args.photos ?? [],
+    })
 
     // Get existing messages or initialize
     const existingMessages = dispute.messages || []

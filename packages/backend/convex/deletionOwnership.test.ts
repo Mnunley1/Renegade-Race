@@ -4,6 +4,7 @@ import { Webhook } from "svix"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import rateSchema from "../node_modules/@convex-dev/rate-limiter/dist/component/schema.js"
 import { api, internal } from "./_generated/api"
+import type { Doc } from "./_generated/dataModel"
 import schema from "./schema"
 
 vi.mock("./r2", () => ({ r2: {} }))
@@ -83,6 +84,75 @@ async function setup(connected = false) {
     )
   }
   return { t, self, other, getUser, userId, postDeleted, postClerkEvent }
+}
+
+function rentalFixture(
+  t: Awaited<ReturnType<typeof setup>>["t"],
+  role: "renter" | "owner",
+  {
+    status = "approved",
+    endDate = "2099-01-02",
+    paymentStatus,
+  }: {
+    status?: Doc<"reservations">["status"]
+    endDate?: string
+    paymentStatus?: Doc<"payments">["status"]
+  } = {}
+) {
+  return t.run(async ({ db }) => {
+    // Give the unrelated identity a real user row so eligibility reaches the
+    // participant-index queries instead of returning early for a missing user.
+    await db.insert("users", { externalId: "other", name: "Unrelated fixture user" })
+    const participants = {
+      renterId: role === "renter" ? "owner" : "renter",
+      ownerId: role === "owner" ? "owner" : "host",
+    }
+    const trackId = await db.insert("tracks", {
+      name: "REN-32 fixture",
+      location: "Test",
+      isActive: true,
+    })
+    const vehicleId = await db.insert("vehicles", {
+      ownerId: participants.ownerId,
+      trackId,
+      make: "Test",
+      model: "REN-32",
+      year: 2020,
+      dailyRate: 1000,
+      description: "Synthetic deletion obligation fixture",
+      amenities: [],
+      addOns: [],
+      isActive: true,
+      createdAt: 0,
+      updatedAt: 0,
+    })
+    const reservationId = await db.insert("reservations", {
+      ...participants,
+      vehicleId,
+      startDate: endDate,
+      endDate,
+      totalDays: 1,
+      dailyRate: 1000,
+      totalAmount: 1000,
+      status,
+      createdAt: 0,
+      updatedAt: 0,
+    })
+    const paymentId = paymentStatus
+      ? await db.insert("payments", {
+          ...participants,
+          reservationId,
+          amount: 1000,
+          platformFee: 100,
+          ownerAmount: 900,
+          currency: "usd",
+          status: paymentStatus,
+          createdAt: 0,
+          updatedAt: 0,
+        })
+      : undefined
+    return { reservationId, paymentId }
+  })
 }
 
 describe("signup and owner profile workflows", () => {
@@ -202,7 +272,7 @@ describe("account deletion ownership", () => {
     expect(await getUser()).not.toBeNull()
   })
 
-  it("requires a signed Clerk deletion event, handles replay, and removes only its subject", async () => {
+  it("requires a signed Clerk deletion event, handles replay, and anonymizes only its subject", async () => {
     const { t, postDeleted, getUser } = await setup(true)
     const otherId = await t.run((ctx) =>
       ctx.db.insert("users", { externalId: "other", name: "Other" })
@@ -212,7 +282,7 @@ describe("account deletion ownership", () => {
     expect(await getUser()).not.toBeNull()
     const first = await postDeleted()
     expect(first.status).toBe(200)
-    expect(await getUser()).toBeNull()
+    expect(await getUser()).toMatchObject({ externalId: "owner", name: "Deleted user" })
     expect((await postDeleted()).status).toBe(200)
     expect(await t.run((ctx) => ctx.db.get(otherId))).not.toBeNull()
     expect(stripe.balance).toHaveBeenCalledTimes(1)
@@ -268,6 +338,7 @@ describe("account deletion ownership", () => {
     const eligibility = await self.action(api.users.checkUserDeletionEligibility, {})
     expect(eligibility.canDelete).toBe(false)
     expect(eligibility.blockingFactors).toHaveLength(2)
+    await t.mutation(internal.users.confirmProviderDeletion, { subject: "owner" })
     await expect(
       t.mutation(internal.users.performUserDeletion, { userId, clerkUserId: "owner" })
     ).rejects.toThrow("Cannot delete")
@@ -281,11 +352,233 @@ describe("account deletion ownership", () => {
     expect((await self.action(api.users.checkUserDeletionEligibility, {})).canDelete).toBe(true)
   })
 
+  it.each(
+    (["renter", "owner"] as const).flatMap((role) =>
+      ["2000-01-01", "2099-01-02"].map((endDate) => ({ role, endDate }))
+    )
+  )("blocks an approved booking before payment as $role ending $endDate, then allows cancellation without erasing history", async ({
+    role,
+    endDate,
+  }) => {
+    const { t, self, other, userId, getUser, postDeleted } = await setup()
+    const { reservationId } = await rentalFixture(t, role, { endDate })
+    expect((await self.action(api.users.checkUserDeletionEligibility, {})).canDelete).toBe(false)
+    expect((await other.action(api.users.checkUserDeletionEligibility, {})).canDelete).toBe(true)
+    await t.mutation(internal.users.confirmProviderDeletion, { subject: "owner" })
+    await expect(
+      t.mutation(internal.users.performUserDeletion, { userId, clerkUserId: "owner" })
+    ).rejects.toThrow("Cannot delete")
+    expect((await postDeleted()).status).toBe(200)
+    expect(await getUser()).not.toBeNull()
+    expect(await t.run(({ db }) => db.query("payments").collect())).toEqual([])
+
+    await t.run(({ db }) => db.patch(reservationId, { status: "cancelled" }))
+    expect((await self.action(api.users.checkUserDeletionEligibility, {})).canDelete).toBe(true)
+    // The signed deletion fact is acknowledged; a replay can retry deferred cleanup.
+    expect((await postDeleted()).status).toBe(200)
+    expect((await postDeleted()).status).toBe(200)
+    expect(await getUser()).toMatchObject({ externalId: "owner", name: "Deleted user" })
+    expect(await t.run(({ db }) => db.get(reservationId))).toMatchObject({ status: "cancelled" })
+  })
+
+  it.each(
+    (["renter", "owner"] as const).flatMap((role) =>
+      (["intent", "checkout"] as const).flatMap((kind) =>
+        [true, false].map((terminalFirst) => ({ role, kind, terminalFirst }))
+      )
+    )
+  )("resolves $role deletion only after booking cancellation and terminal $kind evidence (terminal first=$terminalFirst)", async ({
+    role,
+    kind,
+    terminalFirst,
+  }) => {
+    vi.useFakeTimers()
+    const { t, self } = await setup()
+    try {
+      const { reservationId, paymentId } = await rentalFixture(t, role, {
+        paymentStatus: "pending",
+      })
+      if (!paymentId) throw new Error("Expected payment")
+      const payment = await t.run(async ({ db }) => {
+        await db.patch(reservationId, { paymentId, paymentStatus: "pending" })
+        await db.patch(
+          paymentId,
+          kind === "intent"
+            ? { stripePaymentIntentId: "pi_terminal" }
+            : { stripeCheckoutSessionId: "cs_terminal" }
+        )
+        return await db.get(paymentId)
+      })
+      if (!payment) throw new Error("Expected payment")
+      const duplicateId = await t.run(({ db }) => {
+        const { _id, _creationTime, ...fields } = payment
+        return db.insert("payments", fields)
+      })
+      const terminal = () =>
+        kind === "intent"
+          ? t.mutation(internal.stripe.ingestRentalPaymentEvent, {
+              reservationId,
+              renterId: payment.renterId,
+              ownerId: payment.ownerId,
+              currency: "usd",
+              amount: 1000,
+              stripePaymentIntentId: "pi_terminal",
+              eventId: "evt_terminal",
+              eventType: "payment_intent.canceled",
+            })
+          : t.mutation(internal.stripe.ingestRentalCheckoutExpired, {
+              reservationId,
+              renterId: payment.renterId,
+              ownerId: payment.ownerId,
+              currency: "usd",
+              amount: 1000,
+              stripeCheckoutSessionId: "cs_terminal",
+              eventId: "evt_terminal",
+              mode: "payment",
+              status: "expired",
+              paymentStatus: "unpaid",
+            })
+      expect((await self.action(api.users.checkUserDeletionEligibility, {})).canDelete).toBe(false)
+      if (terminalFirst) {
+        await terminal()
+        expect((await self.action(api.users.checkUserDeletionEligibility, {})).canDelete).toBe(
+          false
+        )
+      }
+      await self.mutation(api.reservations.cancel, { reservationId })
+      if (!terminalFirst) {
+        expect((await self.action(api.users.checkUserDeletionEligibility, {})).canDelete).toBe(
+          false
+        )
+        await terminal()
+      }
+      expect((await self.action(api.users.checkUserDeletionEligibility, {})).canDelete).toBe(true)
+      expect(await t.run(({ db }) => db.get(paymentId))).toMatchObject({ status: "cancelled" })
+      expect(await t.run(({ db }) => db.get(duplicateId))).toMatchObject({ status: "cancelled" })
+      const jobs = await t.run(({ db }) => db.system.query("_scheduled_functions").collect())
+      expect(jobs.some((job) => job.name.includes("processRefundOnCancellation"))).toBe(false)
+    } finally {
+      await t.finishAllScheduledFunctions(vi.runAllTimers)
+      vi.useRealTimers()
+    }
+  })
+
+  const unsettledCases = (["renter", "owner"] as const).flatMap((role) =>
+    (["pending", "processing"] as const).flatMap((paymentStatus) =>
+      (
+        [
+          ["approved", "2000-01-01"],
+          ["completed", "2000-01-01"],
+          ["cancelled", "2099-01-02"],
+        ] as const
+      ).map(([reservationStatus, endDate]) => ({
+        role,
+        paymentStatus,
+        reservationStatus,
+        endDate,
+      }))
+    )
+  )
+
+  it.each(
+    unsettledCases
+  )("blocks $role deletion for $paymentStatus payment on $reservationStatus booking ending $endDate", async ({
+    role,
+    paymentStatus,
+    reservationStatus,
+    endDate,
+  }) => {
+    const { t, self, other, userId, getUser, postDeleted } = await setup()
+    const { reservationId, paymentId } = await rentalFixture(t, role, {
+      status: reservationStatus,
+      endDate,
+      paymentStatus,
+    })
+    if (!paymentId) throw new Error("Expected payment fixture")
+    const eligibility = await self.action(api.users.checkUserDeletionEligibility, {})
+    expect(eligibility.canDelete).toBe(false)
+    expect(eligibility.blockingFactors.join(" ").toLowerCase()).toContain("payment")
+    expect((await other.action(api.users.checkUserDeletionEligibility, {})).canDelete).toBe(true)
+    await t.mutation(internal.users.confirmProviderDeletion, { subject: "owner" })
+    await expect(
+      t.mutation(internal.users.performUserDeletion, { userId, clerkUserId: "owner" })
+    ).rejects.toThrow("Cannot delete")
+    expect((await postDeleted()).status).toBe(200)
+    expect(await getUser()).not.toBeNull()
+    expect(await t.run(({ db }) => db.get(paymentId))).toMatchObject({ status: paymentStatus })
+
+    await t.run(({ db }) => db.patch(paymentId, { status: "cancelled" }))
+    if (reservationStatus === "approved") {
+      expect((await self.action(api.users.checkUserDeletionEligibility, {})).canDelete).toBe(false)
+      await t.run(({ db }) => db.patch(reservationId, { status: "cancelled" }))
+    }
+    expect((await self.action(api.users.checkUserDeletionEligibility, {})).canDelete).toBe(true)
+    expect((await postDeleted()).status).toBe(200)
+    expect(await getUser()).toMatchObject({ externalId: "owner", name: "Deleted user" })
+    expect(await t.run(({ db }) => db.get(paymentId))).toMatchObject({ status: "cancelled" })
+    expect(await t.run(({ db }) => db.get(reservationId))).not.toBeNull()
+  })
+
+  it.each([
+    "renter",
+    "owner",
+  ] as const)("requires both booking and payment obligations to resolve for %s", async (role) => {
+    const { t, self } = await setup()
+    const { reservationId, paymentId } = await rentalFixture(t, role, {
+      paymentStatus: "processing",
+    })
+    if (!paymentId) throw new Error("Expected payment fixture")
+    await t.run(({ db }) => db.patch(reservationId, { status: "cancelled" }))
+    expect((await self.action(api.users.checkUserDeletionEligibility, {})).canDelete).toBe(false)
+    await t.run(async ({ db }) => {
+      await db.patch(reservationId, { status: "approved" })
+      await db.patch(paymentId, { status: "succeeded" })
+    })
+    expect((await self.action(api.users.checkUserDeletionEligibility, {})).canDelete).toBe(false)
+    await t.run(({ db }) => db.patch(reservationId, { status: "confirmed" }))
+    expect((await self.action(api.users.checkUserDeletionEligibility, {})).canDelete).toBe(false)
+    await t.run(({ db }) => db.patch(reservationId, { status: "completed" }))
+    for (const status of [
+      "succeeded",
+      "failed",
+      "cancelled",
+      "refunded",
+      "partially_refunded",
+    ] as const) {
+      await t.run(({ db }) => db.patch(paymentId, { status }))
+      expect((await self.action(api.users.checkUserDeletionEligibility, {})).canDelete).toBe(true)
+    }
+  })
+
+  it.each([
+    "approved booking",
+    "processing payment",
+  ] as const)("rechecks a new %s created during the Stripe balance read in the final deletion transaction", async (obligation) => {
+    const { t, self, getUser, postDeleted } = await setup(true)
+    expect((await self.action(api.users.checkUserDeletionEligibility, {})).canDelete).toBe(true)
+    stripe.balance.mockImplementationOnce(async () => {
+      if (obligation === "approved booking") {
+        await rentalFixture(t, "owner")
+      } else {
+        await rentalFixture(t, "renter", {
+          status: "cancelled",
+          endDate: "2000-01-01",
+          paymentStatus: "processing",
+        })
+      }
+      return { pending: [], available: [] }
+    })
+    expect((await postDeleted()).status).toBe(200)
+    expect(await getUser()).not.toBeNull()
+    expect(await t.run(({ db }) => db.query("webhookEvents").collect())).toHaveLength(1)
+  })
+
   it("denies deletion for an outstanding balance and if Stripe ownership cannot be verified", async () => {
     const { t, self, userId, getUser } = await setup(true)
     stripe.balance.mockResolvedValue({ pending: [{ currency: "usd", amount: 500 }], available: [] })
     const args = { clerkUserId: "owner" }
     expect((await self.action(api.users.checkUserDeletionEligibility, args)).canDelete).toBe(false)
+    await t.mutation(internal.users.confirmProviderDeletion, { subject: "owner" })
     await expect(t.action(internal.users.performUserDeletionWithChecks, args)).rejects.toThrow(
       "payouts"
     )
@@ -295,10 +588,12 @@ describe("account deletion ownership", () => {
       type: "express",
       metadata: { renegadeUserId: "other" },
     })
+    await t.mutation(internal.users.confirmProviderDeletion, { subject: "owner" })
     await expect(t.action(internal.users.performUserDeletionWithChecks, args)).rejects.toThrow(
       "Unable to verify"
     )
     expect(stripe.balance.mock.calls.length).toBe(reads)
+    await t.mutation(internal.users.confirmProviderDeletion, { subject: "owner" })
     await expect(
       t.mutation(internal.users.performUserDeletion, {
         userId,
@@ -314,7 +609,7 @@ describe("account deletion ownership", () => {
     stripe.account.mockResolvedValue({ id: "acct_owner", type: "express", metadata: {} })
     expect((await self.action(api.users.checkUserDeletionEligibility, {})).canDelete).toBe(true)
     expect((await postDeleted()).status).toBe(200)
-    expect(await getUser()).toBeNull()
+    expect(await getUser()).toMatchObject({ externalId: "owner", name: "Deleted user" })
   })
 
   it("returns one generic blocker for legacy funds, a failed balance read or an ambiguous link", async () => {
@@ -341,9 +636,25 @@ describe("account deletion ownership", () => {
     stripe.balance.mockClear()
     expect(await self.action(api.users.checkUserDeletionEligibility, {})).toMatchObject(expected)
     expect(stripe.balance).not.toHaveBeenCalled()
+    await t.mutation(internal.users.confirmProviderDeletion, { subject: "owner" })
     await expect(
       t.action(internal.users.performUserDeletionWithChecks, { clerkUserId: "owner" })
     ).rejects.toThrow("Unable to verify")
     expect(await getUser()).not.toBeNull()
+  })
+  it.each([
+    { pending: [{ amount: -1, currency: "usd" }], available: [] },
+    { pending: [], available: [], connect_reserved: [{ amount: 1, currency: "usd" }] },
+    {
+      pending: [],
+      available: [],
+      refund_and_dispute_prefunding: { pending: [{ amount: -1, currency: "usd" }], available: [] },
+    },
+  ])("blocks verified-owner deletion for nonzero liabilities or reserved funds %j", async (balance) => {
+    const { self } = await setup(true)
+    stripe.balance.mockResolvedValue(balance)
+    expect(await self.action(api.users.checkUserDeletionEligibility, {})).toMatchObject({
+      canDelete: false,
+    })
   })
 })

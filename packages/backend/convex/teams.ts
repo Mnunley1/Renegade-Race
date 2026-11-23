@@ -1,5 +1,6 @@
 import { v } from "convex/values"
 import { mutation, query } from "./_generated/server"
+import { requirePublicMediaFields } from "./r2"
 import { getCurrentUserOrThrow } from "./users"
 
 export const create = mutation({
@@ -32,6 +33,11 @@ export const create = mutation({
   },
   handler: async (ctx, args) => {
     const user = await getCurrentUserOrThrow(ctx)
+    await requirePublicMediaFields(ctx, user, {
+      kind: "general",
+      key: args.logoR2Key,
+      url: args.logoUrl,
+    })
 
     const teamId = await ctx.db.insert("teams", {
       ...args,
@@ -90,6 +96,13 @@ export const update = mutation({
     if (!team || team.ownerId !== user.externalId) {
       throw new Error("Not authorized to update this team")
     }
+
+    await requirePublicMediaFields(ctx, user, {
+      kind: "general",
+      key: args.logoR2Key,
+      url: args.logoUrl,
+      previous: { key: team.logoR2Key, url: team.logoUrl },
+    })
 
     await ctx.db.patch(teamId, {
       ...updates,

@@ -28,6 +28,7 @@ import { toast } from "sonner"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { DetailPageLayout } from "@/components/detail-page-layout"
 import { LoadingState } from "@/components/loading-state"
+import PublicImage from "@/components/public-image"
 import { StatusBadge } from "@/components/status-badge"
 import { UserAvatar } from "@/components/user-avatar"
 import type { Id } from "@/lib/convex"
@@ -603,10 +604,10 @@ function VehiclesCard({ vehicles }: { vehicles: VehicleItem[] | undefined }) {
                   key={vehicle._id}
                 >
                   {primaryImage && (
-                    <img
+                    <PublicImage
                       alt={`${vehicle.make} ${vehicle.model}`}
                       className="h-12 w-16 shrink-0 rounded-md object-cover"
-                      src={primaryImage.r2Key ? r2Url(primaryImage.r2Key) : primaryImage.imageUrl}
+                      src={r2Url(primaryImage.r2Key) ?? primaryImage.imageUrl}
                     />
                   )}
                   <div className="min-w-0 flex-1">

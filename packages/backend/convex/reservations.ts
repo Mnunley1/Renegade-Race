@@ -1,9 +1,17 @@
+import { reserveAccountOperation } from "./accountOperations"
+import { assertAccountsAvailable } from "./accountDeletionGuards"
 import { v } from "convex/values"
 import { internal } from "./_generated/api"
 import type { Id } from "./_generated/dataModel"
 import { mutation, query } from "./_generated/server"
 import { isAdminIdentity } from "./admin"
-import { calculateDaysBetween } from "./dateUtils"
+import {
+  endDateFromDuration,
+  inclusiveRentalDays,
+  isValidRentalDuration,
+  MAX_RENTAL_DURATION_DAYS,
+  MIN_RENTAL_DURATION_DAYS,
+} from "./dateUtils"
 import {
   getReservationApprovedRenterEmailTemplate,
   getReservationCancelledEmailTemplate,
@@ -14,8 +22,9 @@ import {
 } from "./emails"
 import { ErrorCode, throwError } from "./errors"
 import { getWebUrl } from "./helpers"
-import { calculateReservationTotal } from "./pricing"
 import { rateLimiter } from "./rateLimiter"
+import { assertRentalDatesAvailable } from "./rentalAvailability"
+import { buildRentalQuote, validateRentalQuote } from "./rentalQuote"
 import { sanitizeMessage, sanitizeShortText } from "./sanitize"
 import { publicUserProfile, userProfileWithAdminContact } from "./userProfile"
 
@@ -145,12 +154,39 @@ export const getById = query({
   },
 })
 
+// Active requests/bookings for a vehicle — informational, not a renter block.
+export const listActiveForVehicle = query({
+  args: { vehicleId: v.id("vehicles") },
+  handler: async (ctx, args) => {
+    const reservations = await ctx.db
+      .query("reservations")
+      .withIndex("by_vehicle", (q) => q.eq("vehicleId", args.vehicleId))
+      .filter((q) =>
+        q.or(
+          q.eq(q.field("status"), "pending"),
+          q.eq(q.field("status"), "approved"),
+          q.eq(q.field("status"), "confirmed")
+        )
+      )
+      .collect()
+
+    return reservations.map((reservation) => ({
+      _id: reservation._id,
+      status: reservation.status,
+      startDate: reservation.startDate,
+      endDate: reservation.endDate,
+    }))
+  },
+})
+
 // Create a new reservation
 export const create = mutation({
   args: {
     vehicleId: v.id("vehicles"),
     startDate: v.string(),
-    endDate: v.string(),
+    // Inclusive last occupied day. Preferred: pass durationDays and omit this.
+    endDate: v.optional(v.string()),
+    durationDays: v.optional(v.number()),
     pickupTime: v.optional(v.string()),
     dropoffTime: v.optional(v.string()),
     renterMessage: v.optional(v.string()),
@@ -209,123 +245,66 @@ export const create = mutation({
       throwError(ErrorCode.USER_BLOCKED, "Cannot book vehicles from blocked users")
     }
 
-    // Calculate total days and amount
-    // Use date utility to avoid timezone issues
-    const totalDays = calculateDaysBetween(args.startDate, args.endDate)
+    // Rental length is start date + 1–3 occupied days (inclusive).
+    let totalDays: number
+    let endDate: string
 
-    if (totalDays <= 0) {
-      throwError(ErrorCode.INVALID_DATE_RANGE, "Invalid date range", {
-        startDate: args.startDate,
-        endDate: args.endDate,
-      })
-    }
-
-    // Monetary validation for daily rate
-    const MAX_DAILY_RATE_CENTS = 5_000_000 // $50,000 per day max
-    const MIN_DAILY_RATE_CENTS = 100 // $1 per day min
-
-    if (vehicle.dailyRate <= 0 || vehicle.dailyRate < MIN_DAILY_RATE_CENTS) {
-      throwError(ErrorCode.INVALID_AMOUNT, "Daily rate must be at least $1.00", {
-        dailyRate: vehicle.dailyRate,
-      })
-    }
-
-    if (vehicle.dailyRate > MAX_DAILY_RATE_CENTS) {
-      throwError(ErrorCode.INVALID_AMOUNT, "Daily rate cannot exceed $50,000.00 per day", {
-        dailyRate: vehicle.dailyRate,
-      })
-    }
-
-    // Validate add-on prices before calculating totals
-    if (args.addOns && args.addOns.length > 0) {
-      for (const addOn of args.addOns) {
-        if (addOn.price < 0) {
-          throwError(ErrorCode.INVALID_AMOUNT, `Add-on price for ${addOn.name} cannot be negative`)
-        }
-        // Validate reasonable max for add-ons
-        if (addOn.price > 100_000) {
-          // $1,000 max per add-on
-          throwError(
-            ErrorCode.INVALID_AMOUNT,
-            `Add-on price for ${addOn.name} cannot exceed $1,000.00`
-          )
-        }
-      }
-    }
-
-    const totalAmount = calculateReservationTotal(vehicle.dailyRate, totalDays, args.addOns)
-
-    // Validate total amount
-    const MAX_TOTAL_AMOUNT_CENTS = 1_000_000 // $10,000 max
-    const MIN_TOTAL_AMOUNT_CENTS = 100 // $1 min
-
-    if (totalAmount < MIN_TOTAL_AMOUNT_CENTS) {
-      throwError(ErrorCode.INVALID_AMOUNT, "Total amount must be at least $1.00", { totalAmount })
-    }
-
-    if (totalAmount > MAX_TOTAL_AMOUNT_CENTS) {
-      throwError(ErrorCode.INVALID_AMOUNT, "Total amount cannot exceed $10,000.00", {
-        totalAmount,
-      })
-    }
-
-    // Check availability
-    const availability = await ctx.db
-      .query("availability")
-      .withIndex("by_vehicle_date", (q) => q.eq("vehicleId", args.vehicleId))
-      .filter((q) =>
-        q.and(q.gte(q.field("date"), args.startDate), q.lte(q.field("date"), args.endDate))
-      )
-      .collect()
-
-    const blockedDates = availability.filter((a) => !a.isAvailable)
-    if (blockedDates.length > 0) {
-      throwError(ErrorCode.DATES_UNAVAILABLE, "Selected dates are not available", {
-        blockedDates: blockedDates.map((d) => d.date),
-      })
-    }
-
-    // Check for conflicting confirmed reservations only
-    // Pending/approved requests do NOT block — only confirmed (paid) reservations block
-    const conflictingReservations = await ctx.db
-      .query("reservations")
-      .withIndex("by_vehicle", (q) => q.eq("vehicleId", args.vehicleId))
-      .filter((q) =>
-        q.and(
-          q.eq(q.field("status"), "confirmed"),
-          // Check for date overlap: existing reservation overlaps if
-          // existingStart <= newEnd AND existingEnd >= newStart
-          q.and(
-            q.lte(q.field("startDate"), args.endDate),
-            q.gte(q.field("endDate"), args.startDate)
-          )
+    if (args.durationDays !== undefined) {
+      if (!isValidRentalDuration(args.durationDays)) {
+        throwError(
+          ErrorCode.INVALID_DATE_RANGE,
+          `Rental length must be ${MIN_RENTAL_DURATION_DAYS}–${MAX_RENTAL_DURATION_DAYS} days`,
+          { durationDays: args.durationDays }
         )
-      )
-      .collect()
-
-    if (conflictingReservations.length > 0) {
-      throwError(ErrorCode.DATES_CONFLICT, "Selected dates conflict with existing reservations", {
-        startDate: args.startDate,
-        endDate: args.endDate,
-        conflictCount: conflictingReservations.length,
-      })
+      }
+      const computedEnd = endDateFromDuration(args.startDate, args.durationDays)
+      if (!computedEnd) {
+        throwError(ErrorCode.INVALID_DATE_RANGE, "Invalid start date", {
+          startDate: args.startDate,
+        })
+      }
+      totalDays = args.durationDays
+      endDate = computedEnd
+    } else if (args.endDate) {
+      totalDays = inclusiveRentalDays(args.startDate, args.endDate)
+      endDate = args.endDate
+      if (!isValidRentalDuration(totalDays)) {
+        throwError(
+          ErrorCode.INVALID_DATE_RANGE,
+          `Rental length must be ${MIN_RENTAL_DURATION_DAYS}–${MAX_RENTAL_DURATION_DAYS} days`,
+          { startDate: args.startDate, endDate: args.endDate, totalDays }
+        )
+      }
+    } else {
+      throwError(ErrorCode.INVALID_DATE_RANGE, "Start date and rental length are required")
     }
+
+    const quote = buildRentalQuote(vehicle, totalDays, args.addOns)
+    const totalAmount = quote.totalAmount
+
+    await assertRentalDatesAvailable(ctx, {
+      vehicleId: args.vehicleId,
+      startDate: args.startDate,
+      endDate,
+    })
 
     // Create the reservation with sanitized content
+    await assertAccountsAvailable(ctx, renterId, vehicle.ownerId)
     const reservationId = await ctx.db.insert("reservations", {
       vehicleId: args.vehicleId,
       renterId,
       ownerId: vehicle.ownerId,
       startDate: args.startDate,
-      endDate: args.endDate,
+      endDate,
       pickupTime: args.pickupTime,
       dropoffTime: args.dropoffTime,
       totalDays,
-      dailyRate: vehicle.dailyRate,
+      dailyRate: quote.dailyRate,
       totalAmount,
+      quoteVersion: quote.quoteVersion,
       status: "pending",
       renterMessage: args.renterMessage ? sanitizeMessage(args.renterMessage) : undefined,
-      addOns: args.addOns,
+      addOns: quote.addOns,
       createdAt: now,
       updatedAt: now,
     })
@@ -380,7 +359,7 @@ export const create = mutation({
           renterName,
           vehicleName,
           startDate: args.startDate,
-          endDate: args.endDate,
+          endDate,
           totalAmount,
           renterMessage: args.renterMessage,
           reservationUrl: `${webUrl}/host/reservations`,
@@ -427,9 +406,24 @@ export const approve = mutation({
       })
     }
 
+    await assertAccountsAvailable(ctx, identity.subject, reservation.renterId, reservation.ownerId)
+    await assertRentalDatesAvailable(ctx, {
+      vehicleId: reservation.vehicleId,
+      startDate: reservation.startDate,
+      endDate: reservation.endDate,
+      excludeReservationId: reservation._id,
+    })
+
+    const currentListing =
+      reservation.quoteVersion === 1 ? null : await ctx.db.get(reservation.vehicleId)
+    const quote = validateRentalQuote(reservation, currentListing)
+
     const now = Date.now()
 
     await ctx.db.patch(args.reservationId, {
+      // Exact legacy validation may canonicalize descriptive fields, never the price.
+      quoteVersion: quote.quoteVersion,
+      addOns: quote.addOns,
       status: "approved",
       approvedAt: now,
       ownerMessage: args.ownerMessage ? sanitizeMessage(args.ownerMessage) : undefined,
@@ -637,6 +631,18 @@ export const cancel = mutation({
       })
     }
 
+    // Captured payments held for review have not confirmed a rental. They need
+    // explicit reconciliation, not the normal cancellation-policy refund.
+    if (
+      reservation.status === "approved" &&
+      (reservation.paymentStatus === "paid" || reservation.paymentStatus === "partially_refunded")
+    ) {
+      throwError(
+        ErrorCode.INVALID_STATUS,
+        "This payment needs review before the reservation can be cancelled. Contact support."
+      )
+    }
+
     await ctx.db.patch(args.reservationId, {
       status: "cancelled",
       cancellationReason: args.cancellationReason
@@ -675,6 +681,7 @@ export const cancel = mutation({
           // If owner is cancelling a confirmed reservation, force 100% refund
           const forceFullRefund = isOwnerCancelling && reservation.status === "confirmed"
 
+      await reserveAccountOperation(ctx, `rental-cancellation-refund:${reservation._id}`, [reservation.renterId, reservation.ownerId])
           // Schedule refund processing (use scheduler to call internal action)
           await ctx.scheduler.runAfter(0, internal.stripe.processRefundOnCancellation, {
             paymentId: reservation.paymentId,

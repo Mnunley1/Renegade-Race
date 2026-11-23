@@ -35,11 +35,11 @@ import {
   Trash2,
   Upload,
 } from "lucide-react"
-import Image from "next/image"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
+import Image from "@/components/public-image"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
@@ -49,7 +49,10 @@ import {
   isAllowedImageFile,
 } from "@/lib/image-validation"
 import { r2Url } from "@/lib/r2-url"
+import { formatRentalUsd } from "@/lib/rental-checkout"
+import { centsToDollarInput, dollarsToCents } from "@/lib/rental-money"
 import { listingImageUploadApi } from "@/lib/vehicle-upload-api"
+import { isVehicleYear, VEHICLE_YEAR_ERROR } from "@/lib/vehicle-year"
 
 const TRANSMISSION_OPTIONS = ["Manual", "Automatic", "PDK", "DCT", "CVT"]
 const DRIVETRAIN_OPTIONS = ["RWD", "AWD", "FWD"]
@@ -107,7 +110,7 @@ export default function EditVehiclePage() {
     make: "",
     model: "",
     year: 0,
-    dailyRate: 0,
+    dailyRate: "",
     damageDepositAmount: 0,
     description: "",
     horsepower: 0,
@@ -133,8 +136,8 @@ export default function EditVehiclePage() {
         trackId: vehicle.trackId || "",
         make: vehicle.make || "",
         model: vehicle.model || "",
-        year: vehicle.year || 0,
-        dailyRate: vehicle.dailyRate || 0,
+        year: vehicle.year ?? 0,
+        dailyRate: centsToDollarInput(vehicle.dailyRate ?? 0),
         damageDepositAmount: vehicle.damageDepositAmount
           ? Math.round(vehicle.damageDepositAmount / 100)
           : 0,
@@ -203,7 +206,6 @@ export default function EditVehiclePage() {
       ...formData,
       [name]:
         name === "year" ||
-        name === "dailyRate" ||
         name === "damageDepositAmount" ||
         name === "horsepower" ||
         name === "mileage"
@@ -223,14 +225,15 @@ export default function EditVehiclePage() {
 
   // Add-on management functions
   const addAddOn = () => {
-    if (newAddOn.name && newAddOn.price) {
+    const price = dollarsToCents(newAddOn.price)
+    if (newAddOn.name && price !== null) {
       setFormData({
         ...formData,
         addOns: [
           ...formData.addOns,
           {
             name: newAddOn.name,
-            price: Number(newAddOn.price),
+            price,
             description: newAddOn.description || undefined,
             isRequired: newAddOn.isRequired,
             priceType: newAddOn.priceType,
@@ -262,10 +265,10 @@ export default function EditVehiclePage() {
     if (!addOn) return
     setNewAddOn({
       name: addOn.name,
-      price: addOn.price.toString(),
+      price: centsToDollarInput(addOn.price),
       description: addOn.description || "",
       isRequired: addOn.isRequired ?? false,
-      priceType: addOn.priceType ?? "daily",
+      priceType: addOn.priceType ?? "one-time",
     })
     setEditingAddOnIndex(index)
   }
@@ -276,13 +279,30 @@ export default function EditVehiclePage() {
       return
     }
 
+    const original = formData.addOns[editingAddOnIndex]
+    const price =
+      original && newAddOn.price === centsToDollarInput(original.price)
+        ? original.price
+        : dollarsToCents(newAddOn.price)
+    if (price === null) {
+      toast.error("Enter a valid nonnegative dollar price")
+      return
+    }
+
     const updatedAddOns = [...formData.addOns]
     updatedAddOns[editingAddOnIndex] = {
+      ...original,
       name: newAddOn.name,
-      price: Number(newAddOn.price),
+      price,
       description: newAddOn.description || undefined,
-      isRequired: newAddOn.isRequired,
-      priceType: newAddOn.priceType,
+      isRequired:
+        original && newAddOn.isRequired === (original.isRequired ?? false)
+          ? original.isRequired
+          : newAddOn.isRequired,
+      priceType:
+        original && newAddOn.priceType === (original.priceType ?? "one-time")
+          ? original.priceType
+          : newAddOn.priceType,
     }
 
     setFormData({
@@ -497,6 +517,17 @@ export default function EditVehiclePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!(Object.is(formData.year, vehicle.year) || isVehicleYear(formData.year))) {
+      toast.error(VEHICLE_YEAR_ERROR)
+      return
+    }
+    // Preserve legacy stored values when this field was not changed.
+    const rateUnchanged = formData.dailyRate === centsToDollarInput(vehicle.dailyRate)
+    const dailyRate = rateUnchanged ? vehicle.dailyRate : dollarsToCents(formData.dailyRate)
+    if (dailyRate === null || dailyRate < 0 || (!rateUnchanged && dailyRate === 0)) {
+      toast.error("Enter a valid daily rate of at least $0.01")
+      return
+    }
     setIsSubmitting(true)
 
     try {
@@ -508,8 +539,8 @@ export default function EditVehiclePage() {
         trackId: formData.trackId ? (formData.trackId as Id<"tracks">) : undefined,
         make: formData.make || undefined,
         model: formData.model || undefined,
-        year: formData.year || undefined,
-        dailyRate: formData.dailyRate || undefined,
+        year: Object.is(formData.year, vehicle.year) ? undefined : formData.year,
+        dailyRate,
         damageDepositAmount: formData.damageDepositAmount
           ? formData.damageDepositAmount * 100
           : undefined,
@@ -820,18 +851,24 @@ export default function EditVehiclePage() {
                   onChange={handleChange}
                   placeholder="2023"
                   required
+                  step="any"
                   type="number"
                   value={formData.year}
                 />
+                <p className="text-muted-foreground text-xs">
+                  Use a four-digit year. Unconfirmed legacy years require owner verification.
+                </p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="dailyRate">Daily Rate ($) *</Label>
                 <Input
                   id="dailyRate"
+                  min="0"
                   name="dailyRate"
                   onChange={handleChange}
                   placeholder="899"
                   required
+                  step="any"
                   type="number"
                   value={formData.dailyRate}
                 />
@@ -1014,12 +1051,13 @@ export default function EditVehiclePage() {
                           <p className="text-muted-foreground text-sm">{addOn.description}</p>
                         )}
                         <p className="font-semibold text-primary">
-                          ${addOn.price}
-                          {addOn.priceType === "one-time" ? " one-time" : "/day"}
+                          {formatRentalUsd(addOn.price)}
+                          {addOn.priceType === "daily" ? "/day" : " one-time"}
                         </p>
                       </div>
                       <div className="flex gap-2">
                         <Button
+                          aria-label={`Edit ${addOn.name}`}
                           onClick={() => startEditingAddOn(index)}
                           size="sm"
                           type="button"
@@ -1059,8 +1097,10 @@ export default function EditVehiclePage() {
                     <Label htmlFor="addOnPrice">Price ($) *</Label>
                     <Input
                       id="addOnPrice"
+                      min="0"
                       onChange={(e) => setNewAddOn({ ...newAddOn, price: e.target.value })}
                       placeholder="150"
+                      step="any"
                       type="number"
                       value={newAddOn.price}
                     />

@@ -14,6 +14,7 @@ import { DataTable, exportToCSV } from "@/components/data-table"
 import { EmptyState } from "@/components/empty-state"
 import { LoadingState } from "@/components/loading-state"
 import { PageHeader } from "@/components/page-header"
+import { RentalSettlementQueue } from "@/components/rental-settlement-review"
 import { StatusBadge } from "@/components/status-badge"
 import { UserAvatar } from "@/components/user-avatar"
 
@@ -177,6 +178,7 @@ export default function RefundsPage() {
   return (
     <div className="space-y-6">
       <PageHeader description="View refund history and process new refunds" title="Refunds" />
+      <RentalSettlementQueue />
 
       <div className="grid gap-4 md:grid-cols-3">
         <Card>

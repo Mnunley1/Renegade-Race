@@ -9,6 +9,7 @@ import { useSearchParams } from "next/navigation"
 import { Suspense } from "react"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
+import { formatVehicleTitle } from "@/lib/vehicle-year"
 
 function DamagePaymentSuccessContent() {
   const searchParams = useSearchParams()
@@ -47,9 +48,7 @@ function DamagePaymentSuccessContent() {
     )
   }
 
-  const vehicleName = invoice?.vehicle
-    ? `${invoice.vehicle.year} ${invoice.vehicle.make} ${invoice.vehicle.model}`
-    : "Vehicle"
+  const vehicleName = invoice?.vehicle ? formatVehicleTitle(invoice.vehicle) : "Vehicle"
 
   return (
     <div className="container mx-auto max-w-4xl px-4 py-8">

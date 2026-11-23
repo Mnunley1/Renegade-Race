@@ -1,6 +1,6 @@
 // @vitest-environment edge-runtime
 import { convexTest } from "convex-test"
-import { describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { api } from "./_generated/api"
 import type { Id } from "./_generated/dataModel"
 import schema from "./schema"
@@ -14,6 +14,44 @@ const modules = (
     glob: (g: string) => Record<string, () => Promise<unknown>>
   }
 ).glob("./**/*.ts")
+
+let activeTest: ReturnType<typeof convexTest> | undefined
+beforeEach(() => vi.useFakeTimers())
+afterEach(async () => {
+  try {
+    if (activeTest) {
+      const unsuccessful = await drainScheduledWork(activeTest)
+      if (unsuccessful.length) {
+        throw new Error(`Scheduled callbacks did not succeed: ${JSON.stringify(unsuccessful)}`)
+      }
+    }
+  } finally {
+    activeTest = undefined
+    vi.useRealTimers()
+  }
+})
+
+function createTest() {
+  const t = convexTest(schema, modules)
+  activeTest = t
+  return t
+}
+
+async function drainScheduledWork(t: ReturnType<typeof convexTest>) {
+  await t.finishAllScheduledFunctions(vi.runAllTimers)
+  const jobs = await t.run(({ db }) => db.system.query("_scheduled_functions").collect())
+  return jobs.filter((job) => job.state.kind !== "success")
+}
+
+async function notifications(t: ReturnType<typeof convexTest>) {
+  return await t.run(async ({ db }) =>
+    (await db.query("notifications").collect()).map(({ userId, type, metadata }) => ({
+      userId,
+      type,
+      metadata,
+    }))
+  )
+}
 
 const COACH = "coach_1"
 const RENTER = "renter_1"
@@ -58,12 +96,11 @@ async function seed(
 
 describe("coaching reviews — submit", () => {
   it("creates a review on a completed booking and recalculates the coach rating", async () => {
-    vi.useFakeTimers()
-    const t = convexTest(schema, modules)
+    const t = createTest()
     const { coachProfileId, bookingId } = await seed(t, "completed")
 
     const asRenter = t.withIdentity({ subject: RENTER })
-    await asRenter.mutation(api.coachingReviews.submitReview, {
+    const reviewId = await asRenter.mutation(api.coachingReviews.submitReview, {
       bookingId,
       rating: 5,
       communication: 5,
@@ -72,16 +109,18 @@ describe("coaching reviews — submit", () => {
       review: "Learned a lot about trail braking.",
     })
     // Drain the scheduled recalcCoachRating mutation.
-    await t.finishAllScheduledFunctions(vi.runAllTimers)
-    vi.useRealTimers()
+    await drainScheduledWork(t)
 
     const profile = await t.run((ctx) => ctx.db.get(coachProfileId))
     expect(profile?.rating).toBe(5)
     expect(profile?.reviewCount).toBe(1)
+    expect(await notifications(t)).toEqual([
+      { userId: COACH, type: "review_received", metadata: { bookingId, reviewId } },
+    ])
   })
 
   it("rejects reviewing a non-completed booking", async () => {
-    const t = convexTest(schema, modules)
+    const t = createTest()
     const { bookingId } = await seed(t, "confirmed")
 
     const asRenter = t.withIdentity({ subject: RENTER })
@@ -96,7 +135,7 @@ describe("coaching reviews — submit", () => {
   })
 
   it("rejects a non-renter reviewer", async () => {
-    const t = convexTest(schema, modules)
+    const t = createTest()
     const { bookingId } = await seed(t, "completed")
 
     const asCoach = t.withIdentity({ subject: COACH })
@@ -111,17 +150,17 @@ describe("coaching reviews — submit", () => {
   })
 
   it("allows only one review per booking", async () => {
-    const t = convexTest(schema, modules)
-    const { bookingId } = await seed(t, "completed")
+    const t = createTest()
+    const { coachProfileId, bookingId } = await seed(t, "completed")
 
     const asRenter = t.withIdentity({ subject: RENTER })
-    await asRenter.mutation(api.coachingReviews.submitReview, {
+    const reviewId = await asRenter.mutation(api.coachingReviews.submitReview, {
       bookingId,
       rating: 5,
       title: "First",
       review: "First review",
     })
-    await t.finishInProgressScheduledFunctions()
+    await drainScheduledWork(t)
 
     await expect(
       asRenter.mutation(api.coachingReviews.submitReview, {
@@ -131,10 +170,19 @@ describe("coaching reviews — submit", () => {
         review: "Duplicate review",
       })
     ).rejects.toThrow()
+    await drainScheduledWork(t)
+    expect(await t.run(({ db }) => db.get(coachProfileId))).toMatchObject({
+      rating: 5,
+      reviewCount: 1,
+    })
+    expect(await t.run(({ db }) => db.query("coachingReviews").collect())).toHaveLength(1)
+    expect(await notifications(t)).toEqual([
+      { userId: COACH, type: "review_received", metadata: { bookingId, reviewId } },
+    ])
   })
 
   it("rejects an out-of-range rating", async () => {
-    const t = convexTest(schema, modules)
+    const t = createTest()
     const { bookingId } = await seed(t, "completed")
 
     const asRenter = t.withIdentity({ subject: RENTER })

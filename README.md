@@ -43,7 +43,7 @@ renegade-rentals/
 1. Install dependencies:
 
 ```bash
-pnpm install
+pnpm install --frozen-lockfile
 ```
 
 2. Copy environment files and fill in your keys:
@@ -54,27 +54,31 @@ cp apps/admin/.env.example apps/admin/.env.local
 cp packages/backend/.env.example packages/backend/.env.local
 ```
 
-3. Start all services:
+3. Point both apps at the same verified nonproduction backend, then start the
+   frontends in separate terminals:
 
 ```bash
-pnpm dev
+pnpm dev:web
+pnpm dev:admin
 ```
 
-Or start individual services:
-
-```bash
-pnpm dev:web       # Web app only
-pnpm dev:admin     # Admin dashboard only
-pnpm dev:backend   # Convex backend only
-```
+4. For backend work, follow the [shared Convex workflow](docs/backend-workflow.md).
+   `packages/backend` owns the backend for both apps. The `pnpm dev:backend` and
+   `pnpm dev` commands start a watcher that pushes backend code; verify its target
+   and runtime before using it. Frontend-only changes do not require a Convex push.
 
 ## Scripts
 
-For required CI checks and the separate production promotion procedure, see [Releases](docs/releases.md).
+For required CI checks and the dev-to-main release procedure, see [Releases](docs/releases.md).
+For backend ownership, personal development and version-matched staging commands,
+see [Shared Convex backend](docs/backend-workflow.md).
+For the isolated renter/host/payment staging check, see [Staging smoke test](scripts/ren6-staging-smoke.md).
 
 | Command | Description |
 |---------|-------------|
-| `pnpm dev` | Start all services |
+| `pnpm dev` | Start all services, including the backend watcher (pushes code) |
+| `pnpm dev:web` / `pnpm dev:admin` | Start one frontend without a backend push |
+| `pnpm dev:backend` | Start the personal backend watcher; verify its environment first |
 | `pnpm build` | Build all packages |
 | `pnpm lint` | Run linting |
 | `pnpm lint:fix` | Auto-fix lint issues |
@@ -102,7 +106,7 @@ For participant access, private photo delivery, and migration of historical R2 a
 
 See `.env.example` files in each app/package for required variables:
 
-- **Convex** — `CONVEX_DEPLOYMENT`, `CONVEX_URL`
+- **Convex** — `CONVEX_DEPLOYMENT` (backend CLI target), `NEXT_PUBLIC_CONVEX_URL` (both frontends)
 - **Clerk** — `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`
 - **Stripe** — `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`
 - **Resend** — `RESEND_API_KEY`

@@ -48,6 +48,9 @@ import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 import { r2Url } from "@/lib/r2-url"
+import { formatRentalUsd } from "@/lib/rental-checkout"
+import { vehicleRequestState } from "@/lib/vehicle-request-state"
+import { formatVehicleTitle } from "@/lib/vehicle-year"
 
 // ─── Types ──────────────────────────────────────────────────────────────
 
@@ -367,7 +370,7 @@ function VehicleDetailsPageContent() {
     }
 
     const url = typeof window !== "undefined" ? window.location.href : ""
-    const title = `${vehicle.year} ${vehicle.make} ${vehicle.model}`
+    const title = formatVehicleTitle(vehicle)
     const text = `Check out this ${title} on Renegade Rentals!`
 
     try {
@@ -415,6 +418,8 @@ function VehicleDetailsPageContent() {
     )
   }
 
+  const requestState = vehicleRequestState(vehicle.hostStripeReady)
+
   // ── Derived data ──────────────────────────────────────────────────
   const images =
     vehicle.images
@@ -429,14 +434,12 @@ function VehicleDetailsPageContent() {
 
   const host = {
     name: vehicle.owner?.name || "Unknown",
-    avatar: vehicle.owner?.profileImageR2Key
-      ? r2Url(vehicle.owner.profileImageR2Key)
-      : vehicle.owner?.profileImage || "",
+    avatar: r2Url(vehicle.owner?.profileImageR2Key) ?? vehicle.owner?.profileImage ?? "",
     memberSince: formatMemberSince(vehicle.owner?.memberSince),
     tripsCompleted: vehicle.owner?.totalRentals || 0,
   }
 
-  const vehicleTitle = `${vehicle.year} ${vehicle.make} ${vehicle.model}`
+  const vehicleTitle = formatVehicleTitle(vehicle)
 
   const hasSpecs =
     vehicle.horsepower ||
@@ -683,7 +686,7 @@ function VehicleDetailsPageContent() {
                           )}
                         </div>
                         <div className="shrink-0 text-right">
-                          <p className="font-semibold text-sm">${addOn.price}</p>
+                          <p className="font-semibold text-sm">{formatRentalUsd(addOn.price)}</p>
                           <p className="text-[10px] text-muted-foreground">
                             {addOn.priceType === "daily" ? "per day" : "one-time"}
                           </p>
@@ -739,7 +742,7 @@ function VehicleDetailsPageContent() {
                           <p className="font-medium text-muted-foreground text-xs uppercase tracking-wider">
                             Minimum Duration
                           </p>
-                          <p className="font-semibold">{vehicle.minTripDuration}</p>
+                          <p className="font-semibold">1 calendar day</p>
                         </div>
                       </div>
                     )}
@@ -757,7 +760,9 @@ function VehicleDetailsPageContent() {
                           <p className="font-medium text-muted-foreground text-xs uppercase tracking-wider">
                             Maximum Duration
                           </p>
-                          <p className="font-semibold">{vehicle.maxTripDuration}</p>
+                          <p className="font-semibold">
+                            3 calendar days (pickup and dropoff included)
+                          </p>
                         </div>
                       </div>
                     )}
@@ -1024,7 +1029,7 @@ function VehicleDetailsPageContent() {
                         "bg-clip-text font-bold text-3xl text-transparent"
                       )}
                     >
-                      ${vehicle.dailyRate.toLocaleString()}
+                      {formatRentalUsd(vehicle.dailyRate)}
                     </span>
                     <span className="text-muted-foreground text-sm">/day</span>
                   </div>
@@ -1055,7 +1060,7 @@ function VehicleDetailsPageContent() {
 
                   <Button
                     className="mb-3 w-full text-base"
-                    disabled={vehicle.hostStripeReady === false}
+                    disabled={!requestState.ready}
                     onClick={() => {
                       const checkoutUrl =
                         startDate && endDate
@@ -1065,12 +1070,10 @@ function VehicleDetailsPageContent() {
                     }}
                     size="lg"
                   >
-                    {vehicle.hostStripeReady === false ? "Booking Unavailable" : "Reserve Now"}
+                    {requestState.action}
                   </Button>
                   <p className="text-center text-muted-foreground text-xs">
-                    {vehicle.hostStripeReady === false
-                      ? "Vehicle coming soon"
-                      : "You won't be charged until checkout"}
+                    {requestState.explanation}
                   </p>
                 </CardContent>
               </Card>
@@ -1137,11 +1140,11 @@ function VehicleDetailsPageContent() {
         >
           <div className="flex items-center justify-between gap-4">
             <div>
-              <span className="font-bold text-lg">${vehicle.dailyRate.toLocaleString()}</span>
+              <span className="font-bold text-lg">{formatRentalUsd(vehicle.dailyRate)}</span>
               <span className="text-muted-foreground text-sm"> /day</span>
             </div>
             <Button
-              disabled={vehicle.hostStripeReady === false}
+              disabled={!requestState.ready}
               onClick={() => {
                 const checkoutUrl =
                   startDate && endDate
@@ -1151,7 +1154,7 @@ function VehicleDetailsPageContent() {
               }}
               size="lg"
             >
-              {vehicle.hostStripeReady === false ? "Booking Unavailable" : "Reserve Now"}
+              {requestState.action}
             </Button>
           </div>
         </div>

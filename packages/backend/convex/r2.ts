@@ -15,6 +15,49 @@ function findUpload(ctx: QueryCtx, key: string) {
     .unique()
 }
 
+export async function requireReservationPhotoUploads(
+  ctx: QueryCtx,
+  {
+    reservationId,
+    uploader,
+    purpose,
+    photos,
+  }: {
+    reservationId: Id<"reservations">
+    uploader: string
+    purpose: "disputes" | "reviews" | "damage"
+    photos: string[]
+  }
+) {
+  if (photos.length === 0) return
+  const user = await getCurrentUser(ctx)
+  const reservation = await ctx.db.get(reservationId)
+  if (
+    !user ||
+    user.externalId !== uploader ||
+    !reservation ||
+    (reservation.ownerId !== uploader &&
+      (purpose === "damage" || reservation.renterId !== uploader))
+  ) {
+    throw new Error("Not authorized to attach photos to this reservation")
+  }
+  // These server-issued keys record the booking and intended use. Prefix checks
+  // alone are insufficient: an upload record must also establish its owner.
+  const prefix = `images/${purpose}/${reservationId}/${user._id}-`
+  for (const key of new Set(photos)) {
+    const upload = await findUpload(ctx, key)
+    if (
+      !upload ||
+      upload.ownerId !== uploader ||
+      upload.purpose !== "other" ||
+      !upload.key.startsWith(prefix) ||
+      upload.imageId
+    ) {
+      throw new Error(`Upload this ${purpose} photo for this reservation`)
+    }
+  }
+}
+
 async function issueUpload(
   ctx: MutationCtx,
   ownerId: string,
@@ -68,6 +111,121 @@ export async function requireDraftUpload(ctx: QueryCtx, ownerId: string, key: st
     (upload.purpose !== "onboarding" && upload.purpose !== "general")
   ) {
     throw new Error("Upload this onboarding photo again to verify ownership")
+  }
+}
+
+export async function requireProfileUpload(ctx: QueryCtx, user: Doc<"users">, key: string) {
+  const upload = await findUpload(ctx, key)
+  // Profile and reservation uploads historically share purpose "other". Require
+  // the recorded profile namespace as well as ownership; a key prefix alone is
+  // not proof that this server issued the upload.
+  if (
+    !upload ||
+    upload.ownerId !== user.externalId ||
+    upload.purpose !== "other" ||
+    !upload.key.startsWith(`images/profiles/${user._id}/`) ||
+    upload.imageId
+  ) {
+    throw new Error("Upload this profile photo again to verify ownership")
+  }
+}
+
+// Public media writers accept only server-issued uploads for the intended use.
+// General uploads serve logos/posts/portfolio media; profile uploads are shared
+// by user, driver, and coach avatars. Reservation evidence is never public media.
+export async function requirePublicMediaUpload(
+  ctx: QueryCtx,
+  user: Doc<"users">,
+  key: string,
+  kind: "general" | "profile"
+) {
+  if (kind === "profile") return requireProfileUpload(ctx, user, key)
+  const upload = await findUpload(ctx, key)
+  if (
+    !upload ||
+    upload.ownerId !== user.externalId ||
+    upload.purpose !== "general" ||
+    !["general", "uploads"].some((folder) => upload.key.startsWith(`images/${folder}/${user._id}/`))
+  ) {
+    throw new Error("Upload this public media again to verify ownership and intended use")
+  }
+}
+
+function publicMediaOrigin() {
+  // Production-compatible default; staging must use its own bucket's public origin.
+  const configured = process.env.R2_PUBLIC_URL || "https://images.renegaderace.com"
+  const url = new URL(configured)
+  if (url.protocol !== "https:" || url.origin !== configured) {
+    throw new Error("R2_PUBLIC_URL must be an HTTPS origin without a trailing slash")
+  }
+  return url.origin
+}
+
+const TRAILING_HOST_DOT = /\.$/
+const PROJECT_VERCEL_HOST = /^renegade-(web|race-admin|admin)(-|\.)/
+
+function isPlatformMediaHost(hostname: string) {
+  const host = hostname.toLowerCase().replace(TRAILING_HOST_DOT, "")
+  return (
+    ["renegaderace.com", "r2.dev", "cloudflarestorage.com", "convex.cloud", "convex.site"].some(
+      (domain) => host === domain || host.endsWith(`.${domain}`)
+    ) ||
+    host === "staging-renegade-admin.vercel.app" ||
+    (PROJECT_VERCEL_HOST.test(host) && host.endsWith(".vercel.app"))
+  )
+}
+
+type PublicMediaReference = { key?: string; url?: string }
+
+export async function requirePublicMediaFields(
+  ctx: QueryCtx,
+  user: Doc<"users">,
+  {
+    kind,
+    key,
+    url,
+    previous,
+    allowExternal = false,
+  }: PublicMediaReference & {
+    kind: "general" | "profile"
+    previous?: PublicMediaReference
+    allowExternal?: boolean
+  }
+) {
+  // Preserve display and unrelated edits of existing legacy records. This is
+  // scoped to the authorized target record, never a global reference allowlist.
+  if ((key === undefined || key === previous?.key) && (url === undefined || url === previous?.url))
+    return
+  const effectiveKey = key === undefined ? previous?.key : key
+  const effectiveUrl = url === undefined ? previous?.url : url
+  if (effectiveKey) await requirePublicMediaUpload(ctx, user, effectiveKey, kind)
+  if (!effectiveUrl) return
+
+  let parsed: URL
+  try {
+    parsed = new URL(effectiveUrl)
+  } catch {
+    throw new Error("Use a valid public media URL")
+  }
+  if (!["https:", "http:"].includes(parsed.protocol) || parsed.username || parsed.password) {
+    throw new Error("Use a canonical public media URL")
+  }
+  const origin = publicMediaOrigin()
+  if (parsed.origin === origin) {
+    const urlKey = parsed.pathname.slice(1)
+    if (
+      parsed.search ||
+      parsed.hash ||
+      parsed.href !== effectiveUrl ||
+      urlKey.includes("%") ||
+      effectiveUrl !== `${origin}/${urlKey}` ||
+      (effectiveKey && effectiveKey !== urlKey)
+    ) {
+      throw new Error("Media URL must match its uploaded key")
+    }
+    await requirePublicMediaUpload(ctx, user, urlKey, kind)
+  } else if (!allowExternal || effectiveKey || isPlatformMediaHost(parsed.hostname)) {
+    throw new Error("Upload this public media again to verify ownership and intended use")
   }
 }
 

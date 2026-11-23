@@ -1,3 +1,9 @@
+export {
+  endDateFromDuration,
+  inclusiveRentalDays,
+  isValidRentalDuration,
+} from "@renegade/backend/convex/dateUtils"
+
 /**
  * Date utility functions for consistent date handling across the application.
  * All dates are stored in the database as YYYY-MM-DD strings (date-only, no time).
@@ -11,7 +17,10 @@
  * @param dateString - Date string in YYYY-MM-DD format
  * @returns Date object in local timezone, or null if invalid
  */
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/
+
 export function parseLocalDate(dateString: string): Date | null {
+  if (!DATE_ONLY.test(dateString)) return null
   try {
     const parts = dateString.split("-")
     if (parts.length !== 3) return null

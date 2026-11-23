@@ -12,6 +12,8 @@ import { Reveal } from "@/components/home/reveal"
 import { VehicleCard } from "@/components/vehicle-card"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
+import { r2Url } from "@/lib/r2-url"
+import { formatVehicleTitle } from "@/lib/vehicle-year"
 
 const TRACKS = [
   "Laguna Seca",
@@ -45,6 +47,8 @@ const STEPS = [
 ]
 
 export default function HomePage() {
+  const heroVideoUrl = r2Url("site-media/renegade-hero-video.mp4")
+  const promoVideoUrl = r2Url("site-media/Renegade_promo_video.mp4")
   const router = useRouter()
   // Track video load error for hero section
   const [heroVideoFailed, setHeroVideoFailed] = useState(false)
@@ -84,7 +88,7 @@ export default function HomePage() {
         id: vehicle._id,
         image: "",
         imageKey: primaryImage?.r2Key ?? undefined,
-        name: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
+        name: formatVehicleTitle(vehicle),
         year: vehicle.year,
         make: vehicle.make,
         model: vehicle.model,
@@ -117,7 +121,7 @@ export default function HomePage() {
       {/* Hero Section */}
       <section className="relative flex h-screen max-h-[920px] min-h-[640px] flex-col overflow-hidden">
         {/* Fallback Background Image - only shown when video fails */}
-        {heroVideoFailed && (
+        {(heroVideoFailed || !heroVideoUrl) && (
           <div className="absolute inset-0">
             <Image
               alt="Racing on track"
@@ -130,7 +134,7 @@ export default function HomePage() {
         )}
 
         {/* Video Background - only shown when video hasn't failed */}
-        {!heroVideoFailed && (
+        {!heroVideoFailed && heroVideoUrl && (
           <video
             autoPlay
             className="absolute inset-0 h-full w-full animate-ken-burns object-cover"
@@ -140,12 +144,8 @@ export default function HomePage() {
             onError={() => setHeroVideoFailed(true)}
             playsInline
             poster="/images/hero-vid-thumbnail.png"
-          >
-            <source
-              src="https://pub-a50e44fe83ed433f81cb9d89aa0e106b.r2.dev/site-media/renegade-hero-video.mp4"
-              type="video/mp4"
-            />
-          </video>
+            src={heroVideoUrl}
+          />
         )}
 
         {/* Cinematic overlays: bottom-up darkening + red speed glow */}
@@ -318,7 +318,7 @@ export default function HomePage() {
       </section>
 
       {/* About Section */}
-      <section className="container mx-auto px-4 py-28 sm:px-6">
+      <section className="container mx-auto overflow-x-clip px-4 py-28 sm:px-6">
         <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
           {/* Text Content */}
           <Reveal className="space-y-6" from="left">
@@ -346,7 +346,7 @@ export default function HomePage() {
           {/* Video Content */}
           <Reveal from="right">
             <div className="relative aspect-video overflow-hidden rounded-xl bg-muted shadow-[0_30px_60px_-20px_rgba(0,0,0,0.4)] ring-1 ring-border">
-              {videoError ? (
+              {videoError || !promoVideoUrl ? (
                 <Image
                   alt="Racing on track"
                   className="h-full w-full object-cover"
@@ -362,11 +362,8 @@ export default function HomePage() {
                   muted
                   onError={() => setVideoError(true)}
                   playsInline
+                  src={promoVideoUrl}
                 >
-                  <source
-                    src="https://pub-a50e44fe83ed433f81cb9d89aa0e106b.r2.dev/site-media/Renegade_promo_video.mp4"
-                    type="video/mp4"
-                  />
                   Your browser does not support the video tag.
                 </video>
               )}

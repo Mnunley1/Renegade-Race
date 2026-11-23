@@ -70,5 +70,15 @@ CLAUDE.md
 *.csv
 
 # Migration scripts (kept locally, not tracked)
-scripts/
+scripts/*
+!scripts/ren6-staging-smoke.py
+!scripts/ren6-staging-smoke.test.py
+!scripts/ren6-staging-smoke.md
 packages/backend/scripts/
+
+# Commercial documents are maintained in owner-controlled private storage.
+/docs/MERGER-OVERVIEW.md
+/docs/VALUATION-COMPARISON.md
+/docs/deferred-cash-model.html
+/docs/gridseat_nda.md
+/docs/gridseat_renegade_nda (1) copy.md
