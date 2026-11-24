@@ -23,6 +23,7 @@ import { DateRangeFilter } from "@/components/date-range-filter"
 import { PageHeader } from "@/components/page-header"
 import { Pagination } from "@/components/pagination"
 import { StatusBadge } from "@/components/status-badge"
+import { formatBookingDate } from "@/lib/booking-date"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
@@ -111,13 +112,6 @@ export default function ReservationsPage() {
       minimumFractionDigits: 2,
     }).format(amount / 100)
 
-  const formatDate = (dateString: string) =>
-    new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    })
-
   const columns: Column<any>[] = [
     {
       key: "status",
@@ -155,7 +149,7 @@ export default function ReservationsPage() {
       header: "Dates",
       cell: (row) => (
         <span className="whitespace-nowrap text-sm">
-          {formatDate(row.startDate)} – {formatDate(row.endDate)}
+          {formatBookingDate(row.startDate)} – {formatBookingDate(row.endDate)}
         </span>
       ),
       sortable: true,

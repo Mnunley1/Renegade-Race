@@ -84,6 +84,24 @@ Seat-specific frontend parity and seat checkout hardening require separate revie
 the rental smoke test does not establish seat-flow readiness. Passing CI alone
 does not establish production compatibility.
 
+## Admin booking calendar dates (REN-55)
+
+Admin payment/reservation summaries, user/vehicle booking cards and coaching
+booking tables/CSV format stored `YYYY-MM-DD` values as calendar dates in a fixed
+UTC presentation context. Device timezones cannot move the displayed day. This
+presentation anchor does not convert stored values, alter duration/price calculations
+or change actual timestamp formatting. Invalid legacy date values remain visible
+unchanged rather than rolling into a different day.
+
+Run `pnpm test:admin` for isolated timezone-process regressions, including west/east
+of UTC, month/year boundaries, leap day and DST transitions. The existing **Web
+Tests** CI gate runs these admin regressions after the web suite; required check
+names remain unchanged. No new dependency, backend deployment or data migration is
+needed. Verify the admin staging booking/payment views against the stored dates
+before a separately approved production release. Until that release, the known
+production admin presentation limitation remains; staging acceptance does not
+claim the production summary is corrected.
+
 ## Platform and Connect webhook separation (REN-53)
 
 Additive platform and Connect routes have separate explicit signing secrets; the

@@ -29,6 +29,7 @@ import { LoadingState } from "@/components/loading-state"
 import PublicImage from "@/components/public-image"
 import { StatusBadge } from "@/components/status-badge"
 import { UserAvatar } from "@/components/user-avatar"
+import { formatBookingDate } from "@/lib/booking-date"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
@@ -87,8 +88,8 @@ function SummaryCards({ reservation }: { reservation: ReservationData }) {
             {reservation.totalDays} {reservation.totalDays === 1 ? "day" : "days"}
           </p>
           <p className="mt-1 text-muted-foreground text-xs">
-            {format(new Date(reservation.startDate), "MMM d")} -{" "}
-            {format(new Date(reservation.endDate), "MMM d, yyyy")}
+            {formatBookingDate(reservation.startDate, { month: "short", day: "numeric" })} -{" "}
+            {formatBookingDate(reservation.endDate)}
           </p>
         </CardContent>
       </Card>
@@ -144,7 +145,12 @@ function BookingDetailsCard({ reservation }: { reservation: ReservationData }) {
               Pickup
             </p>
             <p className="mt-2 font-semibold">
-              {format(new Date(reservation.startDate), "EEEE, MMMM d, yyyy")}
+              {formatBookingDate(reservation.startDate, {
+                weekday: "long",
+                month: "long",
+                day: "numeric",
+                year: "numeric",
+              })}
             </p>
             {reservation.pickupTime && (
               <p className="mt-1 text-muted-foreground text-sm">{reservation.pickupTime}</p>
@@ -155,7 +161,12 @@ function BookingDetailsCard({ reservation }: { reservation: ReservationData }) {
               Dropoff
             </p>
             <p className="mt-2 font-semibold">
-              {format(new Date(reservation.endDate), "EEEE, MMMM d, yyyy")}
+              {formatBookingDate(reservation.endDate, {
+                weekday: "long",
+                month: "long",
+                day: "numeric",
+                year: "numeric",
+              })}
             </p>
             {reservation.dropoffTime && (
               <p className="mt-1 text-muted-foreground text-sm">{reservation.dropoffTime}</p>

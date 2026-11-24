@@ -27,6 +27,7 @@ import { exportToCSV } from "@/components/data-table/data-table-export"
 import { DataTableToolbar, type FilterConfig } from "@/components/data-table/data-table-toolbar"
 import { PageHeader } from "@/components/page-header"
 import { StatusBadge } from "@/components/status-badge"
+import { formatBookingDate } from "@/lib/booking-date"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 
@@ -124,14 +125,8 @@ export default function CoachingBookingsPage() {
       header: "Dates",
       cell: (row) => (
         <span>
-          {new Date(row.startDate).toLocaleDateString("en-US", {
-            year: "numeric",
-            month: "short",
-            day: "numeric",
-          })}
-          {row.endDate
-            ? ` - ${new Date(row.endDate).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}`
-            : ""}
+          {formatBookingDate(row.startDate)}
+          {row.endDate ? ` - ${formatBookingDate(row.endDate)}` : ""}
         </span>
       ),
       sortable: true,
@@ -276,12 +271,7 @@ export default function CoachingBookingsPage() {
                       {
                         key: "start",
                         header: "Start",
-                        value: (r) =>
-                          new Date(r.startDate).toLocaleDateString("en-US", {
-                            year: "numeric",
-                            month: "short",
-                            day: "numeric",
-                          }),
+                        value: (r) => formatBookingDate(r.startDate),
                       },
                       { key: "sessionType", header: "Session", value: (r) => r.sessionType ?? "" },
                       {
