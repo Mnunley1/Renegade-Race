@@ -10,6 +10,7 @@ import { logError } from "./logger"
 import { rateLimiter } from "./rateLimiter"
 import { readReturnPhoto, returnPhotoOptions, uploadReturnPhoto } from "./returnEvidence"
 import { isSeatPaymentMetadata } from "./seatPayments"
+import { registerStripeRevocationWebhook } from "./stripeRevocationRouting"
 import { registerScopedStripeWebhook } from "./stripeWebhookRouting"
 
 function stripeObjectId(value: string | { id: string } | null): string | undefined {
@@ -509,6 +510,7 @@ const stripeEventHandlers: StripeEventHandlers = {
 registerScopedStripeWebhook(http, "platform", stripeEventHandlers)
 registerScopedStripeWebhook(http, "legacyConnect", stripeEventHandlers)
 registerScopedStripeWebhook(http, "connect", stripeEventHandlers)
+registerStripeRevocationWebhook(http)
 
 // Add this route to your http router (after the Stripe route)
 http.route({

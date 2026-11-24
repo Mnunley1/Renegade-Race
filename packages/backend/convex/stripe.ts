@@ -36,9 +36,11 @@ import { issueRentalRefund, syncRentalRefunds } from "./rentalRefunds"
 import { recordRefundObservations } from "./rentalSettlement"
 import { refundObservation } from "./rentalSettlementValidators"
 import {
+  assertPayoutAccountNotRevoked,
   billingCustomerId,
   EXPRESS_SIGN_IN_URL,
   retrieveLinkedConnectAccount,
+  retrieveLinkedConnectAccountForEvidence,
   retrieveOwnedCustomer,
   verifiedPaymentDestination,
 } from "./stripeOwnership"
@@ -405,7 +407,7 @@ export const createConnectAccount = action({
     })
 
     if (!user) throwError(ErrorCode.NOT_FOUND, "User not found")
-    return await withAccountOperation(
+    const result = await withAccountOperation(
       ctx,
       `connect:${identity.subject}`,
       [identity.subject],
@@ -476,6 +478,7 @@ export const createConnectAccount = action({
             : configuredOrigin
 
         // Create account link for onboarding
+        await assertPayoutAccountNotRevoked(ctx, account.id)
         beforeProviderMutation()
         const accountLink = await stripe.accountLinks.create(
           {
@@ -489,6 +492,7 @@ export const createConnectAccount = action({
           }
         )
 
+        await assertPayoutAccountNotRevoked(ctx, account.id)
         return {
           accountId: account.id,
           onboardingUrl: accountLink.url,
@@ -496,6 +500,8 @@ export const createConnectAccount = action({
         }
       }
     )
+    await assertPayoutAccountNotRevoked(ctx, result.accountId)
+    return result
   },
 })
 
@@ -536,6 +542,7 @@ export const getConnectAccountStatus = action({
       identity.subject
     )
 
+    await assertPayoutAccountNotRevoked(ctx, account.id)
     return {
       hasAccount: true,
       isComplete: account.details_submitted,
@@ -617,6 +624,7 @@ export const refreshConnectAccountStatus = action({
       status,
     })
 
+    await assertPayoutAccountNotRevoked(ctx, account.id)
     return {
       success: true,
       status,
@@ -654,7 +662,9 @@ export const createConnectLoginLink = action({
       identity.subject
     )
     if (account.metadata?.renegadeUserId !== identity.subject) return { url: EXPRESS_SIGN_IN_URL }
+    await assertPayoutAccountNotRevoked(ctx, account.id)
     const loginLink = await stripe.accounts.createLoginLink(account.id)
+    await assertPayoutAccountNotRevoked(ctx, account.id)
 
     return {
       url: loginLink.url,
@@ -792,7 +802,7 @@ export const createCheckoutSession = action({
     }
 
     const destinationAccountId = owner.stripeAccountId
-    return await withAccountOperation(
+    const result = await withAccountOperation(
       ctx,
       `rental-checkout:${reservation._id}`,
       [identity.subject, reservation.ownerId],
@@ -854,6 +864,7 @@ export const createCheckoutSession = action({
 
         // Create checkout session using Stripe directly (component doesn't support Connect)
         // but we use the component's customer management
+        await assertPayoutAccountNotRevoked(ctx, destinationAccountId)
         const checkoutSession = await stripe.checkout.sessions.create(
           {
             customer: customerId,
@@ -942,6 +953,7 @@ export const createCheckoutSession = action({
           renterId: identity.subject,
         })
 
+        await assertPayoutAccountNotRevoked(ctx, destinationAccountId)
         return {
           paymentId,
           sessionId: checkoutSession.id,
@@ -949,6 +961,8 @@ export const createCheckoutSession = action({
         }
       }
     )
+    await assertPayoutAccountNotRevoked(ctx, destinationAccountId)
+    return result
   },
 })
 
@@ -1030,7 +1044,7 @@ export const createPaymentIntent = action({
     }
 
     const destinationAccountId = owner.stripeAccountId
-    return await withAccountOperation(
+    const result = await withAccountOperation(
       ctx,
       `rental-intent:${reservation._id}`,
       [identity.subject, reservation.ownerId],
@@ -1089,6 +1103,7 @@ export const createPaymentIntent = action({
         const customerId = await rentalBillingCustomer(ctx, stripe, identity)
 
         // Create Stripe Payment Intent with Connect
+        await assertPayoutAccountNotRevoked(ctx, destinationAccountId)
         const paymentIntent = await stripe.paymentIntents.create(
           {
             amount: chargeAmountCents,
@@ -1145,6 +1160,7 @@ export const createPaymentIntent = action({
           renterId: identity.subject,
         })
 
+        await assertPayoutAccountNotRevoked(ctx, destinationAccountId)
         return {
           paymentId,
           clientSecret: paymentIntent.client_secret as string,
@@ -1156,6 +1172,8 @@ export const createPaymentIntent = action({
         }
       }
     )
+    await assertPayoutAccountNotRevoked(ctx, destinationAccountId)
+    return result
   },
 })
 
@@ -1715,6 +1733,7 @@ export const createCustomerPortalSession = action({
     const stripe = getStripe()
     const customerId = await rentalBillingCustomer(ctx, stripe, identity)
 
+    const destinations = new Set<string>()
     // The portal can expose a payment link for any payable invoice on the customer.
     for (const status of ["open", "uncollectible"] as const) {
       for await (const invoice of stripe.invoices.list({
@@ -1730,16 +1749,19 @@ export const createCustomerPortalSession = action({
         if (!local || local.recipientId !== identity.subject) {
           throwError(ErrorCode.FORBIDDEN, "Invoice ownership could not be verified")
         }
-        await verifyPayableInvoice(ctx, stripe, local, invoice)
+        destinations.add(await verifyPayableInvoice(ctx, stripe, local, invoice))
       }
     }
 
+    // Recheck every verified destination after all invoice/customer reads.
+    for (const destination of destinations) await assertPayoutAccountNotRevoked(ctx, destination)
     // Create portal session
     const session = await stripeClient.createCustomerPortalSession(ctx, {
       customerId,
       returnUrl: args.returnUrl,
     })
 
+    for (const destination of destinations) await assertPayoutAccountNotRevoked(ctx, destination)
     return {
       url: session.url,
     }
@@ -2368,6 +2390,8 @@ export const handleTransferFailed = internalMutation({
 export const reconcileConnectedAccount = internalAction({
   args: { stripeAccountId: v.string() },
   handler: async (ctx, { stripeAccountId }): Promise<void> => {
+    // Canonically verified delayed updates cannot clear a permanent revocation.
+    if (await ctx.runQuery(internal.stripeRevocations.getByAccount, { stripeAccountId })) return
     const user = await ctx.runQuery(internal.users.getByStripeAccountId, { stripeAccountId })
     if (!user) return
     const account = await retrieveLinkedConnectAccount(
@@ -2404,7 +2428,7 @@ export const reconcilePayoutFailure = internalAction({
       stripeAccountId: args.stripeAccountId,
     })
     if (!user) return
-    const account = await retrieveLinkedConnectAccount(
+    const account = await retrieveLinkedConnectAccountForEvidence(
       ctx,
       getStripe(),
       args.stripeAccountId,
@@ -2455,29 +2479,6 @@ export const handlePayoutFailed = internalMutation({
         eventId: args.eventId,
         failureReason: args.failureReason,
       },
-    })
-  },
-})
-
-// Handle account deauthorized webhook event
-export const handleAccountDeauthorized = internalMutation({
-  args: {
-    stripeAccountId: v.string(),
-  },
-  handler: async (ctx, args): Promise<void> => {
-    // Find user by Stripe account ID
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_stripe_account", (q) => q.eq("stripeAccountId", args.stripeAccountId))
-      .unique()
-
-    if (!user) {
-      return
-    }
-
-    // Update user's Stripe account status to disabled
-    await ctx.db.patch(user._id, {
-      stripeAccountStatus: "disabled",
     })
   },
 })

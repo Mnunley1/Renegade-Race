@@ -1,5 +1,3 @@
-import { withAccountOperation } from "./accountOperations"
-import { assertAccountsAvailable } from "./accountDeletionGuards"
 import { StripeSubscriptions } from "@convex-dev/stripe"
 import { v } from "convex/values"
 import Stripe from "stripe"
@@ -14,6 +12,8 @@ import {
   mutation,
   query,
 } from "./_generated/server"
+import { assertAccountsAvailable } from "./accountDeletionGuards"
+import { withAccountOperation } from "./accountOperations"
 import {
   getCustomInvoicePaidEmailTemplate,
   getCustomInvoiceSentEmailTemplate,
@@ -25,6 +25,7 @@ import { getWebUrl } from "./helpers"
 import { buildDestinationChargeAmounts, estimateStripeCardProcessingFee } from "./pricing"
 
 import {
+  assertPayoutAccountNotRevoked,
   billingCustomerId,
   retrieveOwnedCustomer,
   verifiedPaymentDestination,
@@ -680,7 +681,7 @@ export async function verifyPayableInvoice(
   stripe: Stripe,
   local: Doc<"invoices">,
   remote: Stripe.Invoice
-): Promise<void> {
+): Promise<string> {
   verifyStripeInvoice(local, remote)
   if (!["sent", "viewed", "payment_pending", "processing", "overdue"].includes(local.status)) {
     throwError(ErrorCode.INVALID_STATUS, "Invoice is not payable")
@@ -734,8 +735,11 @@ export async function verifyPayableInvoice(
   }
   if (destinations.size !== 1)
     throwError(ErrorCode.FORBIDDEN, "Invoice payout destinations do not match")
-  for (const destination of destinations)
+  for (const destination of destinations) {
     await verifiedPaymentDestination(ctx, stripe, destination, local.senderId)
+    return destination
+  }
+  throwError(ErrorCode.FORBIDDEN, "Invoice payout destination could not be verified")
 }
 
 async function hostedInvoiceUrl(ctx: ActionCtx, invoice: Doc<"invoices">): Promise<string | null> {
@@ -750,7 +754,8 @@ async function hostedInvoiceUrl(ctx: ActionCtx, invoice: Doc<"invoices">): Promi
     if (!customer) throwError(ErrorCode.FORBIDDEN, "Invoice customer could not be verified")
     await retrieveOwnedCustomer(stripe, customer, invoice.recipientId)
   } else {
-    await verifyPayableInvoice(ctx, stripe, invoice, remote)
+    const destination = await verifyPayableInvoice(ctx, stripe, invoice, remote)
+    await assertPayoutAccountNotRevoked(ctx, destination)
   }
   return remote.hosted_invoice_url ?? null
 }
@@ -812,7 +817,7 @@ export const choosePaymentMethod = action({
     if (!sender?.stripeAccountId)
       throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE, "Provider must complete Stripe onboarding")
     const destinationAccountId = sender.stripeAccountId
-    return withAccountOperation(
+    const result = await withAccountOperation(
       ctx,
       `invoice-payment:${invoice._id}`,
       [identity.subject, invoice.senderId, invoice.recipientId],
@@ -887,6 +892,7 @@ export const choosePaymentMethod = action({
           await verifyPayableInvoice(ctx, stripe, local, draft)
         } else {
           try {
+            await assertPayoutAccountNotRevoked(ctx, destinationAccountId)
             draft = await stripe.invoices.create(
               {
                 customer: customerId,
@@ -982,6 +988,7 @@ export const choosePaymentMethod = action({
               ErrorCode.INVALID_AMOUNT,
               "Stripe draft total does not match the agreed total"
             )
+          await assertPayoutAccountNotRevoked(ctx, destinationAccountId)
           draft = await stripe.invoices.finalizeInvoice(
             draft.id,
             { auto_advance: false },
@@ -992,6 +999,7 @@ export const choosePaymentMethod = action({
         if (!finalized.id || finalized.status !== "open")
           throwError(ErrorCode.INVALID_STATUS, "Stripe invoice is not open")
         await verifyPayableInvoice(ctx, stripe, linkedInvoice, finalized)
+        await assertPayoutAccountNotRevoked(ctx, destinationAccountId)
         const sent = await stripe.invoices.sendInvoice(
           finalized.id,
           { expand: ["payments"] },
@@ -1018,9 +1026,12 @@ export const choosePaymentMethod = action({
           stripePaymentIntentId,
         })
 
+        await assertPayoutAccountNotRevoked(ctx, destinationAccountId)
         return { url: await hostedInvoiceUrl(ctx, linkedInvoice) }
       }
     )
+    await assertPayoutAccountNotRevoked(ctx, destinationAccountId)
+    return result
   },
 })
 

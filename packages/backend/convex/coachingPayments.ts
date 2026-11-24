@@ -1,17 +1,21 @@
-import { withAccountOperation, reserveAccountOperation } from "./accountOperations"
 import { v } from "convex/values"
 import Stripe from "stripe"
 import { api, internal } from "./_generated/api"
 import type { Id } from "./_generated/dataModel"
 import { action, internalAction, internalMutation, internalQuery } from "./_generated/server"
+import { reserveAccountOperation, withAccountOperation } from "./accountOperations"
 import { checkAdmin } from "./admin"
 import { calculateDaysBetween } from "./dateUtils"
 import { ErrorCode, throwError } from "./errors"
 import { getWebUrl } from "./helpers"
 import { logError } from "./logger"
 import { buildDestinationChargeAmounts } from "./pricing"
-import { billingCustomerId, verifiedPaymentDestination } from "./stripeOwnership"
 import { rateLimiter } from "./rateLimiter"
+import {
+  assertPayoutAccountNotRevoked,
+  billingCustomerId,
+  verifiedPaymentDestination,
+} from "./stripeOwnership"
 
 function getStripe(): Stripe {
   const secretKey = process.env.STRIPE_SECRET_KEY
@@ -128,7 +132,7 @@ export const createCheckoutSession = action({
     }
 
     const destinationAccountId = coach.stripeAccountId
-    return await withAccountOperation(
+    const result = await withAccountOperation(
       ctx,
       `coaching-checkout:${booking._id}`,
       [identity.subject, booking.coachUserId],
@@ -178,6 +182,7 @@ export const createCheckoutSession = action({
               ? "Half-day coaching session"
               : "Full-day coaching session"
 
+        await assertPayoutAccountNotRevoked(ctx, destinationAccountId)
         const session = await stripe.checkout.sessions.create(
           {
             customer: customerId,
@@ -248,12 +253,15 @@ export const createCheckoutSession = action({
               : session.payment_intent?.id,
         })
 
+        await assertPayoutAccountNotRevoked(ctx, destinationAccountId)
         return {
           sessionId: session.id,
           url: session.url,
         }
       }
     )
+    await assertPayoutAccountNotRevoked(ctx, destinationAccountId)
+    return result
   },
 })
 

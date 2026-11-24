@@ -1,4 +1,3 @@
-import { withAccountOperation, reserveAccountOperation } from "./accountOperations"
 import { v } from "convex/values"
 import Stripe from "stripe"
 import { internal } from "./_generated/api"
@@ -11,6 +10,7 @@ import {
   internalQuery,
   type MutationCtx,
 } from "./_generated/server"
+import { reserveAccountOperation, withAccountOperation } from "./accountOperations"
 import { ErrorCode, throwError } from "./errors"
 import { getWebUrl } from "./helpers"
 import { logError } from "./logger"
@@ -21,7 +21,6 @@ import {
   grossUpForStripeCardFees,
   resolvePlatformFeePercentage,
 } from "./pricing"
-import { billingCustomerId, verifiedPaymentDestination } from "./stripeOwnership"
 import { rateLimiter } from "./rateLimiter"
 import {
   holdsSeat,
@@ -29,6 +28,11 @@ import {
   MIN_SEAT_PRICE_CENTS,
   promoteOldestWaitlisted,
 } from "./seatHelpers"
+import {
+  assertPayoutAccountNotRevoked,
+  billingCustomerId,
+  verifiedPaymentDestination,
+} from "./stripeOwnership"
 
 function getStripe(): Stripe {
   const secretKey = process.env.STRIPE_SECRET_KEY
@@ -196,13 +200,15 @@ async function startCheckout(
     throwError(ErrorCode.INVALID_AMOUNT, "Payment amount out of allowed range")
   }
 
-  return await withAccountOperation(
+  let destinationAccountId: string | undefined
+  const result = await withAccountOperation(
     ctx,
     `seat-checkout:${phase}:${bookingId}`,
     [identity.subject, booking.hostUserId],
     async (beforeProviderMutation) => {
       const { stripeAccountId: destination, platformFeeCapPercentage } =
         await assertTeamConnectReady(ctx, booking.hostUserId)
+      destinationAccountId = destination
 
       // Snapshot is the ceiling (later global rate changes do not raise it). A provider
       // fee cap can only lower it. Dollar min/max on platformSettings are not applied.
@@ -237,6 +243,7 @@ async function startCheckout(
         chargeAmount: chargeAmountCents.toString(),
       }
 
+      await assertPayoutAccountNotRevoked(ctx, destination)
       const session = await stripe.checkout.sessions.create(
         {
           customer: customerId,
@@ -292,9 +299,12 @@ async function startCheckout(
             : session.payment_intent?.id,
       })
 
+      await assertPayoutAccountNotRevoked(ctx, destination)
       return { sessionId: session.id, url: session.url }
     }
   )
+  if (destinationAccountId) await assertPayoutAccountNotRevoked(ctx, destinationAccountId)
+  return result
 }
 
 export const createDepositCheckoutSession = action({

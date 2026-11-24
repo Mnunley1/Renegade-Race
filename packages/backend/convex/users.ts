@@ -12,10 +12,14 @@ import {
   type QueryCtx,
   query,
 } from "./_generated/server"
+import { additionalDeletionBlockers } from "./accountDeletionChecks"
+import { assertAccountsAvailable, deletionIntent } from "./accountDeletionGuards"
+import { deletionProvider } from "./clerkDeletion"
 import { getWelcomeEmailTemplate, sendTransactionalEmail } from "./emails"
 import { isEarlyAdopterPromoActive, resolvePlatformFeePercentage } from "./pricing"
 import { clearDraftUploads, requireDraftUpload, requireProfileUpload } from "./r2"
 import { retrieveLinkedConnectAccount } from "./stripeOwnership"
+import { accountRevocation } from "./stripeRevocations"
 import {
   NULLISH_NAME_RE,
   publicAuthorProfile,
@@ -23,9 +27,6 @@ import {
   publicUserProfile,
 } from "./userProfile"
 import { requireVehicleYear } from "./vehicleYear"
-import { assertAccountsAvailable, deletionIntent } from "./accountDeletionGuards"
-import { additionalDeletionBlockers } from "./accountDeletionChecks"
-import { deletionProvider } from "./clerkDeletion"
 
 type EarlyAdopterGrant = {
   isEarlyAdopter: true
@@ -833,6 +834,12 @@ export const setStripeAccountId = internalMutation({
     await assertAccountsAvailable(ctx, userId)
     const user = await userByExternalId(ctx, userId)
     if (!user) throw new Error("User not found")
+    if (
+      (await accountRevocation(ctx, stripeAccountId)) ||
+      (user.stripeAccountId && (await accountRevocation(ctx, user.stripeAccountId)))
+    ) {
+      throw new Error("Stripe account access was revoked; operator review required")
+    }
     const existing = await ctx.db
       .query("users")
       .withIndex("by_stripe_account", (q) => q.eq("stripeAccountId", stripeAccountId))
@@ -875,7 +882,10 @@ export const updateStripeAccountStatus = internalMutation({
       .query("users")
       .withIndex("by_stripe_account", (q) => q.eq("stripeAccountId", stripeAccountId))
       .unique()
-    if (user) await ctx.db.patch(user._id, { stripeAccountStatus: status })
+    if (user) {
+      const revoked = await accountRevocation(ctx, stripeAccountId)
+      await ctx.db.patch(user._id, { stripeAccountStatus: revoked ? "disabled" : status })
+    }
   },
 })
 
