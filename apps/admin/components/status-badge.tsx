@@ -57,15 +57,17 @@ const statusConfig: Record<
 }
 
 interface StatusBadgeProps {
-  status: string
+  status?: string | null
   className?: string
 }
 
 export function StatusBadge({ status, className }: StatusBadgeProps) {
-  const config = statusConfig[status] ?? { variant: "secondary" as const }
+  // Missing optional payment state must never imply paid or unpaid.
+  const displayStatus = status || "Unknown"
+  const config = statusConfig[displayStatus] ?? { variant: "secondary" as const }
   return (
     <Badge className={`${config.className ?? ""} ${className ?? ""}`} variant={config.variant}>
-      {status.replace(/_/g, " ")}
+      {displayStatus.replace(/_/g, " ")}
     </Badge>
   )
 }

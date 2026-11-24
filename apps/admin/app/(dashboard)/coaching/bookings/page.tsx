@@ -280,7 +280,11 @@ export default function CoachingBookingsPage() {
                         value: (r) => formatAmount(r.totalAmount),
                       },
                       { key: "status", header: "Status", value: (r) => r.status },
-                      { key: "payment", header: "Payment", value: (r) => r.paymentStatus },
+                      {
+                        key: "payment",
+                        header: "Payment",
+                        value: (r) => r.paymentStatus ?? "Unknown",
+                      },
                       { key: "dispute", header: "Dispute", value: (r) => r.disputeStatus ?? "" },
                     ],
                     "coaching-bookings"
