@@ -66,6 +66,8 @@ jobs:
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter web test
+      - name: Admin timezone regressions
+        run: pnpm test:admin
 
   check:
     name: Lint & Type Check

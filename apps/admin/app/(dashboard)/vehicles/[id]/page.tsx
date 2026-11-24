@@ -30,6 +30,7 @@ import { LoadingState } from "@/components/loading-state"
 import { StatusBadge } from "@/components/status-badge"
 import { UserAvatar } from "@/components/user-avatar"
 import { VehicleImageGallery } from "@/components/vehicle-image-gallery"
+import { formatBookingDate } from "@/lib/booking-date"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
@@ -547,8 +548,8 @@ function ReservationRow({
             {reservation.renter?.name || "Unknown renter"}
           </p>
           <p className="text-muted-foreground text-xs">
-            {format(new Date(reservation.startDate), "MMM d")} -{" "}
-            {format(new Date(reservation.endDate), "MMM d, yyyy")}
+            {formatBookingDate(reservation.startDate, { month: "short", day: "numeric" })} -{" "}
+            {formatBookingDate(reservation.endDate)}
           </p>
         </div>
       </div>
