@@ -84,6 +84,20 @@ Seat-specific frontend parity and seat checkout hardening require separate revie
 the rental smoke test does not establish seat-flow readiness. Passing CI alone
 does not establish production compatibility.
 
+## Optional coaching payment status (REN-67)
+
+Admin status badges show a neutral `Unknown` label when an optional status is
+missing, null or empty. Coaching CSV exports also use `Unknown` for an absent
+payment status. This presentation fallback does not infer a payment state or
+change refund/dispute eligibility; only an explicit `paid` value qualifies for
+the existing refund control. No booking backfill or backend deployment is needed.
+
+`pnpm test:admin` includes server-rendered badge regressions and the calendar-date
+timezone suite. Its test-only JSX configuration includes the shared UI source;
+application builds continue to use their existing Next.js configuration.
+Verify the retained coaching bookings and downloaded CSV in admin staging before
+any separately approved production release.
+
 ## Admin booking calendar dates (REN-55)
 
 Admin payment/reservation summaries, user/vehicle booking cards and coaching
