@@ -1,3 +1,5 @@
+node .github/check-public-documents.mjs || exit 1
+
 npx lint-staged
 
 # Block files larger than 5MB from being committed

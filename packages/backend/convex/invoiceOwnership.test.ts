@@ -1,7 +1,7 @@
 // @vitest-environment edge-runtime
 import { convexTest } from "convex-test"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { api } from "./_generated/api"
+import { api, internal } from "./_generated/api"
 import schema from "./schema"
 
 const sdk = vi.hoisted(() => ({
@@ -141,6 +141,54 @@ async function setup(stored = false) {
 }
 
 describe("Deals invoice payment ownership", () => {
+  it("does not finalize a draft if revocation arrives during invoice item creation", async () => {
+    const { choose, t, invoiceId } = await setup()
+    const item = sdk.item.getMockImplementation()
+    if (!item) throw new Error("Missing invoice item test double")
+    sdk.item.mockImplementationOnce(async (...args) => {
+      const result = await item(...args)
+      await t.mutation(internal.stripeRevocations.recordVerifiedRevocation, {
+        stripeAccountId: "acct_seller",
+        applicationId: "ca_test",
+        platformAccountId: "acct_platform",
+        livemode: false,
+        eventId: "evt_item_barrier",
+        eventCreated: 1,
+      })
+      return result
+    })
+    await expect(choose()).rejects.toThrow("revoked")
+    expect(sdk.finalize).not.toHaveBeenCalled()
+    expect(sdk.send).not.toHaveBeenCalled()
+    expect(await t.run(({ db }) => db.get(invoiceId))).toMatchObject({
+      stripeInvoiceId: "in_local",
+    })
+  })
+
+  it("preserves a sent invoice's provider facts but withholds the URL after an in-flight revocation", async () => {
+    const { choose, t, invoiceId } = await setup()
+    const send = sdk.send.getMockImplementation()
+    if (!send) throw new Error("Missing invoice send test double")
+    sdk.send.mockImplementationOnce(async (...args) => {
+      const result = await send(...args)
+      await t.mutation(internal.stripeRevocations.recordVerifiedRevocation, {
+        stripeAccountId: "acct_seller",
+        applicationId: "ca_test",
+        platformAccountId: "acct_platform",
+        livemode: false,
+        eventId: "evt_send_barrier",
+        eventCreated: 1,
+      })
+      return result
+    })
+    await expect(choose()).rejects.toThrow("revoked")
+    expect(await t.run(({ db }) => db.get(invoiceId))).toMatchObject({
+      stripeInvoiceId: "in_local",
+      stripePaymentIntentId: "pi_org",
+    })
+    expect(sdk.refund).not.toHaveBeenCalled()
+  })
+
   it.each([
     "stripe_card",
     "stripe_ach",

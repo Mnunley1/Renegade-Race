@@ -7,11 +7,30 @@ import schema from "./schema"
 
 // Mock the Stripe SDK so the refund action doesn't reach the network.
 const refundsCreate = vi.fn(async () => ({ id: "re_test_123" }))
+const customersCreate = vi.fn(async () => ({ id: "cus_renter" }))
+const checkoutCreate = vi.fn(async () => ({
+  id: "cs_coach",
+  url: "https://checkout.stripe.test/coach",
+  payment_intent: "pi_coach",
+}))
 vi.mock("stripe", () => ({
   default: class {
     refunds = { create: refundsCreate }
+    customers = { create: customersCreate }
+    accounts = {
+      retrieve: async () => ({
+        type: "express",
+        metadata: { renegadeUserId: "coach_1" },
+        details_submitted: true,
+        charges_enabled: true,
+        capabilities: { transfers: "active" },
+      }),
+    }
+    checkout = { sessions: { create: checkoutCreate } }
   },
 }))
+vi.mock("./rateLimiter", () => ({ rateLimiter: { limit: async () => ({ ok: true }) } }))
+vi.mock("./r2", () => ({ r2: {} }))
 
 const modules = (
   import.meta as unknown as {
@@ -23,7 +42,10 @@ let activeTest: ReturnType<typeof convexTest> | undefined
 beforeEach(() => {
   vi.useFakeTimers()
   vi.stubEnv("STRIPE_SECRET_KEY", "sk_test_dummy")
+  vi.stubEnv("WEB_URL", "https://renegaderace.test")
   refundsCreate.mockClear()
+  customersCreate.mockClear()
+  checkoutCreate.mockClear()
 })
 afterEach(async () => {
   try {
@@ -118,6 +140,62 @@ async function seedConfirmableBooking(
     return { coachProfileId, bookingId: bookingId as Id<"coachingBookings"> }
   })
 }
+
+describe("coaching checkout revocation interleavings", () => {
+  async function payable() {
+    const t = createTest()
+    const { bookingId } = await seedConfirmableBooking(t)
+    await t.run(async ({ db }) => {
+      await db.insert("users", {
+        externalId: "coach_1",
+        name: "Coach",
+        stripeAccountId: "acct_coach",
+      })
+      await db.insert("users", { externalId: "renter_1", name: "Renter" })
+    })
+    return { t, bookingId, renter: t.withIdentity({ subject: "renter_1" }) }
+  }
+  async function revoke(t: ReturnType<typeof convexTest>) {
+    await t.mutation(internal.stripeRevocations.recordVerifiedRevocation, {
+      stripeAccountId: "acct_coach",
+      applicationId: "ca_test",
+      platformAccountId: "acct_platform",
+      livemode: false,
+      eventId: "evt_coach_barrier",
+      eventCreated: 1,
+    })
+  }
+  it("stops checkout creation after revocation during customer creation", async () => {
+    const { t, renter, bookingId } = await payable()
+    customersCreate.mockImplementationOnce(async () => {
+      await revoke(t)
+      return { id: "cus_renter" }
+    })
+    await expect(
+      renter.action(api.coachingPayments.createCheckoutSession, { bookingId })
+    ).rejects.toThrow("revoked")
+    expect(checkoutCreate).not.toHaveBeenCalled()
+  })
+  it("preserves provider-created facts but withholds a checkout created concurrently with revocation", async () => {
+    const { t, renter, bookingId } = await payable()
+    checkoutCreate.mockImplementationOnce(async () => {
+      await revoke(t)
+      return {
+        id: "cs_coach_held",
+        url: "https://checkout.stripe.test/held",
+        payment_intent: "pi_coach_held",
+      }
+    })
+    await expect(
+      renter.action(api.coachingPayments.createCheckoutSession, { bookingId })
+    ).rejects.toThrow("revoked")
+    expect(await t.run(({ db }) => db.get(bookingId))).toMatchObject({
+      stripeCheckoutSessionId: "cs_coach_held",
+      stripePaymentIntentId: "pi_coach_held",
+    })
+    expect(refundsCreate).not.toHaveBeenCalled()
+  })
+})
 
 describe("coaching payments — handlePaymentSuccess", () => {
   it("confirms an approved booking on payment success", async () => {

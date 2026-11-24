@@ -4,6 +4,29 @@ import { v } from "convex/values"
 import { refundObservation, settlementEvidence } from "./rentalSettlementValidators"
 
 export default defineSchema({
+  // Permanent safety barrier: webhook receipt cleanup must never restore access.
+  stripeAccountRevocations: defineTable({
+    stripeAccountId: v.string(),
+    applicationId: v.string(),
+    platformAccountId: v.string(),
+    livemode: v.boolean(),
+    eventId: v.string(),
+    eventCreated: v.number(),
+    recordedAt: v.number(),
+  }).index("by_account", ["stripeAccountId"]),
+
+  // Retain verified provenance and idempotency independently of receipt TTL.
+  stripeRevocationEvents: defineTable({
+    stripeAccountId: v.string(),
+    applicationId: v.string(),
+    platformAccountId: v.string(),
+    livemode: v.boolean(),
+    eventId: v.string(),
+    eventCreated: v.number(),
+    recordedAt: v.number(),
+    linkedUserIds: v.array(v.string()),
+  }).index("by_event", ["eventId"]),
+
   // Separate from users so a deleted identity cannot be recreated by delayed
   // provider events, cached clients, or an old in-flight action.
   accountDeletionIntents: defineTable({
@@ -930,6 +953,7 @@ export default defineSchema({
       v.literal("reservation"),
       v.literal("payment"),
       v.literal("user"),
+      v.literal("stripe_account"),
       v.literal("vehicle"),
       v.literal("dispute"),
       v.literal("damage_invoice"),

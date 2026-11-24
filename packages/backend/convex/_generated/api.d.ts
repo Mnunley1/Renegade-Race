@@ -78,6 +78,8 @@ import type * as speedhive from "../speedhive.js";
 import type * as stripe from "../stripe.js";
 import type * as stripeWebhookRouting from "../stripeWebhookRouting.js";
 import type * as stripeOwnership from "../stripeOwnership.js";
+import type * as stripeRevocationRouting from "../stripeRevocationRouting.js";
+import type * as stripeRevocations from "../stripeRevocations.js";
 import type * as teamApplications from "../teamApplications.js";
 import type * as teamCars from "../teamCars.js";
 import type * as teamDriverConnections from "../teamDriverConnections.js";
@@ -173,6 +175,8 @@ declare const fullApi: ApiFromModules<{
   stripe: typeof stripe;
   stripeWebhookRouting: typeof stripeWebhookRouting;
   stripeOwnership: typeof stripeOwnership;
+  stripeRevocationRouting: typeof stripeRevocationRouting;
+  stripeRevocations: typeof stripeRevocations;
   teamApplications: typeof teamApplications;
   teamCars: typeof teamCars;
   teamDriverConnections: typeof teamDriverConnections;

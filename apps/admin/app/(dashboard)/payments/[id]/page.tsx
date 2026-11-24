@@ -41,6 +41,7 @@ import PublicImage from "@/components/public-image"
 import { RentalSettlementReview } from "@/components/rental-settlement-review"
 import { StatusBadge } from "@/components/status-badge"
 import { UserAvatar } from "@/components/user-avatar"
+import { formatBookingDate } from "@/lib/booking-date"
 import type { Id } from "@/lib/convex"
 import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
@@ -386,8 +387,8 @@ function ReservationCard({ payment }: { payment: PaymentData }) {
           <div className="flex justify-between">
             <span className="text-muted-foreground">Dates</span>
             <span className="font-medium">
-              {format(new Date(reservation.startDate), "MMM d")} -{" "}
-              {format(new Date(reservation.endDate), "MMM d, yyyy")}
+              {formatBookingDate(reservation.startDate, { month: "short", day: "numeric" })} -{" "}
+              {formatBookingDate(reservation.endDate)}
             </span>
           </div>
           <div className="flex justify-between">

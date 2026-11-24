@@ -1,4 +1,4 @@
-# Stripe webhook routing (REN-53)
+# Stripe webhook routing (REN-53, REN-54)
 
 Stripe destination scope and its signing secret are independent from the backend
 API key. A valid signature alone does not prove an event belongs to that key's
@@ -14,6 +14,7 @@ Use Convex's **HTTP action host** (`https://<deployment>.convex.site`), not its
 | `/stripe/platform-webhook` | Your account | `STRIPE_PLATFORM_WEBHOOK_SECRET` |
 | `/stripe/connect-webhook` | Connected accounts | `STRIPE_CONNECT_WEBHOOK_SECRET` |
 | `/stripe/webhook` | Connected accounts, retained legacy route | existing `STRIPE_WEBHOOK_SECRET` |
+| `/stripe/connect-revocation-webhook` | Connected accounts, deauthorization only | `STRIPE_CONNECT_REVOCATION_WEBHOOK_SECRET` + creation binding |
 
 Each route verifies only its own secret. There is no fallback or multi-secret
 verification. New routes fail closed if their configured secret duplicates another
@@ -29,7 +30,8 @@ signature-age check. It then checks event/schema/version and route scope. Platfo
 events have no connected-account identity. Connect events require an `acct_` account;
 `account.updated` also requires the object's account ID to equal that envelope.
 
-Before any supported handler, receipt or component cache write, the exact event ID
+For the platform, Connect health/payout, and legacy routes, before any supported
+handler, receipt or component cache write, the exact event ID
 must be retrieved with the configured API key. Connect retrieval also sends the
 already signed account as `Stripe-Account`. The retrieved ID, type, resource ID,
 mode and account must match. The handler processes the **provider-confirmed** event,
@@ -67,16 +69,74 @@ been removed. `transfer.reversed` is not equivalent to failure and is not guesse
 a replacement. Existing refund/settlement reconciliation continues verifying actual
 charge, refund, transfer, fee and ledger records; no money movement is added here.
 
-**Deauthorization is explicitly deferred.** Do not subscribe the new endpoint to
-`account.application.deauthorized`. Valid legacy deliveries are acknowledged with
-zero local effects. Revocation may remove API access, so a failed account/event GET
-(e.g. 403) is not proof of a particular application's revocation. This preserves the
-verified existing production subscription behavior but does **not** claim complete
-Connect lifecycle coverage. Legacy Standard links also exist; the limitation is not
-just an Express-account assumption. Disconnect status may remain stale locally until
-a separately verified callback is implemented. Financial paths still perform fresh
-provider ownership/readiness checks and fail closed; no deauthorization event can
-resume a payout hold or restore settlement.
+## Revocation authority and permanent holds (REN-54)
+
+Use a separate **Connected accounts** Snapshot destination subscribed only to
+`account.application.deauthorized`, pinned to Basil. Existing destinations and
+secrets retain their subscriptions; their deauthorization deliveries remain
+acknowledged without effects. Never add deauthorization to the generic canonical
+lookup path or treat an account/event GET returning 403/404 as revocation proof.
+
+Stripe sends this event only to the related application, with the affected account
+in the signed `event.account` and an Application object in `data.object`. It also
+uses this v1 event for Express account closure. Genuine disposable Standard and
+Express closure probes in the separate sandbox confirmed that connected event
+reads become unavailable and the platform event list excludes the event. Stripe's
+own destination delivery viewer reported lost event access after closure. Thus
+this one event deliberately uses a narrow signed callback authority instead of
+requiring a connected-account read that revocation removes.
+
+Provision these **additive, environment-specific** settings together:
+
+- `STRIPE_CONNECT_REVOCATION_WEBHOOK_SECRET`: the new destination's own secret.
+- `STRIPE_CONNECT_REVOCATION_BINDING`: JSON with `platformAccountId`,
+  `applicationId`, `webhookEndpointId`, and `secretSha256`.
+
+At trusted endpoint creation, verify mode, exact application, endpoint URL,
+subscription and version; hash the returned signing secret into the binding and
+provision both directly. Stripe returns an endpoint's secret only at creation;
+an arbitrary later endpoint GET cannot prove that a copied secret belongs to it.
+Never print/store the raw secret in evidence, source, tickets, or credential files.
+Keep the binding and secret in the deployment's controlled configuration.
+
+Ingress verifies raw-body signature and age, exact type, reviewed version, boolean
+mode, positive integer creation time, affected account, and exact Application ID.
+It hashes the configured secret and compares the trusted binding, rejects secret
+reuse across existing routes, reads the configured platform account, and reads
+the exact endpoint with that key. Endpoint application/mode/status/version/URL and
+its sole event subscription must match. Provider/configuration failures retry with
+500 and no effects; invalid deliveries fail with 400. This route never reads a
+connected account or infers revocation from failed reads, and never mirrors into
+the shared financial component.
+
+The signed envelope is the authority for the affected account. Someone controlling
+the genuine destination secret can forge another account in that application;
+endpoint/application binding cannot independently detect such a recomputed valid
+HMAC after event access has been removed. Protecting the secret and trusted
+provisioning is therefore part of this contract. An unsigned/tampered substitution
+fails signature verification. An unrelated/unmapped genuine account never selects
+another user by email or metadata.
+
+A verified event atomically creates a permanent account tombstone, durable per-event
+provenance, audit evidence, and disables **every exact current local link** to that
+account. Unknown or replaced links retain provider provenance without guessing an
+owner or disabling a different account. Duplicate IDs must preserve their immutable
+bindings; durable deduplication outlives the generic seven-day receipt cleanup.
+Account IDs, financial history, settlement evidence and existing ownership holds
+remain intact. No event relinks an account, resumes payments, or moves money.
+
+The hold blocks new destination payments, payable hosted links, onboarding/login,
+and automatic account replacement even if provider access later returns. Payment
+and link actions recheck after intervening customer/provider/ledger operations and
+before returning a URL/secret. If an object was already created in flight, retain
+its provider ID and financial record while withholding the URL/secret; no automatic
+cancellation, refund, or transfer is introduced. A local check cannot atomically
+cancel a provider operation already in progress or recall a link previously given
+to a customer. Any existing financial obligations require operator reconciliation.
+Later verified account updates acknowledge the permanent hold without enabling it;
+read-only, ownership-verified payout evidence can still be audited. Clearing a
+revocation or resuming/replacing its account requires a separately reviewed operator
+procedure; there is intentionally no automatic clear function.
 
 Account updates read the **current** linked provider account, check exact account
 identity and owner metadata, and derive current readiness instead of trusting an
@@ -137,3 +197,10 @@ Primary references: [Connect webhook scopes](https://docs.stripe.com/connect/web
 [endpoint signing secrets and API versioning](https://docs.stripe.com/webhooks),
 [provider-supported v1 event types](https://docs.stripe.com/api/events/types), and
 [retrieving an Event](https://docs.stripe.com/api/events/retrieve).
+
+Revocation references: [application-specific event scope](https://docs.stripe.com/api/events/types#event_types-account.application.deauthorized),
+[Connect signature/account guidance](https://docs.stripe.com/connect/webhooks?accounts-namespace=v1),
+[OAuth access revocation](https://docs.stripe.com/connect/oauth-reference#revoke-the-accounts-access),
+[Express self-closure behavior](https://support.stripe.com/questions/self-serve-account-closure-for-express-accounts?locale=en-GB),
+[endpoint application and creation-only secret](https://docs.stripe.com/api/webhook_endpoints/object),
+and [Stripe CLI's genuine disposable-account fixture](https://github.com/stripe/stripe-cli/blob/master/pkg/fixtures/triggers/account.application.deauthorized.json).

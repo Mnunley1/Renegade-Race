@@ -285,6 +285,65 @@ async function insertActiveFee(
 }
 
 describe("seat checkout", () => {
+  it("stops before checkout creation if revocation arrives during customer creation", async () => {
+    const t = createTest()
+    const { bookingId } = await seedApprovedBooking(t)
+    await t.run(async ({ db }) => {
+      const driver = await db
+        .query("users")
+        .withIndex("by_external_id", (q) => q.eq("externalId", DRIVER_A))
+        .unique()
+      if (!driver) throw new Error("Missing driver")
+      await db.patch(driver._id, { stripeCustomerId: undefined })
+    })
+    customersCreate.mockImplementationOnce(async () => {
+      await t.mutation(internal.stripeRevocations.recordVerifiedRevocation, {
+        stripeAccountId: "acct_host",
+        applicationId: "ca_test",
+        platformAccountId: "acct_platform",
+        livemode: false,
+        eventId: "evt_customer_barrier",
+        eventCreated: 1,
+      })
+      return { id: "cus_created" }
+    })
+    await expect(
+      t
+        .withIdentity({ subject: DRIVER_A })
+        .action(api.seatPayments.createDepositCheckoutSession, { bookingId })
+    ).rejects.toThrow("revoked")
+    expect(checkoutSessionsCreate).not.toHaveBeenCalled()
+    expect(
+      (await t.run(({ db }) => db.get(bookingId)))?.stripeDepositCheckoutSessionId
+    ).toBeUndefined()
+  })
+
+  it("records a provider-created checkout but withholds its URL when revocation races the response", async () => {
+    const t = createTest()
+    const { bookingId } = await seedApprovedBooking(t)
+    checkoutSessionsCreate.mockImplementationOnce(async () => {
+      await t.mutation(internal.stripeRevocations.recordVerifiedRevocation, {
+        stripeAccountId: "acct_host",
+        applicationId: "ca_test",
+        platformAccountId: "acct_platform",
+        livemode: false,
+        eventId: "evt_checkout_barrier",
+        eventCreated: 1,
+      })
+      return { id: "cs_held", url: "https://checkout.stripe.test/held", payment_intent: "pi_held" }
+    })
+    await expect(
+      t
+        .withIdentity({ subject: DRIVER_A })
+        .action(api.seatPayments.createDepositCheckoutSession, { bookingId })
+    ).rejects.toThrow("revoked")
+    expect(await t.run(({ db }) => db.get(bookingId))).toMatchObject({
+      stripeDepositCheckoutSessionId: "cs_held",
+      stripeDepositPaymentIntentId: "pi_held",
+    })
+    expect(refundsCreate).not.toHaveBeenCalled()
+  })
+
   it("starts a deposit Checkout for an approved booking and pays the snapshotted fee to the team", async () => {
     const t = createTest()
     await insertActiveFee(t, { platformFeePercentage: 10, minimumPlatformFee: 0 })

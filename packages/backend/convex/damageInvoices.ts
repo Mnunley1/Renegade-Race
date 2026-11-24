@@ -1,12 +1,12 @@
-import { withAccountOperation } from "./accountOperations"
-import { assertAccountsAvailable } from "./accountDeletionGuards"
 import { v } from "convex/values"
 import Stripe from "stripe"
 import { api, internal } from "./_generated/api"
+import type { Doc } from "./_generated/dataModel"
+import type { QueryCtx } from "./_generated/server"
 
 import { action, internalMutation, internalQuery, mutation, query } from "./_generated/server"
-import { userProfileWithAdminContact } from "./userProfile"
-import { verifiedPaymentDestination } from "./stripeOwnership"
+import { assertAccountsAvailable } from "./accountDeletionGuards"
+import { withAccountOperation } from "./accountOperations"
 import { checkAdmin, isAdminIdentity } from "./admin"
 import {
   getDamageClaimSubmittedEmailTemplate,
@@ -18,10 +18,26 @@ import { ErrorCode, throwError } from "./errors"
 import { getWebUrl } from "./helpers"
 import { buildDestinationChargeAmounts } from "./pricing"
 import { requireReservationPhotoUploads } from "./r2"
+import { assertPayoutAccountNotRevoked, verifiedPaymentDestination } from "./stripeOwnership"
+import { accountRevocation } from "./stripeRevocations"
+import { userProfileWithAdminContact } from "./userProfile"
 
 // ============================================================================
 // Queries
 // ============================================================================
+
+async function safePaymentLink(ctx: QueryCtx, invoice: Doc<"damageInvoices">) {
+  if (invoice.status !== "payment_pending" || !invoice.stripeCheckoutUrl) return invoice
+  const owner = await ctx.db
+    .query("users")
+    .withIndex("by_external_id", (q) => q.eq("externalId", invoice.ownerId))
+    .unique()
+  if (!owner?.stripeAccountId || (await accountRevocation(ctx, owner.stripeAccountId))) {
+    // Preserve the provider fact in storage without exposing a payable URL.
+    return { ...invoice, stripeCheckoutUrl: undefined }
+  }
+  return invoice
+}
 
 export const getById = query({
   args: { id: v.id("damageInvoices") },
@@ -55,7 +71,7 @@ export const getById = query({
     ])
 
     return {
-      ...invoice,
+      ...(await safePaymentLink(ctx, invoice)),
       reservation,
       vehicle,
       renter: userProfileWithAdminContact(renter, isAdmin),
@@ -75,7 +91,7 @@ export const getByReservation = query({
       .withIndex("by_reservation", (q) => q.eq("reservationId", args.reservationId))
       .collect()
 
-    return invoices
+    return Promise.all(invoices.map((invoice) => safePaymentLink(ctx, invoice)))
   },
 })
 
@@ -108,7 +124,9 @@ export const getByUser = query({
       return true
     })
 
-    return all.sort((a, b) => b.createdAt - a.createdAt)
+    return Promise.all(
+      all.sort((a, b) => b.createdAt - a.createdAt).map((invoice) => safePaymentLink(ctx, invoice))
+    )
   },
 })
 
@@ -512,7 +530,8 @@ export const adminApprove: ReturnType<typeof action> = action({
       )
     }
 
-    return await withAccountOperation(
+    let destinationAccountId: string | undefined
+    const result = await withAccountOperation(
       ctx,
       `damage-checkout:${invoice._id}`,
       [identity.subject, invoice.ownerId, invoice.renterId],
@@ -528,6 +547,7 @@ export const adminApprove: ReturnType<typeof action> = action({
             "Owner must complete Stripe onboarding before receiving damage payments"
           )
         }
+        destinationAccountId = owner.stripeAccountId
 
         // Verify Connect account is ready
         const secretKey = process.env.STRIPE_SECRET_KEY
@@ -561,6 +581,7 @@ export const adminApprove: ReturnType<typeof action> = action({
 
         // Create Stripe Checkout Session with 0% platform fee
         beforeProviderMutation()
+        await assertPayoutAccountNotRevoked(ctx, owner.stripeAccountId)
         const checkoutSession = await stripe.checkout.sessions.create({
           mode: "payment",
           line_items: [
@@ -641,7 +662,9 @@ export const adminApprove: ReturnType<typeof action> = action({
             amount: invoice.amount,
             paymentUrl: checkoutSession.url || "",
           })
+          await assertPayoutAccountNotRevoked(ctx, owner.stripeAccountId)
           await ctx.runMutation(internal.damageInvoices.sendDamageEmail, {
+            stripeAccountId: owner.stripeAccountId,
             to: renter.email,
             subject: template.subject,
             html: template.html,
@@ -649,6 +672,7 @@ export const adminApprove: ReturnType<typeof action> = action({
           })
         }
 
+        await assertPayoutAccountNotRevoked(ctx, owner.stripeAccountId)
         // Notify owner that claim was approved
         await ctx.runMutation(internal.notifications.createNotification, {
           userId: invoice.ownerId,
@@ -682,24 +706,34 @@ export const adminApprove: ReturnType<typeof action> = action({
           },
         })
 
+        await assertPayoutAccountNotRevoked(ctx, owner.stripeAccountId)
         return {
           damageInvoiceId: args.damageInvoiceId,
           checkoutUrl: checkoutSession.url,
         }
       }
     )
+    if (destinationAccountId) await assertPayoutAccountNotRevoked(ctx, destinationAccountId)
+    return result
   },
 })
 
 // Internal mutation to send email (needed because actions can't call sendTransactionalEmail directly)
 export const sendDamageEmail = internalMutation({
   args: {
+    stripeAccountId: v.string(),
     to: v.string(),
     subject: v.string(),
     html: v.string(),
     text: v.string(),
   },
   handler: async (ctx, args) => {
+    if (await accountRevocation(ctx, args.stripeAccountId)) {
+      throwError(
+        ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,
+        "Payments are on hold because Stripe account access was revoked. Contact support."
+      )
+    }
     await sendTransactionalEmail(ctx, args.to, {
       subject: args.subject,
       html: args.html,

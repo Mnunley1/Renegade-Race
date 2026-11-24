@@ -14,6 +14,7 @@
     "lint:fix": "biome lint --write .",
     "test": "turbo test",
     "test:backend": "turbo test --filter=@renegade/backend",
+    "test:admin": "TSX_TSCONFIG_PATH=apps/admin/tests/tsconfig.json node --import tsx --test apps/admin/tests/*.test.ts",
     "typecheck": "turbo typecheck",
     "prepare": "husky"
   },

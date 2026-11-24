@@ -66,6 +66,8 @@ jobs:
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter web test
+      - name: Admin timezone regressions
+        run: pnpm test:admin
 
   check:
     name: Lint & Type Check
@@ -79,6 +81,10 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: "pnpm"
+      - name: Test the public-document guard
+        run: node --test .github/check-public-documents.test.mjs
+      - name: Check tracked public document filenames
+        run: node .github/check-public-documents.mjs
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint:check
       - run: pnpm typecheck
