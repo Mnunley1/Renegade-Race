@@ -167,5 +167,7 @@ approvals and rental checkout/payment-intent creation also check lifecycle state
 on the backend. Existing records, paid settlements, refunds and payout holds are
 retained. Invoice payment reads deposit terms through a recipient-authorized
 internal query, so hiding a vehicle does not alter invoice settlement amounts.
+Invoice details expose only the deposit terms; invoice participation does not
+grant access to the listing's archived details.
 No canonical listing is inferred from similar titles; an unavailable page links
 to the current catalog until an explicit replacement relation exists.

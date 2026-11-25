@@ -171,6 +171,9 @@ describe("Deals invoice payment ownership", () => {
       return vehicleId
     })
     expect(await payer.query(api.vehicles.getById, { id: vehicleId })).toBeNull()
+    expect((await payer.query(api.invoices.getById, { invoiceId }))?.depositVehicle).toEqual({
+      damageDepositAmount: 1234,
+    })
     await expect(
       other.query(internal.invoices.getDepositVehicleForPayment, { invoiceId })
     ).rejects.toThrow("Only the recipient")
