@@ -11,8 +11,21 @@ const mocks = vi.hoisted(() => ({
   intent: vi.fn(),
   link: vi.fn(),
   login: vi.fn(),
+  afterOperation: vi.fn(),
 }))
 vi.mock("./r2", () => ({ r2: {} }))
+vi.mock("./accountOperations", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./accountOperations")>()
+  return {
+    ...actual,
+    withAccountOperation: async (...args: Parameters<typeof actual.withAccountOperation>) => {
+      const result = await actual.withAccountOperation(...args)
+      await mocks.afterOperation()
+      return result
+    },
+  }
+})
+
 vi.mock("./rateLimiter", () => ({ rateLimiter: { limit: async () => ({ ok: true }) } }))
 vi.mock("stripe", () => ({
   default: class {
@@ -204,4 +217,72 @@ it("keeps verified payout evidence auditable without granting payment access to 
       .action(api.stripe.createConnectLoginLink, { ownerId: "host" })
   ).rejects.toThrow("revoked")
   expect(mocks.login).not.toHaveBeenCalled()
+})
+
+it.each([
+  "createCheckoutSession",
+  "createPaymentIntent",
+] as const)("%s stops if the listing becomes inactive during customer lookup", async (method) => {
+  const { t, reservationId } = await setup()
+  const reservation = await t.run(({ db }) => db.get(reservationId))
+  if (!reservation) throw new Error("Missing synthetic reservation")
+  mocks.customer.mockImplementationOnce(async () => {
+    await t.run(({ db }) => db.patch(reservation.vehicleId, { isActive: false }))
+    return customer
+  })
+  await expect(
+    t
+      .withIdentity({ subject: "renter" })
+      .action(api.stripe[method], { reservationId, amount: 1000 })
+  ).rejects.toThrow("no longer accepting rental requests or payments")
+  expect(mocks.checkout).not.toHaveBeenCalled()
+  expect(mocks.intent).not.toHaveBeenCalled()
+  expect(await t.run(({ db }) => db.query("payments").collect())).toEqual([])
+})
+
+it.each([
+  "createCheckoutSession",
+  "createPaymentIntent",
+] as const)("%s retains in-flight provider history but withholds access after deactivation", async (method) => {
+  const { t, reservationId } = await setup()
+  const reservation = await t.run(({ db }) => db.get(reservationId))
+  if (!reservation) throw new Error("Missing synthetic reservation")
+  const provider = method === "createCheckoutSession" ? mocks.checkout : mocks.intent
+  provider.mockImplementationOnce(async () => {
+    await t.run(({ db }) => db.patch(reservation.vehicleId, { isActive: false }))
+    return method === "createCheckoutSession" ? checkout : intent
+  })
+  await expect(
+    t
+      .withIdentity({ subject: "renter" })
+      .action(api.stripe[method], { reservationId, amount: 1000 })
+  ).rejects.toThrow("no longer accepting rental requests or payments")
+  expect(await t.run(({ db }) => db.query("payments").collect())).toMatchObject([
+    {
+      status: "pending",
+      ...(method === "createCheckoutSession"
+        ? { stripeCheckoutSessionId: checkout.id }
+        : { stripePaymentIntentId: intent.id }),
+    },
+  ])
+  expect(await t.run(({ db }) => db.get(reservationId))).toMatchObject({ status: "approved" })
+})
+
+it.each([
+  "createCheckoutSession",
+  "createPaymentIntent",
+] as const)("%s rechecks lifecycle after the operation wrapper completes", async (method) => {
+  const { t, reservationId } = await setup()
+  const reservation = await t.run(({ db }) => db.get(reservationId))
+  if (!reservation) throw new Error("Missing synthetic reservation")
+  mocks.afterOperation.mockImplementationOnce(() =>
+    t.run(({ db }) => db.patch(reservation.vehicleId, { isActive: false }))
+  )
+  await expect(
+    t
+      .withIdentity({ subject: "renter" })
+      .action(api.stripe[method], { reservationId, amount: 1000 })
+  ).rejects.toThrow("no longer accepting rental requests or payments")
+  expect(await t.run(({ db }) => db.query("payments").collect())).toHaveLength(1)
+  expect(await t.run(({ db }) => db.get(reservationId))).toMatchObject({ status: "approved" })
 })

@@ -150,3 +150,24 @@ platform, additive Connect, and preserved legacy Connect routes. Both applicatio
 share these backend routes. Configuring a frontend URL or a `convex.cloud` API URL
 is not a webhook deployment. Keep endpoint IDs, account/mode, exact source/runtime
 evidence and proof results; never put signing secrets or API keys in source/logs.
+
+
+## Inactive vehicle details and rental history
+
+Inactive, soft-deleted and suspended listings are unavailable to anonymous or
+unrelated detail-page visitors. The current owner, trusted admins and the stored
+renter/owner of any reservation for that vehicle retain detail and image access,
+regardless of reservation status. Reservation history queries authorize the actual
+participant rather than trusting a supplied user ID. Public reviews and old
+favorites do not grant access to an archived listing.
+
+The public page distinguishes loading from unavailable data. Authorized archived
+views show a history notice and disable new rental requests. New requests,
+approvals and rental checkout/payment-intent creation also check lifecycle state
+on the backend. Existing records, paid settlements, refunds and payout holds are
+retained. Invoice payment reads deposit terms through a recipient-authorized
+internal query, so hiding a vehicle does not alter invoice settlement amounts.
+Invoice details expose only the deposit terms; invoice participation does not
+grant access to the listing's archived details.
+No canonical listing is inferred from similar titles; an unavailable page links
+to the current catalog until an explicit replacement relation exists.

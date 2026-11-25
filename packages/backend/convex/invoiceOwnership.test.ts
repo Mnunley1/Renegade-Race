@@ -141,6 +141,52 @@ async function setup(stored = false) {
 }
 
 describe("Deals invoice payment ownership", () => {
+  it.each([
+    "stripe_ach",
+    "stripe_card",
+  ] as const)("preserves %s settlement for an inactive deposit vehicle without granting public detail access", async (method) => {
+    const { t, payer, other, invoiceId, choose } = await setup()
+    const vehicleId = await t.run(async ({ db }) => {
+      const trackId = await db.insert("tracks", {
+        name: "Synthetic",
+        location: "Test",
+        isActive: false,
+      })
+      const vehicleId = await db.insert("vehicles", {
+        trackId,
+        ownerId: "sender",
+        make: "BMW",
+        model: "Synthetic",
+        year: 2015,
+        dailyRate: 1000,
+        damageDepositAmount: 1234,
+        description: "Historical",
+        amenities: [],
+        addOns: [],
+        isActive: false,
+        createdAt: 1,
+        updatedAt: 1,
+      })
+      await db.patch(invoiceId, { depositVehicleId: vehicleId })
+      return vehicleId
+    })
+    expect(await payer.query(api.vehicles.getById, { id: vehicleId })).toBeNull()
+    expect((await payer.query(api.invoices.getById, { invoiceId }))?.depositVehicle).toEqual({
+      damageDepositAmount: 1234,
+    })
+    await expect(
+      other.query(internal.invoices.getDepositVehicleForPayment, { invoiceId })
+    ).rejects.toThrow("Only the recipient")
+    expect(await payer.query(internal.invoices.getDepositVehicleForPayment, { invoiceId })).toEqual(
+      { damageDepositAmount: 1234 }
+    )
+    expect((await choose(method))?.url).toBe("https://invoice.stripe.test/fresh")
+    const invoice = await t.run(({ db }) => db.get(invoiceId))
+    expect(invoice?.damageDepositAmount).toBe(method === "stripe_ach" ? 1234 : 0)
+    expect(invoice?.amountDue).toBe(method === "stripe_ach" ? 11234 : 10330)
+    expect(await t.run(({ db }) => db.query("reservations").collect())).toEqual([])
+  })
+
   it("does not finalize a draft if revocation arrives during invoice item creation", async () => {
     const { choose, t, invoiceId } = await setup()
     const item = sdk.item.getMockImplementation()

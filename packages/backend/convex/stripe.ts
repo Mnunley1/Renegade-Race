@@ -1,4 +1,3 @@
-import { withAccountOperation } from "./accountOperations"
 import { StripeSubscriptions } from "@convex-dev/stripe"
 import type { UserIdentity } from "convex/server"
 import { ConvexError, v } from "convex/values"
@@ -14,6 +13,7 @@ import {
   mutation,
   query,
 } from "./_generated/server"
+import { withAccountOperation } from "./accountOperations"
 import { checkAdmin } from "./admin"
 import { parseLocalDate } from "./dateUtils"
 import {
@@ -44,7 +44,9 @@ import {
   retrieveOwnedCustomer,
   verifiedPaymentDestination,
 } from "./stripeOwnership"
+import { accountRevocation } from "./stripeRevocations"
 import { publicUserProfile } from "./userProfile"
+import { assertRentalVehicleAvailable } from "./vehicleLifecycle"
 
 // ============================================================================
 // Cancellation Policy - Tiered Refund Calculation
@@ -722,13 +724,18 @@ async function assertCurrentRentalAttempt(ctx: QueryCtx, reservation: Doc<"reser
 }
 
 export const assertRentalPaymentAvailable = internalQuery({
-  args: { reservationId: v.id("reservations"), renterId: v.string() },
+  args: {
+    reservationId: v.id("reservations"),
+    renterId: v.string(),
+    stripeAccountId: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
     const reservation = await ctx.db.get(args.reservationId)
     if (!reservation || reservation.renterId !== args.renterId) {
       throwError(ErrorCode.FORBIDDEN, "Payment reservation does not match the renter")
     }
     assertRentalAwaitingPayment(reservation)
+    assertRentalVehicleAvailable(await ctx.db.get(reservation.vehicleId))
     await assertCurrentRentalAttempt(ctx, reservation)
     await assertRentalDatesAvailable(ctx, {
       vehicleId: reservation.vehicleId,
@@ -736,6 +743,12 @@ export const assertRentalPaymentAvailable = internalQuery({
       endDate: reservation.endDate,
       excludeReservationId: reservation._id,
     })
+    if (args.stripeAccountId && (await accountRevocation(ctx, args.stripeAccountId))) {
+      throwError(
+        ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,
+        "Payments are on hold because Stripe account access was revoked. Contact support."
+      )
+    }
   },
 })
 
@@ -864,7 +877,11 @@ export const createCheckoutSession = action({
 
         // Create checkout session using Stripe directly (component doesn't support Connect)
         // but we use the component's customer management
-        await assertPayoutAccountNotRevoked(ctx, destinationAccountId)
+        await ctx.runQuery(internal.stripe.assertRentalPaymentAvailable, {
+          reservationId: reservation._id,
+          renterId: identity.subject,
+          stripeAccountId: destinationAccountId,
+        })
         const checkoutSession = await stripe.checkout.sessions.create(
           {
             customer: customerId,
@@ -961,7 +978,11 @@ export const createCheckoutSession = action({
         }
       }
     )
-    await assertPayoutAccountNotRevoked(ctx, destinationAccountId)
+    await ctx.runQuery(internal.stripe.assertRentalPaymentAvailable, {
+      reservationId: reservation._id,
+      renterId: identity.subject,
+      stripeAccountId: destinationAccountId,
+    })
     return result
   },
 })
@@ -1103,7 +1124,11 @@ export const createPaymentIntent = action({
         const customerId = await rentalBillingCustomer(ctx, stripe, identity)
 
         // Create Stripe Payment Intent with Connect
-        await assertPayoutAccountNotRevoked(ctx, destinationAccountId)
+        await ctx.runQuery(internal.stripe.assertRentalPaymentAvailable, {
+          reservationId: reservation._id,
+          renterId: identity.subject,
+          stripeAccountId: destinationAccountId,
+        })
         const paymentIntent = await stripe.paymentIntents.create(
           {
             amount: chargeAmountCents,
@@ -1172,7 +1197,11 @@ export const createPaymentIntent = action({
         }
       }
     )
-    await assertPayoutAccountNotRevoked(ctx, destinationAccountId)
+    await ctx.runQuery(internal.stripe.assertRentalPaymentAvailable, {
+      reservationId: reservation._id,
+      renterId: identity.subject,
+      stripeAccountId: destinationAccountId,
+    })
     return result
   },
 })

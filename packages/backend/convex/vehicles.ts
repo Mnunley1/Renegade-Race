@@ -14,6 +14,7 @@ import { calculateDistance } from "./geocoding"
 import { attachVehicleUpload, removeVehicleUpload } from "./r2"
 import { getRentalConflicts } from "./rentalAvailability"
 import { publicUserProfile, userProfileWithAdminContact } from "./userProfile"
+import { canReadVehicleDetails } from "./vehicleLifecycle"
 import { normalizeMake } from "./vehicleMakes"
 import { requireVehicleYear } from "./vehicleYear"
 
@@ -362,8 +363,12 @@ export const getById = query({
   handler: async (ctx, args) => {
     const vehicle = await ctx.db.get(args.id)
     if (vehicle === null) {
-      throw new Error("NOT_FOUND")
+      return null
     }
+
+    const identity = await ctx.auth.getUserIdentity()
+    const isAdmin = !!identity && isAdminIdentity(identity)
+    if (!(await canReadVehicleDetails(ctx, vehicle))) return null
 
     const [images, owner, track, availability] = await Promise.all([
       ctx.db
@@ -385,8 +390,6 @@ export const getById = query({
 
     const hostStripeReady = !!owner?.stripeAccountId && owner.stripeAccountStatus === "enabled"
 
-    const identity = await ctx.auth.getUserIdentity()
-    const isAdmin = !!identity && isAdminIdentity(identity)
     return {
       ...vehicle,
       images,
@@ -425,8 +428,11 @@ export const getByOwner = query({
 
     // Filter out soft-deleted vehicles unless explicitly requested
     if (!args.includeDeleted) {
-      vehicles = vehicles.filter((v) => !v.deletedAt)
+      vehicles = vehicles.filter((v) => v.deletedAt === undefined)
     }
+
+    const visibility = await Promise.all(vehicles.map((row) => canReadVehicleDetails(ctx, row)))
+    vehicles = vehicles.filter((_, index) => visibility[index])
 
     const vehiclesWithDetails = await Promise.all(
       vehicles.map(async (vehicle) => {

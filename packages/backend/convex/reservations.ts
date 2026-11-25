@@ -1,9 +1,9 @@
-import { reserveAccountOperation } from "./accountOperations"
-import { assertAccountsAvailable } from "./accountDeletionGuards"
 import { v } from "convex/values"
 import { internal } from "./_generated/api"
 import type { Id } from "./_generated/dataModel"
-import { mutation, query } from "./_generated/server"
+import { mutation, type QueryCtx, query } from "./_generated/server"
+import { assertAccountsAvailable } from "./accountDeletionGuards"
+import { reserveAccountOperation } from "./accountOperations"
 import { isAdminIdentity } from "./admin"
 import {
   endDateFromDuration,
@@ -27,6 +27,16 @@ import { assertRentalDatesAvailable } from "./rentalAvailability"
 import { buildRentalQuote, validateRentalQuote } from "./rentalQuote"
 import { sanitizeMessage, sanitizeShortText } from "./sanitize"
 import { publicUserProfile, userProfileWithAdminContact } from "./userProfile"
+import { assertRentalVehicleAvailable } from "./vehicleLifecycle"
+
+// A supplied user ID is a filter, not proof of permission to read rental history.
+async function assertReservationUserAccess(ctx: Pick<QueryCtx, "auth">, userId: string) {
+  const identity = await ctx.auth.getUserIdentity()
+  if (!identity) throwError(ErrorCode.AUTH_REQUIRED, "Not authenticated")
+  if (identity.subject !== userId && !isAdminIdentity(identity)) {
+    throwError(ErrorCode.FORBIDDEN, "Not authorized to read this reservation history")
+  }
+}
 
 // Get reservations for a user (as renter or owner)
 export const getByUser = query({
@@ -45,6 +55,7 @@ export const getByUser = query({
     ),
   },
   handler: async (ctx, args) => {
+    await assertReservationUserAccess(ctx, args.userId)
     const { userId, role, status } = args
 
     let reservationsQuery
@@ -111,8 +122,16 @@ export const getByUser = query({
 export const getById = query({
   args: { id: v.id("reservations") },
   handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) return null
+    const isAdmin = isAdminIdentity(identity)
     const reservation = await ctx.db.get(args.id)
-    if (!reservation) {
+    if (
+      !reservation ||
+      (!isAdmin &&
+        reservation.renterId !== identity.subject &&
+        reservation.ownerId !== identity.subject)
+    ) {
       return null
     }
 
@@ -143,8 +162,6 @@ export const getById = query({
       } as typeof vehicle & { images: typeof images }
     }
 
-    const identity = await ctx.auth.getUserIdentity()
-    const isAdmin = !!identity && isAdminIdentity(identity)
     return {
       ...reservation,
       vehicle: vehicleWithImages,
@@ -207,24 +224,22 @@ export const create = mutation({
       throwError(ErrorCode.AUTH_REQUIRED, "Not authenticated")
     }
 
-    // Rate limit: 10 reservations per hour per user
-    await rateLimiter.limit(ctx, "createReservation", {
-      key: identity.subject,
-      throws: true,
-    })
-
     const renterId = identity.subject
     const now = Date.now()
 
     // Get vehicle details
     const vehicle = await ctx.db.get(args.vehicleId)
-    if (!vehicle) {
-      throwError(ErrorCode.NOT_FOUND, "Vehicle not found", { vehicleId: args.vehicleId })
-    }
+    assertRentalVehicleAvailable(vehicle)
 
     if (vehicle.ownerId === renterId) {
       throwError(ErrorCode.CANNOT_BOOK_OWN_VEHICLE, "Cannot book your own vehicle")
     }
+
+    // Rate limit: 10 reservations per hour per user
+    await rateLimiter.limit(ctx, "createReservation", {
+      key: identity.subject,
+      throws: true,
+    })
 
     // Check if either party has blocked the other
     const block1 = await ctx.db
@@ -406,6 +421,9 @@ export const approve = mutation({
       })
     }
 
+    const listingVehicle = await ctx.db.get(reservation.vehicleId)
+    assertRentalVehicleAvailable(listingVehicle)
+
     await assertAccountsAvailable(ctx, identity.subject, reservation.renterId, reservation.ownerId)
     await assertRentalDatesAvailable(ctx, {
       vehicleId: reservation.vehicleId,
@@ -414,8 +432,7 @@ export const approve = mutation({
       excludeReservationId: reservation._id,
     })
 
-    const currentListing =
-      reservation.quoteVersion === 1 ? null : await ctx.db.get(reservation.vehicleId)
+    const currentListing = reservation.quoteVersion === 1 ? null : listingVehicle
     const quote = validateRentalQuote(reservation, currentListing)
 
     const now = Date.now()
@@ -876,6 +893,7 @@ export const complete = mutation({
 export const getPendingForOwner = query({
   args: { ownerId: v.string() },
   handler: async (ctx, args) => {
+    await assertReservationUserAccess(ctx, args.ownerId)
     const reservations = await ctx.db
       .query("reservations")
       .withIndex("by_owner_status", (q) => q.eq("ownerId", args.ownerId).eq("status", "pending"))
@@ -909,6 +927,7 @@ export const getPendingForOwner = query({
 export const getApprovedForRenter = query({
   args: { renterId: v.string() },
   handler: async (ctx, args) => {
+    await assertReservationUserAccess(ctx, args.renterId)
     const reservations = await ctx.db
       .query("reservations")
       .withIndex("by_renter_status", (q) =>
@@ -944,6 +963,7 @@ export const getApprovedForRenter = query({
 export const getConfirmedForOwner = query({
   args: { ownerId: v.string() },
   handler: async (ctx, args) => {
+    await assertReservationUserAccess(ctx, args.ownerId)
     const reservations = await ctx.db
       .query("reservations")
       .withIndex("by_owner_status", (q) => q.eq("ownerId", args.ownerId).eq("status", "confirmed"))
@@ -980,6 +1000,7 @@ export const getUpcoming = query({
     role: v.union(v.literal("renter"), v.literal("owner")),
   },
   handler: async (ctx, args) => {
+    await assertReservationUserAccess(ctx, args.userId)
     const { userId, role } = args
     const today = new Date().toISOString().split("T")[0] as string
 
@@ -1034,6 +1055,7 @@ export const getCompletedReservationForVehicle = query({
     vehicleId: v.id("vehicles"),
   },
   handler: async (ctx, args) => {
+    await assertReservationUserAccess(ctx, args.userId)
     const reservation = await ctx.db
       .query("reservations")
       .withIndex("by_renter_status", (q) => q.eq("renterId", args.userId).eq("status", "completed"))
