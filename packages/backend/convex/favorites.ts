@@ -1,6 +1,7 @@
 import { v } from "convex/values"
 import { mutation, query } from "./_generated/server"
 import { publicUserProfile } from "./userProfile"
+import { canReadVehicleDetails } from "./vehicleLifecycle"
 
 // Get user's favorites
 export const getUserFavorites = query({
@@ -22,7 +23,7 @@ export const getUserFavorites = query({
     const favoritesWithVehicles = await Promise.all(
       favorites.map(async (favorite) => {
         const vehicle = await ctx.db.get(favorite.vehicleId)
-        if (!vehicle) return null
+        if (!(vehicle && (await canReadVehicleDetails(ctx, vehicle)))) return null
 
         const [images, owner, track] = await Promise.all([
           ctx.db

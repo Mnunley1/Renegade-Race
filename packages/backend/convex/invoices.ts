@@ -37,6 +37,22 @@ const stripeClient = new StripeSubscriptions(components.stripe, {})
 const MIN_INVOICE_AMOUNT = 100
 const MAX_INVOICE_AMOUNT = 250_000_00
 
+// Invoice recipients may have no rental reservation for a deposit vehicle.
+// Keep settlement independent of the public listing's visibility policy.
+export const getDepositVehicleForPayment = internalQuery({
+  args: { invoiceId: v.id("invoices") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity()
+    const invoice = await ctx.db.get(args.invoiceId)
+    if (!(identity && invoice) || invoice.recipientId !== identity.subject) {
+      throwError(ErrorCode.FORBIDDEN, "Only the recipient can choose a payment method")
+    }
+    if (!invoice.depositVehicleId) return null
+    const vehicle = await ctx.db.get(invoice.depositVehicleId)
+    return vehicle ? { damageDepositAmount: vehicle.damageDepositAmount } : null
+  },
+})
+
 const lineItemValidator = v.object({
   description: v.string(),
   quantity: v.number(),
@@ -811,7 +827,7 @@ export const choosePaymentMethod = action({
     const [sender, depositVehicle] = await Promise.all([
       ctx.runQuery(internal.users.getByExternalIdInternal, { externalId: invoice.senderId }),
       invoice.depositVehicleId
-        ? ctx.runQuery(api.vehicles.getById, { id: invoice.depositVehicleId })
+        ? ctx.runQuery(internal.invoices.getDepositVehicleForPayment, { invoiceId: invoice._id })
         : Promise.resolve(null),
     ])
     if (!sender?.stripeAccountId)

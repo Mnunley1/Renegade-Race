@@ -117,14 +117,14 @@ describe("public user lookups", () => {
         await viewer.query(api.users.getByExternalId, { externalId: "profile-owner" })
       ).toEqual(publicFields)
       const vehicle = await viewer.query(api.vehicles.getById, { id: vehicleId })
-      expect(vehicle.owner).toEqual(publicFields)
-      expect(vehicle.hostStripeReady).toBe(true)
+      expect(vehicle?.owner).toEqual(publicFields)
+      expect(vehicle?.hostStripeReady).toBe(true)
       const endorsements = await viewer.query(api.endorsements.getByDriver, { driverProfileId })
       expect(endorsements[0]?.endorser).toEqual(publicFields)
     }
     const admin = t.withIdentity({ subject: "moderator", publicMetadata: { role: "admin" } })
     const detail = await admin.query(api.vehicles.getById, { id: vehicleId })
-    expect(detail.owner).toEqual({
+    expect(detail?.owner).toEqual({
       ...publicFields,
       email: "owner@example.test",
       phone: "555-0100",

@@ -73,6 +73,27 @@ describe("rental payment access", () => {
   it.each([
     "createCheckoutSession",
     "createPaymentIntent",
+  ] as const)("%s rejects inactive/deleted/suspended listings before contacting Stripe", async (method) => {
+    for (const patch of [{ isActive: false }, { deletedAt: 0 }, { isSuspended: true }]) {
+      const { t, record } = await booking()
+      await t.run(({ db }) => db.patch(record.metadata.vehicleId, patch))
+      const reservationBefore = await t.run(({ db }) => db.get(record.reservationId))
+      await expect(
+        t
+          .withIdentity({ subject: "driver" })
+          .action(api.stripe[method], {
+            reservationId: record.reservationId,
+            amount: record.amount,
+          })
+      ).rejects.toThrow("no longer accepting rental requests or payments")
+      expect(await t.run(({ db }) => db.query("payments").collect())).toEqual([])
+      expect(await t.run(({ db }) => db.get(record.reservationId))).toEqual(reservationBefore)
+    }
+  })
+
+  it.each([
+    "createCheckoutSession",
+    "createPaymentIntent",
   ] as const)("%s rejects an ended current attempt before contacting Stripe", async (method) => {
     const { t, record } = await booking()
     const paymentId = await t.mutation(internal.stripe.createPaymentRecord, record)
@@ -170,7 +191,7 @@ describe("rental payment access", () => {
     await expect(t.action(api.stripe[method], args)).rejects.toThrow("AUTH_REQUIRED")
     await expect(
       t.withIdentity({ subject: "other" }).action(api.stripe[method], args)
-    ).rejects.toThrow("Not authorized")
+    ).rejects.toThrow("Reservation not found")
     expect(await t.run(({ db }) => db.query("payments").collect())).toHaveLength(0)
   })
 

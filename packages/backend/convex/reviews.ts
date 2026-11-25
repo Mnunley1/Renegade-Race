@@ -1,13 +1,26 @@
 import { v } from "convex/values"
 import { api } from "./_generated/api"
-import type { Id } from "./_generated/dataModel"
-import { mutation, query } from "./_generated/server"
+import type { Doc, Id } from "./_generated/dataModel"
+import { mutation, type QueryCtx, query } from "./_generated/server"
+import { isAdminIdentity } from "./admin"
 import { getReviewResponseEmailTemplate, sendTransactionalEmail } from "./emails"
 import { getWebUrl } from "./helpers"
 import { requireReservationPhotoUploads } from "./r2"
 import { calculateUserReviewStats, calculateVehicleReviewStats } from "./reviewStats"
 import { sanitizeReview, sanitizeShortText } from "./sanitize"
 import { publicUserProfile } from "./userProfile"
+import { canReadVehicleDetails } from "./vehicleLifecycle"
+
+async function reservationForViewer(ctx: QueryCtx, reservation: Doc<"reservations"> | null) {
+  const identity = await ctx.auth.getUserIdentity()
+  return reservation &&
+    identity &&
+    (reservation.renterId === identity.subject ||
+      reservation.ownerId === identity.subject ||
+      isAdminIdentity(identity))
+    ? reservation
+    : null
+}
 
 // Get review by completion ID for current user
 export const getByCompletion = query({
@@ -44,10 +57,10 @@ export const getByCompletion = query({
 
     return {
       ...review,
-      vehicle,
+      vehicle: vehicle && (await canReadVehicleDetails(ctx, vehicle)) ? vehicle : null,
       reviewer: publicUserProfile(reviewer),
       reviewed: publicUserProfile(reviewed),
-      reservation,
+      reservation: await reservationForViewer(ctx, reservation),
     }
   },
 })
@@ -61,16 +74,10 @@ export const getByUser = query({
   handler: async (ctx, args) => {
     const { userId, role } = args
 
-    let reviewsQuery
-    if (role === "reviewer") {
-      reviewsQuery = ctx.db
-        .query("rentalReviews")
-        .withIndex("by_reviewer", (q) => q.eq("reviewerId", userId))
-    } else {
-      reviewsQuery = ctx.db
-        .query("rentalReviews")
-        .withIndex("by_reviewed", (q) => q.eq("reviewedId", userId))
-    }
+    const reviewsQuery =
+      role === "reviewer"
+        ? ctx.db.query("rentalReviews").withIndex("by_reviewer", (q) => q.eq("reviewerId", userId))
+        : ctx.db.query("rentalReviews").withIndex("by_reviewed", (q) => q.eq("reviewedId", userId))
 
     const reviews = await reviewsQuery
       .filter((q) => q.eq(q.field("isPublic"), true))
@@ -95,10 +102,10 @@ export const getByUser = query({
 
         return {
           ...review,
-          vehicle,
+          vehicle: vehicle && (await canReadVehicleDetails(ctx, vehicle)) ? vehicle : null,
           reviewer: publicUserProfile(reviewer),
           reviewed: publicUserProfile(reviewed),
-          reservation,
+          reservation: await reservationForViewer(ctx, reservation),
         }
       })
     )
@@ -139,7 +146,7 @@ export const getByVehicle = query({
           ...review,
           reviewer: publicUserProfile(reviewer),
           reviewed: publicUserProfile(reviewed),
-          reservation,
+          reservation: await reservationForViewer(ctx, reservation),
         }
       })
     )
@@ -424,9 +431,9 @@ export const getPendingResponses = query({
 
         return {
           ...review,
-          vehicle,
+          vehicle: vehicle && (await canReadVehicleDetails(ctx, vehicle)) ? vehicle : null,
           reviewer: publicUserProfile(reviewer),
-          reservation,
+          reservation: await reservationForViewer(ctx, reservation),
         }
       })
     )
@@ -533,10 +540,10 @@ export const getById = query({
 
     return {
       ...review,
-      vehicle,
+      vehicle: vehicle && (await canReadVehicleDetails(ctx, vehicle)) ? vehicle : null,
       reviewer: publicUserProfile(reviewer),
       reviewed: publicUserProfile(reviewed),
-      reservation,
+      reservation: await reservationForViewer(ctx, reservation),
     }
   },
 })
