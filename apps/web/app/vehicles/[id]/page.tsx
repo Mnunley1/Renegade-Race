@@ -117,6 +117,8 @@ type VehicleData = {
   deliveryAvailable?: boolean
   cancellationPolicy?: "flexible" | "moderate" | "strict"
   isActive: boolean
+  deletedAt?: number
+  isSuspended?: boolean
   images?: VehicleImage[]
   owner?: VehicleOwner
   track?: VehicleTrack
@@ -137,7 +139,7 @@ type ReviewData = {
   }
   reservation?: {
     _id: string
-  }
+  } | null
 }
 
 type ReviewStats = {
@@ -228,6 +230,7 @@ function VehicleDetailsPageContent() {
 
   const vehicle = useQuery(api.vehicles.getById, { id: id as Id<"vehicles"> }) as
     | VehicleData
+    | null
     | undefined
   const reviews = useQuery(
     api.reviews.getByVehicle,
@@ -398,7 +401,7 @@ function VehicleDetailsPageContent() {
   }
 
   // ── Loading state ───────────────────────────────────────────────────
-  if (!vehicle) {
+  if (vehicle === undefined) {
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="flex min-h-[60vh] items-center justify-center">
@@ -418,7 +421,32 @@ function VehicleDetailsPageContent() {
     )
   }
 
-  const requestState = vehicleRequestState(vehicle.hostStripeReady)
+  if (vehicle === null) {
+    return (
+      <div className="container mx-auto px-4 py-16">
+        <div className="mx-auto max-w-lg space-y-4 text-center">
+          <h1 className="font-bold text-3xl">Listing unavailable</h1>
+          <p className="text-muted-foreground">
+            This listing is no longer publicly available. Browse current vehicles, or sign in to
+            view an existing reservation.
+          </p>
+          <Button asChild>
+            <Link href="/vehicles">Browse vehicles</Link>
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  const isArchived =
+    !vehicle.isActive || vehicle.deletedAt !== undefined || vehicle.isSuspended === true
+  const requestState = isArchived
+    ? {
+        ready: false,
+        action: "Listing unavailable",
+        explanation: "This listing is inactive. Existing reservation history remains available.",
+      }
+    : vehicleRequestState(vehicle.hostStripeReady)
 
   // ── Derived data ──────────────────────────────────────────────────
   const images =
@@ -479,7 +507,7 @@ function VehicleDetailsPageContent() {
       "@type": "Offer",
       price: vehicle.dailyRate / 100,
       priceCurrency: "USD",
-      availability: "https://schema.org/InStock",
+      availability: isArchived ? "https://schema.org/OutOfStock" : "https://schema.org/InStock",
     },
   }
 
@@ -489,6 +517,15 @@ function VehicleDetailsPageContent() {
         <link href={`https://renegaderace.com/vehicles/${id}`} rel="canonical" />
       </Head>
       <div className="container mx-auto max-w-7xl px-4 py-6">
+        {isArchived && (
+          <div className="mb-6 rounded-lg border bg-muted p-4" role="status">
+            <p className="font-semibold">Archived listing</p>
+            <p className="text-muted-foreground text-sm">
+              This vehicle is no longer accepting rental requests. Your reservation history remains
+              available.
+            </p>
+          </div>
+        )}
         <script
           // biome-ignore lint/security/noDangerouslySetInnerHtml: structured data for SEO
           dangerouslySetInnerHTML={{

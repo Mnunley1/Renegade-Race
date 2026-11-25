@@ -3,6 +3,7 @@ import type { Doc, Id } from "./_generated/dataModel"
 import { mutation, type QueryCtx, query } from "./_generated/server"
 import { toPublicTeamListing } from "./seatHelpers"
 import { publicUserProfile } from "./userProfile"
+import { canReadVehicleDetails } from "./vehicleLifecycle"
 
 // Resolve the primary (or first available) image key for a vehicle thumbnail
 async function getVehicleThumbnailKey(
@@ -65,20 +66,16 @@ export const getByUser = query({
 
     const { userId, role } = args
 
-    let conversationsQuery
-    if (role === "renter") {
-      conversationsQuery = ctx.db
-        .query("conversations")
-        .withIndex("by_renter_active", (q) => q.eq("renterId", userId).eq("isActive", true))
-    } else {
-      conversationsQuery = ctx.db
-        .query("conversations")
-        .withIndex("by_owner_active", (q) => q.eq("ownerId", userId).eq("isActive", true))
-    }
+    const conversationsQuery =
+      role === "renter"
+        ? ctx.db
+            .query("conversations")
+            .withIndex("by_renter_active", (q) => q.eq("renterId", userId).eq("isActive", true))
+        : ctx.db
+            .query("conversations")
+            .withIndex("by_owner_active", (q) => q.eq("ownerId", userId).eq("isActive", true))
 
     const allConversations = await conversationsQuery.order("desc").collect()
-
-    // Filter out conversations deleted by the current user
     const conversations = allConversations.filter((conversation) => {
       if (role === "renter") {
         return conversation.deletedByRenter !== true
@@ -133,11 +130,13 @@ export const getByUser = query({
         }
 
         const seatBooking = await loadSeatBookingSummary(ctx, conversation.seatBookingId)
+        const visibleVehicle =
+          vehicle && (await canReadVehicleDetails(ctx, vehicle)) ? vehicle : null
 
         return {
           ...conversation,
-          vehicle,
-          vehicleImageKey,
+          vehicle: visibleVehicle,
+          vehicleImageKey: visibleVehicle ? vehicleImageKey : null,
           renter: publicUserProfile(renter),
           owner: publicUserProfile(owner),
           team: seatConversationTeam(conversation.conversationType, team),
@@ -258,11 +257,12 @@ export const getById = query({
     }
 
     const seatBooking = await loadSeatBookingSummary(ctx, conversation.seatBookingId)
+    const visibleVehicle = vehicle && (await canReadVehicleDetails(ctx, vehicle)) ? vehicle : null
 
     return {
       ...conversation,
-      vehicle,
-      vehicleImageKey,
+      vehicle: visibleVehicle,
+      vehicleImageKey: visibleVehicle ? vehicleImageKey : null,
       renter: publicUserProfile(renter),
       owner: publicUserProfile(owner),
       team: seatConversationTeam(conversation.conversationType, team),
@@ -318,7 +318,7 @@ export const getByVehicleAndParticipants = query({
 
     return {
       ...conversation,
-      vehicle,
+      vehicle: vehicle && (await canReadVehicleDetails(ctx, vehicle)) ? vehicle : null,
       renter: publicUserProfile(renter),
       owner: publicUserProfile(owner),
     }

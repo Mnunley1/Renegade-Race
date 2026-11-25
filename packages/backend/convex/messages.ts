@@ -6,6 +6,7 @@ import { checkAdmin } from "./admin"
 import { rateLimiter } from "./rateLimiter"
 import { sanitizeMessage } from "./sanitize"
 import { publicUserProfile } from "./userProfile"
+import { canReadVehicleDetails } from "./vehicleLifecycle"
 
 // Get messages for a conversation
 export const getByConversation = query({
@@ -64,7 +65,9 @@ export const getByConversation = query({
           .first()
 
         // Get replied-to message if it exists and is visible (after reopening timestamp)
-        let repliedToMessage: (typeof message & { sender: ReturnType<typeof publicUserProfile> }) | null = null
+        let repliedToMessage:
+          | (typeof message & { sender: ReturnType<typeof publicUserProfile> })
+          | null = null
         if (message.replyTo) {
           const replyToMsg = await ctx.db.get(message.replyTo)
           if (replyToMsg && (!reopenedAt || replyToMsg.createdAt >= reopenedAt)) {
@@ -565,7 +568,7 @@ export const getHostConversations = query({
 
         return {
           ...conversation,
-          vehicle,
+          vehicle: vehicle && (await canReadVehicleDetails(ctx, vehicle)) ? vehicle : null,
           renter: publicUserProfile(renter),
           latestMessage,
         }

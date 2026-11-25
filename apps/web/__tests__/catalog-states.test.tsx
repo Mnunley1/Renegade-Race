@@ -12,7 +12,7 @@ const state = vi.hoisted(() => ({
   vehicles: undefined as Record<string, unknown>[] | undefined,
   tracks: [] as unknown[] | undefined,
   stats: {} as Record<string, { averageRating: number; totalReviews: number }> | undefined,
-  detail: undefined as Record<string, unknown> | undefined,
+  detail: undefined as Record<string, unknown> | null | undefined,
 }))
 vi.mock("@clerk/nextjs", () => ({
   useUser: () => ({ isSignedIn: true, user: { id: "renter" } }),
@@ -213,4 +213,31 @@ it("offers requests on both detail CTAs, preserves dates, and explains approval 
   expect(
     screen.getByText("Send a request for host approval. Payment follows approval.")
   ).toBeInTheDocument()
+})
+
+it("shows a neutral unavailable page without legacy content or controls", () => {
+  state.detail = null
+  render(<VehicleDetailsPage />)
+  expect(screen.getByRole("heading", { name: "Listing unavailable" })).toBeInTheDocument()
+  expect(screen.getByRole("link", { name: "Browse vehicles" })).toHaveAttribute("href", "/vehicles")
+  expect(screen.queryByText("Loading vehicle details...")).toBeNull()
+  expect(screen.queryByText("Synthetic listing")).toBeNull()
+  expect(screen.queryByRole("button", { name: "Request rental" })).toBeNull()
+})
+
+it.each([
+  { isActive: false },
+  { deletedAt: 0 },
+  { isSuspended: true },
+])("keeps authorized archived history readable and disables requests %j", (patch) => {
+  state.detail = { ...vehicle, ...patch, hostStripeReady: true }
+  render(<VehicleDetailsPage />)
+  expect(screen.getByRole("status")).toHaveTextContent("Archived listing")
+  expect(screen.getByText("Synthetic listing")).toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "Request rental" })).toBeNull()
+  for (const button of screen.getAllByRole("button", { name: "Listing unavailable" }))
+    expect(button).toBeDisabled()
+  expect(document.querySelector('script[type="application/ld+json"]')?.textContent).toContain(
+    "OutOfStock"
+  )
 })
