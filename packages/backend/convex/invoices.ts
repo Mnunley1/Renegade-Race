@@ -523,7 +523,10 @@ export const getById = query({
       ...invoiceView(invoice),
       sender: publicUserProfile(sender),
       recipient: publicUserProfile(recipient),
-      depositVehicle,
+      // Invoice access preserves agreed deposit terms, not access to a retired listing.
+      depositVehicle: depositVehicle
+        ? { damageDepositAmount: depositVehicle.damageDepositAmount }
+        : null,
       // Preview of the card pass-through before a method is chosen. ACH does not add this.
       estimatedCardProcessingFee: estimateStripeCardProcessingFee(invoice.total),
     }
