@@ -11,7 +11,7 @@ import {
 } from "@workspace/ui/components/dialog"
 import { useMutation, useQuery } from "convex/react"
 import { RotateCcw } from "lucide-react"
-import { useRouter } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { useState } from "react"
 import { toast } from "sonner"
 import { SimpleOnboardingProgress } from "@/components/simple-onboarding-progress"
@@ -20,6 +20,16 @@ import { api } from "@/lib/convex"
 import { handleErrorWithContext } from "@/lib/error-handler"
 
 export default function OnboardingLayout({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname()
+  // Payment setup is not a vehicle draft. Mounting the wizard here would add
+  // its destructive reset controls and a beforeunload guard that cancels Stripe navigation.
+  if (pathname === "/host/onboarding/payout" || pathname.startsWith("/host/onboarding/payout/")) {
+    return children
+  }
+  return <VehicleOnboardingLayout>{children}</VehicleOnboardingLayout>
+}
+
+function VehicleOnboardingLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const [showStartOverDialog, setShowStartOverDialog] = useState(false)
   const [isResetting, setIsResetting] = useState(false)
