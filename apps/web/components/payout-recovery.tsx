@@ -193,8 +193,11 @@ function PayoutRecoveryPanel({
           </p>
         ) : (
           <p className="text-sm">
-            Complete payment setup securely with Stripe. We may ask you to verify your sign-in
-            first. Your existing reservations and account history stay in place.
+            {status.canContinue
+              ? "Continue your fresh Stripe Express setup securely with Stripe."
+              : "Start fresh Stripe Express onboarding for your Renegade payments."}{" "}
+            We may ask you to verify your sign-in first. Your existing Stripe account, reservations
+            and account history stay in place, and payments remain on hold.
           </p>
         )}
         {stripeRefresh && (
@@ -217,7 +220,7 @@ function PayoutRecoveryPanel({
           {setupAllowed && (
             <Button disabled={busy} onClick={start}>
               {busy ? <Loader2 aria-hidden="true" className="mr-2 size-4 animate-spin" /> : null}
-              {status.canContinue ? "Continue setup" : "Start secure setup"}
+              {status.canContinue ? "Continue setup" : "Start fresh payment setup"}
             </Button>
           )}
           <Button disabled={busy} onClick={checkStatus} variant="outline">

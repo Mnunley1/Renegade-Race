@@ -111,3 +111,12 @@ merge to main merely to test: main automatically deploys production frontends.
 Use the shared backend/release procedures in [backend workflow](backend-workflow.md)
 and [releases](releases.md). A frontend rollback must not clear durable holds,
 case/attempt history, original destination references or uncertain provider facts.
+
+Once recovery cases are live, never roll the backend or schema back to a version
+that ignores recovery holds, even before candidate promotion. Older onboarding
+could replace a held legacy destination, and older payment code could accept a
+promoted ready candidate without honoring its retained hold. Keep the hold-aware
+backend and all recovery records in place during any frontend rollback. If new
+setup must stop, use a separately reviewed hold-aware patch that disables
+start/resume; there is no existing recovery kill switch. Do not erase attempts,
+reset leases, relink legacy accounts or undo recorded provider facts as rollback.
