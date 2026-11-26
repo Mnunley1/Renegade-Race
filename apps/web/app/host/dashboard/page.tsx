@@ -32,6 +32,8 @@ import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Suspense, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
+import { AccountAuthBoundary } from "@/components/account-auth-boundary"
+import { PayoutRecoveryNotice } from "@/components/payout-recovery"
 import { HostOnboardingChecklist } from "@/components/host-onboarding-checklist"
 import Image from "@/components/public-image"
 import { api } from "@/lib/convex"
@@ -60,6 +62,8 @@ function HostDashboardContent() {
   const refreshConnectStatus = useAction(api.stripe.refreshConnectAccountStatus)
   const startOrContinueOnboarding = useAction(api.stripe.createConnectAccount)
   const createDashboardLink = useAction(api.stripe.createConnectLoginLink)
+
+  const recoveryStatus = useQuery(api.payoutRecovery.getMyStatus, {})
 
   // Check onboarding status
   const onboardingStatus = useQuery(api.users.getHostOnboardingStatus, user?.id ? {} : "skip")
@@ -111,8 +115,10 @@ function HostDashboardContent() {
   }, [searchParams, stripeReturnHandled, router])
 
   useEffect(() => {
+    let active = true
     const loadStatus = async () => {
-      if (!user?.id) return
+      // Legacy provider readiness must not bypass a recovery case or its hold.
+      if (!user?.id || recoveryStatus !== null) return
       setIsLoadingConnect(true)
       setConnectError(null)
       try {
@@ -123,6 +129,7 @@ function HostDashboardContent() {
         })
 
         const status = await fetchConnectStatus({ ownerId: user.id })
+        if (!active) return
         setConnectStatus(status)
 
         // Show toast if returning from Stripe onboarding
@@ -136,16 +143,20 @@ function HostDashboardContent() {
           }
         }
       } catch (error) {
+        if (!active) return
         handleError(error, { showToast: false })
         const errorMessage = "Failed to load payout status"
         setConnectError(errorMessage)
       } finally {
-        setIsLoadingConnect(false)
+        if (active) setIsLoadingConnect(false)
       }
     }
 
-    loadStatus()
-  }, [fetchConnectStatus, refreshConnectStatus, user?.id, stripeReturnHandled])
+    void loadStatus()
+    return () => {
+      active = false
+    }
+  }, [fetchConnectStatus, refreshConnectStatus, user?.id, stripeReturnHandled, recoveryStatus])
 
   // Calculate stats from real data
   const stats = useMemo(() => {
@@ -282,6 +293,7 @@ function HostDashboardContent() {
 
   // Show loading state while data is being fetched
   const isLoading =
+    recoveryStatus === undefined ||
     vehicles === undefined ||
     pendingReservations === undefined ||
     confirmedReservations === undefined ||
@@ -289,7 +301,7 @@ function HostDashboardContent() {
     vehicleAnalytics === undefined
 
   const handleOnboarding = async () => {
-    if (!user?.id) return
+    if (!user?.id || recoveryStatus !== null) return
     setIsLoadingConnect(true)
     setConnectError(null)
     try {
@@ -316,7 +328,7 @@ function HostDashboardContent() {
   }
 
   const handleOpenDashboard = async () => {
-    if (!user?.id) return
+    if (!user?.id || recoveryStatus !== null) return
     setIsLoadingConnect(true)
     setConnectError(null)
     try {
@@ -389,8 +401,10 @@ function HostDashboardContent() {
           </div>
         )}
 
-        {/* Stripe Account Setup Banner - slim, single row */}
-        {connectStatus && !connectStatus.isComplete && (
+        {recoveryStatus && <PayoutRecoveryNotice status={recoveryStatus} />}
+
+        {/* Existing trusted users keep their normal Stripe setup flow. */}
+        {!recoveryStatus && connectStatus && !connectStatus.isComplete && (
           <div className="mb-6 flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-amber-900/50 dark:bg-amber-950/20">
             <div className="flex items-start gap-3">
               <AlertCircle className="mt-0.5 size-5 shrink-0 text-amber-600 dark:text-amber-400" />
@@ -711,75 +725,91 @@ function HostDashboardContent() {
                 <CardTitle className="text-base">Payments & payouts</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {connectError && (
-                  <p className="text-destructive text-sm" role="alert">
-                    {connectError}
-                  </p>
-                )}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground text-sm">Account</span>
-                    {connectStatus?.isComplete ? (
-                      <Badge className="gap-1.5 bg-green-500/10 text-green-700 dark:text-green-400">
-                        <CheckCircle2 className="size-3" />
-                        Connected
-                      </Badge>
-                    ) : (
-                      <Badge
-                        className="gap-1.5 bg-red-500/10 text-red-700 dark:text-red-400"
-                        variant="secondary"
-                      >
-                        <XCircle className="size-3" />
-                        Not set up
-                      </Badge>
+                {recoveryStatus ? (
+                  <>
+                    <Badge variant="secondary">Payments on hold</Badge>
+                    <p className="text-muted-foreground text-sm">
+                      {recoveryStatus.state === "ready_for_review"
+                        ? "Your payment setup is ready for review. Payments remain on hold."
+                        : "Finish payment setup before accepting rental payments."}
+                    </p>
+                    <Button asChild size="sm">
+                      <Link href="/host/onboarding/payout">View payment setup</Link>
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    {connectError && (
+                      <p className="text-destructive text-sm" role="alert">
+                        {connectError}
+                      </p>
                     )}
-                  </div>
-                  {connectStatus?.isComplete && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground text-sm">Payouts</span>
-                      {connectStatus?.payoutsEnabled ? (
-                        <Badge className="gap-1.5 bg-green-500/10 text-green-700 dark:text-green-400">
-                          <CheckCircle2 className="size-3" />
-                          Enabled
-                        </Badge>
-                      ) : (
-                        <Badge className="gap-1.5" variant="secondary">
-                          <Clock className="size-3" />
-                          Pending
-                        </Badge>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground text-sm">Account</span>
+                        {connectStatus?.isComplete ? (
+                          <Badge className="gap-1.5 bg-green-500/10 text-green-700 dark:text-green-400">
+                            <CheckCircle2 className="size-3" />
+                            Connected
+                          </Badge>
+                        ) : (
+                          <Badge
+                            className="gap-1.5 bg-red-500/10 text-red-700 dark:text-red-400"
+                            variant="secondary"
+                          >
+                            <XCircle className="size-3" />
+                            Not set up
+                          </Badge>
+                        )}
+                      </div>
+                      {connectStatus?.isComplete && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground text-sm">Payouts</span>
+                          {connectStatus?.payoutsEnabled ? (
+                            <Badge className="gap-1.5 bg-green-500/10 text-green-700 dark:text-green-400">
+                              <CheckCircle2 className="size-3" />
+                              Enabled
+                            </Badge>
+                          ) : (
+                            <Badge className="gap-1.5" variant="secondary">
+                              <Clock className="size-3" />
+                              Pending
+                            </Badge>
+                          )}
+                        </div>
                       )}
                     </div>
-                  )}
-                </div>
-                <div className="flex flex-col gap-2">
-                  <Button
-                    className={
-                      connectStatus && !connectStatus.isComplete
-                        ? "bg-red-600 text-white hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600"
-                        : ""
-                    }
-                    disabled={isLoadingConnect || !user?.id}
-                    onClick={handleOnboarding}
-                    size="sm"
-                    variant={connectStatus?.isComplete ? "outline" : "default"}
-                  >
-                    {isLoadingConnect
-                      ? "Working..."
-                      : connectStatus?.isComplete
-                        ? "Manage account"
-                        : "Set up payouts"}
-                  </Button>
-                  {connectStatus?.isComplete && (
-                    <Button
-                      disabled={isLoadingConnect || !user?.id}
-                      onClick={handleOpenDashboard}
-                      size="sm"
-                      variant="ghost"
-                    >
-                      Open Stripe dashboard
-                    </Button>
-                  )}
-                </div>
+                    <div className="flex flex-col gap-2">
+                      <Button
+                        className={
+                          connectStatus && !connectStatus.isComplete
+                            ? "bg-red-600 text-white hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600"
+                            : ""
+                        }
+                        disabled={isLoadingConnect || !user?.id}
+                        onClick={handleOnboarding}
+                        size="sm"
+                        variant={connectStatus?.isComplete ? "outline" : "default"}
+                      >
+                        {isLoadingConnect
+                          ? "Working..."
+                          : connectStatus?.isComplete
+                            ? "Manage account"
+                            : "Set up payouts"}
+                      </Button>
+                      {connectStatus?.isComplete && (
+                        <Button
+                          disabled={isLoadingConnect || !user?.id}
+                          onClick={handleOpenDashboard}
+                          size="sm"
+                          variant="ghost"
+                        >
+                          Open Stripe dashboard
+                        </Button>
+                      )}
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -803,7 +833,12 @@ export default function HostDashboardPage() {
         </div>
       }
     >
-      <HostDashboardContent />
+      <AccountAuthBoundary
+        loadingLabel="Connecting to your dashboard..."
+        signedOutDescription="Sign in to view your host dashboard."
+      >
+        {() => <HostDashboardContent />}
+      </AccountAuthBoundary>
     </Suspense>
   )
 }

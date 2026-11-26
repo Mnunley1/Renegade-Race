@@ -19,6 +19,7 @@ import { formatDateForDisplay } from "@/lib/date-utils"
 import { r2Url } from "@/lib/r2-url"
 import {
   formatRentalUsd,
+  getRentalPayoutHoldError,
   getRentalQuoteError,
   isTerminalRentalPaymentError,
 } from "@/lib/rental-checkout"
@@ -173,6 +174,7 @@ function PayPageContent() {
     result?: Awaited<ReturnType<typeof createPaymentIntent>>
     error?: string
     terminalAttempt?: boolean
+    payoutSetupPending?: boolean
   } | null>(null)
   const current = initialization?.key === paymentKey ? initialization : null
   const clientSecret = current?.result?.clientSecret ?? null
@@ -221,7 +223,9 @@ function PayPageContent() {
           setInitialization({
             key: paymentKey,
             terminalAttempt: isTerminalRentalPaymentError(err),
+            payoutSetupPending: getRentalPayoutHoldError(err) !== null,
             error:
+              getRentalPayoutHoldError(err) ??
               getRentalQuoteError(err) ??
               (err instanceof Error ? err.message : "Failed to initialize payment"),
           })
@@ -458,18 +462,20 @@ function PayPageContent() {
                   role="alert"
                 >
                   <p className="text-destructive">{error}</p>
-                  <p>
-                    If this booking's quote cannot be verified, submit a new rental request for host
-                    approval. Your saved quote will not be replaced automatically.
-                  </p>
+                  {!current?.payoutSetupPending && (
+                    <p>
+                      If this booking's quote cannot be verified, submit a new rental request for
+                      host approval. Your saved quote will not be replaced automatically.
+                    </p>
+                  )}
                   <div className="flex flex-wrap gap-2">
                     <Button onClick={() => setRetry((value) => value + 1)} variant="outline">
-                      Retry payment
+                      {current?.payoutSetupPending ? "Check payment availability" : "Retry payment"}
                     </Button>
                     <Button asChild variant="outline">
                       <Link href="/trips">View My Trips</Link>
                     </Button>
-                    {reservation.vehicleId && (
+                    {!current?.payoutSetupPending && reservation.vehicleId && (
                       <Button asChild variant="outline">
                         <Link href={`/vehicles/${reservation.vehicleId}`}>Start a new request</Link>
                       </Button>

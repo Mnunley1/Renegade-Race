@@ -663,3 +663,30 @@ it.each([
   expect(mock.mutate).not.toHaveBeenCalled()
   expect(mock.push).not.toHaveBeenCalled()
 })
+
+it.each([
+  new ConvexError({
+    code: "PAYOUT_VERIFICATION_REQUIRED",
+    message: "Private provider detail must not be rendered",
+  }),
+  new Error("[CONVEX A] PAYOUT_VERIFICATION_REQUIRED private provider detail"),
+])("explains an owner payment-setup hold without exposing provider details or changing the booking", async (error) => {
+  mock.reservation = {
+    ...reservation,
+    status: "approved",
+    paymentStatus: "pending",
+    vehicleId: "vehicle",
+  }
+  mock.createPaymentIntent.mockRejectedValue(error)
+  render(<PayPage />)
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "The owner needs to finish payment setup"
+  )
+  expect(screen.getByRole("alert")).toHaveTextContent("Your reservation has not been changed")
+  expect(screen.getByRole("alert")).not.toHaveTextContent("Private provider detail")
+  expect(screen.queryByText("Secure card form")).not.toBeInTheDocument()
+  expect(screen.queryByRole("link", { name: "Start a new request" })).not.toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "Check payment availability" })).toBeInTheDocument()
+  expect(mock.mutate).not.toHaveBeenCalled()
+  expect(mock.push).not.toHaveBeenCalled()
+})

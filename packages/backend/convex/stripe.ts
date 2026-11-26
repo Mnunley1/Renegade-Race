@@ -23,6 +23,7 @@ import {
 } from "./emails"
 import { ErrorCode, throwError } from "./errors"
 import { getWebUrl } from "./helpers"
+import { assertRecoveryPaymentAllowed } from "./payoutRecovery"
 import { verifyPayableInvoice } from "./invoices"
 import {
   buildDestinationChargeAmounts,
@@ -348,46 +349,6 @@ export const updatePlatformSettings = mutation({
 // Stripe Connect - Account Management
 // ============================================================================
 
-// Old versions created a new Express account on every incomplete onboarding attempt.
-async function canRestartUnusedOnboarding(
-  ctx: ActionCtx,
-  stripe: Stripe,
-  account: Stripe.Account,
-  owner: Doc<"users">
-) {
-  if (
-    owner.stripeAccountStatus !== "pending" ||
-    account.details_submitted ||
-    account.charges_enabled ||
-    account.payouts_enabled ||
-    !account.external_accounts ||
-    account.external_accounts.data.length ||
-    account.external_accounts.has_more ||
-    Object.keys(account.metadata ?? {}).length ||
-    (await ctx.runQuery(internal.users.hasPayoutHistoryForOnboarding, { userId: owner.externalId }))
-  )
-    return false
-  const options = { stripeAccount: account.id }
-  const [balance, transactions, transfers] = await Promise.all([
-    stripe.balance.retrieve({}, options),
-    stripe.balanceTransactions.list({ limit: 1 }, options),
-    stripe.transfers.list({ destination: account.id, limit: 1 }),
-  ])
-  return (
-    transactions.data.length === 0 &&
-    transfers.data.length === 0 &&
-    [
-      ...balance.available,
-      ...balance.pending,
-      ...(balance.connect_reserved ?? []),
-      ...(balance.instant_available ?? []),
-      ...(balance.issuing?.available ?? []),
-      ...(balance.refund_and_dispute_prefunding?.available ?? []),
-      ...(balance.refund_and_dispute_prefunding?.pending ?? []),
-    ].every((row) => row.amount === 0)
-  )
-}
-
 // Create Stripe Connect account for vehicle owners
 export const createConnectAccount = action({
   args: {
@@ -409,6 +370,7 @@ export const createConnectAccount = action({
     })
 
     if (!user) throwError(ErrorCode.NOT_FOUND, "User not found")
+    await ctx.runQuery(internal.payoutRecovery.assertPaymentAllowed, { subject: identity.subject })
     const result = await withAccountOperation(
       ctx,
       `connect:${identity.subject}`,
@@ -416,7 +378,6 @@ export const createConnectAccount = action({
       async (beforeProviderMutation) => {
         const stripe = getStripe()
         let account: Stripe.Account | undefined
-        let replaceUnusedAccount: string | undefined
         if (user.stripeAccountId) {
           const linked = await retrieveLinkedConnectAccount(
             ctx,
@@ -424,19 +385,18 @@ export const createConnectAccount = action({
             user.stripeAccountId,
             identity.subject
           )
+          // Never replace an unverified legacy link before its durable recovery
+          // case is imported. Readiness/history alone do not establish control.
+          if (linked.metadata?.renegadeUserId !== identity.subject) {
+            throwError(
+              ErrorCode.PAYOUT_VERIFICATION_REQUIRED,
+              "Finish payment setup through the reviewed recovery flow. Payments remain on hold."
+            )
+          }
           if (linked.details_submitted) {
             return { accountId: linked.id, onboardingUrl: null, isComplete: true }
           }
-          if (linked.metadata?.renegadeUserId === identity.subject) {
-            account = linked
-          } else if (await canRestartUnusedOnboarding(ctx, stripe, linked, user)) {
-            replaceUnusedAccount = linked.id
-          } else {
-            throwError(
-              ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,
-              "Contact support to verify your existing Stripe account and resume onboarding."
-            )
-          }
+          account = linked
         }
         if (!account) {
           beforeProviderMutation()
@@ -452,13 +412,12 @@ export const createConnectAccount = action({
               },
             },
             {
-              idempotencyKey: `renegade_connect_${identity.subject}_${replaceUnusedAccount ?? "new"}`,
+              idempotencyKey: `renegade_connect_${identity.subject}_new`,
             }
           )
           await ctx.runMutation(internal.users.setStripeAccountId, {
             userId: identity.subject,
             stripeAccountId: account.id,
-            replaceUnusedAccount,
           })
         }
 
@@ -656,6 +615,7 @@ export const createConnectLoginLink = action({
       throwError(ErrorCode.STRIPE_ACCOUNT_INCOMPLETE, "No Stripe Connect account found")
     }
 
+    await ctx.runQuery(internal.payoutRecovery.assertPaymentAllowed, { subject: identity.subject })
     const stripe = getStripe()
     const account = await retrieveLinkedConnectAccount(
       ctx,
@@ -733,6 +693,15 @@ export const assertRentalPaymentAvailable = internalQuery({
     const reservation = await ctx.db.get(args.reservationId)
     if (!reservation || reservation.renterId !== args.renterId) {
       throwError(ErrorCode.FORBIDDEN, "Payment reservation does not match the renter")
+    }
+    await assertRecoveryPaymentAllowed(ctx, reservation.ownerId)
+    if (args.stripeAccountId) {
+      const owner = await ctx.db
+        .query("users")
+        .withIndex("by_external_id", (q) => q.eq("externalId", reservation.ownerId))
+        .unique()
+      if (owner?.stripeAccountId !== args.stripeAccountId)
+        throwError(ErrorCode.CONFLICT, "Payout binding changed; retry payment setup")
     }
     assertRentalAwaitingPayment(reservation)
     assertRentalVehicleAvailable(await ctx.db.get(reservation.vehicleId))
@@ -870,6 +839,11 @@ export const createCheckoutSession = action({
           })
 
         // Get or create Stripe customer (component handles this)
+        await ctx.runQuery(internal.stripe.assertRentalPaymentAvailable, {
+          reservationId: reservation._id,
+          renterId: identity.subject,
+          stripeAccountId: destinationAccountId,
+        })
         beforeProviderMutation()
         const customerId = await rentalBillingCustomer(ctx, stripe, identity)
 
@@ -1120,6 +1094,11 @@ export const createPaymentIntent = action({
           })
 
         // Get or create Stripe customer (component handles this)
+        await ctx.runQuery(internal.stripe.assertRentalPaymentAvailable, {
+          reservationId: reservation._id,
+          renterId: identity.subject,
+          stripeAccountId: destinationAccountId,
+        })
         beforeProviderMutation()
         const customerId = await rentalBillingCustomer(ctx, stripe, identity)
 
