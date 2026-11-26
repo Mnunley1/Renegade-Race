@@ -179,22 +179,17 @@ describe("Stripe ownership", () => {
     expect(mocks.login).not.toHaveBeenCalled()
   })
 
-  it("restarts only unused legacy onboarding without issuing access to the old account", async () => {
+  it("preserves unverified legacy onboarding until recovery is imported, even without history", async () => {
     const { host, t, id } = await setup("acct_old")
     mocks.account.mockResolvedValue({ ...tagged, id: "acct_old", metadata: {} })
-    mocks.transactions.mockResolvedValueOnce({ data: [{ id: "txn_history" }] })
-    await expect(host.action(api.stripe.createConnectAccount, { ownerId: "host" })).rejects.toThrow(
-      "Contact support"
-    )
+    for (let retry = 0; retry < 2; retry++) {
+      await expect(
+        host.action(api.stripe.createConnectAccount, { ownerId: "host" })
+      ).rejects.toThrow("PAYOUT_VERIFICATION_REQUIRED")
+    }
     expect(mocks.create).not.toHaveBeenCalled()
     expect(mocks.link).not.toHaveBeenCalled()
     expect((await t.run(({ db }) => db.get(id)))?.stripeAccountId).toBe("acct_old")
-    await host.action(api.stripe.createConnectAccount, { ownerId: "host" })
-    expect(mocks.link).toHaveBeenCalledWith(
-      expect.objectContaining({ account: "acct_host" }),
-      expect.anything()
-    )
-    expect((await t.run(({ db }) => db.get(id)))?.stripeAccountId).toBe("acct_host")
   })
 
   it("rejects an account owned by another subject and duplicate legacy pointers", async () => {
@@ -244,7 +239,7 @@ describe("Stripe ownership", () => {
     expect(await check("host")).toBe(true)
     expect(await check("payer")).toBe(false)
     await expect(host.action(api.stripe.createConnectAccount, { ownerId: "host" })).rejects.toThrow(
-      "Contact support"
+      "PAYOUT_VERIFICATION_REQUIRED"
     )
     await expect(
       t.mutation(internal.users.setStripeAccountId, {

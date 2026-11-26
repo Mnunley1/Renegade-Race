@@ -80,7 +80,9 @@ export async function verifiedPaymentDestination(
   stripeAccountId: string,
   ownerId: string
 ): Promise<Stripe.Account> {
+  await ctx.runQuery(internal.payoutRecovery.assertPaymentAllowed, { subject: ownerId })
   const account = await retrieveLinkedConnectAccount(ctx, stripe, stripeAccountId, ownerId)
+  await ctx.runQuery(internal.payoutRecovery.assertPaymentAllowed, { subject: ownerId })
   if (account.metadata?.renegadeUserId !== ownerId) {
     throwError(
       ErrorCode.STRIPE_ACCOUNT_INCOMPLETE,

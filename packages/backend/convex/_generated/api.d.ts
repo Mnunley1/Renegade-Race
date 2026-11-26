@@ -47,6 +47,7 @@ import type * as notificationCron from "../notificationCron.js";
 import type * as notifications from "../notifications.js";
 import type * as posts from "../posts.js";
 import type * as presence from "../presence.js";
+import type * as payoutRecovery from "../payoutRecovery.js";
 import type * as pricing from "../pricing.js";
 import type * as profileViews from "../profileViews.js";
 import type * as r2 from "../r2.js";
@@ -144,6 +145,7 @@ declare const fullApi: ApiFromModules<{
   notifications: typeof notifications;
   posts: typeof posts;
   presence: typeof presence;
+  payoutRecovery: typeof payoutRecovery;
   pricing: typeof pricing;
   profileViews: typeof profileViews;
   r2: typeof r2;
