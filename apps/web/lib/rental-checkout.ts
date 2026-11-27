@@ -42,3 +42,14 @@ export function isTerminalRentalPaymentError(error: unknown): boolean {
     (error instanceof Error && error.message.includes("PAYMENT_ATTEMPT_TERMINAL"))
   )
 }
+
+/** Recovery failures describe the owner's setup, never the renter's card or account IDs. */
+export function getRentalPayoutHoldError(error: unknown): string | null {
+  if (
+    (error instanceof ConvexError && error.data?.code === "PAYOUT_VERIFICATION_REQUIRED") ||
+    (error instanceof Error && error.message.includes("PAYOUT_VERIFICATION_REQUIRED"))
+  ) {
+    return "The owner needs to finish payment setup before you can pay for this rental. Your reservation has not been changed."
+  }
+  return null
+}

@@ -49,6 +49,55 @@ export default defineSchema({
     .index("by_subject", ["subject"])
     .index("by_key", ["key"]),
 
+  // Recovery eligibility is independent of mutable provider health/owner tags.
+  // These records and the old binding survive candidate setup and promotion.
+  payoutRecoveryCases: defineTable({
+    caseKey: v.string(),
+    subject: v.string(),
+    legacyAccountId: v.string(),
+    currentAccountId: v.string(),
+    held: v.boolean(),
+    state: v.union(
+      v.literal("held"),
+      v.literal("setup_in_progress"),
+      v.literal("ready_for_review"),
+      v.literal("released")
+    ),
+    attemptId: v.optional(v.id("payoutRecoveryAttempts")),
+    version: v.number(),
+    evidenceRef: v.string(),
+    promotedAt: v.optional(v.number()),
+    promotionApprovalRef: v.optional(v.string()),
+    releasedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_subject", ["subject"])
+    .index("by_case", ["caseKey"])
+    .index("by_legacy_account", ["legacyAccountId"]),
+
+  payoutRecoveryAttempts: defineTable({
+    caseId: v.id("payoutRecoveryCases"),
+    subject: v.string(),
+    expectedAccountId: v.string(),
+    attemptKey: v.string(),
+    platformAccountId: v.string(),
+    livemode: v.boolean(),
+    candidateAccountId: v.optional(v.string()),
+    state: v.union(
+      v.literal("creating"),
+      v.literal("onboarding"),
+      v.literal("ready"),
+      v.literal("review_required")
+    ),
+    linkGeneration: v.number(),
+    observedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_case", ["caseId"])
+    .index("by_candidate", ["candidateAccountId"]),
+
   users: defineTable({
     externalId: v.string(),
     name: v.string(),

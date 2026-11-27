@@ -19,6 +19,7 @@ import { getWelcomeEmailTemplate, sendTransactionalEmail } from "./emails"
 import { isEarlyAdopterPromoActive, resolvePlatformFeePercentage } from "./pricing"
 import { clearDraftUploads, requireDraftUpload, requireProfileUpload } from "./r2"
 import { retrieveLinkedConnectAccount } from "./stripeOwnership"
+import { recoveryCase } from "./payoutRecovery"
 import { accountRevocation } from "./stripeRevocations"
 import {
   NULLISH_NAME_RE,
@@ -832,6 +833,8 @@ export const setStripeAccountId = internalMutation({
   },
   handler: async (ctx, { userId, stripeAccountId, replaceUnusedAccount }) => {
     await assertAccountsAvailable(ctx, userId)
+    if ((await recoveryCase(ctx, userId))?.held)
+      throw new Error("Use the reviewed payout recovery transition")
     const user = await userByExternalId(ctx, userId)
     if (!user) throw new Error("User not found")
     if (
